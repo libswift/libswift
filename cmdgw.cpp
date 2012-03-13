@@ -534,7 +534,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         	dprintf("cmd: START: roothash too short %i\n", strlen(hashstr) );
             return ERROR_BAD_ARG;
         }
-        size_t chunksize=SWIFT_DEFAULT_CHUNK_SIZE;
+        uint32_t chunksize=SWIFT_DEFAULT_CHUNK_SIZE;
         if (haschunksize) {
         	int n = sscanf(chunksizestr,"%i",&chunksize);
         	if (n != 1)

@@ -16,11 +16,7 @@
 
 namespace swift {
 
-// Arno, 2011-12-22: Riccardo to fix.
-#ifdef _WIN32
-typedef unsigned long long 			uint;
-#endif
-
+typedef 	std::vector< std::pair<uint32_t, binmap_t*> >	WaitingPeers;
 
 class Availability
 {
@@ -42,6 +38,12 @@ class Availability
 	    	avail_ = new uint8_t[size];
 	    }
 
+        ~Availability(void)
+        {
+            if (size_)
+                delete [] avail_;
+        }
+
 	    /** return the availability array */
 	    uint8_t* get() { return avail_; }
 
@@ -58,7 +60,7 @@ class Availability
 	    int size() { return size_; }
 
 	    /** sets the size of the availability tree once we know the size of the file */
-	    void setSize(uint size);
+	    void setSize(uint64_t size);
 
 	    /** sets a binmap */
 	    void setBinmap(binmap_t *binmap);
@@ -71,10 +73,10 @@ class Availability
 
     protected:
 	    uint8_t *avail_;
-	    int 	size_;
+	    uint64_t 	size_;
 	    // a list of incoming have msgs, those are saved only it the file size is still unknown
 	     // TODO fix... set it depending on the # of channels * something
-	    std::vector< std::pair<uint, binmap_t*> > waiting_peers_;
+	    WaitingPeers waiting_peers_;
 	    //binmap_t *waiting_[20];
 
 

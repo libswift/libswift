@@ -104,9 +104,9 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
     else
         *retransmitptr = false;
 
-    if (send.is_none() && hint_in_.empty() && last_recv_time_>NOW-rtt_avg_-TINT_SEC) {
+    if (ENABLE_SENDERSIZE_PUSH && send.is_none() && hint_in_.empty() && last_recv_time_>NOW-rtt_avg_-TINT_SEC) {
         bin_t my_pick = ImposeHint(); // FIXME move to the loop
-        if (ENABLE_SENDERSIZE_PUSH &&!my_pick.is_none()) {
+        if (!my_pick.is_none()) {
             hint_in_.push_back(my_pick);
             char bin_name_buf[32];
             dprintf("%s #%u *hint %s\n",tintstr(),id_,my_pick.str(bin_name_buf));
@@ -127,8 +127,9 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
             send = hint;
     }
     uint64_t mass = 0;
-    for(int i=0; i<hint_in_.size(); i++)
-        mass += hint_in_[i].bin.base_length();
+    // Arno, 2012-03-09: Is mucho expensive on busy server.
+    //for(int i=0; i<hint_in_.size(); i++)
+    //    mass += hint_in_[i].bin.base_length();
     char bin_name_buf[32];
     dprintf("%s #%u dequeued %s [%lli]\n",tintstr(),id_,send.str(bin_name_buf),mass);
     return send;
@@ -341,7 +342,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     	 * the DATA on a retransmit.
     	 */
  	     char binstr[32];
-         fprintf(stderr,"OnData: retransmit of chunk > 1K, adding random to change frag: %s\n",tosend.str(binstr) );
+         fprintf(stderr,"AddData: retransmit of randomized chunk %s\n",tosend.str(binstr) );
          evbuffer_add_8(evb, SWIFT_RANDOMIZE);
          evbuffer_add_32be(evb, (int)rand() );
     }
@@ -546,8 +547,8 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 
     // Arno: Assuming DATA last message in datagram
     if (evbuffer_get_length(evb) > file().chunk_size()) {
-    	dprintf("%s #%u !data chunk size mismatch %s: exp " PRISIZET " got " PRISIZET "\n",tintstr(),id_,pos.str(bin_name_buf), file().chunk_size(), evbuffer_get_length(evb));
-    	fprintf(stderr,"WARNING: chunk size mismatch: exp " PRISIZET " got " PRISIZET "\n",file().chunk_size(), evbuffer_get_length(evb));
+    	dprintf("%s #%u !data chunk size mismatch %s: exp %lu got " PRISIZET "\n",tintstr(),id_,pos.str(bin_name_buf), file().chunk_size(), evbuffer_get_length(evb));
+    	fprintf(stderr,"WARNING: chunk size mismatch: exp %lu got " PRISIZET "\n",file().chunk_size(), evbuffer_get_length(evb));
     }
 
     int length = (evbuffer_get_length(evb) < file().chunk_size()) ? evbuffer_get_length(evb) : file().chunk_size();
@@ -702,7 +703,7 @@ void Channel::OnHave (struct evbuffer *evb) {
 		// Ric: check if we should set the size in the file transfer
 		if (transfer().availability().size() <= 0 && file().size() > 0)
 		{
-			transfer().availability().setSize((uint)file().size_in_chunks());
+			transfer().availability().setSize(file().size_in_chunks());
 		}
 		// Ric: update the availability if needed
 		transfer().availability().set(id_, ack_in_, ackd_pos);
@@ -748,6 +749,7 @@ void Channel::OnHandshake (struct evbuffer *evb) {
             return; // this is a self-connection
         }
     }
+
     // FUTURE: channel forking
     if (is_established())
         dprintf("%s #%u established %s\n", tintstr(), id_, peer().str());
@@ -762,7 +764,10 @@ void Channel::OnPex (struct evbuffer *evb) {
     if (transfer().OnPexIn(addr))
         useless_pex_count_ = 0;
     else
+    {
+		dprintf("%s #%u already channel to %s\n", tintstr(),id_,addr.str());
         useless_pex_count_++;
+    }
     pex_request_outstanding_ = false;
 }
 
@@ -785,24 +790,42 @@ void    Channel::AddPex (struct evbuffer *evb) {
             if (channels[(int) pex_peer.bin.toUInt()] == NULL)
                 continue;
             Address a = channels[(int) pex_peer.bin.toUInt()]->peer();
-            evbuffer_add_8(evb, SWIFT_PEX_ADD);
-            evbuffer_add_32be(evb, a.ipv4());
-            evbuffer_add_16be(evb, a.port());
-            dprintf("%s #%u +pex (reverse) %s\n",tintstr(),id_,a.str());
+            // Arno, 2012-02-28: Don't send private addresses to non-private peers.
+            if (!a.is_private() || (a.is_private() && peer().is_private()))
+            {
+            	evbuffer_add_8(evb, SWIFT_PEX_ADD);
+            	evbuffer_add_32be(evb, a.ipv4());
+            	evbuffer_add_16be(evb, a.port());
+            	dprintf("%s #%u +pex (reverse) %s\n",tintstr(),id_,a.str());
+            }
         } while (!reverse_pex_out_.empty() && (SWIFT_MAX_NONDATA_DGRAM_SIZE-evbuffer_get_length(evb)) >= 7);
-        return;
+
+        // Arno: 2012-02-23: Don't think this is right. Bit of DoS thing,
+        // that you only get back the addr of people that got your addr.
+        // Disable for now.
+        //return;
     }
 
     if (!pex_requested_)
         return;
 
-    // Arno, 2011-10-03: Choosing Gertjan's RandomChannel over RevealChannel here.
-    int chid = transfer().RandomChannel(id_);
-    if (chid==-1 || chid==id_) {
-        pex_requested_ = false;
-        return;
+    // Arno, 2012-02-28: Don't send private addresses to non-private peers.
+    int chid = 0, tries=0;
+    Address a;
+    while (true)
+    {
+    	// Arno, 2011-10-03: Choosing Gertjan's RandomChannel over RevealChannel here.
+    	chid = transfer().RandomChannel(id_);
+    	if (chid==-1 || chid==id_ || tries > 5) {
+    		pex_requested_ = false;
+    		return;
+    	}
+    	a = channels[chid]->peer();
+    	if (!a.is_private() || (a.is_private() && peer().is_private()))
+    		break;
+    	tries++;
     }
-    Address a = channels[chid]->peer();
+
     evbuffer_add_8(evb, SWIFT_PEX_ADD);
     evbuffer_add_32be(evb, a.ipv4());
     evbuffer_add_16be(evb, a.port());
@@ -846,7 +869,14 @@ void Channel::AddPexReq(struct evbuffer *evb) {
     if (transfer().hs_in_.size() >= SWIFT_MAX_CONNECTIONS ||
             // Check whether this channel has been providing useful peer information
             useless_pex_count_ > 2)
+    {
+    	// Arno, 2012-02-23: Fix: Code doesn't recover from useless_pex_count_ > 2,
+    	// let's just try again in 30s
+		useless_pex_count_ = 0;
+		next_pex_request_time_ = NOW + 30 * TINT_SEC;
+
         return;
+    }
 
     dprintf("%s #%u +pex req\n", tintstr(), id_);
     evbuffer_add_8(evb, SWIFT_PEX_REQ);
@@ -880,7 +910,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
     uint32_t mych = evbuffer_remove_32be(evb);
     Sha1Hash hash;
     Channel* channel = NULL;
-    if (mych==0) { // handshake initiated
+    if (mych==0) { // peer initiates handshake
         if (evbuffer_get_length(evb)<1+4+1+4+Sha1Hash::SIZE)
             return_log ("%s #0 incorrect size %i initial handshake packet %s\n",
                         tintstr(),(int)evbuffer_get_length(evb),addr.str());
@@ -892,52 +922,55 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         if (!pos.is_all())
             return_log ("%s #0 that is not the root hash %s\n",tintstr(),addr.str());
         hash = evbuffer_remove_hash(evb);
-        FileTransfer* file = FileTransfer::Find(hash);
-        if (!file)
+        FileTransfer* ft = FileTransfer::Find(hash);
+        if (!ft)
             return_log ("%s #0 hash %s unknown, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
         dprintf("%s #0 -hash ALL %s\n",tintstr(),hash.hex().c_str());
 
-        for(binqueue::iterator i=file->hs_in_.begin(); i!=file->hs_in_.end(); i++) {
-            if (channels[i->toUInt()] && channels[i->toUInt()]->peer_==addr) {
-            	// Arno: 2011-10-13: Ignore if established, otherwise consider
-            	// it a concurrent connection attempt.
-            	if (channels[i->toUInt()]->is_established()) {
-            		// ARNOTODO: Read complete handshake here so we know whether
-            		// attempt is to new channel or to existing.
-                    if (channels[i->toUInt()]->last_recv_time_>NOW-TINT_SEC*2) {
-                    	return_log("%s #0 have a channel already to %s\n",tintstr(),addr.str());
-                    }
-                    // else
-                    	// Arno: New connection attempt from same peer, create new Channel
-            	} else {
-            		channel = channels[i->toUInt()];
-            		//fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: reuse channel %s\n", channel->peer_.str() );
-					break;
-            	}
-            }
+        // Arno, 2012-02-27: Check for duplicate channel
+        Channel* existchannel = ft->FindChannel(addr,NULL);
+        if (existchannel)
+        {
+			// Arno: 2011-10-13: Ignore if established, otherwise consider
+			// it a concurrent connection attempt.
+			if (existchannel->is_established()) {
+				// ARNOTODO: Read complete handshake here so we know whether
+				// attempt is to new channel or to existing. Currently read
+				// in OnHandshake()
+				//
+				return_log("%s #0 have a channel already to %s\n",tintstr(),addr.str());
+			} else {
+				channel = existchannel;
+				//fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: reuse channel %s\n", channel->peer_.str() );
+			}
         }
         if (channel == NULL) {
         	//fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: create new channel %s\n", addr.str() );
-        	channel = new Channel(file, socket, addr);
+        	channel = new Channel(ft, socket, addr);
         }
         //fprintf(stderr,"CHANNEL INCOMING DEF hass %s is id %d\n",hash.hex().c_str(),channel->id());
 
-    } else {
+    } else { // peer responds to my handshake (and other messages)
         mych = DecodeID(mych);
         if (mych>=channels.size())
             return_log("%s invalid channel #%u, %s\n",tintstr(),mych,addr.str());
         channel = channels[mych];
         if (!channel)
             return_log ("%s #%u is already closed\n",tintstr(),mych);
-        if (channel->peer() != addr)
-            return_log ("%s #%u invalid peer address %s!=%s\n",
-                        tintstr(),mych,channel->peer().str(),addr.str());
+		if (channel->IsDiffSenderOrDuplicate(addr,mych)) {
+			channel->Schedule4Close();
+			return;
+		}
         channel->own_id_mentioned_ = true;
     }
     channel->raw_bytes_down_ += evboriglen;
     //dprintf("recvd %i bytes for %i\n",data.size(),channel->id);
     bool wasestablished = channel->is_established();
+
+    dprintf("%s #%u peer %s recv_peer %s addr %s\n", tintstr(),mych, channel->peer().str(), channel->recv_peer().str(), addr.str() );
+
     channel->Recv(evb);
+
     evbuffer_free(evb);
     //SAFECLOSE
     if (wasestablished && !channel->is_established()) {

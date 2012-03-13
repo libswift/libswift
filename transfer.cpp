@@ -21,11 +21,16 @@ std::vector<FileTransfer*> FileTransfer::files(20);
 
 #define BINHASHSIZE (sizeof(bin64_t)+sizeof(Sha1Hash))
 
+
+#define TRACKER_RETRY_INTERVAL_START	(5*TINT_SEC)
+#define TRACKER_RETRY_INTERVAL_EXP		1.1				// exponent used to increase INTERVAL_START
+#define TRACKER_RETRY_INTERVAL_MAX		(1800*TINT_SEC) // 30 minutes
+
 // FIXME: separate Bootstrap() and Download(), then Size(), Progress(), SeqProgress()
 
-FileTransfer::FileTransfer (const char* filename, const Sha1Hash& _root_hash, bool check_hashes, size_t chunk_size) :
+FileTransfer::FileTransfer (const char* filename, const Sha1Hash& _root_hash, bool check_hashes, uint32_t chunk_size) :
     file_(filename,_root_hash,chunk_size,NULL,check_hashes), cb_installed(0), mychannels_(),
-    speedzerocount_(0)
+    speedzerocount_(0), tracker_(), tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START), tracker_retry_time_(NOW)
 {
     if (files.size()<fd()+1)
         files.resize(fd()+1);
@@ -55,6 +60,9 @@ FileTransfer::FileTransfer (const char* filename, const Sha1Hash& _root_hash, bo
 // SAFECLOSE
 void FileTransfer::LibeventCleanCallback(int fd, short event, void *arg)
 {
+	// Arno, 2012-02-24: Why-oh-why, update NOW
+	Channel::Time();
+
 	FileTransfer *ft = (FileTransfer *)arg;
 	if (ft == NULL)
 		return;
@@ -62,12 +70,18 @@ void FileTransfer::LibeventCleanCallback(int fd, short event, void *arg)
 	// STL and MS and conditional delete from set not a happy place :-(
 	std::set<Channel *>	delset;
 	std::set<Channel *>::iterator iter;
+	bool hasestablishedpeers=false;
 	for (iter=ft->mychannels_.begin(); iter!=ft->mychannels_.end(); iter++)
 	{
 		Channel *c = *iter;
 		if (c != NULL) {
 			if (c->IsScheduled4Close())
 				delset.insert(c);
+
+			if (c->is_established ()) {
+				hasestablishedpeers = true;
+				//fprintf(stderr,"%s peer %s\n", ft->file().root_hash().hex().c_str(), c->peer().str() );
+			}
 		}
 	}
 	for (iter=delset.begin(); iter!=delset.end(); iter++)
@@ -79,10 +93,62 @@ void FileTransfer::LibeventCleanCallback(int fd, short event, void *arg)
 		delete c;
     }
 
-    // Reschedule cleanup
+	// Arno, 2012-02-24: Check for liveliness.
+	ft->ReConnectToTrackerIfAllowed(hasestablishedpeers);
+
+	// Reschedule cleanup
     evtimer_add(&(ft->evclean_),tint2tv(5*TINT_SEC));
 }
 
+
+void FileTransfer::ReConnectToTrackerIfAllowed(bool hasestablishedpeers)
+{
+	// If I'm not connected to any
+	// peers, try to contact the tracker again.
+	if (!hasestablishedpeers)
+	{
+		if (NOW > tracker_retry_time_)
+		{
+			ConnectToTracker();
+
+			tracker_retry_interval_ *= TRACKER_RETRY_INTERVAL_EXP;
+			if (tracker_retry_interval_ > TRACKER_RETRY_INTERVAL_MAX)
+				tracker_retry_interval_ = TRACKER_RETRY_INTERVAL_MAX;
+			tracker_retry_time_ = NOW + tracker_retry_interval_;
+		}
+	}
+	else
+	{
+		tracker_retry_interval_ = TRACKER_RETRY_INTERVAL_START;
+		tracker_retry_time_ = NOW + tracker_retry_interval_;
+	}
+}
+
+
+void FileTransfer::ConnectToTracker()
+{
+	Channel *c = NULL;
+    if (tracker_ != Address())
+    	c = new Channel(this,INVALID_SOCKET,tracker_);
+    else if (Channel::tracker!=Address())
+    	c = new Channel(this);
+}
+
+
+Channel * FileTransfer::FindChannel(const Address &addr, Channel *notc)
+{
+	std::set<Channel *>::iterator iter;
+	for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
+	{
+		Channel *c = *iter;
+		if (c != NULL) {
+			if (c != notc && (c->peer() == addr || c->recv_peer() == addr)) {
+				return c;
+			}
+		}
+	}
+	return NULL;
+}
 
 
 
@@ -148,6 +214,7 @@ FileTransfer::~FileTransfer ()
     Channel::CloseTransfer(this);
     files[fd()] = NULL;
     delete picker_;
+    delete availability_;
   
     // Arno, 2012-02-06: Cancel cleanup timer, otherwise chaos!
     evtimer_del(&evclean_);
@@ -174,16 +241,20 @@ int swift:: Find (Sha1Hash hash) {
 bool FileTransfer::OnPexIn (const Address& addr) {
 
 	//fprintf(stderr,"FileTransfer::OnPexIn: %s\n", addr.str() );
-
-    for(int i=0; i<hs_in_.size(); i++) {
-        Channel* c = Channel::channel(hs_in_[i].toUInt());
-        if (c && c->transfer().fd()==this->fd() && c->peer()==addr) {
-            return false; // already connected or connecting, Gertjan fix = return false
-        }
-    }
+	// Arno: this brings safety, but prevents private swift installations.
+	// TODO: detect public internet.
+	//if (addr.is_private())
+	//	return false;
     // Gertjan fix: PEX redo
     if (hs_in_.size()<SWIFT_MAX_CONNECTIONS)
-        new Channel(this,Channel::default_socket(),addr);
+    {
+    	// Arno, 2012-02-27: Check if already connected to this peer.
+		Channel *c = FindChannel(addr,NULL);
+		if (c == NULL)
+			new Channel(this,Channel::default_socket(),addr);
+		else
+			return false;
+    }
     return true;
 }
 
@@ -210,7 +281,7 @@ int FileTransfer::RandomChannel (int own_id) {
     if (choose_from.size() == 0)
         return -1;
 
-    return choose_from[((double) rand() / RAND_MAX) * choose_from.size()].toUInt();
+    return choose_from[rand() % choose_from.size()].toUInt();
 }
 
 void		FileTransfer::OnRecvData(int n)

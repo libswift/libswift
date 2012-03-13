@@ -35,6 +35,7 @@ typedef unsigned __int64 uint64_t;
 #include <netinet/in.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <sys/stat.h>
 #endif
 
 #include <fcntl.h>
@@ -103,7 +104,6 @@ typedef void* setsockoptptr_t;
 #define PRISIZET	"%lu"
 #endif
 
-
 namespace swift {
 
 /** tint is the time integer type; microsecond-precise. */
@@ -127,11 +127,11 @@ typedef int64_t tint;
 #endif
 
 
-size_t  file_size (int fd);
+int64_t  file_size (int fd);
 
-int     file_seek (int fd, size_t offset);
+int     file_seek (int fd, int64_t offset);
 
-int     file_resize (int fd, size_t new_size);
+int     file_resize (int fd, int64_t new_size);
 
 void*   memory_map (int fd, size_t size=0);
 void    memory_unmap (int fd, void*, size_t size);
@@ -141,10 +141,10 @@ void    print_error (const char* msg);
 #ifdef _WIN32
 
 /** UNIX pread approximation. Does change file pointer. Is not thread-safe */
-size_t  pread(int fildes, void *buf, size_t nbyte, long offset);
+size_t  pread(int fildes, void *buf, size_t nbyte, __int64 offset); // off_t not 64-bit dynamically on Win32
 
 /** UNIX pwrite approximation. Does change file pointer. Is not thread-safe */
-size_t  pwrite(int fildes, const void *buf, size_t nbyte, long offset);
+size_t  pwrite(int fildes, const void *buf, size_t nbyte, __int64 offset);
 
 int     inet_aton(const char *cp, struct in_addr *inp);
 

@@ -44,7 +44,7 @@ int http_gw_reqs_open = 0;
 int http_gw_reqs_count = 0;
 struct evhttp *http_gw_event;
 struct evhttp_bound_socket *http_gw_handle;
-size_t httpgw_chunk_size = SWIFT_DEFAULT_CHUNK_SIZE; // Copy of cmdline param
+uint32_t httpgw_chunk_size = SWIFT_DEFAULT_CHUNK_SIZE; // Copy of cmdline param
 double *httpgw_maxspeed = NULL;						 // Copy of cmdline param
 
 // Arno, 2010-11-30: for SwarmPlayer 3000 backend autoquit when no HTTP req is received
@@ -390,7 +390,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 }
 
 
-bool InstallHTTPGateway (struct event_base *evbase,Address bindaddr, size_t chunk_size, double *maxspeed) {
+bool InstallHTTPGateway (struct event_base *evbase,Address bindaddr, uint32_t chunk_size, double *maxspeed) {
 	// Arno, 2011-10-04: From libevent's http-server.c example
 
 	/* Create a new evhttp object to handle requests. */
@@ -431,6 +431,7 @@ bool HTTPIsSending()
 		if (ft != NULL) {
 			fprintf(stderr,"httpgw: upload %lf\n",ft->GetCurrentSpeed(DDIR_UPLOAD)/1024.0);
 			fprintf(stderr,"httpgw: dwload %lf\n",ft->GetCurrentSpeed(DDIR_DOWNLOAD)/1024.0);
+			fprintf(stderr,"httpgw: seqcmp %llu\n", swift::SeqComplete(http_requests[http_gw_reqs_open-1].transfer));
 		}
 	}
     return true;

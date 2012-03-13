@@ -152,6 +152,14 @@ namespace swift {
 	    return rs[i];
 	}
 	bool operator != (const Address& b) const { return !(*this==b); }
+	bool is_private() const {
+		// TODO IPv6
+		uint32_t no = ipv4(); uint8_t no0 = no>>24,no1 = (no>>16)&0xff;
+		if (no0 == 10) return true;
+		else if (no0 == 172 && no1 >= 16 && no1 <= 31) return true;
+		else if (no0 == 192 && no1 == 168) return true;
+		else return false;
+	}
     };
 
 // Arno, 2011-10-03: Use libevent callback functions, no on_error?
@@ -252,7 +260,7 @@ namespace swift {
          *  @param file_name    the name of the file
          *  @param root_hash    the root hash of the file; zero hash if the file
 	 is newly submitted */
-        FileTransfer(const char *file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO,bool check_hashes=true,size_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+        FileTransfer(const char *file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO,bool check_hashes=true,uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
         /**    Close everything. */
         ~FileTransfer();
@@ -311,6 +319,22 @@ namespace swift {
 		/** Arno: Return the set of Channels for this transfer. MORESTATS */
 		std::set<Channel *> GetChannels() { return mychannels_; }
 
+		/** Arno: set the tracker for this transfer. Reseting it won't kill
+		 * any existing connections.
+		 */
+		void SetTracker(Address tracker) { tracker_ = tracker; }
+
+		/** Arno: (Re)Connect to tracker for this transfer, or global Channel::tracker if not set */
+		void ConnectToTracker();
+
+		/** Arno: Reconnect to the tracker if no established peers and
+		 * exp backoff allows it.
+		 */
+		void ReConnectToTrackerIfAllowed(bool hasestablishedpeers);
+
+		/** Arno: Return the Channel to peer "addr" that is not equal to "notc". */
+		Channel * FindChannel(const Address &addr, Channel *notc);
+
 		// SAFECLOSE
 		static void LibeventCleanCallback(int fd, short event, void *arg);
     protected:
@@ -338,13 +362,17 @@ namespace swift {
         int             cb_installed;
 
 		// RATELIMIT
-        std::set<Channel *>	mychannels_;
+        std::set<Channel *>	mychannels_; // Arno, 2012-01-31: May be duplicate of hs_in_
         MovingAverageSpeed	cur_speed_[2];
         double				max_speed_[2];
         int					speedzerocount_;
 
         // SAFECLOSE
         struct event 		evclean_;
+
+        Address 			tracker_; // Tracker for this transfer
+        tint				tracker_retry_interval_;
+        tint				tracker_retry_time_;
 
     public:
         void            OnDataIn (bin_t pos);
@@ -361,7 +389,7 @@ namespace swift {
         friend bool      IsComplete (int fdes);
         friend uint64_t  Complete (int fdes);
         friend uint64_t  SeqComplete (int fdes);
-        friend int     Open (const char* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, size_t chunk_size);
+        friend int     Open (const char* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size);
         friend void    Close (int fd) ;
         friend void AddProgressCallback (int transfer,ProgressCallback cb,uint8_t agg);
         friend void RemoveProgressCallback (int transfer,ProgressCallback cb);
@@ -429,7 +457,7 @@ namespace swift {
             CLOSE_CONTROL
         } send_control_t;
 
-
+        static Address  tracker; // Global tracker for all transfers
         struct event *evsend_ptr_; // Arno: timer per channel // SAFECLOSE
         static struct event_base *evbase;
         static struct event evrecv;
@@ -492,6 +520,9 @@ namespace swift {
         tint        LedbatNextSendTime ();
         /** Arno: return true if this peer has complete file. May be fuzzy if Peak Hashes not in */
         bool		IsComplete();
+        /** Arno: return (UDP) port for this channel */
+        uint16_t 	GetMyPort();
+        bool 		IsDiffSenderOrDuplicate(Address addr, uint32_t chid);
 
         static int  MAX_REORDERING;
         static tint TIMEOUT;
@@ -511,6 +542,7 @@ namespace swift {
         FileTransfer& transfer() { return *transfer_; }
         HashTree&   file () { return transfer_->file(); }
         const Address& peer() const { return peer_; }
+        const Address& recv_peer() const { return recv_peer_; }
         tint ack_timeout () {
         	tint dev = dev_avg_ < MIN_DEV ? MIN_DEV : dev_avg_;
         	tint tmo = rtt_avg_ + dev * 4;
@@ -617,7 +649,10 @@ namespace swift {
 
         // SAFECLOSE
         bool		scheduled4close_;
-
+        /** Arno: Socket address of the peer where packets are received from,
+         * when an IANA private address, otherwise 0.
+         * May not be equal to peer_. 2PEERSBEHINDSAMENAT */
+        Address     recv_peer_;
 
         int         PeerBPS() const {
             return TINT_SEC / dip_avg_ * 1024;
@@ -637,14 +672,13 @@ namespace swift {
         static tint     last_tick;
         //static tbheap   send_queue;
 
-        static Address  tracker;
         static std::vector<Channel*> channels;
 
         friend int      Listen (Address addr);
         friend void     Shutdown (int sock_des);
         friend void     AddPeer (Address address, const Sha1Hash& root);
         friend void     SetTracker(const Address& tracker);
-        friend int      Open (const char*, const Sha1Hash&, Address tracker, bool check_hashes, size_t chunk_size) ; // FIXME
+        friend int      Open (const char*, const Sha1Hash&, Address tracker, bool check_hashes, uint32_t chunk_size) ; // FIXME
     };
 
 
@@ -665,7 +699,7 @@ namespace swift {
         fails, it will hashcheck anyway. Roothash is optional for new files or
         files already hashchecked and checkpointed.
         */
-    int     Open (const char* filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(), bool check_hashes=true,size_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     Open (const char* filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(), bool check_hashes=true,uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** Get the root hash for the transmission. */
     const Sha1Hash& RootMerkleHash (int file) ;
     /** Close a file and a transmission. */
@@ -692,7 +726,7 @@ namespace swift {
     /***/
     int       Find (Sha1Hash hash);
     /** Returns the number of bytes in a chunk for this transmission */
-    size_t	  ChunkSize(int fdes);
+    uint32_t	  ChunkSize(int fdes);
 
     /** Get the address bound to the socket descriptor returned by Listen() */
     Address BoundAddress(evutil_socket_t sock);

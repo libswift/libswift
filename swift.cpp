@@ -21,8 +21,8 @@ using namespace swift;
 
 // Local prototypes
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
-int OpenSwiftFile(const TCHAR* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, size_t chunk_size);
-int OpenSwiftDirectory(const TCHAR* dirname, Address tracker, bool check_hashes, size_t chunk_size);
+int OpenSwiftFile(const TCHAR* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size);
+int OpenSwiftDirectory(const TCHAR* dirname, Address tracker, bool check_hashes, uint32_t chunk_size);
 
 void ReportCallback(int fd, short event, void *arg);
 void EndCallback(int fd, short event, void *arg);
@@ -30,7 +30,7 @@ void RescanDirCallback(int fd, short event, void *arg);
 
 
 // Gateway stuff
-bool InstallHTTPGateway(struct event_base *evbase,Address addr,size_t chunk_size, double *maxspeed);
+bool InstallHTTPGateway(struct event_base *evbase,Address addr,uint32_t chunk_size, double *maxspeed);
 bool InstallStatsGateway(struct event_base *evbase,Address addr);
 bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr);
 bool HTTPIsSending();
@@ -51,8 +51,9 @@ bool httpgw_enabled=false,cmdgw_enabled=false;
 bool do_nat_test = false;
 
 char *scan_dirname = 0;
-size_t chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;
+uint32_t chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;
 Address tracker;
+
 
 int main (int argc, char** argv)
 {
@@ -321,7 +322,6 @@ int main (int argc, char** argv)
     	exitoncomplete = true;
     }
 
-
     // End after wait_time
     if ((long)wait_time > 0) {
     	evtimer_assign(&evend, Channel::evbase, EndCallback, NULL);
@@ -365,7 +365,7 @@ int main (int argc, char** argv)
 
 
 
-int OpenSwiftFile(const TCHAR* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, size_t chunk_size)
+int OpenSwiftFile(const TCHAR* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size)
 {
 	std::string bfn;
 	bfn.assign(filename);
@@ -391,7 +391,7 @@ int OpenSwiftFile(const TCHAR* filename, const Sha1Hash& hash, Address tracker, 
 }
 
 
-int OpenSwiftDirectory(const TCHAR* dirname, Address tracker, bool check_hashes, size_t chunk_size)
+int OpenSwiftDirectory(const TCHAR* dirname, Address tracker, bool check_hashes, uint32_t chunk_size)
 {
 #ifdef _WIN32
 	HANDLE hFind;
@@ -446,6 +446,44 @@ int OpenSwiftDirectory(const TCHAR* dirname, Address tracker, bool check_hashes,
 	return 1;
 #endif
 }
+
+
+
+int CleanSwiftDirectory(const TCHAR* dirname)
+{
+	std::set<int>	delset;
+	std::vector<FileTransfer*>::iterator iter;
+	for (iter=FileTransfer::files.begin(); iter!=FileTransfer::files.end(); iter++)
+	{
+		FileTransfer *ft = *iter;
+		if (ft != NULL) {
+			std::string filename = ft->file().filename();
+#ifdef WIN32
+			struct _stat buf;
+#else
+			struct stat buf;
+#endif
+			fprintf(stderr,"swift: clean: Checking %s\n", filename.c_str() );
+			int res = stat( filename.c_str(), &buf );
+			if( res < 0 && errno == ENOENT) {
+				fprintf(stderr,"swift: clean: Missing %s\n", filename.c_str() );
+				delset.insert(ft->fd());
+			}
+		}
+	}
+
+	std::set<int>::iterator	iiter;
+	for (iiter=delset.begin(); iiter!=delset.end(); iiter++)
+	{
+		int fd = *iiter;
+		fprintf(stderr,"swift: clean: Deleting transfer %d\n", fd );
+		swift::Close(fd);
+	}
+
+	return 1;
+}
+
+
 
 
 
@@ -542,6 +580,8 @@ void RescanDirCallback(int fd, short event, void *arg) {
 	// such that a fast restore from checkpoint is done.
 	//
 	OpenSwiftDirectory(scan_dirname,tracker,false,chunk_size);
+
+	CleanSwiftDirectory(scan_dirname);
 
 	evtimer_add(&evrescan, tint2tv(RESCAN_DIR_INTERVAL*TINT_SEC));
 }

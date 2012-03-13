@@ -80,7 +80,7 @@ class HashTree : Serializable {
 
 	// CHUNKSIZE
 	/** Arno: configurable fixed chunk size in bytes */
-	size_t			chunk_size_;
+    uint32_t			chunk_size_;
 
 	// LESSHASH
 	binmap_t		is_hash_verified_; // binmap being abused as bitmap, only layer 0 used
@@ -99,7 +99,7 @@ protected:
     
 public:
     
-    HashTree (const char* file_name, const Sha1Hash& root=Sha1Hash::ZERO, size_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE,
+    HashTree (const char* file_name, const Sha1Hash& root=Sha1Hash::ZERO, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE,
               const char* hash_filename=NULL, bool check_hashes=true, const char* binmap_filename=NULL);
     
     // Arno, 2012-01-03: Hack to quickly learn root hash from a checkpoint
@@ -145,7 +145,7 @@ public:
     /** The binmap of complete chunks. */
     binmap_t&       ack_out () { return ack_out_; }
     std::string		filename() { return filename_; } // Arno
-    size_t			chunk_size() { return chunk_size_; } // CHUNKSIZE
+    uint32_t		chunk_size() { return chunk_size_; } // CHUNKSIZE
     ~HashTree ();
 
     // Arno: persistent storage for state other than hashes (which are in .mhash)

@@ -28,21 +28,27 @@ namespace swift {
 static HANDLE map_handles[1024];
 #endif
 
-size_t file_size (int fd) {
+int64_t file_size (int fd) {
+
+#ifdef WIN32
+	struct _stat32i64 st;
+    _fstat32i64(fd, &st);
+#else
     struct stat st;
     fstat(fd, &st);
+#endif
     return st.st_size;
 }
 
-int     file_seek (int fd, size_t offset) {
+int     file_seek (int fd, int64_t offset) {
 #ifndef _WIN32
     return lseek(fd,offset,SEEK_SET);
 #else
-    return _lseek(fd,offset,SEEK_SET);
+    return _lseeki64(fd,offset,SEEK_SET);
 #endif
 }
 
-int     file_resize (int fd, size_t new_size) {
+int     file_resize (int fd, int64_t new_size) {
 #ifndef _WIN32
     return ftruncate(fd, new_size);
 #else
@@ -107,15 +113,15 @@ void    memory_unmap (int fd, void* mapping, size_t size) {
 
 #ifdef _WIN32
 
-size_t pread(int fildes, void *buf, size_t nbyte, long offset)
+size_t pread(int fildes, void *buf, size_t nbyte, __int64 offset)
 {
-    _lseek(fildes,offset,SEEK_SET);
+    _lseeki64(fildes,offset,SEEK_SET);
     return read(fildes,buf,nbyte);
 }
 
-size_t pwrite(int fildes, const void *buf, size_t nbyte, long offset)
+size_t pwrite(int fildes, const void *buf, size_t nbyte, __int64 offset)
 {
-    _lseek(fildes,offset,SEEK_SET);
+    _lseeki64(fildes,offset,SEEK_SET);
     return write(fildes,buf,nbyte);
 }
 

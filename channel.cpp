@@ -56,6 +56,7 @@ Channel::Channel    (FileTransfer* transfer, int socket, Address peer_addr) :
     // "Changed PEX rate limiting to per channel limiting"
     last_pex_request_time_(0), next_pex_request_time_(0),
     pex_request_outstanding_(false), useless_pex_count_(0),
+    pex_requested_(false),  // Ric: init var that wasn't initialiazed
     //
     rtt_avg_(TINT_SEC), dev_avg_(0), dip_avg_(TINT_SEC),
     last_send_time_(0), last_recv_time_(0), last_data_out_time_(0), last_data_in_time_(0),
@@ -125,6 +126,77 @@ bool Channel::IsComplete() {
     }
  	return true;
 }
+
+
+
+uint16_t Channel::GetMyPort() {
+	struct sockaddr_in mysin = {};
+	socklen_t mysinlen = sizeof(mysin);
+	if (getsockname(socket_, (struct sockaddr *)&mysin, &mysinlen) < 0)
+	{
+		print_error("error on getsockname");
+		return 0;
+	}
+	else
+		return ntohs(mysin.sin_port);
+}
+
+bool Channel::IsDiffSenderOrDuplicate(Address addr, uint32_t chid)
+{
+    if (peer() != addr)
+    {
+    	// Got message from different address than I send to
+    	//
+		if (!own_id_mentioned_ && addr.is_private()) {
+			// Arno, 2012-02-27: Got HANDSHAKE reply from IANA private address,
+			// check for duplicate connections:
+			//
+			// When two peers A and B are behind the same firewall, they will get
+			// extB, resp. extA addresses from the tracker. They will both
+			// connect to their counterpart but because the incoming packet
+			// will be from the intNAT address the duplicates are not
+			// recognized.
+			//
+			// Solution: when the second datagram comes in (HANDSHAKE reply),
+			// see if you have had a first datagram from the same addr
+			// (HANDSHAKE). If so, close the channel if his port number is
+			// larger than yours (such that one channel remains).
+			//
+			recv_peer_ = addr;
+
+			Channel *c = transfer().FindChannel(addr,this);
+			if (c != NULL) {
+				// I already initiated a connection to this peer,
+				// this new incoming message would establish a duplicate.
+				// One must break the connection, decide using port
+				// number:
+				dprintf("%s #%u found duplicate channel to %s\n",
+						tintstr(),chid,addr.str());
+
+				if (addr.port() > GetMyPort()) {
+					//Schedule4Close();
+					dprintf("%s #%u closing duplicate channel to %s\n",
+							tintstr(),chid,addr.str());
+					return true;
+				}
+			}
+		}
+		else
+		{
+			// Received HANDSHAKE reply from other address than I sent
+			// HANDSHAKE to, and the address is not an IANA private
+			// address (=no NAT in play), so close.
+			//Schedule4Close();
+			dprintf("%s #%u invalid peer address %s!=%s\n",
+					tintstr(),chid,peer().str(),addr.str());
+			return true;
+		}
+    }
+	return false;
+}
+
+
+
 
 
 
@@ -365,7 +437,7 @@ void    swift::Shutdown (int sock_des) {
     Channel::Shutdown();
 }
 
-int      swift::Open (const char* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, size_t chunk_size) {
+int      swift::Open (const char* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size) {
     FileTransfer* ft = new FileTransfer(filename, hash, check_hashes, chunk_size);
     if (ft && ft->file().file_descriptor()) {
 
@@ -375,12 +447,10 @@ int      swift::Open (const char* filename, const Sha1Hash& hash, Address tracke
 
         // initiate tracker connections
     	// SWIFTPROC
-    	Channel *c = NULL;
-        if (tracker != Address())
-        	c = new Channel(ft,INVALID_SOCKET,tracker);
-        else if (Channel::tracker!=Address())
-        	c = new Channel(ft);
-        return ft->file().file_descriptor();
+    	ft->SetTracker(tracker);
+    	ft->ConnectToTracker();
+
+    	return ft->file().file_descriptor();
     } else {
         if (ft)
             delete ft;
@@ -441,7 +511,7 @@ const Sha1Hash& swift::RootMerkleHash (int file) {
 
 
 /** Returns the number of bytes in a chunk for this transmission */
-size_t	  swift::ChunkSize(int fdes)
+uint32_t	  swift::ChunkSize(int fdes)
 {
     if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
         return FileTransfer::files[fdes]->file().chunk_size();

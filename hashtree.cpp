@@ -24,7 +24,6 @@
 #define OPENFLAGS         O_RDWR|O_CREAT|_O_BINARY
 #else
 #define OPENFLAGS         O_RDWR|O_CREAT
-#include <sys/stat.h>
 #endif
 
 
@@ -84,7 +83,7 @@ std::string    Sha1Hash::hex() const {
 /**     H a s h   t r e e       */
 
 
-HashTree::HashTree (const char* filename, const Sha1Hash& root_hash, size_t chunk_size, const char* hash_filename, bool check_hashes, const char* binmap_filename) :
+HashTree::HashTree (const char* filename, const Sha1Hash& root_hash, uint32_t chunk_size, const char* hash_filename, bool check_hashes, const char* binmap_filename) :
 root_hash_(root_hash), hashes_(NULL), peak_count_(0), fd_(0), hash_fd_(0),
 filename_(filename), size_(0), sizec_(0), complete_(0), completec_(0),
 chunk_size_(chunk_size)
@@ -301,9 +300,9 @@ int HashTree::serialize(FILE *fp)
 {
 	fprintf_retiffail(fp,"version %i\n", 1 );
 	fprintf_retiffail(fp,"root hash %s\n", root_hash_.hex().c_str() );
-	fprintf_retiffail(fp,"chunk size " PRISIZET"\n", chunk_size_ );
-	fprintf_retiffail(fp,"complete %lli\n", complete_ );
-	fprintf_retiffail(fp,"completec %lli\n", completec_ );
+	fprintf_retiffail(fp,"chunk size %lu\n", chunk_size_ );
+	fprintf_retiffail(fp,"complete %llu\n", complete_ );
+	fprintf_retiffail(fp,"completec %llu\n", completec_ );
 	return ack_out_.serialize(fp);
 }
 
@@ -329,11 +328,11 @@ int HashTree::internal_deserialize(FILE *fp,bool contentavail) {
 
 	fscanf_retiffail(fp,"version %i\n", &version );
 	fscanf_retiffail(fp,"root hash %s\n", hexhashstr);
-	fscanf_retiffail(fp,"chunk size " PRISIZET"\n", &cs);
-	fscanf_retiffail(fp,"complete %lli\n", &c );
-	fscanf_retiffail(fp,"completec %lli\n", &cc );
+	fscanf_retiffail(fp,"chunk size %lu\n", &cs);
+	fscanf_retiffail(fp,"complete %llu\n", &c );
+	fscanf_retiffail(fp,"completec %llu\n", &cc );
 
-	//fprintf(stderr,"hashtree: deserialize: %s %lli ~ %lli * %i\n", hexhashstr, c, cc, cs );
+	//fprintf(stderr,"hashtree: deserialize: %s %llu ~ %llu * %i\n", hexhashstr, c, cc, cs );
 
 	if (ack_out_.deserialize(fp) < 0)
 		return -1;

@@ -90,7 +90,6 @@ void Availability::removeBinmap(binmap_t &binmap)
 	else
 		if (!binmap.is_empty())
 		{
-			//status();
 			bin_t tmp_b;
 			binmap_t tmp_bm;
 			tmp_b = binmap_t::find_complement(tmp_bm, binmap, 0);
@@ -100,7 +99,6 @@ void Availability::removeBinmap(binmap_t &binmap)
 				tmp_bm.set(tmp_b);
 				tmp_b = binmap_t::find_complement(tmp_bm, binmap, 0);
 			}
-			//status();
 		}
 
 	return;
@@ -127,11 +125,22 @@ void Availability::set(uint32_t channel_id, binmap_t& binmap, bin_t target)
 				avail_[i]++;
 			//TODO avoid running into sub-trees that r filled
 		}
-		//status();
 	}
 	// keep track of the incoming have msgs
 	else
-		waiting_peers_.push_back(std::make_pair(channel_id, &binmap));
+	{
+
+   		for (WaitingPeers::iterator vpci = waiting_peers_.begin(); vpci != waiting_peers_.end(); ++vpci)
+   		{
+   		    if (vpci->first == channel_id)
+   		    {
+   		        waiting_peers_.erase(vpci);
+   		        break;
+	        }
+   		}
+
+    	waiting_peers_.push_back(std::make_pair(channel_id, &binmap));
+	}
 }
 
 
@@ -143,15 +152,15 @@ void Availability::remove(uint32_t channel_id, binmap_t& binmap)
 	}
 	if (size_<=0)
 	{
-		std::vector<std::pair <uint, binmap_t*> >::iterator vpci = waiting_peers_.begin();
+		WaitingPeers::iterator vpci = waiting_peers_.begin();
 		for(; vpci != waiting_peers_.end(); ++vpci)
 		{
 			if (vpci->first == channel_id)
+			{
+			    waiting_peers_.erase(vpci);
 				break;
+			}
 		}
-		// Arno, 2012-01-03: Protection
-		if (vpci != waiting_peers_.end())
-			waiting_peers_.erase(vpci);
 	}
 
 	else
@@ -162,13 +171,13 @@ void Availability::remove(uint32_t channel_id, binmap_t& binmap)
 }
 
 
-void Availability::setSize(uint size)
+void Availability::setSize(uint64_t size)
 {
 	if (size && !size_)
 	{
 		// TODO can be optimized (bithacks)
-		uint r = 0;
-		uint s = size;
+		uint64_t r = 0;
+		uint64_t s = size;
 
 		// check if the binmap is not complete
 		if (s & (s-1))
@@ -185,7 +194,7 @@ void Availability::setSize(uint size)
 		avail_ = new uint8_t[s]();
 
 		// Initialize with the binmaps we already received
-		for(std::vector<std::pair <uint, binmap_t*> >::const_iterator vpci = waiting_peers_.begin(); vpci != waiting_peers_.end(); ++vpci)
+		for(WaitingPeers::iterator vpci = waiting_peers_.begin(); vpci != waiting_peers_.end(); ++vpci)
 		{
 			setBinmap(vpci->second);
 		}
@@ -203,7 +212,7 @@ bin_t Availability::getRarest(const bin_t range, int width)
 {
 	assert(range.toUInt()<size_);
 	bin_t curr = range;
-	uint idx = range.toUInt();
+	bin_t::uint_t idx = range.toUInt();
 
 	while (curr.base_length()>width)
 	{
