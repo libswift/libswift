@@ -1,0 +1,185 @@
+#!/usr/bin/perl -w
+
+$SERVER=shift;
+%PORTS = ();
+%HOSTS = ();
+%CHANN = ( "#0" => "none" );
+%EVENTS = ( "#0" => {"+hs"=>0} );
+%SENT = ();
+%RCVD = ();
+%DSENT = ();
+%DRCVD = ();
+%CWNDLOG = ();
+%RTTLOG = ();
+%OWDLOG = ();
+%TDATALOG = ();
+%RDATALOG = ();
+%INDATALOG = ();
+$SENTB = 0;
+$RCVDB = 0;
+
+open(SRVP,$ENV{"HOME"}."/swift/mfold/servers.txt") or die;
+while (<SRVP>) {
+    /(\S+):(\d+)/ or next;
+    $PORTS{$1} = $2;
+}
+close SRVP;
+
+open(SRV,$ENV{"HOME"}."/.ssh/config") or die;
+while (<SRV>) {
+    if (/Host (\S+)/) {
+	$srvname=$1;
+	$port = $PORTS{$srvname};
+    }
+    $HOSTS{$1}{$port}=$srvname if /HostName (\S+)/ && $port;
+}
+close SRV;
+
+while (<>) {
+    /(\d+_\d+_\d+_\d+_\d+) (#\d+) (\S+) (.*)/ or next;
+    my $time = $1;
+    my $channel = $2;
+    my $event = $3;
+    my $rest = $4;
+    my $host = $CHANN{"$channel"};
+    $host = "unknown" if not $host;
+    $time =~ /^(\d+)_(\d+)_(\d+)_(\d+)/;
+    my $ms=$1*60; $ms=($ms+$2)*60; $ms=($ms+$3)*1000; $ms+=$4;
+    if ($event eq "sent") {
+        $rest =~ /(\d+)b ([\d\.]+):(\d+):/;
+        $ip = $2;
+	$port = $3;
+	$host = $HOSTS{$ip}{$port};
+        #$SENT{$h} = 0 if not exists $SENT{$h};
+        $SENT{$host} += $1;
+        $SENTB += $1;
+        $DSENT{$host}++;
+        $CHANN{"$channel"} = $host;
+    } elsif ($event eq "recvd") {
+        $rest =~ /(\d+)/;
+        #$RCVD{$h} = 0 if not exists $RCVD{$h};
+        $DRCVD{$host}++;
+        $RCVD{$host} += $1;
+        $RCVDB += $1;
+    } elsif ($event eq "sendctrl") {
+        if ($rest =~ /cwnd (\d+\.\d+).*data_out (\d+)/) {
+            if (not exists $CWNDLOG{$host}) {
+                open(my $handle, '>', "$SERVER-harvest/$SERVER-$host-cwnd.log") or die;
+                $CWNDLOG{$host} = $handle;
+            }
+            print {$CWNDLOG{$host}} "$ms\t$1\t$2\n";
+        } elsif ($rest =~ /ledbat (\-?\d+)\-(\-?\d+)/) {
+            if (not exists $OWDLOG{$host}) {
+                open(my $handle, '>', "$SERVER-harvest/$SERVER-$host-owd.log") or die;
+                $OWDLOG{$host} = $handle;
+            }
+            print {$OWDLOG{$host}} "$ms\t$1\t$2\n";
+        } elsif ($rest =~ /rtt (\d+) dev (\d+)/) {
+            if (not exists $RTTLOG{$host}) {
+                open(my $handle, '>', "$SERVER-harvest/$SERVER-$host-rtt.log") or die;
+                $RTTLOG{$host} = $handle;
+            }
+            print {$RTTLOG{$host}} "$ms\t$1\t$2\n";
+        }
+    } elsif ($event eq "Tdata") {
+        if (not exists $TDATALOG{$host}) {
+            open(my $handle, '>', "$SERVER-harvest/$SERVER-$host-tdata.log") or die;
+            $TDATALOG{$host} = $handle;
+        }
+        print {$TDATALOG{$host}} "$ms\n";
+    } elsif ($event eq "Rdata") {
+        if (not exists $RDATALOG{$host}) {
+            open(my $handle, '>', "$SERVER-harvest/$SERVER-$host-rdata.log") or die;
+            $RDATALOG{$host} = $handle;
+        }
+        print {$RDATALOG{$host}} "$ms\n";
+    } elsif ($event eq "-data" && $rest =~ /\(0,(\d+)\)/) {
+	my $bin = $1;
+	if (not exists $INDATALOG{$host}) {
+            open(my $handle, '>', "$SERVER-harvest/$SERVER-$host-indata.log") or die;
+            $INDATALOG{$host} = $handle;
+	}
+	print {$INDATALOG{$host}} "$bin\t$ms\n";
+    }
+    $EVENTS{"$host"} = { "+hs"=>0 } if not exists $EVENTS{"$host"};
+    
+    print "$time $SERVER $host$channel $event $rest\n";
+
+    # DO STATS
+    $EVENTS{"$host"}{"$event"} = 0 if not exists $EVENTS{"$host"}{"$event"};
+    $EVENTS{"$host"}{"$event"}++;
+
+}
+
+for $host (keys %CWNDLOG) {
+    close($CWNDLOG{$host});
+}
+for $host (keys %OWDLOG) {
+    close ($OWDLOG{$host});
+}
+for $host (keys %RTTLOG) {
+    close ($RTTLOG{$host});
+}
+for $host (keys %TDATALOG) {
+    close ($TDATALOG{$host});
+}
+for $host (keys %RDATALOG) {
+    close ($RDATALOG{$host});
+}
+for $host (keys %INDATALOG) {
+    close ($INDATALOG{$host});
+}
+
+open(LEGEND,"> $SERVER-harvest/$SERVER-legend.txt") or die;
+
+for $channel (keys %CHANN) {
+    my $host = $CHANN{"$channel"};
+    print LEGEND "$channel\t$host\n";
+    open(STATS,"> $SERVER-harvest/$SERVER-$host.stat") or die;
+    my %events = %{ $EVENTS{"$host"} };
+    for $event ( keys %events ) {
+        print STATS "$event\t".($events{"$event"})."\n";
+    }
+    close STATS;
+    open(HTML,"> $SERVER-harvest/$SERVER-$host.html") or die;
+    print HTML "<table class='channel'><th><td>sent</td><td>rcvd</td></th>\n";
+    my $rcvd = $RCVD{$host};
+    my $sent = $SENT{$host};
+    $rcvd=0.001 if not $rcvd;
+    $sent=0.001 if not $sent;
+    printf HTML 
+        "<tr class='bytes'><td>bytes</td><td>%i/<pp>%.1f%%</pp></td>".
+        "<td>%i/<pp>%.1f%%</pp></td></tr>\n",
+        $sent, $SENTB?$sent/$SENTB*100:0, $rcvd, $RCVDB?$rcvd/$RCVDB*100:0;
+    print HTML
+        "<tr><td>dgrams</td><td>".$DSENT{$host}."</td><td>".$DRCVD{$host}."</td></tr>\n";
+    printf HTML
+        "<tr><td>data</td><td>%i/<pp><b>%.1f%%</b></pp></td><td>%i/<pp><b>%.1f%%</b></pp></td></tr>\n",
+        $events{"+data"}, ($events{"+data"}*1029)/$sent*100,
+        $events{"-data"}, ($events{"-data"}*1029)/$rcvd*100;
+    printf HTML
+        "<tr><td>hash</td><td>%i/<pp>%.1f%%</pp></td><td>%i/<pp>%.1f%%</pp></td></tr>\n",
+        $events{"+hash"}, ($events{"+hash"}*25)/$sent*100,
+        $events{"-hash"}, ($events{"-hash"}*25)/$rcvd*100;
+    printf HTML
+        "<tr><td>ack</td><td>%i/<pp>%.1f%%</pp></td><td>%i/<pp>%.1f%%</pp></td></tr>\n",
+        $events{"+ack"}, ($events{"+ack"}*5)/$sent*100,
+        $events{"-ack"}, ($events{"-ack"}*5)/$rcvd*100;
+    printf HTML
+        "<tr><td>hint</td><td>%i/<pp>%.1f%%</pp></td><td>%i/<pp>%.1f%%</pp></td></tr>\n",
+        $events{"+hint"}, ($events{"+hint"}*5)/$sent*100,
+        $events{"-hint"}, ($events{"-hint"}*5)/$rcvd*100;
+    printf HTML
+        "<tr><td>hs</td><td>%i</td><td>%i</td></tr>\n",
+        $events{"+hs"}, $events{"-hs"};
+    my $losses = $events{"+data"}>0 ? 
+        ($events{"Rdata"}+$events{"Tdata"})/$events{"+data"}*100 : 0;
+    printf HTML
+        "<tr><td>losses</td><td colspan='2'>R:%i+T:%i=%i/<pp>%.1f%%</pp></td></tr>\n",
+        $events{"Rdata"}, $events{"Tdata"},
+        $events{"Rdata"}+$events{"Tdata"}, $losses;
+
+    print HTML "</table>\n";
+    close HTML;
+}
+close LEGEND;

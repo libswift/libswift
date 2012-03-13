@@ -1,0 +1,121 @@
+* {
+font-family: Georgia, serif;
+}
+
+a {
+text-decoration: none;
+}
+
+img#logo {
+    position:absolute;
+    top: 40px;
+}
+
+a:hover {
+text-decoration: underline;
+}
+
+body {
+background: #A3CDEA;
+margin: 0;
+padding: 0px;
+}
+
+h1, h2, h3, h4 {
+font-family: Trebuchet MS, Arial, sans-serif;
+padding: 0;
+}
+
+h1 {
+color: #000;
+font-size: 200%;
+font-weight: bold;
+margin: 0;
+}
+
+h2 {
+border-top: 1px dotted #aaa;
+font-size: 150%;
+margin: 30px 0 10px 0;
+padding: 20px 0 0 0;
+}
+
+div > h2:first-child {
+border-top: none;
+margin: 0 0 10px 0;
+padding: 0;
+}
+
+h3 {
+font-weight: normal;
+margin: 30px 0 10px 0;
+}
+
+h4 {
+font-size: 90%;
+font-weight: bold;
+margin: 20px 0 10px 0;
+}
+
+
+li {
+font-size: 12px;
+line-height: 1.5em;
+}
+
+p {
+font-size: 12px;
+line-height: 1.5em;
+} 
+
+ul {
+list-style: square;
+margin: 0;
+padding: 0 0 0 15px;
+}
+
+
+
+div#container {
+margin: 0 auto 0 auto;
+width: 700px;
+}
+
+div#header  {
+    font: 32pt Verdana bold;
+    color: white;
+    background: #44a;
+    padding: 5px 30px 15px 0;
+    text-align: center;
+}
+
+div#header img {
+vertical-align: middle;
+}
+
+div#intro {
+background: #fff;
+border-bottom: 1px dotted #aaa;
+padding: 25px 20px 10px 20px;
+}
+
+div#intro p {
+font-size: 16px;
+}
+
+div#content {
+background: #f6f6f6;
+border-bottom: 1px solid black;
+padding: 20px 20px 20px 20px;
+}
+
+div#contact {
+background: #fff;
+padding: 20px 20px 20px 20px;
+}
+
+div#footer {
+background: #444;
+color: #aaa;
+padding: 20px 20px 20px 20px;
+}

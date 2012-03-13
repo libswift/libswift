@@ -1,0 +1,164 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"> 
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head> 
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" /> 
+	<title>swift: the multiparty transport protocol</title> 	
+	<link rel="stylesheet" type="text/css" href="swift.css"></link>
+</head> 
+
+
+<body> 
+
+
+<div id="container">
+
+
+
+<div id="header">
+    <img id=logo src="apusapus.png"/>
+    <i>swift</i> <br/>
+    the multiparty transport protocol
+</div>
+
+
+
+<div id="intro"> 
+
+	<h2>Turn the Net into a single data cloud</h2>
+	<p>Current Internet protocols are geared for 1:1 client/server communication. We expanded the TCP/IP protocol suite with swarming. Our protocol is designed to be capable of integration into browsers or operating systems and is able to serve 95% of current Internet traffic.</p> 
+	<p><em>swift</em> is a multiparty transport protocol. Its mission is to disseminate content among a swarm of peers. It might be understood as <a href="http://en.wikipedia.org/wiki/BitTorrent">BitTorrent</a> at the <a href="http://en.wikipedia.org/wiki/Transport_Layer">transport layer</a>.</p>
+    <p>The TCP+BitTorrent stack consists of 60+90K lines of code (according to <a href="http://www.dwheeler.com/sloccount/">SLOCCount</a>). With novel datastructures and refactoring we managed to <a href="http://github.com/gritzko/swift">implement</a> swift in a mere 4,000 lines of cross-platform C++ code. The lib<em>swift</em> library is licensed under LGPL; it runs on Mac OS X, Windows and a variety of Unices; it uses UDP with <a href="http://tools.ietf.org/wg/ledbat/">LEDBAT</a> congestion control. Currently maximum throughput is 400Mbps, but we are <a href="http://mughal.tribler.org:8080">working on that</a>: our next target is 1 Gbps. The library is delivered as a part of <a href="http://p2p-next.org">P2P-Next</a>, funded by the European Union <a href="http://cordis.europa.eu/fp7/dc/index.cfm">Seventh Framework Programme</a>.</p> 
+
+</div> <!-- intro -->
+
+
+
+<div id="content">
+
+<h2>Ideas</h2> 
+
+<p>As <a href="http://en.wikipedia.org/wiki/Content-centric_networking"> wise people say</a>, the Internet was initially built for remotely connecting scientists to expensive supercomputers (whose computing power was comparable to modern cell phones). Thus, they supported the abstraction of <em>conversation</em>. Currently, however, the Internet is mostly used for <em>disseminating</em> content &ndash; and this mismatch definitely creates some problems.</p> 
+<p>The <em>swift</em> protocol is a content-centric multiparty transport protocol. Basically, it answers one and only one question: <em>'Here is a <a href="http://en.wikipedia.org/wiki/Hash_function">hash</a>! Give me data for it!'</em>. Ultimately <em>swift</em> aims at the abstraction of the Internet as a single big data <a href="http://en.wikipedia.org/wiki/Cloud_computing">cloud</a>. Such entities as storage, servers and connections are abstracted away and are virtually invisible at the API layer. Given a hash, the data is received from whatever source available and data integrity is checked cryptographically with <a href="http://en.wikipedia.org/wiki/Hash_tree"> Merkle hash trees</a>.</p> 
+<p>An old Unix adage says: 'free memory is wasted memory'. Once a computer is powered on, there is no benefit in keeping some memory unoccupied. We may extend this principle a bit further:</p>
+<ul> 
+	<li>free bandwidth is wasted bandwidth</li> 
+	<li>free storage is wasted storage.</li> 
+</ul> 
+<p>Unless your power budget is really tight, there is no sense in conserving either. Thus, instead of emphasising reciprocity and incentives we focus on code with a lighter footprint, <a href="http://tools.ietf.org/wg/ledbat/">non-intrusive</a> <a href="http://en.wikipedia.org/wiki/TCP_congestion_avoidance_algorithm"> congestion control</a> and automatic disk space management. </p> 
+<p>Currently, most parts of the protocol/library are implemented, pass basic testing and successfully transfer data on real networks. After more scrutinized testing, the protocol and the library are expected to be real-life-ready in December 2010. </p> 
+
+
+
+<h2>Design of the protocol</h2> 
+
+<p>Most features of the protocol are defined by its function as a content-centric multiparty transport protocol. It entirely drops TCP's abstraction of sequential reliable data stream delivery: for <em>swift</em> this is redundant. For example, out-of-order data could still be saved and the same piece of data might always be received from another peer. Being implemented over UDP, the protocol does its best to make every datagram self-contained. In general, pruning of unneeded functions and aggressive layer collapsing greatly simplifies the protocol compared to, for example, the BitTorrent+TCP stack.</p> 
+
+<h3>Atomic datagrams, not data stream</h3> 
+<p>To achieve per-datagram flexibility of data flow and also to adapt to the unreliable medium (UDP, and, ultimately, IP), the protocol was built around the abstraction of atomic datagrams. Ideally, once received, a datagram is either immediately discarded or permanently accepted, ready to be forwarded to other peers. For the sake of flexibility, most of the protocol's messages are optional. It also has no 'standard' header. Instead, each datagram is a concatenation of zero or more messages. No message ever spans two datagrams. Except for the data pieces themselves, no message is acknowledged or guaranteed to be delivered.</p>
+
+<h3>Scale-independent unit system</h3> 
+<p>To avoid a multilayered request/acknowledgement system, where every layer basically does the same but for bigger chunks of data &ndash; as is the case with BitTorrent+TCP packet-block-piece-file-torrent stacking &ndash; <em>swift</em> employs a scale-independent acknowledgement/request system, where data is measured by aligned power-of-2 intervals (so called bins). All acknowledgements and requests are done in terms of bins.</p>
+
+<h3>Datagram-level integrity checks</h3> 
+<p><em>swift</em> builds Merkle hash trees down to every single packet (1KB of data). Once data is transmitted, all uncle hashes necessary for verification are prepended to the same datagram. As the receiver constantly remembers old hashes, the average number of 'new' hashes which have to be transmitted is small: normally around one per packet of data.</p>
+
+<h3>NAT traversal by design</h3>  
+<p>The only method of peer discovery in <em>swift</em> is <a href="http://en.wikipedia.org/wiki/Peer_exchange">PEX</a>: a third peer initiates a connection between two of its contacted peers. The protocol's handshake is engineered to perform simple NAT hole punching transparently if needed. </p>
+
+<h3>Subsetting of the protocol</h3> 
+<p>Different kinds of peers might implement different subsets of messages; a 'tracker', for example, uses the same protocol as every peer, except it only accepts the HANDSHAKE message and the HASH message (to let peers explain what content they are interested in), while returning only HANDSHAKE and PEX_ADD messages (to return the list of peers). Different subsets of accepted/emitted messages may correspond to push/pull peers, plain trackers, hash storing trackers, live streaming peers, etc. </p>
+
+<h3>Push AND pull</h3> 
+<p>The protocol allows both for PUSH (sender decides what to send) and PULL (receiver explicitly requests the data). PUSH is normally used as a fallback if PULL fails; also, the sender may ignore requests and send any data it finds convenient to send. Merkle hash trees allow this flexibility without causing security implications.</p>
+
+<h3>No transmission metadata</h3> 
+<p>Unlike BitTorrent <em>swift</em> employs no transmission metadata (the .torrent file). The only bootstrap information is the root hash; file size is derived from the hash tree once the first packet is received; the hash tree is reconstructed incrementally in the process of download.</p>
+
+
+
+<h2>Specifications and documentation</h2> 
+
+<ul> 
+	<li><a href="https://datatracker.ietf.org/doc/draft-grishchenko-ppsp-swift/">Internet draft style technical description</a></li>
+    <li>
+    <a href="http://github.com/gritzko/swift/tree/master/doc/">Other docs</a></li>
+</ul> 
+
+
+
+<h2>Downloads</h2> 
+
+<ul> 
+	<li><a href="http://github.com/gritzko/swift/tarball/master">Fairly recent tarball</a></li>
+	<li><a href="http://github.com/gritzko/swift"><em>swift</em> sources at github</a></li>
+	<li>Mac OS X: <a href="http://97.107.136.211/files/swift"><em>swift</em> binary</a> and <a href="http://97.107.136.211/files/swift-test.sh">test script</a></li> 
+	<li>Windows: <a href="http://97.107.136.211/files/swift.exe"><em>swift</em> binary</a> and <a href="http://97.107.136.211/files/swift-test.bat">test script</a></li> 
+	<li>One-click demo for Windows: <a href="http://97.107.136.211/files/swift-nobrainer.exe">swift-nobrainer.exe</a></li> 
+</ul> 	
+
+
+
+<h2>Frequently asked questions</h2> 
+
+<h3>Well, why <em>swift</em>?</h3> 
+<p>That name has served well for many other protocols; we hope it will serve well for ours. It may be thought of as a meta-joke. The working name for the protocol was 'VicTorrent'. We also insist on lowercase italic <em>swift</em> to keep the name formally unique (for some definition of unique).</p> 
+
+<h3>How is it different from... </h3> 
+
+<h4>...TCP?</h4> 
+<p>TCP emulates reliable in-order delivery ("data pipe") over chaotic unreliable multi-hop networks. TCP has no idea what data it is dealing with, as the data is passed from the userspace. In our case, the data is fixed in advance and many peers participate in distributing the same data. Order of delivery is of little importance and unreliability is naturally compensated for by redundance. Thus, many functions of TCP turn out to be redundant. The only function of TCP that is also critical for <em>swift</em> is the congestion control, but... we need our own custom congestion control! Thus, we did not use TCP.</p> 
+<p>That led both to hurdles and to some savings. As one example, every TCP connection needs to maintain buffers for the data that has left the sender's userspace but not yet arrived at the receiver's userspace. As we know that we are dealing with the same fixed data, we don't need to maintain per-connection buffers. </p> 
+
+<h4>...UDP?</h4> 
+<p>UDP, which is the thinnest wrapper around <a href="http://en.wikipedia.org/wiki/IPv4">IP</a>, is our choice of underlying protocol. From the standpoint of ideology, a transport protocol should be implemented over IP, but unfortunately that causes some chicken-and-egg problems, like a need to get into the kernel to get deployments, and a need to get deployments to be accepted into the kernel. UDP is also quite nice with regard to NAT penetration.</p> 
+
+<h4>...BitTorrent?</h4> 
+<p>BitTorrent is an application-level protocol and quite a heavy one. We focused on fitting our protocol into the restrictions of the transport layer, assuming that the protocol might eventually be included into operating system kernels. For example, we stripped the protocol of any transmission's metadata (the .torrent file); leaving a file's root hash as the only parameter.</p>
+
+<h4>...&micro;Torrent's &micro;TP?</h4> 
+<p>Historically, BitTorrent required lots of adaptations to its underlying transport. First and foremost, TCP is unable to prioritize traffic, so BitTorrent needed to coerce users somehow to tolerate the inconveniences of seeding. That caused tit-for-tat and, to significant degree, rarest-first. Another example is the four-upload-slots limitation. (Apparently some architectural decisions in BitTorrent were dictated by the oddities of Windows 95, but... never mind.)</p> 
+<p>Eventually, BitTorrent developers came to the conclusion that not annoying the user in the first place was probably a better stimulus. So they came up with the <a href="http://www.ietf.org/dyn/wg/charter/ledbat-charter.html">LEDBAT</a> congestion control algorithm (Low Extra Delay Background Transport). LEDBAT allows a peer to seed without interfering with regular traffic (in other words, without slowing down the browser). To integrate the novel congestion control algorithm into BitTorrent incrementally, BitTorrent Inc had to develop a TCP-alike transport named <a href="http://en.wikipedia.org/wiki/Micro_Transport_Protocol">&micro;TP</a>. The <em>swift</em> project (then named VicTorrent) began by trying to understand what would happen if BitTorrent was stripped of any Win95-specific, TCP-specific or Python-specific workarounds. As it turned out, not much was left.</p>
+
+<h4>...Van Jacobson's CCN?</h4> 
+<p><a href="http://www.parc.com/about/people/88/van-jacobson.html">Van Jacobson's</a> team in PARC is doing exploratory research on <a href="http://en.wikipedia.org/wiki/Content-centric_networking">content-centric networking</a>. While BitTorrent works at layer 5 (application), we go to layer 4 (transport). PARC people are bold enough to go to layer 3 and to propose a complete replacement for the entire TCP/IP world. That is certainly a compelling vision, but we focus on the near future (&lt;10 years) while <a href="http://www.ccnx.org/">CCNx</a> is a much more ambitious rework.</p>
+
+<h4>...DCCP?</h4> 
+<p>This question arises quite frequently as DCCP is a congestion-controlled datagram transport. The option of implementing <em>swift</em> over <a href="http://en.wikipedia.org/wiki/DCCP">DCCP</a> was considered, but the inconvenience of working with an esoteric transport was not compensated by the added value of DCCP, which is limited to one mode of congestion control being readily implemented. Architectural restrictions imposed by DCCP were also found to be a major inconvenience. Last but not least, currently only Linux supports DCCP at the kernel level.</p>
+
+<h4>...SCTP?</h4> 
+<p>
+<a href="http://en.wikipedia.org/wiki/SCTP">SCTP</a> is a protocol fixing some shortcomings of TCP mostly in the context of telephony. As was the case with DCCP, features of SCTP were of little interest to us, while things we really needed were missing from SCTP. Still, we must admit that we employ quite a similar message-oriented model (as opposed to TCP's stream orientation).</p>
+
+</div> <!-- content -->
+
+
+
+<div id="contact">
+
+<h2>Who we are</h2> 
+<ul> 
+	<li> <a href="http://p2p-next.org/">P2P-Next Project</a>, EU 7th Framework Program</li> 
+	<li> <a href="http://ewi.tudelft.nl">Delft University of Technology</a> EWI PDS</li> 
+	<li> <a href="http://www.st.ewi.tudelft.nl/~pouwelse/">Dr. Johan Pouwelse</a></li> 
+	<li> <a href="http://www.tribler.org/trac/wiki/VictorGrishchenko"> Dr. Victor Grishchenko</a></li> 
+</ul> 
+
+<h2>Contacts &amp; feedback</h2> 
+
+<ul>
+	<li><a href="mailto:victor.grishchenko@gmail.com">Email us</a></li> 
+	<li><a href="https://listserv2.tudelft.nl/mailman/listinfo/swift-ewi">Subscribe to our mailing list</a></li> 
+</ul>
+
+</div> <!-- contact -->
+
+<div id="footer">
+Copyright &copy; 2010, Delft University of Technology
+</div> <!-- footer -->
+
+</div> <!-- container -->
+
+</body>
+</html> 

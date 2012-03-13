@@ -1,0 +1,35 @@
+table#main table {
+    background: #ffe;
+}
+
+td.host {
+    text-align: center;
+    font: 24pt "Courier";
+}
+
+table.channel {
+/*    border: 1 dotted #aa5; */
+    font-size: smaller;
+}
+
+td {
+    border-top: 1 dotted #aa5;
+    border-spacing: 0;
+}
+
+pp {
+    color: #a00;
+}
+
+tr.bytes {
+    background: #fed;
+}
+
+img.thumb {
+    width: 160pt;
+    border-style: none;
+}
+
+table#main tr td {
+    vertical-align: top;
+}

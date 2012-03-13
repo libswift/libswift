@@ -1,0 +1,4 @@
+export PATH=$HOME/bin:$PATH
+export CPPPATH=$CPPPATH:$HOME/include
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/lib
+export LIBPATH=$LD_LIBRARY_PATH

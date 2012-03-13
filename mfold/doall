@@ -1,0 +1,34 @@
+#!/bin/bash
+# This script executes a chain of commands
+# on all the member servers, in parallel.
+# Commands are defined in .sh files (see
+# docmd.sh); all failed executions are
+# put to the FAILURES file
+rm -f FAILURES
+if [ ! -d logs ]; then
+    mkdir logs
+fi
+
+if [ -z "$SERVERS" ]; then
+    SERVERS="servers.txt"
+fi
+
+
+# Line format in $SERVERS: <hostname>:<port number>
+for srvstr in `grep -v '^#' $SERVERS`; do
+    (
+	srv=${srvstr%:*}
+	port=${srvstr#*:}
+	if [[ $port  &&  $srv == $port ]]; then
+	    port=
+	fi
+        if ! ./docmd $srv $1 $port; then
+            echo $srv >> FAILURES
+            echo $srv FAILED
+            break
+        fi
+    ) &
+done
+
+wait
+echo DONE

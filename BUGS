@@ -1,0 +1,65 @@
+    * min_owd TINT_NEVER is logged
+
+    v hints, data for non-existing ranges
+    v opens multiple channels to the same address
+    v hints do not expire
+    v RTT calculations need improvement (test)
+    v google-log is unnecessary
+    * reduce template use (peer queue)
+    v hints do not expire
+    v survive 10% loss
+    v unlimited ping pong
+    v git sha-1
+    v check hints agains ack_out?_
+    v check data against ack_in
+    v channel suspend/wake. 3 cong modes state machine - ???
+    * release hints for a dormant channel
+    * minimize the number of template instantiations
+    v Channel thinks how much it HINTs a second,
+      picker thinks which HINTs are snubbed
+    * files <1sec download : how HINTs are sent?
+    v dead Channels are not killed => cannot open a new one
+        (have a channel already)
+    v peers don't cooperate
+    * RecoverProgress fails sometime
+    v leecher can't see file is done already
+    v why leecher waits 1sec?
+    * hint queue buildup
+    * file operations are not 64-bit ready
+        http://mail.python.org/pipermail/patches/2000-June/000848.html
+    * recovery: last packet
+    v no-HINT sending to a dead peer
+    * what if rtt>1sec
+    v unHINTed repeated sending
+    v 1259859412.out#8,9 connection breaks, #8 rtt 1000, #9 hint - 
+     mudachestvo, cwnd => send int 0.5sec
+     0_11_10_075_698 #9 sendctrl may send 0 < 0.000000 & 1732919509_-49_-45_-200_-111 (rtt 59661)
+     0_11_10_075_698 #9 +data (0,194)
+     0_11_10_575_703 #9 sendctrl loss detected
+     0_11_10_575_703 #9 Tdata (0,194)
+     0_11_10_575_703 #9 sendctrl may send 0 < 0.000000 & 1732919509_-49_-44_-700_-110 (rtt 59661)
+    v complete peer reconnects 1259967418.out.gz
+    * underhinting causes repetition causes interarr underest causes underhinting
+    * misterious initiating handshake bursts
+    v whether sending is limited by cwnd or app
+    * actually: whether packets are ACKed faster than sent
+    * uproot DATA NONE: complicates and deceives
+    v r735 goes to github; r741
+    * receiver is swapping => strange behavior
+    v on high losses cwnd goes to silly fractions => slows down recovery
+    v code the pingpong<->keepalive<->slowstart transition
+    v empty datagram hammering (see at linode)
+    * make a testkit!!!
+    * never back from keepalive syndrome (because of underhashing)
+    * HTTP daemon, combined select() loop
+    * range requests, priorities
+    v LEDBAT
+    * CUBIC
+    v misterious mass packet losses (!data)
+    
+    // Ric:
+    * check why the last HAVE msgs r not sent
+    * data is sent even if the client has stopped
+    * when initialized the piece picker might select hints from hint_out without knowing if the peer actually has it!
+    * IMPORTANT: trace(bin, range) reports bins out of range! Check if bug!! 
+

@@ -1,0 +1,88 @@
+import sys
+import os
+
+Import("DEBUG")
+Import("env")
+Import("libs")
+Import("libpath")
+
+
+if DEBUG and sys.platform == "win32":
+	libs = ['libswift','gtestd'] + libs  # order is important, crypto needs to be last
+else:
+	libs = ['libswift','gtest'] + libs  # order is important, crypto needs to be last
+
+cpppath = env["CPPPATH"]
+if sys.platform == "win32":
+	cpppath += '..;'
+else:
+	cpppath += '..:'
+env.Append(CPPPATH=cpppath)
+
+env.Program( 
+    target='binstest2',
+    source=['binstest2.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+env.Program( 
+    target='dgramtest',
+    source=['dgramtest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+env.Program( 
+    target='hashtest',
+    source=['hashtest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+# Arno: must be rewritten to libevent
+#env.Program( 
+#    target='ledbattest',
+#    source=['ledbattest.cpp'],
+#    CPPPATH=cpppath,
+#    LIBS=libs,
+#    LIBPATH=libpath )
+
+# Arno: must be rewritten to libevent
+#if sys.platform != "win32":
+#    # Arno: Needs getopt
+#    env.Program( 
+#        target='ledbattest2',
+#        source=['ledbattest2.cpp'],
+#        CPPPATH=cpppath,
+#        LIBS=libs,
+#        LIBPATH=libpath )
+
+env.Program( 
+    target='freemap',
+    source=['freemap.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+env.Program( 
+    target='bin64test',
+    source=['bin64test.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+env.Program( 
+    target='transfertest',
+    source=['transfertest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+env.Program( 
+    target='connecttest',
+    source=['connecttest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+

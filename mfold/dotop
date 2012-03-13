@@ -1,0 +1,9 @@
+#!/bin/bash
+
+while true; do
+    rm logs/*status.out
+    ( ./doall status > /dev/null ) &
+    wait
+    clear
+    cat logs/*status.out | sort
+done

@@ -1,0 +1,99 @@
+#!/bin/bash
+
+if [ -z "$SERVERS" ]; then
+    SERVERS="servers.txt"
+fi
+
+. env.default.sh
+
+if [ ! $MAXGNUPLOTS ]; then
+    MAXGNUPLOTS=200
+fi
+
+VERSION=`date`,`git log --summary | head -1`
+
+cd harvest
+
+# HEAD=`head -1 *.log | grep -v '^$' | cut -f1 | sort | head -1`
+# TAIL=`tail -n1 -q *.log | grep -v '^$' | cut -f1 | sort | tail -n1 -q`
+
+i=0
+for fromstr in `grep -v '^#' ../$SERVERS`; do
+    from=${fromstr%:*}
+    for tostr in `grep -v '^#' ../$SERVERS`; do
+	to=${tostr%:*}
+        CWNDLOG="$from-$to-cwnd.log"
+        if [ ! -e $CWNDLOG ]; then
+            continue
+        fi
+        GP="$from-$to.gnuplot"
+
+        echo "set term png large size 2048,768" > $GP
+        PNG="$from-$to.big.png"
+        if [ -e $PNG ]; then rm $PNG; fi
+        echo "set out '$PNG'" >> $GP
+
+        echo "set y2tics" >> $GP
+        echo "set y2label 'packets'" >> $GP
+        echo "set ylabel 'microseconds'" >> $GP
+        echo "set xlabel 'run time millis'" >> $GP
+        echo "set title '$VERSION'" >> $GP
+        #echo "set xrange [$HEAD:$TAIL]" >> $GP
+        CWNDLOG="$from-$to-cwnd.log"
+        echo -ne "plot '$CWNDLOG' using 1:2 with lines lt rgb '#00aa00' title 'cwnd'"\
+                " axis x1y2, "\
+                " '$CWNDLOG' using 1:3 with lines lt rgb '#99ff99'  title 'data out'"\
+                " axis x1y2 "\
+                >> $GP
+        RTTLOG="$from-$to-rtt.log"
+        if [ -e $RTTLOG ]; then
+            echo -ne ", '$RTTLOG' using 1:2 with lines lt rgb '#2833ff'  title 'rtt' "\
+                "axis x1y1, "\
+                "'$RTTLOG' using 1:3 with lines lt rgb '#8844ff' title 'dev' "\
+                "axis x1y1"\
+                >> $GP
+        fi
+        OWDLOG="$from-$to-owd.log"
+        if [ -e $OWDLOG ]; then
+            echo -ne ", '$OWDLOG' using 1:2 with lines lt rgb '#ff00ee' title 'owd' "\
+                "axis x1y1, "\
+                "'$OWDLOG' using 1:3 with lines lw 2 lt rgb '#0044cc'  title 'min owd'"\
+                "axis x1y1, "\
+                "'$OWDLOG' using 1:(\$3+25000) with lines lw 2 lt rgb '#0000ff' title 'target'"\
+                "axis x1y1 "\
+                >> $GP
+        fi
+        RDATALOG="$from-$to-rdata.log"
+        if [ -e $RDATALOG ]; then
+            echo -ne ", '$RDATALOG' using 1:(1) with points "\
+                "lt rgb '#0f0000' title 'r-losses'"\
+                >> $GP
+        fi
+        TDATALOG="$from-$to-tdata.log"
+        if [ -e $TDATALOG ]; then
+            echo -ne ", '$TDATALOG' using 1:(1) with points "\
+                "lt rgb '#ff0000' title 't-losses'"\
+                >> $GP
+        fi
+        echo  >> $GP
+
+        echo "set term png size 512,192" >> $GP
+        PNG="$from-$to.thumb.png"
+        if [ -e $PNG ]; then rm $PNG; fi
+        echo "set out '$PNG'" >> $GP
+        echo "unset title" >> $GP
+        echo "unset xlabel" >> $GP
+        echo "unset ylabel" >> $GP
+        echo "replot" >> $GP
+
+        ( cat $GP | gnuplot ) &
+	let i++
+	if [ $i == $MAXGNUPLOTS ]; then
+	    wait
+	    i=0
+	fi
+    done
+done
+
+wait
+cd ..

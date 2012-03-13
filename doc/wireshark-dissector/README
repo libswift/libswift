@@ -1,0 +1,10 @@
+This is a protocol dissector for swift: the multiparty transport protocol
+(http://libswift.org)
+
+For instructions on how to include this plugin in a Wireshark build, see
+Wireshark's /doc/README.developer
+
+If you are new to Wireshark protocol dissectors, take a look at 
+http://www.wireshark.org/docs/wsdg_html_chunked/ChDissectAdd.html
+
+Author: Andrew Keating <andrewzkeating@gmail.com>

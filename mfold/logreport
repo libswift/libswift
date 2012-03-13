@@ -1,0 +1,35 @@
+#!/bin/bash
+
+if [ ! $SERVERS ]; then
+    export SERVERS="servers.txt"
+fi
+
+cd harvest
+
+echo '<html><head>'
+echo '<link rel="stylesheet" href="report.css" type="text/css">'
+echo '<title>Manifold: swarm tomography' `date` `git log --summary | head -1` '</title>'
+echo '</head><body>'
+echo '<table id="main"><th>'
+for tostr in `grep -v '#' ../$SERVERS`; do
+    to=${tostr%:*}
+    echo '<td class="host">&gt;'$to'</td>'
+done
+echo '</th>'
+for fromstr in `grep -v '#' ../$SERVERS`; do
+    from=${fromstr%:*}
+    echo '<tr><td class="host">'$from'&gt;</td>'
+    for tostr in `grep -v '#' ../$SERVERS`; do
+	to=${tostr%:*}
+        echo '<td>'
+        cat $from-$to.html
+        if [ -e "$from-$to.big.png" ]; then 
+            echo "<a href='$from-$to.big.png'>"
+            echo "<img class='thumb' src='$from-$to.thumb.png'/>"
+            echo "</a>"
+        fi
+        echo '</td>'
+    done
+    echo '</tr>'
+done
+echo '<body></html>'

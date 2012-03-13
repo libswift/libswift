@@ -1,0 +1,76 @@
+    TRIAL TODO
+
+STATE MACHINE
+* imposed HINTs are terribly broken, resent for the data in flight 
+* check ACK/HAVE redundancy
+* HAVE overuses find_filtered
+* set priorities on ranges
+* small-progress update problem (aka peer nap)
+  guarantee size of updates < x% of data, on both ends
+* pex is affected by peer nap
+* how will tracker aggregate pexes?
+* SWIFT_MSGTYPE_RCVD
+* HAVE ALL / HAVE NONE
+* aggregate ACKS (schedule for +x ms)
+* channel close msg (hs 0)   # Arno: indeed, there appears to be no Channel garbage collection
+* connection rotation / pex / pex_del
+* misterious bug: Rdata (NONE)
+* ?amend MAX_REORDER depending on rtt_dev
+* Tdata repetitions bug
+
+PERFORMANCE
+* move to the.zett's binmaps
+* optimize redundant HASH messages
+* move to rolling HAVE queue
+* 32 bit time field
+* ?empty/full binmaps
+* initiate RTT with prev RTT to host:port
+* fractional cwnd
+
+CACHING/FILES
+* connection rotation
+* file rotation
+* real LRU/LFU
+* file/hash-file re-open in read-only mode
+* no cache recheck, failure-resistant
+* completion mark
+* unified events/callbacks
+* move to 64-bit IO
+* Transfer(fd) constructor
+* think of sliding window(s)
+* the ability to sniff file without downloading
+
+MANIFOLD
+* all-swarm performance stats
+* run chained setups (cmd line protocol subsetting)
+* implement: multiple swift instances per server
+* run thousand-daemon caching tests (use httpgw)
+* use a dedicated tracker
+* add NATs to the setup
+* recover mfold.libswift.org
+* integrate Windowses
+
+API
+* pluggable storage
+
+NAT
+* NAT type detection => need peer identifiers (x100 amplification)
+
+MFOLD
+* integrate multi-peer changes by Jori
+* do global swarm stats
+
+OTHER
+* httpgw or nginx?
+* Sha1Hash constructor ambiguity
+* don't #include .cpp
+* think of using HTTP (?) as a fallback
+* add header/footer, better abstract to the draft
+* Gertjan: separate peer from channel? cng ctrl per peer ?
+* packing hashes into a single datagram (tracking 1000s)
+* partial channels / lightweight channels
+
+THOUGHTS
+* 6 degrees of sep = 3-hop TorrentSmell
+* 60% immediately not connectable
+* support traffic

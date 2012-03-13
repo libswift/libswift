@@ -1,0 +1,129 @@
+Host node300
+HostName 130.161.211.200
+
+Host aussie 
+HostName 130.161.211.201
+
+Host lossy
+HostName 130.161.211.202
+
+Host messy
+HostName 130.161.211.203
+
+Host node304
+HostName 130.161.211.204
+
+Host node305
+HostName 130.161.211.205
+
+Host node306
+HostName 130.161.211.206
+
+Host node308
+HostName 130.161.211.208
+
+Host node309
+HostName 130.161.211.209
+
+Host node310
+HostName 130.161.211.210
+
+Host node312
+HostName 130.161.211.212
+
+Host node313
+HostName 130.161.211.213
+
+Host node314
+HostName 130.161.211.214
+
+Host node315
+HostName 130.161.211.215
+
+Host node317
+HostName 130.161.211.217
+
+Host node319
+HostName 130.161.211.219
+
+Host node320
+HostName 130.161.211.220
+
+Host node322
+HostName 130.161.211.222
+
+Host node323
+HostName 130.161.211.223
+
+Host node324
+HostName 130.161.211.224
+
+Host node325
+HostName 130.161.211.225
+
+Host node326
+HostName 130.161.211.226
+
+Host node327
+HostName 130.161.211.227
+
+Host node328
+HostName 130.161.211.228
+
+Host node329
+HostName 130.161.211.229
+
+Host node330
+HostName 130.161.211.230
+
+Host node331
+HostName 130.161.211.231
+
+Host vtt1
+HostName 130.188.225.81
+
+Host vtt2
+HostName 130.188.225.82
+
+Host vtt3
+HostName 130.188.225.83
+
+Host vtt4
+HostName 130.188.225.84
+
+Host vtt5
+HostName 130.188.225.85
+
+Host vtt6
+HostName 130.188.225.86
+
+Host vtt7
+HostName 130.188.225.87
+
+Host vtt8
+HostName 130.188.225.88
+
+Host vtt9
+HostName 130.188.225.89
+
+Host vttA
+HostName 130.188.225.90
+
+Host vttB
+HostName 130.188.225.91
+
+Host vttC
+HostName 130.188.225.97
+
+Host vttD
+HostName 130.188.225.98
+
+Host canada
+HostName 72.55.184.147
+
+Host media
+HostName 83.96.143.114
+
+Host itanium
+HostName 194.226.235.181
+User RUNC\gritzko
