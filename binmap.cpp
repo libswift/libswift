@@ -2044,8 +2044,8 @@ int binmap_t::serialize(FILE *fp)
 {
 	 fprintf_retiffail(fp,"root bin %lli\n",root_bin_.toUInt() );
 	 fprintf_retiffail(fp,"free top %i\n",free_top_ );
-	 fprintf_retiffail(fp,"alloc cells %i\n", allocated_cells_number_);
-	 fprintf_retiffail(fp,"cells num %i\n", cells_number_);
+	 fprintf_retiffail(fp,"alloc cells " PRISIZET"\n", allocated_cells_number_);
+	 fprintf_retiffail(fp,"cells num " PRISIZET"\n", cells_number_);
 	 for (size_t i=0; i<cells_number_; i++)
 	 {
 		if (write_cell(fp,cell_[i]) < 0)
@@ -2064,8 +2064,8 @@ int binmap_t::deserialize(FILE *fp)
 	 size_t alloccells,cells;
 	 fscanf_retiffail(fp,"root bin %lli\n", &rootbinval );
 	 fscanf_retiffail(fp,"free top %i\n", &freetop );
-	 fscanf_retiffail(fp,"alloc cells %i\n", &alloccells);
-	 fscanf_retiffail(fp,"cells num %i\n", &cells);
+	 fscanf_retiffail(fp,"alloc cells " PRISIZET"\n", &alloccells);
+	 fscanf_retiffail(fp,"cells num " PRISIZET"\n", &cells);
 
 	 //fprintf(stderr,"Filling BINMAP %p\n", this );
 	 //fprintf(stderr,"Rootbin %lli freetop %li alloc %li num %li\n", rootbinval, freetop, alloccells, cells );

@@ -86,6 +86,8 @@ class HashTree : Serializable {
 	binmap_t		is_hash_verified_; // binmap being abused as bitmap, only layer 0 used
 	// FAXME: make is_hash_verified_ part of persistent state?
 
+    int 			internal_deserialize(FILE *fp,bool contentavail=true);
+
 protected:
     
     void            Submit();
@@ -93,12 +95,16 @@ protected:
     bool 			RecoverPeakHashes();
     Sha1Hash        DeriveRoot();
     bool            OfferPeakHash (bin_t pos, const Sha1Hash& hash);
+
     
 public:
     
     HashTree (const char* file_name, const Sha1Hash& root=Sha1Hash::ZERO, size_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE,
               const char* hash_filename=NULL, bool check_hashes=true, const char* binmap_filename=NULL);
     
+    // Arno, 2012-01-03: Hack to quickly learn root hash from a checkpoint
+    HashTree (bool dummy, const char* binmap_filename);
+
     /** Offer a hash; returns true if it verified; false otherwise.
      Once it cannot be verified (no sibling or parent), the hash
      is remembered, while returning false. */
@@ -145,6 +151,7 @@ public:
     // Arno: persistent storage for state other than hashes (which are in .mhash)
     int serialize(FILE *fp);
     int deserialize(FILE *fp);
+    int partial_deserialize(FILE *fp);
 };
 
 }

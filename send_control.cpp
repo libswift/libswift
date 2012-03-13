@@ -32,7 +32,7 @@ tint    Channel::NextSendTime () {
         case AIMD_CONTROL:       return AimdNextSendTime();
         case LEDBAT_CONTROL:     return LedbatNextSendTime();
         case CLOSE_CONTROL:      return TINT_NEVER;
-        default:                 assert(false); return TINT_NEVER;
+        default:                 fprintf(stderr,"send_control.cpp: unknown control %d\n", send_control_); return TINT_NEVER;
     }
 }
 
@@ -90,7 +90,7 @@ tint    Channel::KeepAliveNextSendTime () {
     // Arno: Fix that doesn't do exponential growth always, only after sends
     // without following recvs
 
-    //fprintf(stderr,"KeepAliveNextSendTime: gotka %d sentka %d ss %d si %lli\n", lastrecvwaskeepalive_, lastsendwaskeepalive_, sent_since_recv_, send_interval_);
+    // fprintf(stderr,"KeepAliveNextSendTime: gotka %d sentka %d ss %d si %lli\n", lastrecvwaskeepalive_, lastsendwaskeepalive_, sent_since_recv_, send_interval_);
 
     if (lastrecvwaskeepalive_ && lastsendwaskeepalive_)
     {
@@ -99,9 +99,13 @@ tint    Channel::KeepAliveNextSendTime () {
     else if (lastrecvwaskeepalive_ || lastsendwaskeepalive_)
     {
         // Arno, 2011-11-29: we like eachother again, start fresh
-    	send_interval_ = rtt_avg_;
+    	// Arno, 2012-01-25: Unless we're talking to a dead peer.
+        if (sent_since_recv_ < 4) {
+    	    send_interval_ = rtt_avg_;
+        } else 
+            send_interval_ <<= 1;
     }
-    else if (sent_since_recv_ == 0) 
+    else if (sent_since_recv_ <= 1) 
     {
     	send_interval_ = rtt_avg_;
     }
@@ -182,6 +186,8 @@ tint    Channel::AimdNextSendTime () {
 }
 
 tint Channel::LedbatNextSendTime () {
+    float oldcwnd = cwnd_;
+
     tint owd_cur(TINT_NEVER), owd_min(TINT_NEVER);
     for(int i=0; i<4; i++) {
         if (owd_min>owd_min_bins_[i])
@@ -195,10 +201,27 @@ tint Channel::LedbatNextSendTime () {
     tint queueing_delay = owd_cur - owd_min;
     tint off_target = LEDBAT_TARGET - queueing_delay;
     cwnd_ += LEDBAT_GAIN * off_target / cwnd_;
-    if (cwnd_<1)
+    if (cwnd_<1) 
         cwnd_ = 1;
-    if (owd_cur==TINT_NEVER || owd_min==TINT_NEVER)
+    if (owd_cur==TINT_NEVER || owd_min==TINT_NEVER) 
         cwnd_ = 1;
+
+    //Arno, 2012-02-02: Somehow LEDBAT gets stuck at cwnd_ == 1 sometimes
+    // This hack appears to work to get it back on the right track quickly.
+    if (oldcwnd == 1 && cwnd_ == 1)
+       cwnd_count1_++;
+    else
+       cwnd_count1_ = 0;
+    if (cwnd_count1_ > 10)
+    {
+        dprintf("%s #%u sendctrl ledbat stuck, reset\n",tintstr(),id() );
+	cwnd_count1_ = 0;
+        for(int i=0; i<4; i++) {
+            owd_min_bins_[i] = TINT_NEVER;
+            owd_current_[i] = TINT_NEVER;
+        }
+    }
+
     dprintf("%s #%u sendctrl ledbat %lli-%lli => %3.2f\n",
             tintstr(),id_,owd_cur,owd_min,cwnd_);
     return CwndRateNextSendTime();

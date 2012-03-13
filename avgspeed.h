@@ -17,15 +17,18 @@ namespace swift {
 class MovingAverageSpeed
 {
     public: 
-  	MovingAverageSpeed( tint speed_interval = 5 * TINT_SEC, tint fudge = TINT_SEC );
+		MovingAverageSpeed( tint speed_interval = 5 * TINT_SEC, tint fudge = TINT_SEC );
 		void AddPoint( uint64_t amount );
         double GetSpeed();
         double GetSpeedNeutral();
+        void Reset();
     protected:
         tint   speed_interval_;
         tint   t_start_;
         tint   t_end_;
         double speed_;
+        tint   fudge_;
+        bool   resetstate_;
 };
 
 }

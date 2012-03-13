@@ -59,13 +59,14 @@ Channel::Channel    (FileTransfer* transfer, int socket, Address peer_addr) :
     //
     rtt_avg_(TINT_SEC), dev_avg_(0), dip_avg_(TINT_SEC),
     last_send_time_(0), last_recv_time_(0), last_data_out_time_(0), last_data_in_time_(0),
-    last_loss_time_(0), next_send_time_(0), cwnd_(1), send_interval_(TINT_SEC),
+    last_loss_time_(0), next_send_time_(0), cwnd_(1), cwnd_count1_(0), send_interval_(TINT_SEC),
     send_control_(PING_PONG_CONTROL), sent_since_recv_(0),
     lastrecvwaskeepalive_(false), lastsendwaskeepalive_(false), // Arno: nap bug fix
     ack_rcvd_recent_(0),
     ack_not_rcvd_recent_(0), owd_min_bin_(0), owd_min_bin_start_(NOW),
     owd_cur_bin_(0), dgrams_sent_(0), dgrams_rcvd_(0),
-    raw_bytes_up_(0), raw_bytes_down_(0), bytes_up_(0), bytes_down_(0)
+    raw_bytes_up_(0), raw_bytes_down_(0), bytes_up_(0), bytes_down_(0),
+    scheduled4close_(false)
 {
     if (peer_==Address())
         peer_ = tracker;
@@ -76,8 +77,9 @@ Channel::Channel    (FileTransfer* transfer, int socket, Address peer_addr) :
         owd_min_bins_[i] = TINT_NEVER;
         owd_current_[i] = TINT_NEVER;
     }
-    evtimer_assign(&evsend_,evbase,&Channel::LibeventSendCallback,this);
-    evtimer_add(&evsend_,tint2tv(next_send_time_));
+    evsend_ptr_ = new struct event;
+    evtimer_assign(evsend_ptr_,evbase,&Channel::LibeventSendCallback,this);
+    evtimer_add(evsend_ptr_,tint2tv(next_send_time_));
 
     // RATELIMIT
 	transfer->mychannels_.insert(this);
@@ -90,12 +92,24 @@ Channel::Channel    (FileTransfer* transfer, int socket, Address peer_addr) :
 Channel::~Channel () {
 	dprintf("%s #%u dealloc channel\n",tintstr(),id_);
     channels[id_] = NULL;
-    evtimer_del(&evsend_);
+    ClearEvents();
 
     // RATELIMIT
     if (transfer_ != NULL)
     	transfer_->mychannels_.erase(this);
 }
+
+
+void Channel::ClearEvents()
+{
+    if (evsend_ptr_ != NULL) {
+    	if (evtimer_pending(evsend_ptr_,NULL))
+    		evtimer_del(evsend_ptr_);
+    	delete evsend_ptr_;
+    	evsend_ptr_ = NULL;
+    }
+}
+
 
 
 
@@ -434,6 +448,28 @@ size_t	  swift::ChunkSize(int fdes)
     else
         return 0;
 }
+
+
+// CHECKPOINT
+void swift::Checkpoint(int transfer) {
+	// Save transfer's binmap for zero-hashcheck restart
+	FileTransfer *ft = FileTransfer::file(transfer);
+	if (ft == NULL)
+		return;
+
+	std::string binmap_filename = ft->file().filename();
+	binmap_filename.append(".mbinmap");
+	//fprintf(stderr,"swift: checkpointing %s at %lli\n", binmap_filename.c_str(), Complete(transfer));
+	FILE *fp = fopen(binmap_filename.c_str(),"wb");
+	if (!fp) {
+		print_error("cannot open mbinmap for writing");
+		return;
+	}
+	if (ft->file().serialize(fp) < 0)
+		print_error("writing to mbinmap");
+	fclose(fp);
+}
+
 
 
 /*

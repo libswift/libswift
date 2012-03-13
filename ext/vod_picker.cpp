@@ -12,7 +12,7 @@
 
 using namespace swift;
 
-#define HIGHPRIORITYWINDOW 360;	// initial high priority window in bin unit
+#define HIGHPRIORITYWINDOW 45000;	// initial high priority window in bin unit
 #define MIDPRIORITYWINDOW 4; 		// proportion of the mid priority window compared to the high pri. one
 
 /** Picks pieces in VoD fashion. The stream is divided in three priority
@@ -66,7 +66,7 @@ public:
     }
 
 
-    bin_t pickUrgent (binmap_t& offer, uint64_t max_width) {
+    bin_t pickUrgent (binmap_t& offer, uint64_t max_width, uint64_t size) {
 
     	bin_t curr = bin_t((playback_pos_+1)<<1); // the base bin will be indexed by the double of the value (bin(4) == bin(0,2))
     	bin_t hint = bin_t::NONE;
@@ -74,9 +74,9 @@ public:
 		binmap_t binmap;
 
     	// report the first bin we find
-    	while (hint.is_none() && examined < high_pri_window_)
+    	while (hint.is_none() && examined < size)
     	{
-    		curr = getTopBin(curr, (playback_pos_+1)<<1, high_pri_window_-examined);
+    		curr = getTopBin(curr, (playback_pos_+1)<<1, size-examined);
     		if (!ack_hint_out_.is_filled(curr))
     		{
     			binmap.fill(offer);
@@ -89,8 +89,8 @@ public:
     	}
 
     	if (!hint.is_none())
-    		while (hint.base_length()>max_width)
-    	        hint = hint.left();
+    		while (hint.base_length()>max_width && !hint.is_base()) // Arno,2012-01-17: stop!
+    	        hint.to_left();
 
     	return hint;
     }
@@ -148,8 +148,8 @@ public:
 			if (avail_->size())
 				rarest_hint = avail_->getRarest(rarest_hint, max_width);
 			else
-				while (rarest_hint.base_length()>max_width)
-					rarest_hint = rarest_hint.left();
+				while (rarest_hint.base_length()>max_width && !rarest_hint.is_base()) // Arno,2012-01-17: stop!
+					rarest_hint.to_left();
 		}
 
 		return rarest_hint;
@@ -171,27 +171,33 @@ public:
 
         // get the first piece to estimate the size, whoever sends it first
         if (!file().size()) {
+
             return bin_t(0,0);
         }
 
         do {
+        	uint64_t max_size = file().size_in_chunks() - playback_pos_ - 1;
+        	max_size = high_pri_window_ < max_size ? high_pri_window_ : max_size;
+
 			// check the high priority window for data we r missing
-			hint = pickUrgent(offer, max_width);
+			hint = pickUrgent(offer, max_width, max_size);
 
 			// check the mid priority window
-			if (hint.is_none())
+			uint64_t start = (1 + playback_pos_) + HIGHPRIORITYWINDOW;	// start in KB
+			if (hint.is_none() && start < file().size_in_chunks())
 			{
-				uint64_t start = (1 + playback_pos_) + HIGHPRIORITYWINDOW;	// start in KB
 				int mid = MIDPRIORITYWINDOW;
 				int size = mid * HIGHPRIORITYWINDOW;						// size of window in KB
+				// check boundaries
+				max_size = file().size_in_chunks() - start;
+				max_size = size < max_size ? size : max_size;
 
-
-				hint = pickRarest(offer, max_width, start, size);
+				hint = pickRarest(offer, max_width, start, max_size);
 
 				//check low priority
-				if (hint.is_none())
+				start += max_size;
+				if (hint.is_none() && start < file().size_in_chunks())
 				{
-					start += size;
 					size = file().size_in_chunks() - start;
 					hint = pickRarest(offer, max_width, start, size);
 					set = 'L';
@@ -220,8 +226,10 @@ public:
         	if (hint.is_none())
         		return hint;
         	else
-        		while (hint.base_length()>max_width)
-        			hint.to_left();
+				while (hint.base_length()>max_width && !hint.is_base()) // Arno,2012-01-17: stop!
+					hint.to_left();
+
+
         }
 
         assert(ack_hint_out_.is_empty(hint));
@@ -241,7 +249,7 @@ public:
     void updatePlaybackPos(int size = 1)
     {
     	assert(size>-1);
-    	if (size<file().size_in_chunks())
+    	if (size< file().size_in_chunks() - playback_pos_ - 2)
     		playback_pos_ += size;
     }
 

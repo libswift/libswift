@@ -34,6 +34,7 @@ typedef unsigned __int64 uint64_t;
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <dirent.h>
 #endif
 
 #include <fcntl.h>
@@ -95,6 +96,14 @@ typedef void* setsockoptptr_t;
 #endif
 
 
+// Arno, 2012-01-05: Handle 64-bit size_t & printf+scanf
+#if SIZE_MAX > UINT_MAX
+#define PRISIZET		"%llu"
+#else
+#define PRISIZET	"%lu"
+#endif
+
+
 namespace swift {
 
 /** tint is the time integer type; microsecond-precise. */
@@ -110,6 +119,11 @@ typedef int64_t tint;
 #define tintabs	_abs64
 #else
 #define tintabs	::abs
+#endif
+
+
+#ifndef _WIN32
+#define TCHAR	char
 #endif
 
 

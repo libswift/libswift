@@ -44,14 +44,54 @@ FileTransfer::FileTransfer (const char* filename, const Sha1Hash& _root_hash, bo
     cur_speed_[DDIR_DOWNLOAD] = MovingAverageSpeed();
     max_speed_[DDIR_UPLOAD] = DBL_MAX;
     max_speed_[DDIR_DOWNLOAD] = DBL_MAX;
+
+    // SAFECLOSE
+    evtimer_assign(&evclean_,Channel::evbase,&FileTransfer::LibeventCleanCallback,this);
+    evtimer_add(&evclean_,tint2tv(5*TINT_SEC));
+
 }
+
+
+// SAFECLOSE
+void FileTransfer::LibeventCleanCallback(int fd, short event, void *arg)
+{
+	FileTransfer *ft = (FileTransfer *)arg;
+	if (ft == NULL)
+		return;
+
+	// STL and MS and conditional delete from set not a happy place :-(
+	std::set<Channel *>	delset;
+	std::set<Channel *>::iterator iter;
+	for (iter=ft->mychannels_.begin(); iter!=ft->mychannels_.end(); iter++)
+	{
+		Channel *c = *iter;
+		if (c != NULL) {
+			if (c->IsScheduled4Close())
+				delset.insert(c);
+		}
+	}
+	for (iter=delset.begin(); iter!=delset.end(); iter++)
+	{
+		Channel *c = *iter;
+		dprintf("%s #%u clean cb close\n",tintstr(),c->id());
+		c->Close();
+		ft->mychannels_.erase(c);
+		delete c;
+    }
+
+    // Reschedule cleanup
+    evtimer_add(&(ft->evclean_),tint2tv(5*TINT_SEC));
+}
+
+
+
 
 
 void    Channel::CloseTransfer (FileTransfer* trans) {
     for(int i=0; i<Channel::channels.size(); i++)
         if (Channel::channels[i] && Channel::channels[i]->transfer_==trans)
         {
-        	fprintf(stderr,"Channel::CloseTransfer: delete #%i\n", Channel::channels[i]->id());
+        	//fprintf(stderr,"Channel::CloseTransfer: delete #%i\n", Channel::channels[i]->id());
         	Channel::channels[i]->Close(); // ARNO
             delete Channel::channels[i];
         }
@@ -108,6 +148,9 @@ FileTransfer::~FileTransfer ()
     Channel::CloseTransfer(this);
     files[fd()] = NULL;
     delete picker_;
+  
+    // Arno, 2012-02-06: Cancel cleanup timer, otherwise chaos!
+    evtimer_del(&evclean_);
 }
 
 
@@ -205,6 +248,8 @@ double		FileTransfer::GetCurrentSpeed(data_direction_t ddir)
 void		FileTransfer::SetMaxSpeed(data_direction_t ddir, double m)
 {
 	max_speed_[ddir] = m;
+	// Arno, 2012-01-04: Be optimistic, forget history.
+	cur_speed_[ddir].Reset();
 }
 
 

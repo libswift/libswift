@@ -68,27 +68,6 @@ http_gw_t *HttpGwFindRequestByTransfer(int transfer) {
 	return NULL;
 }
 
-// CHECKPOINT
-void HttpGwCheckpoint(int transfer) {
-	// Save transfer's binmap for zero-hashcheck restart
-	FileTransfer *ft = FileTransfer::file(transfer);
-	if (ft == NULL)
-		return;
-
-	std::string binmap_filename = ft->file().filename();
-	binmap_filename.append(".mbinmap");
-	fprintf(stderr,"httpgw checkpointing %s at %lli\n", binmap_filename.c_str(), Complete(transfer));
-	FILE *fp = fopen(binmap_filename.c_str(),"wb");
-	if (!fp) {
-		print_error("cannot open mbinmap for writing");
-		return;
-	}
-	if (ft->file().serialize(fp) < 0)
-		print_error("writing to mbinmap");
-	fclose(fp);
-}
-
-
 void HttpGwCloseConnection (http_gw_t* req) {
 	dprintf("%s @%i cleanup http request evreq %p\n",tintstr(),req->id, req->sinkevreq);
 
@@ -113,7 +92,7 @@ void HttpGwCloseConnection (http_gw_t* req) {
 	// Current close policy: checkpoint and DO NOT close transfer, keep on
 	// seeding forever. More sophisticated clients should use CMD GW and issue
 	// REMOVE.
-	HttpGwCheckpoint(req->transfer);
+	swift::Checkpoint(req->transfer);
 
 	//swift::Close(req->transfer);
 

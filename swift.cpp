@@ -14,24 +14,45 @@
 
 using namespace swift;
 
+
+// Local constants
+#define RESCAN_DIR_INTERVAL	30 // seconds
+
+
+// Local prototypes
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
+int OpenSwiftFile(const TCHAR* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, size_t chunk_size);
+int OpenSwiftDirectory(const TCHAR* dirname, Address tracker, bool check_hashes, size_t chunk_size);
+
+void ReportCallback(int fd, short event, void *arg);
+void EndCallback(int fd, short event, void *arg);
+void RescanDirCallback(int fd, short event, void *arg);
+
+
+// Gateway stuff
 bool InstallHTTPGateway(struct event_base *evbase,Address addr,size_t chunk_size, double *maxspeed);
 bool InstallStatsGateway(struct event_base *evbase,Address addr);
 bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr);
-
 bool HTTPIsSending();
 bool StatsQuit();
 void CmdGwUpdateDLStatesCallback();
 
-struct event evreport, evend;
-int file = -1;
+
+// Global variables
+struct event evreport, evrescan, evend;
+int single_fd = -1;
 bool file_enable_checkpoint = false;
 bool file_checkpointed = false;
 bool report_progress = false;
+bool quiet=false;
+bool exitoncomplete=false;
 bool httpgw_enabled=false,cmdgw_enabled=false;
 // Gertjan fix
 bool do_nat_test = false;
+
+char *scan_dirname = 0;
 size_t chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;
+Address tracker;
 
 int main (int argc, char** argv)
 {
@@ -39,7 +60,7 @@ int main (int argc, char** argv)
     {
         {"hash",    required_argument, 0, 'h'},
         {"file",    required_argument, 0, 'f'},
-        {"daemon",  no_argument, 0, 'd'},
+        {"dir",     required_argument, 0, 'd'}, // SEEDDIR reuse
         {"listen",  required_argument, 0, 'l'},
         {"tracker", required_argument, 0, 't'},
         {"debug",   no_argument, 0, 'D'},
@@ -54,15 +75,15 @@ int main (int argc, char** argv)
         {"downrate",required_argument, 0, 'y'}, // RATELIMIT
         {"checkpoint",no_argument, 0, 'H'},
         {"chunksize",required_argument, 0, 'z'}, // CHUNKSIZE
+        {"printurl",no_argument, 0, 'm'},
         {0, 0, 0, 0}
     };
 
     Sha1Hash root_hash;
     char* filename = 0;
-    const char *destdir = 0; // UNICODE?
-    bool daemonize = false;
+    const char *destdir = 0, *trackerargstr = 0; // UNICODE?
+    bool printurl=false;
     Address bindaddr;
-    Address tracker;
     Address httpaddr;
     Address statsaddr;
     Address cmdaddr;
@@ -73,7 +94,7 @@ int main (int argc, char** argv)
     Channel::evbase = event_base_new();
 
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:dl:t:D:pg:s:c:o:u:y:z:wBNH", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHm", long_options, 0)) ) {
         switch (c) {
             case 'h':
                 if (strlen(optarg)!=40)
@@ -86,7 +107,7 @@ int main (int argc, char** argv)
                 filename = strdup(optarg);
                 break;
             case 'd':
-                daemonize = true;
+                scan_dirname = strdup(optarg);
                 break;
             case 'l':
                 bindaddr = Address(optarg);
@@ -96,6 +117,7 @@ int main (int argc, char** argv)
                 break;
             case 't':
                 tracker = Address(optarg);
+                trackerargstr = strdup(optarg); // UNICODE
                 if (tracker==Address())
                     quit("address must be hostname:port, ip:port or just port\n");
                 SetTracker(tracker);
@@ -114,8 +136,7 @@ int main (int argc, char** argv)
             case 'g':
             	httpgw_enabled = true;
                 httpaddr = Address(optarg);
-                if (wait_time==-1)
-                    wait_time = TINT_NEVER; // seed
+				wait_time = TINT_NEVER; // seed
                 break;
             case 'w':
                 if (optarg) {
@@ -148,6 +169,7 @@ int main (int argc, char** argv)
                 cmdaddr = Address(optarg);
                 if (cmdaddr==Address())
                     quit("address must be hostname:port, ip:port or just port\n");
+                wait_time = TINT_NEVER; // seed
                 break;
             case 'o': // SWIFTPROC
                 destdir = strdup(optarg); // UNICODE
@@ -172,7 +194,11 @@ int main (int argc, char** argv)
             	if (n != 1)
             		quit("chunk size must be bytes as int\n");
             	break;
-
+            case 'm': // printurl
+            	printurl = true;
+            	quiet = true;
+            	wait_time = 0;
+            	break;
         }
 
     }   // arguments parsed
@@ -213,7 +239,8 @@ int main (int argc, char** argv)
             if (i==10)
                 quit("cant listen on %s\n",bindaddr.str());
         }
-        fprintf(stderr,"swift: My listen port is %d\n", BoundAddress(sock).port() );
+        if (!quiet)
+        	fprintf(stderr,"swift: My listen port is %d\n", BoundAddress(sock).port() );
     }
 
     if (tracker!=Address())
@@ -228,61 +255,105 @@ int main (int argc, char** argv)
     if (statsaddr != Address())
     	InstallStatsGateway(Channel::evbase,statsaddr);
 
-    if (root_hash!=Sha1Hash::ZERO && !filename)
-        filename = strdup(root_hash.hex().c_str());
 
-    if (filename) {
-        file = Open(filename,root_hash,Address(),false,chunk_size);
+    if (!cmdgw_enabled && !httpgw_enabled)
+    {
+		int ret = -1;
+		if (filename || root_hash != Sha1Hash::ZERO) {
+			// Single file
+			if (root_hash!=Sha1Hash::ZERO && !filename)
+				filename = strdup(root_hash.hex().c_str());
 
-        if (file<=0)
-            quit("cannot open file %s",filename);
-        printf("Root hash: %s\n", RootMerkleHash(file).hex().c_str());
+			single_fd = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size);
+			if (single_fd < 0)
+				quit("cannot open file %s",filename);
+			if (printurl) {
+				if (trackerargstr == NULL)
+					trackerargstr = "";
+				printf("tswift://%s/%s$%i\n", trackerargstr, RootMerkleHash(single_fd).hex().c_str(), chunk_size);
 
-        // RATELIMIT
-        FileTransfer *ft = FileTransfer::file(file);
-        ft->SetMaxSpeed(DDIR_DOWNLOAD,maxspeed[DDIR_DOWNLOAD]);
-        ft->SetMaxSpeed(DDIR_UPLOAD,maxspeed[DDIR_UPLOAD]);
+				// Arno, 2012-01-04: LivingLab: Create checkpoint such that content
+				// can be copied to scanned dir and quickly loaded
+				swift::Checkpoint(single_fd);
+			}
+			else
+				printf("Root hash: %s\n", RootMerkleHash(single_fd).hex().c_str());
+
+			// RATELIMIT
+			FileTransfer *ft = FileTransfer::file(single_fd);
+			ft->SetMaxSpeed(DDIR_DOWNLOAD,maxspeed[DDIR_DOWNLOAD]);
+			ft->SetMaxSpeed(DDIR_UPLOAD,maxspeed[DDIR_UPLOAD]);
+
+			ret = single_fd;
+		}
+		else if (scan_dirname != NULL)
+			ret = OpenSwiftDirectory(scan_dirname,Address(),false,chunk_size);
+		else
+			ret = -1;
+
+		// No file/dir nor HTTP gateway nor CMD gateway, will never know what to swarm
+		if (ret == -1) {
+			fprintf(stderr,"Usage:\n");
+			fprintf(stderr,"  -h, --hash\troot Merkle hash for the transmission\n");
+			fprintf(stderr,"  -f, --file\tname of file to use (root hash by default)\n");
+			fprintf(stderr,"  -l, --listen\t[ip:|host:]port to listen to (default: random)\n");
+			fprintf(stderr,"  -t, --tracker\t[ip:|host:]port of the tracker (default: none)\n");
+			fprintf(stderr,"  -D, --debug\tfile name for debugging logs (default: stdout)\n");
+			fprintf(stderr,"  -B\tdebugging logs to stdout (win32 hack)\n");
+			fprintf(stderr,"  -p, --progress\treport transfer progress\n");
+			fprintf(stderr,"  -g, --httpgw\t[ip:|host:]port to bind HTTP content gateway to (no default)\n");
+			fprintf(stderr,"  -s, --statsgw\t[ip:|host:]port to bind HTTP stats listen socket to (no default)\n");
+			fprintf(stderr,"  -c, --cmdgw\t[ip:|host:]port to bind CMD listen socket to (no default)\n");
+			fprintf(stderr,"  -o, --destdir\tdirectory for saving data (default: none)\n");
+			fprintf(stderr,"  -u, --uprate\tupload rate limit in KiB/s (default: unlimited)\n");
+			fprintf(stderr,"  -y, --downrate\tdownload rate limit in KiB/s (default: unlimited)\n");
+			fprintf(stderr,"  -w, --wait\tlimit running time, e.g. 1[DHMs] (default: infinite with -l, -g)\n");
+			fprintf(stderr,"  -H, --checkpoint\tcreate checkpoint of file when complete for fast restart\n");
+			fprintf(stderr,"  -z, --chunksize\tchunk size in bytes (default: %d)\n", SWIFT_DEFAULT_CHUNK_SIZE);
+			fprintf(stderr,"  -m, --printurl\tcompose URL from tracker, file and chunksize\n");
+			return 1;
+		}
     }
 
-    // No file nor HTTP gateway nor CMD gateway, will never know what to swarm
-    if (cmdaddr==Address() && file==-1 && !httpgw_enabled) {
-        fprintf(stderr,"Usage:\n");
-        fprintf(stderr,"  -h, --hash\troot Merkle hash for the transmission\n");
-        fprintf(stderr,"  -f, --file\tname of file to use (root hash by default)\n");
-        fprintf(stderr,"  -l, --listen\t[ip:|host:]port to listen to (default: random)\n");
-        fprintf(stderr,"  -t, --tracker\t[ip:|host:]port of the tracker (default: none)\n");
-        fprintf(stderr,"  -D, --debug\tfile name for debugging logs (default: stdout)\n");
-        fprintf(stderr,"  -B\tdebugging logs to stdout (win32 hack)\n");
-        fprintf(stderr,"  -p, --progress\treport transfer progress\n");
-        fprintf(stderr,"  -g, --httpgw\t[ip:|host:]port to bind HTTP content gateway to (no default)\n");
-        fprintf(stderr,"  -s, --statsgw\t[ip:|host:]port to bind HTTP stats listen socket to (no default)\n");
-        fprintf(stderr,"  -c, --cmdgw\t[ip:|host:]port to bind CMD listen socket to (no default)\n");
-        fprintf(stderr,"  -o, --destdir\tdirectory for saving data (default: none)\n");
-        fprintf(stderr,"  -u, --uprate\tupload rate limit in KiB/s (default: unlimited)\n");
-        fprintf(stderr,"  -y, --downrate\tdownload rate limit in KiB/s (default: unlimited)\n");
-        fprintf(stderr,"  -w, --wait\tlimit running time, e.g. 1[DHMs] (default: infinite with -l, -g)\n");
-        fprintf(stderr,"  -H, --checkpoint\tcreate checkpoint of file when complete for fast restart\n");
-        fprintf(stderr,"  -z, --chunksize\tchunk size in bytes (default: %d)\n", SWIFT_DEFAULT_CHUNK_SIZE);
-        return 1;
+    // Arno, 2012-01-04: Allow download and quit mode
+    if (single_fd != -1 && root_hash != Sha1Hash::ZERO && wait_time == 0) {
+    	wait_time = TINT_NEVER;
+    	exitoncomplete = true;
     }
+
 
     // End after wait_time
-    if (wait_time != TINT_NEVER && (long)wait_time > 0) {
+    if ((long)wait_time > 0) {
     	evtimer_assign(&evend, Channel::evbase, EndCallback, NULL);
     	evtimer_add(&evend, tint2tv(wait_time));
     }
 
-    // Arno: always, for statsgw, rate control, etc.
-	evtimer_assign(&evreport, Channel::evbase, ReportCallback, NULL);
-	evtimer_add(&evreport, tint2tv(TINT_SEC));
+    // Enter mainloop, if daemonizing
+    if (wait_time == TINT_NEVER || (long)wait_time > 0) {
+		// Arno: always, for statsgw, rate control, etc.
+		evtimer_assign(&evreport, Channel::evbase, ReportCallback, NULL);
+		evtimer_add(&evreport, tint2tv(TINT_SEC));
 
-	fprintf(stderr,"swift: Mainloop\n");
-	// Enter libevent mainloop
-    event_base_dispatch(Channel::evbase);
 
-    // event_base_loopexit() was called, shutting down
-    if (file!=-1)
-        Close(file);
+		// Arno:
+		if (scan_dirname != NULL) {
+			evtimer_assign(&evrescan, Channel::evbase, RescanDirCallback, NULL);
+			evtimer_add(&evrescan, tint2tv(RESCAN_DIR_INTERVAL*TINT_SEC));
+		}
+
+
+		fprintf(stderr,"swift: Mainloop\n");
+		// Enter libevent mainloop
+		event_base_dispatch(Channel::evbase);
+
+		// event_base_loopexit() was called, shutting down
+    }
+
+    // Arno, 2012-01-03: Close all transfers
+	for (int i=0; i<FileTransfer::files.size(); i++) {
+		if (FileTransfer::files[i] != NULL)
+            Close(FileTransfer::files[i]->fd());
+    }
 
     if (Channel::debug_file)
         fclose(Channel::debug_file);
@@ -293,21 +364,107 @@ int main (int argc, char** argv)
 }
 
 
-void swift::ReportCallback(int fd, short event, void *arg) {
 
-	if (file >= 0)
+int OpenSwiftFile(const TCHAR* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, size_t chunk_size)
+{
+	std::string bfn;
+	bfn.assign(filename);
+	bfn.append(".mbinmap");
+	const char *binmap_filename = bfn.c_str();
+
+	// Arno, 2012-01-03: Hack to discover root hash of a file on disk, such that
+	// we don't load it twice while rescanning a dir of content.
+	HashTree *ht = new HashTree(true,binmap_filename);
+
+	//	fprintf(stderr,"swift: parsedir: File %s may have hash %s\n", filename, ht->root_hash().hex().c_str() );
+
+	int fd = swift::Find(ht->root_hash());
+	if (fd == -1) {
+		if (!quiet)
+			fprintf(stderr,"swift: parsedir: Opening %s\n", filename);
+
+		fd = swift::Open(filename,hash,tracker,check_hashes,chunk_size);
+	}
+	else if (!quiet)
+		fprintf(stderr,"swift: parsedir: Ignoring loaded %s\n", filename);
+	return fd;
+}
+
+
+int OpenSwiftDirectory(const TCHAR* dirname, Address tracker, bool check_hashes, size_t chunk_size)
+{
+#ifdef _WIN32
+	HANDLE hFind;
+	WIN32_FIND_DATA FindFileData;
+
+	TCHAR pathsearch[MAX_PATH];
+	strcpy(pathsearch,dirname);
+	strcat(pathsearch,"\\*.*");
+	hFind = FindFirstFile(pathsearch, &FindFileData);
+	if(hFind != INVALID_HANDLE_VALUE) {
+	    do {
+	    	//fprintf(stderr,"swift: parsedir: %s\n", FindFileData.cFileName);
+	    	if ((FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 && !strstr(FindFileData.cFileName,".mhash") && !strstr(FindFileData.cFileName,".mbinmap") ) {
+				TCHAR path[MAX_PATH];
+				strcpy(path,dirname);
+				strcat(path,"\\");
+				strcat(path,FindFileData.cFileName);
+
+				int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,check_hashes,chunk_size);
+				if (fd >= 0)
+					Checkpoint(fd);
+	    	}
+	    } while(FindNextFile(hFind, &FindFileData));
+
+	    FindClose(hFind);
+	    return 1;
+	}
+	else
+		return -1;
+#else
+	DIR *dirp = opendir(dirname);
+	if (dirp == NULL)
+		return -1;
+
+	while(1)
+	{
+		struct dirent *de = readdir(dirp);
+		if (de == NULL)
+			break;
+		if ((de->d_type & DT_DIR) !=0 || strstr(de->d_name,".mhash") || strstr(de->d_name,".mbinmap"))
+			continue;
+		char path[PATH_MAX];
+		strcpy(path,dirname);
+		strcat(path,"/");
+		strcat(path,de->d_name);
+
+		int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,check_hashes,chunk_size);
+		if (fd >= 0)
+			Checkpoint(fd);
+	}
+	closedir(dirp);
+	return 1;
+#endif
+}
+
+
+
+void ReportCallback(int fd, short event, void *arg) {
+	// Called every second to print/calc some stats
+
+	if (single_fd  >= 0)
 	{
 		if (report_progress) {
 			fprintf(stderr,
 				"%s %lli of %lli (seq %lli) %lli dgram %lli bytes up, "	\
 				"%lli dgram %lli bytes down\n",
-				IsComplete(file) ? "DONE" : "done",
-				Complete(file), Size(file), SeqComplete(file),
+				IsComplete(single_fd ) ? "DONE" : "done",
+				Complete(single_fd), Size(single_fd), SeqComplete(single_fd),
 				Channel::global_dgrams_up, Channel::global_raw_bytes_up,
 				Channel::global_dgrams_down, Channel::global_raw_bytes_down );
 		}
 
-        FileTransfer *ft = FileTransfer::file(file);
+        FileTransfer *ft = FileTransfer::file(single_fd);
         if (report_progress) { // TODO: move up
         	fprintf(stderr,"upload %lf\n",ft->GetCurrentSpeed(DDIR_UPLOAD));
         	fprintf(stderr,"dwload %lf\n",ft->GetCurrentSpeed(DDIR_DOWNLOAD));
@@ -318,7 +475,7 @@ void swift::ReportCallback(int fd, short event, void *arg) {
     	ft->OnSendData(0);
 
     	// CHECKPOINT
-    	if (file_enable_checkpoint && !file_checkpointed && IsComplete(file))
+    	if (file_enable_checkpoint && !file_checkpointed && IsComplete(single_fd))
     	{
     		std::string binmap_filename = ft->file().filename();
     		binmap_filename.append(".mbinmap");
@@ -334,6 +491,12 @@ void swift::ReportCallback(int fd, short event, void *arg) {
     			file_checkpointed = true;
     		fclose(fp);
     	}
+
+
+    	if (exitoncomplete && IsComplete(single_fd))
+    		// Download and stop mode
+    	    event_base_loopexit(Channel::evbase, NULL);
+
 	}
     if (httpgw_enabled)
     {
@@ -365,9 +528,24 @@ void swift::ReportCallback(int fd, short event, void *arg) {
 	evtimer_add(&evreport, tint2tv(TINT_SEC));
 }
 
-void swift::EndCallback(int fd, short event, void *arg) {
+void EndCallback(int fd, short event, void *arg) {
+	// Called when wait timer expires == fixed time daemon
     event_base_loopexit(Channel::evbase, NULL);
 }
+
+
+void RescanDirCallback(int fd, short event, void *arg) {
+
+	// SEEDDIR
+	// Rescan dir: CAREFUL: this is blocking, better prepare .m* files first
+	// by running swift separately and then copy content + *.m* to scanned dir,
+	// such that a fast restore from checkpoint is done.
+	//
+	OpenSwiftDirectory(scan_dirname,tracker,false,chunk_size);
+
+	evtimer_add(&evrescan, tint2tv(RESCAN_DIR_INTERVAL*TINT_SEC));
+}
+
 
 
 #ifdef _WIN32

@@ -24,11 +24,12 @@ source = [ 'bin.cpp', 'binmap.cpp','binheap.cpp', 'sha1.cpp','hashtree.cpp',
     	   'transfer.cpp', 'channel.cpp', 'sendrecv.cpp', 'send_control.cpp', 
     	   'compat.cpp','avgspeed.cpp', 'availability.cpp']
 
-#libevent2path = '\\build\\libevent-2.0.14-stable'
-libevent2path = '\\build\\ttuki\\libevent-2.0.15-arno-http'
 
 env = Environment()
 if sys.platform == "win32":
+    #libevent2path = '\\build\\libevent-2.0.14-stable'
+    libevent2path = '\\build\\ttuki\\libevent-2.0.15-arno-http'
+
     # "MSVC works out of the box". Sure.
     # Make sure scons finds cl.exe, etc.
     env.Append ( ENV = { 'PATH' : os.environ['PATH'] } )
@@ -82,25 +83,36 @@ if sys.platform == "win32":
     APPSOURCE=['swift.cpp','httpgw.cpp','statsgw.cpp','cmdgw.cpp','getopt.c','getopt_long.c']
     
 else:
+    libevent2path = '/arno/pkgs/libevent-2.0.15-arno-http'
+
     # Enable the user defining external includes
     if 'CPPPATH' in os.environ:
         cpppath = os.environ['CPPPATH']
     else:
         cpppath = ""
         print "To use external libs, set CPPPATH environment variable to list of colon-separated include dirs"
+    cpppath += libevent2path+'/include:'
     env.Append(CPPPATH=".:"+cpppath)
     #env.Append(LINKFLAGS="--static")
 
     #if DEBUG:
     #    env.Append(CXXFLAGS="-g")
 
+    # Large-file support always
+    env.Append(CXXFLAGS="-D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE")
+
     # Set libs to link to
-    libs = ['stdc++','pthread']
+    libs = ['stdc++','libevent','pthread']
     if 'LIBPATH' in os.environ:
           libpath = os.environ['LIBPATH']
     else:
         libpath = ""
         print "To use external libs, set LIBPATH environment variable to list of colon-separated lib dirs"
+    libpath += libevent2path+'/lib:'
+
+    linkflags = '-Wl,-rpath,'+libevent2path+'/lib'
+    env.Append(LINKFLAGS=linkflags);
+
 
     APPSOURCE=['swift.cpp','httpgw.cpp','statsgw.cpp','cmdgw.cpp']
 

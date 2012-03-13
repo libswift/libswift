@@ -12,11 +12,6 @@ using namespace swift;
 
 #define DEBUGAVAILABILITY 	0
 
-// Arno, 2011-12-22: Riccardo to fix.
-#ifdef _WIN32
-typedef unsigned long long 			uint;
-#endif
-
 
 uint8_t Availability::get(const bin_t bin)
 {
@@ -57,6 +52,7 @@ void Availability::removeBin(bin_t bin)
 		avail_[i]--;
 	}
 }
+
 
 void Availability::setBinmap(binmap_t * binmap)
 {
@@ -135,7 +131,7 @@ void Availability::set(uint32_t channel_id, binmap_t& binmap, bin_t target)
 	}
 	// keep track of the incoming have msgs
 	else
-		waiting_[channel_id] = &binmap;
+		waiting_peers_.push_back(std::make_pair(channel_id, &binmap));
 }
 
 
@@ -143,11 +139,21 @@ void Availability::remove(uint32_t channel_id, binmap_t& binmap)
 {
 	if (DEBUGAVAILABILITY)
 	{
-		char bin_name_buf[32];
 		dprintf("%s #%u Availability -> removing peer\n",tintstr(),channel_id);
 	}
 	if (size_<=0)
-		waiting_[channel_id] = NULL;
+	{
+		std::vector<std::pair <uint, binmap_t*> >::iterator vpci = waiting_peers_.begin();
+		for(; vpci != waiting_peers_.end(); ++vpci)
+		{
+			if (vpci->first == channel_id)
+				break;
+		}
+		// Arno, 2012-01-03: Protection
+		if (vpci != waiting_peers_.end())
+			waiting_peers_.erase(vpci);
+	}
+
 	else
 		removeBinmap(binmap);
 	// remove the binmap from the availability
@@ -156,13 +162,13 @@ void Availability::remove(uint32_t channel_id, binmap_t& binmap)
 }
 
 
-void Availability::setSize(uint64_t size)
+void Availability::setSize(uint size)
 {
 	if (size && !size_)
 	{
 		// TODO can be optimized (bithacks)
 		uint r = 0;
-		uint s = (int)size;
+		uint s = size;
 
 		// check if the binmap is not complete
 		if (s & (s-1))
@@ -179,11 +185,11 @@ void Availability::setSize(uint64_t size)
 		avail_ = new uint8_t[s]();
 
 		// Initialize with the binmaps we already received
-		for (int i=0; i<20; i++)
+		for(std::vector<std::pair <uint, binmap_t*> >::const_iterator vpci = waiting_peers_.begin(); vpci != waiting_peers_.end(); ++vpci)
 		{
-			if (waiting_[i])
-				setBinmap(waiting_[i]);
+			setBinmap(vpci->second);
 		}
+
 
 		if (DEBUGAVAILABILITY)
 		{

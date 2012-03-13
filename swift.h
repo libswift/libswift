@@ -72,9 +72,9 @@ namespace swift {
 #define SWIFT_MAX_UDP_OVER_ETH_PAYLOAD		(1500-20-8)
 // Arno: Maximum size of non-DATA messages in a UDP packet we send.
 #define SWIFT_MAX_NONDATA_DGRAM_SIZE 		(SWIFT_MAX_UDP_OVER_ETH_PAYLOAD-SWIFT_DEFAULT_CHUNK_SIZE-1-4)
-// Arno: Maximum size of a UDP packet we send. Note: depends on CHUNKSIZE 8196
-#define SWIFT_MAX_SEND_DGRAM_SIZE			(SWIFT_MAX_NONDATA_DGRAM_SIZE+8196)
-// Arno: Maximum size of a UDP packet we are willing to accept. Note: depends on CHUNKSIZE 8196
+// Arno: Maximum size of a UDP packet we send. Note: depends on CHUNKSIZE 8192
+#define SWIFT_MAX_SEND_DGRAM_SIZE			(SWIFT_MAX_NONDATA_DGRAM_SIZE+1+4+8192)
+// Arno: Maximum size of a UDP packet we are willing to accept. Note: depends on CHUNKSIZE 8192
 #define SWIFT_MAX_RECV_DGRAM_SIZE			(SWIFT_MAX_SEND_DGRAM_SIZE*2)
 
 #define layer2bytes(ln,cs)	(uint64_t)( ((double)cs)*pow(2.0,(double)ln))
@@ -183,11 +183,11 @@ namespace swift {
         tintbin(tint time_, bin_t bin_) : time(time_), bin(bin_) {}
         tintbin(bin_t bin_) : time(NOW), bin(bin_) {}
         bool operator < (const tintbin& b) const
-	{ return time > b.time; }
+			{ return time > b.time; }
         bool operator == (const tintbin& b) const
-	{ return time==b.time && bin==b.bin; }
+			{ return time==b.time && bin==b.bin; }
         bool operator != (const tintbin& b) const
-	{ return !(*this==b); }
+			{ return !(*this==b); }
     };
 
     typedef std::deque<tintbin> tbqueue;
@@ -227,8 +227,9 @@ namespace swift {
         SWIFT_SIGNED_HASH = 7,
         SWIFT_HINT = 8,
         SWIFT_MSGTYPE_RCVD = 9,
-        SWIFT_VERSION = 10, // Arno, 2011-10-19: TODO to match RFC-rev-03
-        SWIFT_MESSAGE_COUNT = 11
+        SWIFT_RANDOMIZE = 10, //FRAGRAND
+        SWIFT_VERSION = 11, // Arno, 2011-10-19: TODO to match RFC-rev-03
+        SWIFT_MESSAGE_COUNT = 12
     } messageid_t;
 
     typedef enum {
@@ -309,6 +310,9 @@ namespace swift {
 		uint32_t		GetNumSeeders();
 		/** Arno: Return the set of Channels for this transfer. MORESTATS */
 		std::set<Channel *> GetChannels() { return mychannels_; }
+
+		// SAFECLOSE
+		static void LibeventCleanCallback(int fd, short event, void *arg);
     protected:
 
         HashTree        file_;
@@ -338,6 +342,10 @@ namespace swift {
         MovingAverageSpeed	cur_speed_[2];
         double				max_speed_[2];
         int					speedzerocount_;
+
+        // SAFECLOSE
+        struct event 		evclean_;
+
     public:
         void            OnDataIn (bin_t pos);
         // Gertjan fix: return bool
@@ -422,7 +430,7 @@ namespace swift {
         } send_control_t;
 
 
-        struct event evsend_; // Arno: timer per channel
+        struct event *evsend_ptr_; // Arno: timer per channel // SAFECLOSE
         static struct event_base *evbase;
         static struct event evrecv;
         static const char* SEND_CONTROL_MODES[];
@@ -462,6 +470,7 @@ namespace swift {
         void        OnHash (struct evbuffer *evb);
         void        OnPex (struct evbuffer *evb);
         void        OnHandshake (struct evbuffer *evb);
+        void        OnRandomize (struct evbuffer *evb); //FRAGRAND
         void        AddHandshake (struct evbuffer *evb);
         bin_t       AddData (struct evbuffer *evb);
         void        AddAck (struct evbuffer *evb);
@@ -522,6 +531,12 @@ namespace swift {
         }
         static void CloseTransfer (FileTransfer* trans);
 
+        // SAFECLOSE
+        void		ClearEvents();
+        void 		Schedule4Close() { scheduled4close_ = true; }
+        bool		IsScheduled4Close() { return scheduled4close_; }
+
+
     protected:
         /** Channel id: index in the channel array. */
         uint32_t    id_;
@@ -572,6 +587,7 @@ namespace swift {
         tint        next_send_time_;
         /** Congestion window; TODO: int, bytes. */
         float       cwnd_;
+        int         cwnd_count1_;
         /** Data sending interval. */
         tint        send_interval_;
         /** The congestion control strategy. */
@@ -599,16 +615,22 @@ namespace swift {
         // Arno, 2011-11-28: for detailed, per-peer stats. MORESTATS
         uint64_t raw_bytes_up_, raw_bytes_down_, bytes_up_, bytes_down_;
 
+        // SAFECLOSE
+        bool		scheduled4close_;
+
+
         int         PeerBPS() const {
             return TINT_SEC / dip_avg_ * 1024;
         }
         /** Get a request for one packet from the queue of peer's requests. */
-        bin_t       DequeueHint();
+        bin_t       DequeueHint(bool *retransmitptr);
         bin_t       ImposeHint();
         void        TimeoutDataOut ();
         void        CleanStaleHintOut();
         void        CleanHintOut(bin_t pos);
         void        Reschedule();
+        void 		UpdateDIP(bin_t pos); // RETRANSMIT
+
 
         static PeerSelector* peer_selector;
 
@@ -683,9 +705,6 @@ namespace swift {
     /** Must be called by any client using the library */
     void LibraryInit(void);
 
-    void ReportCallback(int fd, short event, void *arg);
-    void EndCallback(int fd, short event, void *arg);
-
     int evbuffer_add_string(struct evbuffer *evb, std::string str);
     int evbuffer_add_8(struct evbuffer *evb, uint8_t b);
     int evbuffer_add_16be(struct evbuffer *evb, uint16_t w);
@@ -704,6 +723,10 @@ namespace swift {
  #define SWIFT_MAX_CONNECTIONS 20
 
     void nat_test_update(void);
+
+    // Arno: Save transfer's binmap for zero-hashcheck restart
+    void Checkpoint(int fdes);
+
 } // namespace end
 
 // #define SWIFT_MUTE

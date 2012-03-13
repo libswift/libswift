@@ -22,6 +22,7 @@ using namespace swift;
 // Send PLAY after receiving 2^layer * chunksize bytes
 #define CMDGW_MAX_PREBUF_BYTES		(256*1024)
 
+
 // Status of the swarm download
 #define DLSTATUS_HASHCHECKING  2
 #define DLSTATUS_DOWNLOADING  3
@@ -66,8 +67,10 @@ void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line);
 
 void CmdGwFreeRequest(cmd_gw_t* req)
 {
-	if (req->contentfilename != NULL)
-		free(req->contentfilename);
+    if (req->contentfilename != NULL)
+        free(req->contentfilename);
+    // Arno, 2012-02-06: Reset, in particular moreinfo flag.
+    memset(req,'\0',sizeof(cmd_gw_t));
 }
 
 
@@ -171,6 +174,14 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 
 		remove(mhashfilename);
 		free(mhashfilename);
+
+		// Arno, 2012-01-10: .mbinmap gots to go too.
+		char *mbinmapfilename = (char *)malloc(strlen(req->contentfilename)+strlen(".mbinmap")+1);
+		strcpy(mbinmapfilename,req->contentfilename);
+		strcat(mbinmapfilename,".mbinmap");
+
+		remove(mbinmapfilename);
+		free(mbinmapfilename);
 	}
 
 	CmdGwFreeRequest(req);
@@ -376,8 +387,7 @@ void CmdGwDataCameInCallback(struct bufferevent *bev, void *ctx)
 		fprintf(stderr,"CmdGwDataCameIn: ENTER %d\n", cmdsock );
 
 	struct evbuffer *inputevbuf = bufferevent_get_input(bev);
-    struct evbuffer *evb = evbuffer_new();
-    int ret = evbuffer_add_buffer(cmd_evbuffer,inputevbuf);
+        int ret = evbuffer_add_buffer(cmd_evbuffer,inputevbuf);
 	if (ret == -1) {
 		CmdGwCloseConnection(cmdsock);
 		return;
@@ -441,7 +451,8 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 		paramstr = token+1;
 	}
 	else
-		return ERROR_UNKNOWN_CMD;
+		paramstr = "";
+
 	method = copyline;
 
     fprintf(stderr,"cmd: GOT %s %s\n", method, paramstr);
@@ -458,7 +469,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
     	char *url = paramstr;
         // parse URL
-		// tswift://tracker/roothash-as-hex@duration-in-secs
+		// tswift://tracker/roothash-as-hex$chunksize@duration-in-secs
         char *trackerstr=NULL,*hashstr=NULL,*durationstr=NULL,*chunksizestr=NULL;
 
         bool haschunksize = (bool)(strchr(paramstr,'$') != NULL);
@@ -499,7 +510,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
                 	return ERROR_BAD_ARG;
             chunksizestr = token;
         }
-        else {
+        else if (hasduration) {
         	token = strtok_r(NULL,"@",&savetok);       // roothash
         	if (token == NULL)
         		return ERROR_BAD_ARG;
@@ -509,6 +520,12 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             if (token == NULL)
                 	return ERROR_BAD_ARG;
             durationstr = token;
+        }
+        else {
+        	token = strtok_r(NULL,"",&savetok);       // roothash
+        	if (token == NULL)
+        		return ERROR_BAD_ARG;
+        	hashstr = token;
         }
 
         dprintf("cmd: START: parsed tracker %s hash %s dur %s cs %s\n",trackerstr,hashstr,durationstr,chunksizestr);

@@ -131,7 +131,7 @@ chunk_size_(chunk_size)
     if( res < 0 && errno == ENOENT)
     	binmap_exists = false;
 
-    fprintf(stderr,"hashtree: hashchecking want %s do %s binmap-on-disk %s\n", (check_hashes ? "yes" : "no"), (actually_check_hashes? "yes" : "no"), (binmap_exists? "yes" : "no") );
+    //fprintf(stderr,"hashtree: hashchecking want %s do %s binmap-on-disk %s\n", (check_hashes ? "yes" : "no"), (actually_check_hashes? "yes" : "no"), (binmap_exists? "yes" : "no") );
 
     hash_fd_ = open(hfn.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (hash_fd_<0) {
@@ -167,12 +167,28 @@ chunk_size_(chunk_size)
     }
 }
 
+
+HashTree::HashTree(bool dummy, const char* binmap_filename) :
+root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), fd_(0), hash_fd_(0),
+filename_(""), size_(0), sizec_(0), complete_(0), completec_(0),
+chunk_size_(0)
+{
+	FILE *fp = fopen(binmap_filename,"rb");
+	if (!fp) {
+		 return;
+	}
+	if (partial_deserialize(fp) < 0) {
+	}
+	fclose(fp);
+}
+
+
 // Reads complete file and constructs hash tree
 void            HashTree::Submit () {
     size_ = file_size(fd_);
     sizec_ = (size_ + chunk_size_-1) / chunk_size_;
 
-    fprintf(stderr,"hashtree: submit: cs %i\n", chunk_size_);
+    //fprintf(stderr,"hashtree: submit: cs %i\n", chunk_size_);
 
     peak_count_ = gen_peaks(sizec_,peaks_);
     int hashes_size = Sha1Hash::SIZE*sizec_*2;
@@ -219,7 +235,7 @@ void            HashTree::Submit () {
  Precondition: root hash known */
 void            HashTree::RecoverProgress () {
 
-	fprintf(stderr,"hashtree: recover: cs %i\n", chunk_size_);
+	//fprintf(stderr,"hashtree: recover: cs %i\n", chunk_size_);
 
 	if (!RecoverPeakHashes())
 		return;
@@ -285,7 +301,7 @@ int HashTree::serialize(FILE *fp)
 {
 	fprintf_retiffail(fp,"version %i\n", 1 );
 	fprintf_retiffail(fp,"root hash %s\n", root_hash_.hex().c_str() );
-	fprintf_retiffail(fp,"chunk size %i\n", chunk_size_ );
+	fprintf_retiffail(fp,"chunk size " PRISIZET"\n", chunk_size_ );
 	fprintf_retiffail(fp,"complete %lli\n", complete_ );
 	fprintf_retiffail(fp,"completec %lli\n", completec_ );
 	return ack_out_.serialize(fp);
@@ -296,6 +312,15 @@ int HashTree::serialize(FILE *fp)
  * Precondition: root hash known
  */
 int HashTree::deserialize(FILE *fp) {
+	return internal_deserialize(fp,true);
+}
+
+int HashTree::partial_deserialize(FILE *fp) {
+	return internal_deserialize(fp,false);
+}
+
+
+int HashTree::internal_deserialize(FILE *fp,bool contentavail) {
 
 	char hexhashstr[256];
 	uint64_t c,cc;
@@ -304,16 +329,20 @@ int HashTree::deserialize(FILE *fp) {
 
 	fscanf_retiffail(fp,"version %i\n", &version );
 	fscanf_retiffail(fp,"root hash %s\n", hexhashstr);
-	fscanf_retiffail(fp,"chunk size %i\n", &cs);
+	fscanf_retiffail(fp,"chunk size " PRISIZET"\n", &cs);
 	fscanf_retiffail(fp,"complete %lli\n", &c );
 	fscanf_retiffail(fp,"completec %lli\n", &cc );
 
-	fprintf(stderr,"hashtree: deserialize: %s %lli ~ %lli * %i\n", hexhashstr, c, cc, cs );
+	//fprintf(stderr,"hashtree: deserialize: %s %lli ~ %lli * %i\n", hexhashstr, c, cc, cs );
 
 	if (ack_out_.deserialize(fp) < 0)
 		return -1;
 	root_hash_ = Sha1Hash(true, hexhashstr);
 	chunk_size_ = cs;
+
+	// Arno, 2012-01-03: Hack to just get root hash
+	if (!contentavail)
+		return 2;
 
 	if (!RecoverPeakHashes()) {
 		root_hash_ = Sha1Hash::ZERO;

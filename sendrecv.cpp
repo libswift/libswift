@@ -86,8 +86,25 @@ bin_t           Channel::ImposeHint () {
 }
 
 
-bin_t        Channel::DequeueHint () {
-    if (hint_in_.empty() && last_recv_time_>NOW-rtt_avg_-TINT_SEC) {
+bin_t        Channel::DequeueHint (bool *retransmitptr) {
+    bin_t send = bin_t::NONE;
+
+    // Arno, 2012-01-23: Extra protection against channel loss, don't send DATA
+    if (last_recv_time_ < NOW-(3*TINT_SEC))
+    	return bin_t::NONE;
+
+    // Arno, 2012-01-18: Reenable Victor's retransmit
+    if (!data_out_tmo_.empty())
+    {
+        tintbin tb = data_out_tmo_.front();
+        send = tb.bin;
+        data_out_tmo_.pop_front();  
+        *retransmitptr = true;
+    }
+    else
+        *retransmitptr = false;
+
+    if (send.is_none() && hint_in_.empty() && last_recv_time_>NOW-rtt_avg_-TINT_SEC) {
         bin_t my_pick = ImposeHint(); // FIXME move to the loop
         if (ENABLE_SENDERSIZE_PUSH &&!my_pick.is_none()) {
             hint_in_.push_back(my_pick);
@@ -95,7 +112,7 @@ bin_t        Channel::DequeueHint () {
             dprintf("%s #%u *hint %s\n",tintstr(),id_,my_pick.str(bin_name_buf));
         }
     }
-    bin_t send = bin_t::NONE;
+    
     while (!hint_in_.empty() && send.is_none()) {
         bin_t hint = hint_in_.front().bin;
         tint time = hint_in_.front().time;
@@ -200,7 +217,8 @@ void    Channel::AddHint (struct evbuffer *evb) {
 	//fprintf(stderr,"AddHint: cur %f max %f\n", transfer().GetCurrentSpeed(DDIR_DOWNLOAD), transfer().GetMaxSpeed(DDIR_DOWNLOAD));
 
 	if (transfer().GetCurrentSpeed(DDIR_DOWNLOAD) > transfer().GetMaxSpeed(DDIR_DOWNLOAD)) {
-		//fprintf(stderr,"#");
+		if (DEBUGTRAFFIC)
+			fprintf(stderr,"hint: forbidden#");
 		return;
 	}
 
@@ -215,15 +233,13 @@ void    Channel::AddHint (struct evbuffer *evb) {
     int first_plan_pck = max ( (tint)1, plan_for / dip_avg_ );
 
     // RATELIMIT
-    int rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
+    uint64_t rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
     std::set<Channel *>::iterator iter;
-    //for (iter = channels.begin(); iter != channels.end(); iter++)
     for (iter=transfer().mychannels_.begin(); iter!=transfer().mychannels_.end(); iter++)
     {
 		Channel *c = *iter;
 		if (c != NULL)
-			if (c->transfer().fd() == transfer().fd())
-				rough_global_hint_out_size += c->hint_out_size_;
+			rough_global_hint_out_size += c->hint_out_size_;
     }
 
     // Policy: this channel is allowed to hint at the limit - global_hinted_at
@@ -231,22 +247,23 @@ void    Channel::AddHint (struct evbuffer *evb) {
     double hints_limit_float = transfer().GetMaxSpeed(DDIR_DOWNLOAD)/((double)file().chunk_size());
 
     int hints_limit = (int)min((double)LONG_MAX,hints_limit_float);
-    int allowed_hints = max(0,hints_limit-rough_global_hint_out_size);
+    int allowed_hints = max(0,hints_limit-(int)rough_global_hint_out_size);
 
     if (DEBUGTRAFFIC)
-    	fprintf(stderr,"send c%d: %f plan %d allow %d out %d\n", id(), transfer().GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, allowed_hints, hint_out_size_ );
+    	fprintf(stderr,"hint c%d: %f want %d allow %d chanout %llu globout %llu\n", id(), transfer().GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, allowed_hints, hint_out_size_, rough_global_hint_out_size );
 
     // Take into account network limit
-    int plan_pck = min(allowed_hints,first_plan_pck);
+    uint64_t plan_pck = (uint64_t)min(allowed_hints,first_plan_pck);
     //fprintf(stderr,"send c%d: %f fp %d p %d count %d ghs %d allow %d\n", id(), transfer().GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, plan_pck, count, rough_global_hint_out_size, allowed_hints );
-    if (hint_out_size_ == 0 || hint_out_size_+HINT_GRANULARITY < plan_pck ) {
-
-        int diff = plan_pck - hint_out_size_; // TODO: aggregate
-        bin_t hint = transfer().picker().Pick(ack_in_,diff,NOW+plan_for*2);
+    if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY) {
+    //if (hint_out_size_ == 0 || hint_out_size_+HINT_GRANULARITY < plan_pck ) {
+        bin_t hint = transfer().picker().Pick(ack_in_,plan_pck,NOW+plan_for*2);
         if (!hint.is_none()) {
         	if (DEBUGTRAFFIC)
-        		fprintf(stderr,"send c%d: HINT %lli %f\n", id(), hint.toUInt(), transfer().GetCurrentSpeed(DDIR_DOWNLOAD));
-
+        	{
+        		char binstr[32];
+        		fprintf(stderr,"hint c%d: ask %s\n", id(), hint.str(binstr) );
+        	}
             evbuffer_add_8(evb, SWIFT_HINT);
             evbuffer_add_32be(evb, bin_toUInt32(hint));
             char bin_name_buf[32];
@@ -273,10 +290,11 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         return bin_t::NONE;
 
     bin_t tosend = bin_t::NONE;
+    bool isretransmit = false;
     tint luft = send_interval_>>4; // may wake up a bit earlier
     if (data_out_.size()<cwnd_ &&
             last_data_out_time_+send_interval_<=NOW+luft) {
-        tosend = DequeueHint();
+        tosend = DequeueHint(&isretransmit);
         if (tosend.is_none()) {
             dprintf("%s #%u sendctrl no idea what data to send\n",tintstr(),id_);
             if (send_control_!=KEEP_ALIVE_CONTROL && send_control_!=CLOSE_CONTROL)
@@ -308,6 +326,24 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     	if (ret > 0)
     		raw_bytes_up_ += ret;
         evbuffer_add_32be(evb, peer_channel_id_);
+    }
+
+    if (file().chunk_size() != SWIFT_DEFAULT_CHUNK_SIZE && isretransmit) {
+    	/* FRAGRAND
+    	 * Arno, 2012-01-17: We observe strange behaviour when using
+    	 * fragmented UDP packets. When ULANC sends a specific datagram ("995"),
+    	 * the 2nd IP packet carrying it gets lost structurally. When
+    	 * downloading from the same asset hosted on a Linux 32-bit machine
+    	 * using a Win7 32-bit client (behind a NAT), one specific full
+    	 * datagram never gets delivered (6970 one before do). A workaround
+    	 * is to add some random data to the datagram. Hence we introduce
+    	 * the SWIFT_RANDOMIZE message, that is added to the datagram carrying
+    	 * the DATA on a retransmit.
+    	 */
+ 	     char binstr[32];
+         fprintf(stderr,"OnData: retransmit of chunk > 1K, adding random to change frag: %s\n",tosend.str(binstr) );
+         evbuffer_add_8(evb, SWIFT_RANDOMIZE);
+         evbuffer_add_32be(evb, (int)rand() );
     }
 
     evbuffer_add_8(evb, SWIFT_DATA);
@@ -442,8 +478,9 @@ void    Channel::Recv (struct evbuffer *evb) {
             case SWIFT_HINT:      OnHint(evb); break;
             case SWIFT_PEX_ADD:   OnPex(evb); break;
             case SWIFT_PEX_REQ:   OnPexReq(); break;
+            case SWIFT_RANDOMIZE: OnRandomize(evb); break; //FRAGRAND
             default:
-                eprintf("%s #%u ?msg id unknown %i\n",tintstr(),id_,(int)type);
+                dprintf("%s #%u ?msg id unknown %i\n",tintstr(),id_,(int)type);
                 return;
         }
     }
@@ -508,13 +545,21 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 	bin_t pos = bin_fromUInt32(evbuffer_remove_32be(evb));
 
     // Arno: Assuming DATA last message in datagram
-    if (evbuffer_get_length(evb) > file().chunk_size())
-    	dprintf("%s #%u !data chunk size mismatch %s: exp %i got %i\n",tintstr(),id_,pos.str(bin_name_buf), file().chunk_size(), evbuffer_get_length(evb));
+    if (evbuffer_get_length(evb) > file().chunk_size()) {
+    	dprintf("%s #%u !data chunk size mismatch %s: exp " PRISIZET " got " PRISIZET "\n",tintstr(),id_,pos.str(bin_name_buf), file().chunk_size(), evbuffer_get_length(evb));
+    	fprintf(stderr,"WARNING: chunk size mismatch: exp " PRISIZET " got " PRISIZET "\n",file().chunk_size(), evbuffer_get_length(evb));
+    }
 
     int length = (evbuffer_get_length(evb) < file().chunk_size()) ? evbuffer_get_length(evb) : file().chunk_size();
     if (!file().ack_out().is_empty(pos)) {
-	evbuffer_drain(evb, length);
-	data_in_ = tintbin(TINT_NEVER,transfer().ack_out().cover(pos));
+        // Arno, 2012-01-24: print message for duplicate
+        dprintf("%s #%u Ddata %s\n",tintstr(),id_,pos.str(bin_name_buf));
+        evbuffer_drain(evb, length);
+        data_in_ = tintbin(TINT_NEVER,transfer().ack_out().cover(pos));
+
+        // Arno, 2012-01-24: Make sure data interarrival periods don't get
+        // screwed up because of these (ignored) duplicates.
+        UpdateDIP(pos);
         return bin_t::NONE;
     }
     uint8_t *data = evbuffer_pullup(evb, length);
@@ -528,6 +573,9 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     evbuffer_drain(evb, length);
     dprintf("%s #%u -data %s\n",tintstr(),id_,pos.str(bin_name_buf));
 
+    if (DEBUGTRAFFIC)
+    	fprintf(stderr,"$ ");
+
     bin_t cover = transfer().ack_out().cover(pos);
     for(int i=0; i<transfer().cb_installed; i++)
         if (cover.layer()>=transfer().cb_agg[i])
@@ -535,17 +583,24 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     if (cover.layer() >= 5) // Arno: tested with 32K, presently = 2 ** 5 * chunk_size CHUNKSIZE
     	transfer().OnRecvData( pow((double)2,(double)5)*((double)file().chunk_size()) );
     data_in_.bin = pos;
-    if (!pos.is_none()) {
-        if (last_data_in_time_) {
-            tint dip = NOW - last_data_in_time_;
-            dip_avg_ = ( dip_avg_*3 + dip ) >> 2;
-        }
-        last_data_in_time_ = NOW;
-    }
+
+    UpdateDIP(pos);
     CleanHintOut(pos);
     bytes_down_ += length;
     global_bytes_down += length;
     return pos;
+}
+
+
+void Channel::UpdateDIP(bin_t pos)
+{
+	if (!pos.is_none()) {
+		if (last_data_in_time_) {
+			tint dip = NOW - last_data_in_time_;
+			dip_avg_ = ( dip_avg_*3 + dip ) >> 2;
+		}
+		last_data_in_time_ = NOW;
+	}
 }
 
 
@@ -647,7 +702,7 @@ void Channel::OnHave (struct evbuffer *evb) {
 		// Ric: check if we should set the size in the file transfer
 		if (transfer().availability().size() <= 0 && file().size() > 0)
 		{
-			transfer().availability().setSize(file().size_in_chunks());
+			transfer().availability().setSize((uint)file().size_in_chunks());
 		}
 		// Ric: update the availability if needed
 		transfer().availability().set(id_, ack_in_, ackd_pos);
@@ -709,6 +764,14 @@ void Channel::OnPex (struct evbuffer *evb) {
     else
         useless_pex_count_++;
     pex_request_outstanding_ = false;
+}
+
+
+//FRAGRAND
+void Channel::OnRandomize (struct evbuffer *evb) {
+    dprintf("%s #%u -rand\n",tintstr(),id_ );
+	// Payload is 4 random bytes
+    uint32_t r = evbuffer_remove_32be(evb);
 }
 
 
@@ -876,9 +939,10 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
     bool wasestablished = channel->is_established();
     channel->Recv(evb);
     evbuffer_free(evb);
+    //SAFECLOSE
     if (wasestablished && !channel->is_established()) {
-    	// Arno: Received an explict close, clean up channel
-    	delete channel; // removes from global channels vector too.
+    	// Arno, 2012-01-26: Received an explict close, clean up channel, safely.
+    	channel->Schedule4Close();
     }
 }
 
@@ -897,13 +961,10 @@ void Channel::CloseChannelByAddress(const Address &addr)
 		Channel *c = *iter;
 		if (c != NULL && c->peer_ == addr)
 		{
-			// fprintf(stderr,"CloseChannelByAddress: channel is %d\n", c->id());
 			// ARNOSMPTODO: will do another send attempt before not being
 			// Rescheduled.
 			c->peer_channel_id_ = 0; // established->false, do no more sending
-			c->Close();
-			*iter = NULL;
-			delete c;
+			c->Schedule4Close();
 			break;
 		}
     }
@@ -921,8 +982,10 @@ void Channel::Close () {
 		// Ric: remove it's binmap from the availability
 		transfer().availability().remove(id_, ack_in_);
     }
+
+    // SAFECLOSE
     // Arno: ensure LibeventSendCallback is no longer called with ptr to this Channel
-    evtimer_del(&evsend_);
+    ClearEvents();
 }
 
 
@@ -945,13 +1008,18 @@ void Channel::Reschedule () {
         	LibeventSendCallback(-1,EV_TIMEOUT,this);
         }
         else {
-        	struct timeval duetv = *tint2tv(duein);
-        	evtimer_add(&evsend_,&duetv);
-        	dprintf("%s #%u requeue for %s in %lli\n",tintstr(),id_,tintstr(next_send_time_), duein);
+        	if (evsend_ptr_ != NULL) {
+        		struct timeval duetv = *tint2tv(duein);
+        		evtimer_add(evsend_ptr_,&duetv);
+        		dprintf("%s #%u requeue for %s in %lli\n",tintstr(),id_,tintstr(next_send_time_), duein);
+        	}
+        	else
+        		dprintf("%s #%u cannot requeue for %s, closed\n",tintstr(),id_,tintstr(next_send_time_));
         }
-
     } else {
-        dprintf("%s #%u closed at resched\n",tintstr(),id_);
+    	// SAFECLOSE
+        dprintf("%s #%u resched, will close\n",tintstr(),id_);
+		this->Schedule4Close();
     }
 }
 
