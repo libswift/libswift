@@ -347,7 +347,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     Sha1Hash root_hash = Sha1Hash(true,hash);
     int transfer = swift::Find(root_hash);
     if (transfer==-1) {
-        transfer = swift::Open(hash,root_hash,Address(),false,httpgw_chunk_size); // ARNOTODO: allow for chunk size to be set via URL?
+        transfer = swift::Open(hash,root_hash,Address(),false,true,httpgw_chunk_size); // ARNOTODO: allow for chunk size to be set via URL?
         dprintf("%s @%i trying to HTTP GET swarm %s that has not been STARTed\n",tintstr(),http_gw_reqs_open+1,hash);
 
         // Arno, 2011-12-20: Only on new transfers, otherwise assume that CMD GW

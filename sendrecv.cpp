@@ -310,7 +310,11 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
 
     if (ack_in_.is_empty() && file().size())
         AddPeakHashes(evb);
-    AddUncleHashes(evb,tosend);
+
+    //NETWVSHASH
+    if (file().get_check_netwvshash())
+    	AddUncleHashes(evb,tosend);
+
     if (!ack_in_.is_empty()) // TODO: cwnd_>1
         data_out_cap_ = tosend;
 

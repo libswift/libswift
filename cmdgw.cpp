@@ -569,7 +569,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 		// ARNOSMPTODO: disable/interleave hashchecking at startup
         int transfer = swift::Find(root_hash);
         if (transfer==-1)
-            transfer = swift::Open(hashstr,root_hash,trackaddr,false,chunksize);
+            transfer = swift::Open(hashstr,root_hash,trackaddr,false,true,chunksize);
 
         // RATELIMIT
         //FileTransfer::file(transfer)->SetMaxSpeed(DDIR_DOWNLOAD,512*1024);

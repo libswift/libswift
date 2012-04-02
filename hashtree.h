@@ -88,6 +88,9 @@ class HashTree : Serializable {
 
     int 			internal_deserialize(FILE *fp,bool contentavail=true);
 
+    //NETWVSHASH
+    bool 			check_netwvshash_;
+
 protected:
     
     void            Submit();
@@ -100,7 +103,7 @@ protected:
 public:
     
     HashTree (const char* file_name, const Sha1Hash& root=Sha1Hash::ZERO, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE,
-              const char* hash_filename=NULL, bool check_hashes=true, const char* binmap_filename=NULL);
+              const char* hash_filename=NULL, bool force_check_diskvshash=true, bool check_netwvshash=true, const char* binmap_filename=NULL);
     
     // Arno, 2012-01-03: Hack to quickly learn root hash from a checkpoint
     HashTree (bool dummy, const char* binmap_filename);
@@ -152,6 +155,9 @@ public:
     int serialize(FILE *fp);
     int deserialize(FILE *fp);
     int partial_deserialize(FILE *fp);
+
+    //NETWVSHASH
+    bool get_check_netwvshash() { return check_netwvshash_; }
 };
 
 }

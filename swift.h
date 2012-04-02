@@ -259,8 +259,9 @@ namespace swift {
         /** A constructor. Open/submit/retrieve a file.
          *  @param file_name    the name of the file
          *  @param root_hash    the root hash of the file; zero hash if the file
-	 is newly submitted */
-        FileTransfer(const char *file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO,bool check_hashes=true,uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+	 	 *	                    is newly submitted
+	 	 */
+        FileTransfer(const char *file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO,bool force_check_diskvshash=true,bool check_netwvshash=true,uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
         /**    Close everything. */
         ~FileTransfer();
@@ -389,7 +390,7 @@ namespace swift {
         friend bool      IsComplete (int fdes);
         friend uint64_t  Complete (int fdes);
         friend uint64_t  SeqComplete (int fdes);
-        friend int     Open (const char* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size);
+        friend int     Open (const char* filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size);
         friend void    Close (int fd) ;
         friend void AddProgressCallback (int transfer,ProgressCallback cb,uint8_t agg);
         friend void RemoveProgressCallback (int transfer,ProgressCallback cb);
@@ -678,7 +679,7 @@ namespace swift {
         friend void     Shutdown (int sock_des);
         friend void     AddPeer (Address address, const Sha1Hash& root);
         friend void     SetTracker(const Address& tracker);
-        friend int      Open (const char*, const Sha1Hash&, Address tracker, bool check_hashes, uint32_t chunk_size) ; // FIXME
+        friend int      Open (const char*, const Sha1Hash&, Address tracker, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size) ; // FIXME
     };
 
 
@@ -690,16 +691,19 @@ namespace swift {
     void    Shutdown (int sock_des=-1);
 
     /** Open a file, start a transmission; fill it with content for a given
-        root hash and tracker (optional). If hashchecking is requested the
+        root hash and tracker (optional). If "force_check_diskvshash" is true, the
         hashtree state will be (re)constructed from the file on disk (if any).
-        If not requested, open will try to reconstruct the hashtree state from
+        If not, open will try to reconstruct the hashtree state from
         the .mhash and .mbinmap files on disk. .mhash files are created
         automatically, .mbinmap files must be written by checkpointing the
         transfer by calling FileTransfer::serialize(). If the reconstruction
         fails, it will hashcheck anyway. Roothash is optional for new files or
-        files already hashchecked and checkpointed.
+        files already hashchecked and checkpointed. If "check_netwvshash" is
+        false, no uncle hashes will be sent and no data will be verified against
+        then on receipt. In this mode, checking disk contents against hashes
+        no longer works on restarts, unless checkpoints are used.
         */
-    int     Open (const char* filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(), bool check_hashes=true,uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     Open (const char* filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(), bool force_check_diskvshash=true, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** Get the root hash for the transmission. */
     const Sha1Hash& RootMerkleHash (int file) ;
     /** Close a file and a transmission. */

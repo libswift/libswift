@@ -1305,6 +1305,9 @@ bin_t binmap_t::_find_complement(const bin_t& bin, const bitmap_t dbitmap, const
         if (twist & 8) {
             bitmap = ((bitmap & 0x00ff) << 8)  | ((bitmap & 0xff00) >> 8);
         }
+
+        // Arno, 2012-03-21: Do workaround (see below) here as well?
+
         return bin_t(bin.base_left().twisted(twist & ~0x0f).toUInt() + bitmap_to_bin(bitmap)).to_twisted(twist & 0x0f);
 
     } else {
@@ -1323,7 +1326,40 @@ bin_t binmap_t::_find_complement(const bin_t& bin, const bitmap_t dbitmap, const
         if (twist & 16) {
             bitmap = ((bitmap & 0x0000ffff) << 16)  | ((bitmap & 0xffff0000) >> 16);
         }
-        return bin_t(bin.base_left().twisted(twist & ~0x1f).toUInt() + bitmap_to_bin(bitmap)).to_twisted(twist & 0x1f);
+
+        bin_t diff = bin_t(bin.base_left().twisted(twist & ~0x1f).toUInt() + bitmap_to_bin(bitmap)).to_twisted(twist & 0x1f);
+
+        // Arno, 2012-03-21: Sanity check, if it fails, attempt workaround
+        if (!bin.contains(diff))
+        {
+        	// Bug: Proposed bin is outside of specified range. The bug appears
+        	// to be that the code assumes that the range parameter (called bin
+        	// here) is aligned on a 32-bit boundary. I.e. the width of a
+        	// half_t. Hence when the code does range + bitmap_to_bin(x)
+        	// to find the base-layer offset of the bit on which the source
+        	// and dest bitmaps differ, the result may be too high.
+        	//
+        	// What I do here is to round the rangestart to 32 bits, and
+        	// then add bitmap_to_bin(bitmap), divided by two as that function
+        	// returns the bit in a "bin number" format (=bit * 2).
+        	//
+        	// In other words, the "bin" parameter should tell us at what
+        	// base offset of the 32-bit dbitmap and sbitmap is. At the moment
+        	// it doesn't always, because "bin" is not rounded to 32-bit.
+        	//
+        	// see tests/binstest3.cpp
+
+        	bin_t::uint_t rangestart = bin.base_left().twisted(twist & ~0x1f).layer_offset();
+        	bin_t::uint_t b2b = bitmap_to_bin(bitmap);
+        	bin_t::uint_t absoff = ((int)(rangestart/32))*32 + b2b/2;
+
+        	diff = bin_t(0,absoff);
+        	diff = diff.to_twisted(twist & 0x1f);
+
+        	//char binstr[32];
+        	//fprintf(stderr,"__fc solution %s\n", diff.str(binstr) );
+        }
+        return diff;
     }
 }
 

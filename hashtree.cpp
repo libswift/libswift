@@ -83,10 +83,10 @@ std::string    Sha1Hash::hex() const {
 /**     H a s h   t r e e       */
 
 
-HashTree::HashTree (const char* filename, const Sha1Hash& root_hash, uint32_t chunk_size, const char* hash_filename, bool check_hashes, const char* binmap_filename) :
+HashTree::HashTree (const char* filename, const Sha1Hash& root_hash, uint32_t chunk_size, const char* hash_filename, bool force_check_diskvshash, bool check_netwvshash, const char* binmap_filename) :
 root_hash_(root_hash), hashes_(NULL), peak_count_(0), fd_(0), hash_fd_(0),
 filename_(filename), size_(0), sizec_(0), complete_(0), completec_(0),
-chunk_size_(chunk_size)
+chunk_size_(chunk_size), check_netwvshash_(check_netwvshash)
 {
     fd_ = open(filename,OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (fd_<0) {
@@ -109,7 +109,7 @@ chunk_size_(chunk_size)
 	}
 
 	// Arno: if user doesn't want to check hashes but no .mhash, check hashes anyway
-	bool actually_check_hashes = check_hashes;
+	bool actually_force_check_diskvshash = force_check_diskvshash;
     bool mhash_exists=true;
 #ifdef WIN32
     struct _stat buf;
@@ -119,8 +119,8 @@ chunk_size_(chunk_size)
     int res = stat( hash_filename, &buf );
     if( res < 0 && errno == ENOENT)
     	mhash_exists = false;
-    if (!mhash_exists && !check_hashes)
-    	actually_check_hashes = true;
+    if (!mhash_exists && !force_check_diskvshash)
+    	actually_force_check_diskvshash = true;
 
 
     // Arno: if the remainder of the hashtree state is on disk we can
@@ -130,7 +130,7 @@ chunk_size_(chunk_size)
     if( res < 0 && errno == ENOENT)
     	binmap_exists = false;
 
-    //fprintf(stderr,"hashtree: hashchecking want %s do %s binmap-on-disk %s\n", (check_hashes ? "yes" : "no"), (actually_check_hashes? "yes" : "no"), (binmap_exists? "yes" : "no") );
+    //fprintf(stderr,"hashtree: hashchecking want %s do %s binmap-on-disk %s\n", (force_check_diskvshash ? "yes" : "no"), (actually_force_check_diskvshash? "yes" : "no"), (binmap_exists? "yes" : "no") );
 
     hash_fd_ = open(hfn.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (hash_fd_<0) {
@@ -140,7 +140,7 @@ chunk_size_(chunk_size)
     }
 
     // Arno: if user wants to or no .mhash, and if root hash unknown (new file) and no checkpoint, (re)calc root hash
-    if (file_size(fd_) && ((actually_check_hashes) || (root_hash_==Sha1Hash::ZERO && !binmap_exists) || (!mhash_exists)) ) {
+    if (file_size(fd_) && ((actually_force_check_diskvshash) || (root_hash_==Sha1Hash::ZERO && !binmap_exists) || (!mhash_exists)) ) {
     	// fresh submit, hash it
     	dprintf("%s hashtree full compute\n",tintstr());
         assert(file_size(fd_));
@@ -170,7 +170,7 @@ chunk_size_(chunk_size)
 HashTree::HashTree(bool dummy, const char* binmap_filename) :
 root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), fd_(0), hash_fd_(0),
 filename_(""), size_(0), sizec_(0), complete_(0), completec_(0),
-chunk_size_(0)
+chunk_size_(0), check_netwvshash_(false)
 {
 	FILE *fp = fopen(binmap_filename,"rb");
 	if (!fp) {
@@ -469,6 +469,11 @@ bin_t         HashTree::peak_for (bin_t pos) const {
 bool            HashTree::OfferHash (bin_t pos, const Sha1Hash& hash) {
     if (!size_)  // only peak hashes are accepted at this point
         return OfferPeakHash(pos,hash);
+
+    //NETWVSHASH
+    if (!check_netwvshash_)
+    	return true;
+
     bin_t peak = peak_for(pos);
     if (peak.is_none())
         return false;

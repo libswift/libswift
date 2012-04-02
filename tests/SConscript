@@ -27,6 +27,13 @@ env.Program(
     LIBPATH=libpath )
 
 env.Program( 
+    target='binstest3',
+    source=['binstest3.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+env.Program( 
     target='dgramtest',
     source=['dgramtest.cpp'],
     CPPPATH=cpppath,

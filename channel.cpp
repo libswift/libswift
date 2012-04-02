@@ -437,8 +437,8 @@ void    swift::Shutdown (int sock_des) {
     Channel::Shutdown();
 }
 
-int      swift::Open (const char* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size) {
-    FileTransfer* ft = new FileTransfer(filename, hash, check_hashes, chunk_size);
+int      swift::Open (const char* filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size) {
+    FileTransfer* ft = new FileTransfer(filename, hash, force_check_diskvshash, check_netwvshash, chunk_size);
     if (ft && ft->file().file_descriptor()) {
 
         /*if (FileTransfer::files.size()<fdes)  // FIXME duplication
