@@ -95,6 +95,29 @@ typedef void* setsockoptptr_t;
 #endif
 
 
+#ifdef _WIN32
+#define CREATEFLAGS         O_RDWR|O_CREAT|_O_BINARY
+#else
+#define CREATEFLAGS         O_RDWR|O_CREAT
+#endif
+
+
+#ifdef _WIN32
+#define READFLAGS         O_RDONLY|_O_BINARY
+#else
+#define READFLAGS         O_RDONLY|O_CREAT
+#endif
+
+
+// Arno, 2012-01-05: Handle 64-bit size_t & printf+scanf
+#if SIZE_MAX > UINT_MAX
+#define PRISIZET		"%llu"
+#else
+#define PRISIZET	"%lu"
+#endif
+
+
+
 namespace swift {
 
 /** tint is the time integer type; microsecond-precise. */

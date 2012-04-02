@@ -7,8 +7,12 @@
  *
  */
 
+#ifndef VOD_PICKER_H
+#define VOD_PICKER_H
+
 #include "swift.h"
 #include <cassert>
+
 
 using namespace swift;
 
@@ -36,15 +40,15 @@ public:
            transfer_(file_to_pick_from), twist_(0), range_(bin_t::ALL)
     {
     	avail_ = &(transfer_->availability());
-        binmap_t::copy(ack_hint_out_, file().ack_out());
+        binmap_t::copy(ack_hint_out_, transfer_->ack_out());
         playback_pos_ = -1;
         high_pri_window_ = HIGHPRIORITYWINDOW;
     }
 
     virtual ~VodPiecePicker() {}
 
-    HashTree& file() {
-        return transfer_->file();
+    HashTree * hashtree() {
+        return transfer_->hashtree();
     }
 
     virtual void Randomize (uint64_t twist) {
@@ -165,12 +169,12 @@ public:
 
     	// TODO check... the seconds should depend on previous speed of the peer
         while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*3/2) { // FIXME sec
-            binmap_t::copy(ack_hint_out_, file().ack_out(), hint_out_.front().bin);
+            binmap_t::copy(ack_hint_out_, transfer_->ack_out(), hint_out_.front().bin);
             hint_out_.pop_front();
         }
 
         // get the first piece to estimate the size, whoever sends it first
-        if (!file().size()) {
+        if (!hashtree()->size()) {
             return bin_t(0,0);
         }
 
@@ -192,7 +196,7 @@ public:
 				if (hint.is_none())
 				{
 					start += size;
-					size = file().size_in_chunks() - start;
+					size = hashtree()->size_in_chunks() - start;
 					hint = pickRarest(offer, max_width, start, size);
 					set = 'L';
 				}
@@ -203,8 +207,8 @@ public:
 				set = 'H';
 
 			// unhinted/late data
-			if (!file().ack_out().is_empty(hint)) {
-				binmap_t::copy(ack_hint_out_, file().ack_out(), hint);
+			if (!transfer_->ack_out().is_empty(hint)) {
+				binmap_t::copy(ack_hint_out_, transfer_->ack_out(), hint);
 				retry = true;
 			}
 			else
@@ -241,10 +245,30 @@ public:
     void updatePlaybackPos(int size = 1)
     {
     	assert(size>-1);
-    	if (size<file().size_in_chunks())
+    	if (size<hashtree()->size_in_chunks())
     		playback_pos_ += size;
     }
 
+    void startAddPeerPos(uint32_t channelid, bin_t peerpos, bool peerissource)
+    {
+    }
+
+    void endAddPeerPos(uint32_t channelid)
+    {
+    }
+
+
+    bin_t getHookinPos()
+    {
+    	return bin_t(0,0);
+    }
+
+
+    bin_t getCurrentPos()
+    {
+    	// LIVETODO?
+    	return bin_t::NONE;
+    }
 
     void status()
 	{
@@ -259,7 +283,7 @@ public:
 
 		while (i<=end_high)
 		{
-			if (!file().ack_out().is_empty(bin_t(i)))
+			if (!transfer_->ack_out().is_empty(bin_t(i)))
 				t++;
 			i++;
 		}
@@ -269,7 +293,7 @@ public:
 		t = 0;
 		while (i<=end_mid)
 		{
-			if (!file().ack_out().is_empty(bin_t(i)))
+			if (!transfer_->ack_out().is_empty(bin_t(i)))
 				t++;
 			i++;
 		}
@@ -277,15 +301,17 @@ public:
 		t = t*100/((x*y)<<1);
 		fprintf(stderr, "mid %u, ", t);
 		t = 0;
-		while (i<=file().size_in_chunks()<<1)
+		while (i<=hashtree()->size_in_chunks()<<1)
 		{
-			if (!file().ack_out().is_empty(bin_t(i)))
+			if (!transfer_->ack_out().is_empty(bin_t(i)))
 				t++;
 			i++;
 		}
 		total += t;
-		t = t*100/((file().size_in_chunks()-(x*y+playback_pos_))<<1);
+		t = t*100/((hashtree()->size_in_chunks()-(x*y+playback_pos_))<<1);
 		fprintf(stderr, "low %u  -> in total: %i\t pp: %i\n", t, total, playback_pos_);
 	}
 
 };
+
+#endif

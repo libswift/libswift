@@ -46,7 +46,7 @@ tint Channel::MIN_PEX_REQUEST_INTERVAL = TINT_SEC;
  * Instance methods
  */
 
-Channel::Channel    (FileTransfer* transfer, int socket, Address peer_addr) :
+Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool peerissource) :
 	// Arno, 2011-10-03: Reordered to avoid g++ Wall warning
 	peer_(peer_addr), socket_(socket==INVALID_SOCKET?default_socket():socket), // FIXME
     transfer_(transfer), peer_channel_id_(0), own_id_mentioned_(false),
@@ -65,22 +65,28 @@ Channel::Channel    (FileTransfer* transfer, int socket, Address peer_addr) :
     ack_rcvd_recent_(0),
     ack_not_rcvd_recent_(0), owd_min_bin_(0), owd_min_bin_start_(NOW),
     owd_cur_bin_(0), dgrams_sent_(0), dgrams_rcvd_(0),
-    raw_bytes_up_(0), raw_bytes_down_(0), bytes_up_(0), bytes_down_(0)
+    raw_bytes_up_(0), raw_bytes_down_(0), bytes_up_(0), bytes_down_(0),
+    peer_is_source_(peerissource),
+    scheduled4close_(false)
 {
     if (peer_==Address())
         peer_ = tracker;
     this->id_ = channels.size();
     channels.push_back(this);
-    transfer_->hs_in_.push_back(bin_t(id_));
+    transfer_->hs_in().push_back(bin_t(id_));
     for(int i=0; i<4; i++) {
         owd_min_bins_[i] = TINT_NEVER;
         owd_current_[i] = TINT_NEVER;
     }
-    evtimer_assign(&evsend_,evbase,&Channel::LibeventSendCallback,this);
-    evtimer_add(&evsend_,tint2tv(next_send_time_));
+    evsend_ptr_ = new struct event;
+    evtimer_assign(evsend_ptr_,evbase,&Channel::LibeventSendCallback,this);
+    evtimer_add(evsend_ptr_,tint2tv(next_send_time_));
+
+    //LIVE
+    evsendlive_ptr_ = NULL;
 
     // RATELIMIT
-	transfer->mychannels_.insert(this);
+	transfer->GetChannels().insert(this);
 
 	dprintf("%s #%u init channel %s\n",tintstr(),id_,peer_.str());
 	//fprintf(stderr,"new Channel %d %s\n", id_, peer_.str() );
@@ -90,22 +96,46 @@ Channel::Channel    (FileTransfer* transfer, int socket, Address peer_addr) :
 Channel::~Channel () {
 	dprintf("%s #%u dealloc channel\n",tintstr(),id_);
     channels[id_] = NULL;
-    evtimer_del(&evsend_);
+    ClearEvents();
 
     // RATELIMIT
     if (transfer_ != NULL)
-    	transfer_->mychannels_.erase(this);
+    	transfer_->GetChannels().erase(this);
 }
 
 
+void Channel::ClearEvents()
+{
+    if (evsend_ptr_ != NULL) {
+    	if (evtimer_pending(evsend_ptr_,NULL))
+    		evtimer_del(evsend_ptr_);
+    	delete evsend_ptr_;
+    	evsend_ptr_ = NULL;
+    }
+    if (evsendlive_ptr_ != NULL) {
+    	if (evtimer_pending(evsendlive_ptr_,NULL))
+    		evtimer_del(evsendlive_ptr_);
+    	delete evsendlive_ptr_;
+    	evsendlive_ptr_ = NULL;
+    }
+}
+
+
+HashTree * Channel::hashtree()
+{
+	if (transfer()->ttype() == LIVE_TRANSFER)
+		return NULL;
+	else
+		return ((FileTransfer *)transfer_)->hashtree();
+}
 
 bool Channel::IsComplete() {
  	// Check if peak hash bins are filled.
-	if (file().peak_count() == 0)
+	if (hashtree()->peak_count() == 0)
 		return false;
 
-    for(int i=0; i<file().peak_count(); i++) {
-        bin_t peak = file().peak(i);
+    for(int i=0; i<hashtree()->peak_count(); i++) {
+        bin_t peak = hashtree()->peak(i);
         if (!ack_in_.is_filled(peak))
             return false;
     }
@@ -331,109 +361,6 @@ std::string swift::sock2str (struct sockaddr_in addr) {
     return std::string(ipch);
 }
 
-
-/*
- * Swift top-level API implementation
- */
-
-int     swift::Listen (Address addr) {
-    sckrwecb_t cb;
-    cb.may_read = &Channel::LibeventReceiveCallback;
-    cb.sock = Channel::Bind(addr,cb);
-    // swift UDP receive
-    event_assign(&Channel::evrecv, Channel::evbase, cb.sock, EV_READ,
-		 cb.may_read, NULL);
-    event_add(&Channel::evrecv, NULL);
-    return cb.sock;
-}
-
-void    swift::Shutdown (int sock_des) {
-    Channel::Shutdown();
-}
-
-int      swift::Open (const char* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, size_t chunk_size) {
-    FileTransfer* ft = new FileTransfer(filename, hash, check_hashes, chunk_size);
-    if (ft && ft->file().file_descriptor()) {
-
-        /*if (FileTransfer::files.size()<fdes)  // FIXME duplication
-            FileTransfer::files.resize(fdes);
-        FileTransfer::files[fdes] = ft;*/
-
-        // initiate tracker connections
-    	// SWIFTPROC
-    	Channel *c = NULL;
-        if (tracker != Address())
-        	c = new Channel(ft,INVALID_SOCKET,tracker);
-        else if (Channel::tracker!=Address())
-        	c = new Channel(ft);
-        return ft->file().file_descriptor();
-    } else {
-        if (ft)
-            delete ft;
-        return -1;
-    }
-}
-
-
-void    swift::Close (int fd) {
-    if (fd<FileTransfer::files.size() && FileTransfer::files[fd])
-        delete FileTransfer::files[fd];
-}
-
-
-void    swift::AddPeer (Address address, const Sha1Hash& root) {
-    Channel::peer_selector->AddPeer(address,root);
-}
-
-
-uint64_t  swift::Size (int fdes) {
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->file().size();
-    else
-        return 0;
-}
-
-
-bool  swift::IsComplete (int fdes) {
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->file().is_complete();
-    else
-        return 0;
-}
-
-
-uint64_t  swift::Complete (int fdes) {
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->file().complete();
-    else
-        return 0;
-}
-
-
-uint64_t  swift::SeqComplete (int fdes) {
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->file().seq_complete();
-    else
-        return 0;
-}
-
-
-const Sha1Hash& swift::RootMerkleHash (int file) {
-    FileTransfer* trans = FileTransfer::file(file);
-    if (!trans)
-        return Sha1Hash::ZERO;
-    return trans->file().root_hash();
-}
-
-
-/** Returns the number of bytes in a chunk for this transmission */
-size_t	  swift::ChunkSize(int fdes)
-{
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->file().chunk_size();
-    else
-        return 0;
-}
 
 
 /*

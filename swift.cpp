@@ -12,9 +12,36 @@
 #include "swift.h"
 #include <cfloat>
 
+#include <event2/http.h>
+#include <event2/http_struct.h>
+
 using namespace swift;
 
-#define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
+void usage(void)
+{
+    fprintf(stderr,"Usage:\n");
+    fprintf(stderr,"  -h, --hash\troot Merkle hash for the transmission\n");
+    fprintf(stderr,"  -f, --file\tname of file to use (root hash by default)\n");
+    fprintf(stderr,"  -l, --listen\t[ip:|host:]port to listen to (default: random)\n");
+    fprintf(stderr,"  -t, --tracker\t[ip:|host:]port of the tracker (default: none)\n");
+    fprintf(stderr,"  -D, --debug\tfile name for debugging logs (default: stdout)\n");
+    fprintf(stderr,"  -B\tdebugging logs to stdout (win32 hack)\n");
+    fprintf(stderr,"  -p, --progress\treport transfer progress\n");
+    fprintf(stderr,"  -g, --httpgw\t[ip:|host:]port to bind HTTP content gateway to (no default)\n");
+    fprintf(stderr,"  -s, --statsgw\t[ip:|host:]port to bind HTTP stats listen socket to (no default)\n");
+    fprintf(stderr,"  -c, --cmdgw\t[ip:|host:]port to bind CMD listen socket to (no default)\n");
+    fprintf(stderr,"  -o, --destdir\tdirectory for saving data (default: none)\n");
+    fprintf(stderr,"  -u, --uprate\tupload rate limit in KiB/s (default: unlimited)\n");
+    fprintf(stderr,"  -y, --downrate\tdownload rate limit in KiB/s (default: unlimited)\n");
+    fprintf(stderr,"  -w, --wait\tlimit running time, e.g. 1[DHMs] (default: infinite with -l, -g)\n");
+    fprintf(stderr,"  -H, --checkpoint\tcreate checkpoint of file when complete for fast restart\n");
+    fprintf(stderr,"  -z, --chunksize\tchunk size in bytes (default: %d)\n", SWIFT_DEFAULT_CHUNK_SIZE);
+    fprintf(stderr,"  -i, --source\tlive source input (URL or filename or - for stdin)\n");
+    fprintf(stderr,"  -e, --live\tperform live download, use with -t and -h\n");
+
+}
+#define quit(...) {usage(); fprintf(stderr,__VA_ARGS__); exit(1); }
+
 bool InstallHTTPGateway(struct event_base *evbase,Address addr,size_t chunk_size, double *maxspeed);
 bool InstallStatsGateway(struct event_base *evbase,Address addr);
 bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr);
@@ -23,7 +50,16 @@ bool HTTPIsSending();
 bool StatsQuit();
 void CmdGwUpdateDLStatesCallback();
 
-struct event evreport, evend;
+// Local prototypes
+void ReportCallback(int fd, short event, void *arg);
+void EndCallback(int fd, short event, void *arg);
+void LiveSourceAttemptCreate();
+void LiveSourceFileTimerCallback(int fd, short event, void *arg);
+void LiveSourceHTTPResponseCallback(struct evhttp_request *req, void *arg);
+void LiveSourceHTTPDownloadChunkCallback(struct evhttp_request *req, void *arg);
+
+
+struct event evreport, evend, evlivesource;
 int file = -1;
 bool file_enable_checkpoint = false;
 bool file_checkpointed = false;
@@ -32,6 +68,12 @@ bool httpgw_enabled=false,cmdgw_enabled=false;
 // Gertjan fix
 bool do_nat_test = false;
 size_t chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;
+
+// LIVE
+char* livesource_input = 0;
+LiveTransfer *livesource_lt = NULL;
+int livesource_fd=-1;
+struct evbuffer *livesource_evb = NULL;
 
 int main (int argc, char** argv)
 {
@@ -54,13 +96,15 @@ int main (int argc, char** argv)
         {"downrate",required_argument, 0, 'y'}, // RATELIMIT
         {"checkpoint",no_argument, 0, 'H'},
         {"chunksize",required_argument, 0, 'z'}, // CHUNKSIZE
+        {"source",required_argument, 0, 'i'}, // LIVE
+        {"live",no_argument, 0, 'e'}, // LIVE
         {0, 0, 0, 0}
     };
 
     Sha1Hash root_hash;
     char* filename = 0;
     const char *destdir = 0; // UNICODE?
-    bool daemonize = false;
+    bool daemonize = false, livestream=false;
     Address bindaddr;
     Address tracker;
     Address httpaddr;
@@ -73,7 +117,7 @@ int main (int argc, char** argv)
     Channel::evbase = event_base_new();
 
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:dl:t:D:pg:s:c:o:u:y:z:wBNH", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:dl:t:D:pg:s:c:o:u:y:z:i:wBNHe", long_options, 0)) ) {
         switch (c) {
             case 'h':
                 if (strlen(optarg)!=40)
@@ -172,7 +216,13 @@ int main (int argc, char** argv)
             	if (n != 1)
             		quit("chunk size must be bytes as int\n");
             	break;
-
+            case 'i': // LIVE
+                livesource_input = strdup(optarg);
+                wait_time = TINT_NEVER;
+                break;
+            case 'e': // LIVE
+                livestream = true;
+                break;
         }
 
     }   // arguments parsed
@@ -231,40 +281,107 @@ int main (int argc, char** argv)
     if (root_hash!=Sha1Hash::ZERO && !filename)
         filename = strdup(root_hash.hex().c_str());
 
-    if (filename) {
-        file = Open(filename,root_hash,Address(),false,chunk_size);
+    if (!livesource_input && filename) {
+
+    	// Client mode: regular or live download
+    	if (!livestream)
+    		file = Open(filename,root_hash,Address(),false,chunk_size);
+    	else
+    		file = LiveOpen(filename,root_hash,Address(),false,chunk_size);
 
         if (file<=0)
             quit("cannot open file %s",filename);
         printf("Root hash: %s\n", RootMerkleHash(file).hex().c_str());
 
         // RATELIMIT
-        FileTransfer *ft = FileTransfer::file(file);
-        ft->SetMaxSpeed(DDIR_DOWNLOAD,maxspeed[DDIR_DOWNLOAD]);
-        ft->SetMaxSpeed(DDIR_UPLOAD,maxspeed[DDIR_UPLOAD]);
+        ContentTransfer *ct = ContentTransfer::transfer(file);
+        ct->SetMaxSpeed(DDIR_DOWNLOAD,maxspeed[DDIR_DOWNLOAD]);
+        ct->SetMaxSpeed(DDIR_UPLOAD,maxspeed[DDIR_UPLOAD]);
     }
+    else if (livesource_input)
+	{
+		// LIVE
+    	// Server mode: read from http source or pipe or file
+		livesource_evb = evbuffer_new();
 
-    // No file nor HTTP gateway nor CMD gateway, will never know what to swarm
-    if (cmdaddr==Address() && file==-1 && !httpgw_enabled) {
-        fprintf(stderr,"Usage:\n");
-        fprintf(stderr,"  -h, --hash\troot Merkle hash for the transmission\n");
-        fprintf(stderr,"  -f, --file\tname of file to use (root hash by default)\n");
-        fprintf(stderr,"  -l, --listen\t[ip:|host:]port to listen to (default: random)\n");
-        fprintf(stderr,"  -t, --tracker\t[ip:|host:]port of the tracker (default: none)\n");
-        fprintf(stderr,"  -D, --debug\tfile name for debugging logs (default: stdout)\n");
-        fprintf(stderr,"  -B\tdebugging logs to stdout (win32 hack)\n");
-        fprintf(stderr,"  -p, --progress\treport transfer progress\n");
-        fprintf(stderr,"  -g, --httpgw\t[ip:|host:]port to bind HTTP content gateway to (no default)\n");
-        fprintf(stderr,"  -s, --statsgw\t[ip:|host:]port to bind HTTP stats listen socket to (no default)\n");
-        fprintf(stderr,"  -c, --cmdgw\t[ip:|host:]port to bind CMD listen socket to (no default)\n");
-        fprintf(stderr,"  -o, --destdir\tdirectory for saving data (default: none)\n");
-        fprintf(stderr,"  -u, --uprate\tupload rate limit in KiB/s (default: unlimited)\n");
-        fprintf(stderr,"  -y, --downrate\tdownload rate limit in KiB/s (default: unlimited)\n");
-        fprintf(stderr,"  -w, --wait\tlimit running time, e.g. 1[DHMs] (default: infinite with -l, -g)\n");
-        fprintf(stderr,"  -H, --checkpoint\tcreate checkpoint of file when complete for fast restart\n");
-        fprintf(stderr,"  -z, --chunksize\tchunk size in bytes (default: %d)\n", SWIFT_DEFAULT_CHUNK_SIZE);
-        return 1;
-    }
+		if (strncmp(livesource_input,"http:",strlen("http:")))
+		{
+			// Source is file or pipe
+			if (!strcmp(livesource_input,"-"))
+				livesource_fd = 0; // stdin, aka read from pipe
+			else {
+				livesource_fd = open(livesource_input,READFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+				if (livesource_fd < 0)
+					quit("Could not open source input");
+			}
+
+			livesource_lt = swift::Create(filename);
+
+			evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
+			evtimer_add(&evlivesource, tint2tv(TINT_SEC));
+		}
+		else
+		{
+			// Source is HTTP server
+		    char *token = NULL, *savetok = NULL;
+			char *url = livesource_input;
+			bool hasport = (bool)(strchr(&livesource_input[strlen("http:")],':') != NULL);
+
+			// Parse URL
+		    char *httpservstr=NULL,*httpportstr,*pathstr=NULL;
+
+		    token = strtok_r(url,"/",&savetok); // tswift://
+			if (token == NULL)
+		        quit("Live source URL incorrect, no //");
+			if (hasport)
+			{
+				token = strtok_r(NULL,":",&savetok);
+				if (token == NULL)
+					quit("Live source URL incorrect, no port");
+				httpservstr = token+1;
+				token = strtok_r(NULL,"/",&savetok);
+				if (token == NULL)
+					quit("Live source URL incorrect, no path");
+				httpportstr = token;
+				token = strtok_r(NULL,"",&savetok);
+				if (token == NULL)
+					quit("Live source URL incorrect, no end");
+				pathstr = token;
+			}
+			else
+			{
+				token = strtok_r(NULL,"/",&savetok);
+				if (token == NULL)
+					quit("Live source URL incorrect, no path2");
+				httpservstr = token;
+				httpportstr = "80";
+				token = strtok_r(NULL,"",&savetok);
+				if (token == NULL)
+					quit("Live source URL incorrect, no end2");
+				pathstr = token;
+			}
+
+			int port=-1;
+			int n = sscanf(httpportstr,"%u",&port);
+			if (n != 1)
+				quit("Live source URL incorrect, port no number");
+			char *slashpath = (char *)malloc(strlen(pathstr)+1+1);
+			strcpy(slashpath,"/");
+			strcat(slashpath,pathstr);
+
+			fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservstr, port, slashpath );
+
+			livesource_lt = swift::Create(filename);
+
+			struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, httpservstr, port);
+			struct evhttp_request *req = evhttp_request_new(LiveSourceHTTPResponseCallback, NULL);
+			evhttp_request_set_chunked_cb(req,LiveSourceHTTPDownloadChunkCallback);
+			evhttp_make_request(cn, req, EVHTTP_REQ_GET,slashpath);
+			evhttp_add_header(req->output_headers, "Host", httpservstr);
+		}
+	}
+    else if (!cmdgw_enabled && !httpgw_enabled)
+    	quit("Not client, not live server, not a gateway?");
 
     // End after wait_time
     if (wait_time != TINT_NEVER && (long)wait_time > 0) {
@@ -293,7 +410,7 @@ int main (int argc, char** argv)
 }
 
 
-void swift::ReportCallback(int fd, short event, void *arg) {
+void ReportCallback(int fd, short event, void *arg) {
 
 	if (file >= 0)
 	{
@@ -307,20 +424,21 @@ void swift::ReportCallback(int fd, short event, void *arg) {
 				Channel::global_dgrams_down, Channel::global_raw_bytes_down );
 		}
 
-        FileTransfer *ft = FileTransfer::file(file);
+        ContentTransfer *ct = ContentTransfer::transfer(file);
         if (report_progress) { // TODO: move up
-        	fprintf(stderr,"upload %lf\n",ft->GetCurrentSpeed(DDIR_UPLOAD));
-        	fprintf(stderr,"dwload %lf\n",ft->GetCurrentSpeed(DDIR_DOWNLOAD));
+        	fprintf(stderr,"upload %lf\n",ct->GetCurrentSpeed(DDIR_UPLOAD));
+        	fprintf(stderr,"dwload %lf\n",ct->GetCurrentSpeed(DDIR_DOWNLOAD));
         }
         // Update speed measurements such that they decrease when DL/UL stops
         // Always
-    	ft->OnRecvData(0);
-    	ft->OnSendData(0);
+    	ct->OnRecvData(0);
+    	ct->OnSendData(0);
 
     	// CHECKPOINT
-    	if (file_enable_checkpoint && !file_checkpointed && IsComplete(file))
+    	if (ct->ttype() == FILE_TRANSFER && file_enable_checkpoint && !file_checkpointed && IsComplete(file))
     	{
-    		std::string binmap_filename = ft->file().filename();
+    		HashTree *ht = ((FileTransfer *)ct)->hashtree();
+    		std::string binmap_filename = ht->filename();
     		binmap_filename.append(".mbinmap");
     		fprintf(stderr,"swift: Complete, checkpointing %s\n", binmap_filename.c_str() );
     		FILE *fp = fopen(binmap_filename.c_str(),"wb");
@@ -328,7 +446,7 @@ void swift::ReportCallback(int fd, short event, void *arg) {
     			print_error("cannot open mbinmap for writing");
     			return;
     		}
-    		if (ft->file().serialize(fp) < 0)
+    		if (ht->serialize(fp) < 0)
     			print_error("writing to mbinmap");
     		else
     			file_checkpointed = true;
@@ -365,9 +483,94 @@ void swift::ReportCallback(int fd, short event, void *arg) {
 	evtimer_add(&evreport, tint2tv(TINT_SEC));
 }
 
-void swift::EndCallback(int fd, short event, void *arg) {
+void EndCallback(int fd, short event, void *arg) {
     event_base_loopexit(Channel::evbase, NULL);
 }
+
+
+void LiveSourceFileTimerCallback(int fd, short event, void *arg) {
+
+	char buf[102400];
+
+	fprintf(stderr,"live: file: timer\n");
+
+	int nread = read(livesource_fd,buf,sizeof(buf));
+
+	fprintf(stderr,"live: file: read returned %d\n", nread );
+
+	if (nread < -1)
+		print_error("error reading from live source");
+	else if (nread > 0)
+	{
+		int ret = evbuffer_add(livesource_evb,buf,nread);
+		if (ret < 0)
+			print_error("live: file: error evbuffer_add");
+
+		LiveSourceAttemptCreate();
+	}
+
+	// Reschedule
+	evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
+	evtimer_add(&evlivesource, tint2tv(TINT_SEC/10));
+}
+
+
+void LiveSourceHTTPResponseCallback(struct evhttp_request *req, void *arg)
+{
+	const char *new_location = NULL;
+	switch(req->response_code)
+	{
+		case HTTP_OK:
+			fprintf(stderr,"live: http: GET OK\n");
+			break;
+
+		case HTTP_MOVEPERM:
+		case HTTP_MOVETEMP:
+			new_location = evhttp_find_header(req->input_headers, "Location");
+			fprintf(stderr,"live: http: GET REDIRECT %s\n", new_location );
+			break;
+		default:
+			fprintf(stderr,"live: http: GET ERROR %d\n", req->response_code );
+			event_base_loopexit(Channel::evbase, 0);
+			return;
+	}
+
+	// LIVETODO: already reply data here?
+	//evbuffer_add_buffer(ctx->buffer, req->input_buffer);
+}
+
+
+void LiveSourceHTTPDownloadChunkCallback(struct evhttp_request *req, void *arg)
+{
+	int length = evbuffer_get_length(req->input_buffer);
+	fprintf(stderr,"live: http: read %d bytes\n", length );
+
+	// Create chunks of chunk_size()
+	int ret = evbuffer_add_buffer(livesource_evb,req->input_buffer);
+	if (ret < 0)
+		print_error("live: http: error evbuffer_add");
+
+	LiveSourceAttemptCreate();
+}
+
+
+void LiveSourceAttemptCreate()
+{
+	if (evbuffer_get_length(livesource_evb) > livesource_lt->chunk_size())
+	{
+		size_t nchunklen = livesource_lt->chunk_size() * (size_t)(evbuffer_get_length(livesource_evb)/livesource_lt->chunk_size());
+		uint8_t *chunks = evbuffer_pullup(livesource_evb, nchunklen);
+		int nwrite = swift::Write(livesource_lt, chunks, nchunklen, -1);
+		if (nwrite < -1)
+			print_error("error creating live chunk");
+
+		int ret = evbuffer_drain(livesource_evb, nchunklen);
+		if (ret < 0)
+			print_error("live: http: error evbuffer_drain");
+	}
+}
+
+
 
 
 #ifdef _WIN32

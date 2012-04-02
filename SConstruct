@@ -22,7 +22,7 @@ TestDir='tests'
 target = 'swift'
 source = [ 'bin.cpp', 'binmap.cpp','binheap.cpp', 'sha1.cpp','hashtree.cpp',
     	   'transfer.cpp', 'channel.cpp', 'sendrecv.cpp', 'send_control.cpp', 
-    	   'compat.cpp','avgspeed.cpp', 'availability.cpp']
+    	   'api.cpp', 'compat.cpp','avgspeed.cpp', 'availability.cpp', 'live.cpp']
 
 #libevent2path = '\\build\\libevent-2.0.14-stable'
 libevent2path = '\\build\\ttuki\\libevent-2.0.15-arno-http'
@@ -125,4 +125,4 @@ Export("libs")
 Export("libpath")
 Export("DEBUG")
 # Arno: uncomment to build tests
-SConscript('tests/SConscript')
+#SConscript('tests/SConscript')

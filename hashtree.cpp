@@ -20,10 +20,7 @@
 
 #include <iostream>
 
-#ifdef _WIN32
-#define OPENFLAGS         O_RDWR|O_CREAT|_O_BINARY
-#else
-#define OPENFLAGS         O_RDWR|O_CREAT
+#ifndef _WIN32
 #include <sys/stat.h>
 #endif
 
@@ -89,7 +86,7 @@ root_hash_(root_hash), hashes_(NULL), peak_count_(0), fd_(0), hash_fd_(0),
 filename_(filename), size_(0), sizec_(0), complete_(0), completec_(0),
 chunk_size_(chunk_size)
 {
-    fd_ = open(filename,OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+    fd_ = open(filename,CREATEFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (fd_<0) {
         fd_ = 0;
         print_error("cannot open the file");
@@ -133,7 +130,7 @@ chunk_size_(chunk_size)
 
     fprintf(stderr,"hashtree: hashchecking want %s do %s binmap-on-disk %s\n", (check_hashes ? "yes" : "no"), (actually_check_hashes? "yes" : "no"), (binmap_exists? "yes" : "no") );
 
-    hash_fd_ = open(hfn.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+    hash_fd_ = open(hfn.c_str(),CREATEFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (hash_fd_<0) {
         hash_fd_ = 0;
         print_error("cannot open hash file");
