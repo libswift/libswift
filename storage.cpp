@@ -427,7 +427,7 @@ typedef std::vector<std::pair<std::string,int64_t> >	filelist_t;
 
 #include <sstream>
 
-#define BLOCKSIZE	1024
+#define BLOCKSIZE	200
 
 
 int main()
@@ -435,9 +435,11 @@ int main()
 	filelist_t	filelist;
 
 	// 1. Make list of files
-	filelist.push_back(std::make_pair("a.tst",100));
-	filelist.push_back(std::make_pair("b.tst",200));
-	filelist.push_back(std::make_pair("c.tst",1024));
+	std::string prefix="REALLYBIGSTRINGSOMEwecangetaspecthatislargerthanwhatiswrittenHERE-";
+	filelist.push_back(std::make_pair(prefix+"a.tst",100));
+	filelist.push_back(std::make_pair(prefix+"b.tst",200));
+	filelist.push_back(std::make_pair(prefix+"c.tst",1024));
+	filelist.push_back(std::make_pair(prefix+"d.tst",5*1024));
 
 	// 2. Create spec body
 	std::ostringstream specbody;
