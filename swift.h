@@ -250,6 +250,7 @@ namespace swift {
     class PeerSelector;
     class Channel;
     typedef void (*ProgressCallback) (int transfer, bin_t bin);
+    class Storage;
 
     /** A class representing single file transfer. */
     class    FileTransfer {
@@ -335,6 +336,9 @@ namespace swift {
 		/** Arno: Return the Channel to peer "addr" that is not equal to "notc". */
 		Channel * FindChannel(const Address &addr, Channel *notc);
 
+		// MULTIFILE
+		//Storage * GetStorage() { return storage_; }
+
 		// SAFECLOSE
 		static void LibeventCleanCallback(int fd, short event, void *arg);
     protected:
@@ -373,6 +377,9 @@ namespace swift {
         Address 			tracker_; // Tracker for this transfer
         tint				tracker_retry_interval_;
         tint				tracker_retry_time_;
+
+        // MULTIFILE
+        //Storage				storage_;
 
     public:
         void            OnDataIn (bin_t pos);
@@ -682,6 +689,69 @@ namespace swift {
     };
 
 
+    // MULTIFILE
+    class StorageFile;
+#ifdef SJAAK
+    class Storage {
+
+      public:
+
+        typedef enum {
+            STOR_STATE_INIT,
+            STOR_STATE_MFSPEC_SIZE_KNOWN,
+            STOR_STATE_MFSPEC_COMPLETE,
+            STOR_STATE_SINGLE_FILE
+        } storage_state_t;
+
+        typedef std::vector<StorageFile *>	storage_files_t;
+
+    	Storage(FileTransfer *ft);
+
+    	/** UNIX pread approximation. Does change file pointer. Is not thread-safe */
+    	ssize_t  Read(void *buf, size_t nbyte, int64_t offset); // off_t not 64-bit dynamically on Win32
+
+    	/** UNIX pwrite approximation. Does change file pointer. Is not thread-safe */
+    	ssize_t  Write(const void *buf, size_t nbyte, int64_t offset);
+
+      protected:
+    		/** FileTransfer this Storage belongs to */
+    	    FileTranfer *ft_;
+
+    	    storage_state_t	state_;
+
+    	    int64_t spec_size_;
+
+    	    storage_files_t	sfs_;
+    	    int single_fd_;
+    };
+#endif
+
+    class StorageFile
+    {
+       public:
+    	 StorageFile(char *utf8path, int64_t start, int64_t size)
+    	 {
+    		 utf8path_ = strdup(utf8path);
+    		 start_ = start;
+    		 end_ = start+size-1;
+    	 }
+    	 ~StorageFile()
+    	 {
+    		 free(utf8path_);
+    	 }
+    	 int64_t GetStart() { return start_; }
+    	 int64_t GetEnd() { return end_; }
+    	 int64_t GetSize() { return end_+1-start_; }
+    	 char *GetUTF8Path() { return utf8path_; }
+
+       protected:
+    	 char *	 	utf8path_;
+    	 int64_t	start_;
+    	 int64_t	end_;
+    };
+
+
+    typedef std::vector<StorageFile *>	storage_files_t;
 
     /*************** The top-level API ****************/
     /** Start listening a port. Returns socket descriptor. */

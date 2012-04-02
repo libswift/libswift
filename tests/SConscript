@@ -86,3 +86,9 @@ env.Program(
     LIBS=libs,
     LIBPATH=libpath )
 
+env.Program( 
+    target='storagetest',
+    source=['storagetest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )

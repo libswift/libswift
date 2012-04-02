@@ -131,6 +131,15 @@ env.Program(
    #CPPPATH=cpppath,
    LIBS=[libs,'libswift'],
    LIBPATH=libpath+':.')
+
+
+env.Program(
+   target='storage',
+   source=['storage.cpp','compat.cpp'],
+   #CPPPATH=cpppath,
+   LIBS=[libs],
+   LIBPATH=libpath+':.')
+
    
 Export("env")
 Export("libs")

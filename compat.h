@@ -104,6 +104,11 @@ typedef void* setsockoptptr_t;
 #define PRISIZET	"%lu"
 #endif
 
+#ifdef _WIN32
+#define ssize_t		SSIZE_T
+#endif
+
+
 namespace swift {
 
 /** tint is the time integer type; microsecond-precise. */
