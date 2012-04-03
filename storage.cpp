@@ -153,7 +153,7 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 	{
 		if (offset != 0)
 		{
-			errno = EFAULT;
+			errno = EINVAL;
 			return -1;
 		}
 
@@ -169,7 +169,7 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 			int n = sscanf((const char *)&bufstr[strlen(MULTIFILE_PATHNAME)+1],"%lli",&spec_size_);
 			if (n != 1)
 			{
-				errno = EFAULT;
+				errno = EINVAL;
 				return -1;
 			}
 
@@ -206,14 +206,14 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 		if (sf == NULL)
 		{
 			fprintf(stderr,"storage: Write: File not found!\n");
-			errno = EFAULT;
+			errno = EINVAL;
 			return -1;
 		}
 
 		std::pair<int64_t,int64_t> ht = WriteBuffer(sf,buf,nbyte,offset);
 		if (ht.first == -1)
 		{
-			errno = EFAULT;
+			errno = EINVAL;
 			return -1;
 		}
 
@@ -242,7 +242,7 @@ int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64
 	std::pair<int64_t,int64_t> ht = WriteBuffer(sf,buf,nbyte,offset);
 	if (ht.first == -1)
 	{
-		errno = EFAULT;
+		errno = EINVAL;
 		return -1;
 	}
 
@@ -253,7 +253,7 @@ int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64
 
 		if (ParseSpec(sf) < 0)
 		{
-			errno = EFAULT;
+			errno = EINVAL;
 			return -1;
 		}
 
@@ -387,6 +387,8 @@ int Storage::ParseSpec(StorageFile *sf)
 
 ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 {
+	fprintf(stderr,"storage: Read: nbyte " PRISIZET " off %lli\n", nbyte, offset );
+
 	if (state_ == STOR_STATE_SINGLE_FILE)
 	{
 		return pread(single_fd_, buf, nbyte, offset);
@@ -395,7 +397,7 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 
 	if (state_ == STOR_STATE_INIT)
 	{
-		errno = EFAULT;
+		errno = EINVAL;
 		return -1;
 	}
 	else
@@ -403,19 +405,29 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 		StorageFile *sf = FindStorageFile(offset);
 		if (sf == NULL)
 		{
-			errno = EFAULT;
+			errno = EINVAL;
 			return -1;
 		}
 
-		ssize_t ret = sf->Read(buf,nbyte,offset);
+		fprintf(stderr,"storage: Read: found file %s for off %lli\n", sf->GetUTF8Path(), offset );
+
+		ssize_t ret = sf->Read(buf,nbyte,offset - sf->GetStart());
 		if (ret < 0)
 			return ret;
 
+		fprintf(stderr,"storage: Read: read %d\n", ret );
+
 		if (ret < nbyte && offset+ret != ft_->file().size())
 		{
+			fprintf(stderr,"storage: Read: want %d more\n", nbyte-ret );
+
 			// Not at end, and can fit more in buffer. Do recursion
 			char *bufstr = (char *)buf;
-			return Read((void *)(bufstr+ret),nbyte-ret,offset+ret);
+			ssize_t newret = Read((void *)(bufstr+ret),nbyte-ret,offset+ret);
+			if (newret < 0)
+				return newret;
+			else
+				return ret + newret;
 		}
 		else
 			return ret;
@@ -490,7 +502,7 @@ int main()
 
 	const char *assetbytes = asset.str().c_str();
 
-	fprintf(stderr,"asset2: <%s>\n", asset.str().c_str() );
+	fprintf(stderr,"asset2: <%s> size %d\n", asset.str().c_str(), asset.str().size() );
 
 	FileTransfer *ft = new FileTransfer(asset.str().size());
 
@@ -503,6 +515,80 @@ int main()
 
 		ret = s->Write(asset.str().c_str()+off,nbyte,off);
 		fprintf(stderr,"main: wrote %d\n", ret );
+		off += ret;
+	}
+
+
+	// Read back via OS
+	c = 'A';
+	for (iter = filelist.begin(); iter < filelist.end(); iter++)
+	{
+		char *filename = strdup( (*iter).first.c_str() );
+		int64_t fsize = (*iter).second;
+
+#ifdef WIN32
+		struct _stat statbuf;
+#else
+		struct stat statbuf;
+#endif
+		int res = stat( filename, &statbuf );
+		if( res < 0)
+		{
+			fprintf(stderr,"main: read OS: stat %d\n", ret );
+			continue;
+		}
+
+		if (statbuf.st_size != fsize)
+			fprintf(stderr,"main: read OS: size wrong %s exp %lli got %lli\n", filename, fsize, statbuf.st_size );
+
+		FILE *fp = fopen(filename,"rb");
+		char buf[512];
+		while(!feof(fp))
+		{
+			ret = fread(buf,sizeof(char),sizeof(buf), fp);
+			if (ret < 0)
+			{
+				fprintf(stderr,"main: read OS: %d\n", ret );
+				continue;
+			}
+			for (int i=0; i<ret; i++)
+			{
+				if (buf[i] != c)
+				{
+					fprintf(stderr,"main: read OS: wrong bytes %d\n", buf[i] );
+					break;
+				}
+
+			}
+		}
+		fclose(fp);
+
+		c++;
+	}
+
+
+	// Read back via Storage API
+	off = 0;
+	while(true)
+	{
+		char readbuf[512];
+
+		fprintf(stderr,"main: read API: reading %lli\n", off );
+
+		int ret = s->Read(readbuf,sizeof(readbuf),off);
+		if (ret < 0)
+		{
+			fprintf(stderr,"main: read API: %d errno %s\n", ret, strerror(errno) );
+			break;
+		}
+
+		fprintf(stderr,"main: read API: got %d\n", ret );
+
+		if (memcmp(readbuf,asset.str().c_str()+off,ret))
+		{
+			fprintf(stderr,"main: read API: asset mismatch\n" );
+		}
+
 		off += ret;
 	}
 }
