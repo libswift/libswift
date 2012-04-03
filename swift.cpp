@@ -457,7 +457,7 @@ int CleanSwiftDirectory(const TCHAR* dirname)
 	{
 		FileTransfer *ft = *iter;
 		if (ft != NULL) {
-			std::string filename = ft->file().filename();
+			std::string filename = ft->GetStorage()->GetPathNameUTF8String();
 #ifdef WIN32
 			struct _stat buf;
 #else
@@ -515,19 +515,12 @@ void ReportCallback(int fd, short event, void *arg) {
     	// CHECKPOINT
     	if (file_enable_checkpoint && !file_checkpointed && IsComplete(single_fd))
     	{
-    		std::string binmap_filename = ft->file().filename();
+    		std::string binmap_filename = ft->GetStorage()->GetPathNameUTF8String();
     		binmap_filename.append(".mbinmap");
     		fprintf(stderr,"swift: Complete, checkpointing %s\n", binmap_filename.c_str() );
-    		FILE *fp = fopen(binmap_filename.c_str(),"wb");
-    		if (!fp) {
-    			print_error("cannot open mbinmap for writing");
-    			return;
-    		}
-    		if (ft->file().serialize(fp) < 0)
-    			print_error("writing to mbinmap");
-    		else
+
+    		if (swift::Checkpoint(single_fd) >= 0)
     			file_checkpointed = true;
-    		fclose(fp);
     	}
 
 

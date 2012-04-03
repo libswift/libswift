@@ -260,8 +260,9 @@ namespace swift {
         /** A constructor. Open/submit/retrieve a file.
          *  @param file_name    the name of the file
          *  @param root_hash    the root hash of the file; zero hash if the file
-	 is newly submitted */
-        FileTransfer(const char *file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO,bool check_hashes=true,uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+	 	 *                      is newly submitted
+	 	 */
+        FileTransfer(std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO,bool check_hashes=true,uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
         /**    Close everything. */
         ~FileTransfer();
@@ -286,17 +287,17 @@ namespace swift {
         }
 
         /** The binmap for data already retrieved and checked. */
-        binmap_t&           ack_out ()  { return file_.ack_out(); }
+        binmap_t&           ack_out ()  { return hashtree_->ack_out(); }
         /** Piece picking strategy used by this transfer. */
         PiecePicker&    picker () { return *picker_; }
         /** The number of channels working for this transfer. */
         int             channel_count () const { return hs_in_.size(); }
         /** Hash tree checked file; all the hashes and data are kept here. */
-        HashTree&       file() { return file_; }
+        HashTree&       file() { return *hashtree_; }
         /** File descriptor for the data file. */
-        int             fd () const { return file_.file_descriptor(); }
+        int             fd () const { return hashtree_->file_descriptor(); }
         /** Root SHA1 hash of the transfer (and the data file). */
-        const Sha1Hash& root_hash () const { return file_.root_hash(); }
+        const Sha1Hash& root_hash () const { return hashtree_->root_hash(); }
         /** Ric: the availability in the swarm */
         Availability&	availability() { return *availability_; }
 
@@ -337,13 +338,13 @@ namespace swift {
 		Channel * FindChannel(const Address &addr, Channel *notc);
 
 		// MULTIFILE
-		//Storage * GetStorage() { return storage_; }
+		Storage * GetStorage() { return storage_; }
 
 		// SAFECLOSE
 		static void LibeventCleanCallback(int fd, short event, void *arg);
     protected:
 
-        HashTree        file_;
+        HashTree*		hashtree_;
 
         /** Piece picker strategy. */
         PiecePicker*    picker_;
@@ -379,7 +380,7 @@ namespace swift {
         tint				tracker_retry_time_;
 
         // MULTIFILE
-        //Storage				storage_;
+        Storage				*storage_;
 
     public:
         void            OnDataIn (bin_t pos);
@@ -430,14 +431,6 @@ namespace swift {
         virtual void AddPeer (const Address& addr, const Sha1Hash& root) = 0;
         virtual Address GetPeer (const Sha1Hash& for_root) = 0;
     };
-
-
-    /* class DataStorer { // Arno: never implemented
-    public:
-        DataStorer (const Sha1Hash& id, size_t size);
-        virtual size_t    ReadData (bin_t pos,uint8_t** buf) = 0;
-        virtual size_t    WriteData (bin_t pos, uint8_t* buf, size_t len) = 0;
-    }; */
 
 
     /**    swift channel's "control block"; channels loosely correspond to TCP
@@ -690,68 +683,94 @@ namespace swift {
 
 
     // MULTIFILE
-    class StorageFile;
-#ifdef SJAAK
-    class Storage {
-
-      public:
-
-        typedef enum {
-            STOR_STATE_INIT,
-            STOR_STATE_MFSPEC_SIZE_KNOWN,
-            STOR_STATE_MFSPEC_COMPLETE,
-            STOR_STATE_SINGLE_FILE
-        } storage_state_t;
-
-        typedef std::vector<StorageFile *>	storage_files_t;
-
-    	Storage(FileTransfer *ft);
-
-    	/** UNIX pread approximation. Does change file pointer. Is not thread-safe */
-    	ssize_t  Read(void *buf, size_t nbyte, int64_t offset); // off_t not 64-bit dynamically on Win32
-
-    	/** UNIX pwrite approximation. Does change file pointer. Is not thread-safe */
-    	ssize_t  Write(const void *buf, size_t nbyte, int64_t offset);
-
-      protected:
-    		/** FileTransfer this Storage belongs to */
-    	    FileTranfer *ft_;
-
-    	    storage_state_t	state_;
-
-    	    int64_t spec_size_;
-
-    	    storage_files_t	sfs_;
-    	    int single_fd_;
-    };
-#endif
-
+    /*
+     * Class representing a single file in a multi-file swarm.
+     */
     class StorageFile
     {
        public:
-    	 StorageFile(char *utf8path, int64_t start, int64_t size)
-    	 {
-    		 utf8path_ = strdup(utf8path);
-    		 start_ = start;
-    		 end_ = start+size-1;
-    	 }
-    	 ~StorageFile()
-    	 {
-    		 free(utf8path_);
-    	 }
+    	 StorageFile(std::string utf8pathstr, int64_t start, int64_t size);
+    	 ~StorageFile();
     	 int64_t GetStart() { return start_; }
     	 int64_t GetEnd() { return end_; }
     	 int64_t GetSize() { return end_+1-start_; }
-    	 char *GetUTF8Path() { return utf8path_; }
+    	 std::string GetPathNameUTF8String() { return pathname_utf8_str_; }
+    	 ssize_t  Write(const void *buf, size_t nbyte, int64_t offset) { return pwrite(fd_,buf,nbyte,offset); }
+    	 ssize_t  Read(void *buf, size_t nbyte, int64_t offset) {  return pread(fd_,buf,nbyte,offset); }
+    	 int ResizeReserved() { return file_resize(fd_,GetSize()); }
 
        protected:
-    	 char *	 	utf8path_;
+    	 std::string pathname_utf8_str_;
     	 int64_t	start_;
     	 int64_t	end_;
+
+    	 int		fd_;
     };
 
-
     typedef std::vector<StorageFile *>	storage_files_t;
+
+    /*
+     * Class representing the persistent storage layer. Supports a swarm
+     * stored as multiple files.
+     */
+
+	class Storage {
+
+	  public:
+
+		typedef enum {
+			STOR_STATE_INIT,
+			STOR_STATE_MFSPEC_SIZE_KNOWN,
+			STOR_STATE_MFSPEC_COMPLETE,
+			STOR_STATE_SINGLE_FILE
+		} storage_state_t;
+
+		typedef std::vector<StorageFile *>	storage_files_t;
+
+		/** Constructor */
+		Storage(std::string pathname);
+		~Storage();
+
+		/** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
+		ssize_t  Read(void *buf, size_t nbyte, int64_t offset); // off_t not 64-bit dynamically on Win32
+
+		/** UNIX pwrite approximation. Does change file pointer. Is not thread-safe */
+		ssize_t  Write(const void *buf, size_t nbyte, int64_t offset);
+
+		/** Link to HashTree */
+		void SetHashTree(HashTree *ht) { ht_ = ht; }
+
+		/** Size reserved for storage */
+		int64_t GetReservedSize();
+
+		/** Change size reserved for storage */
+		int ResizeReserved(int64_t size);
+
+		std::string GetPathNameUTF8String() { return pathname_utf8_str_; }
+
+
+	  protected:
+			storage_state_t	state_;
+
+			std::string pathname_utf8_str_;
+
+			/** HashTree this Storage is linked to */
+			HashTree *ht_;
+
+			int64_t spec_size_;
+
+			storage_files_t	sfs_;
+			int single_fd_;
+
+			int WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
+			std::pair<int64_t,int64_t> WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
+			StorageFile * FindStorageFile(int64_t offset);
+			int ParseSpec(StorageFile *sf);
+			int OpenSingleFile();
+
+	};
+
+
 
     /*************** The top-level API ****************/
     /** Start listening a port. Returns socket descriptor. */
@@ -778,6 +797,12 @@ namespace swift {
         root hash is zero, the peer might be talked to regarding any transmission
         (likely, a tracker, cache or an archive). */
     void    AddPeer (Address address, const Sha1Hash& root=Sha1Hash::ZERO);
+
+	/** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
+	ssize_t  Read(int fd, void *buf, size_t nbyte, int64_t offset); // off_t not 64-bit dynamically on Win32
+
+	/** UNIX pwrite approximation. Does change file pointer. Is not thread-safe */
+	ssize_t  Write(int fd, const void *buf, size_t nbyte, int64_t offset);
 
     void    SetTracker(const Address& tracker);
     /** Set the default tracker that is used when Open is not passed a tracker
@@ -829,7 +854,7 @@ namespace swift {
     void nat_test_update(void);
 
     // Arno: Save transfer's binmap for zero-hashcheck restart
-    void Checkpoint(int fdes);
+    int Checkpoint(int fdes);
 
 } // namespace end
 

@@ -1,4 +1,17 @@
-//#include "swift.h"
+/*
+ *  storage.cpp
+ *  swift
+ *
+ *  Created by Arno Bakker.
+ *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
+ *
+ * TODO:
+ * - mkdir for META-INF
+ * - Unicode?
+ * - If multi-file spec, then exact size known after 1st few chunks. Use for swift::Size()?
+ */
+
+#include "swift.h"
 #include "compat.h"
 
 #include <vector>
@@ -11,132 +24,52 @@ using namespace swift;
 #define MULTIFILE_MAX_LINE	MULTIFILE_MAX_PATH+1+32+1
 
 
-class HashTree
+Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), spec_size_(0), single_fd_(-1)
 {
-	uint64_t        size_;
+	pathname_utf8_str_ = pathname;
 
-  public:
-	HashTree(uint64_t size)
-	{
-		size_ = size;
-	}
-
-	uint64_t        size () const { return size_; }
-};
-
-class FileTransfer
-{
-	HashTree hashtree_;
-
-  public:
-	FileTransfer(uint64_t size) : hashtree_(size)
-	{
-	}
-
-
-	HashTree &file() { return hashtree_; }
-};
-
-
-#ifdef _WIN32
-#define OPENFLAGS         O_RDWR|O_CREAT|_O_BINARY
+#ifdef WIN32
+	struct _stat statbuf;
 #else
-#define OPENFLAGS         O_RDWR|O_CREAT
+	struct stat statbuf;
 #endif
+	int ret = stat( pathname.c_str(), &statbuf );
+	if( ret < 0 && errno == ENOENT)
+	{
+		return;
+	}
+
+	// File exists
+
+	std::string ps = pathname;
+	unsigned int last = ps.rfind(MULTIFILE_PATHNAME); // Find the last occurrence of ending
+	if (last != std::string::npos)
+	{
+		// Pathname points to a multi-file spec, assume we're seeding
+		StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,statbuf.st_size);
+		if (ParseSpec(sf) < 0)
+			print_error("storage: error parsing multi-file spec");
+	}
+	else
+	{
+		// Normal swarm
+		(void)OpenSingleFile();
+	}
+}
 
 
-class StorageFile
+Storage::~Storage()
 {
-   public:
-	 StorageFile(char *utf8path, int64_t start, int64_t size) : fd_(-1)
-	 {
-		 utf8path_ = strdup(utf8path);
-		 start_ = start;
-		 end_ = start+size-1;
+	if (single_fd_ != -1)
+		close(single_fd_);
 
-		 fd_ = open(utf8path,OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-		 if (fd_<0) {
-			 fprintf(stderr,"storage: file: Could not open %s\n", utf8path );
- 	         return;
-		 }
-	 }
-
-	 ~StorageFile()
-	 {
-		 if (fd_ < 0)
-			 close(fd_);
-		 free(utf8path_);
-	 }
-	 int64_t GetStart() { return start_; }
-	 int64_t GetEnd() { return end_; }
-	 int64_t GetSize() { return end_+1-start_; }
-	 char *GetUTF8Path() { return utf8path_; }
-
-	 ssize_t  Write(const void *buf, size_t nbyte, int64_t offset)
-	 {
-		 return pwrite(fd_,buf,nbyte,offset);
-	 }
-	 ssize_t  Read(void *buf, size_t nbyte, int64_t offset)
-	 {
-		 return pread(fd_,buf,nbyte,offset);
-	 }
-
-   protected:
-	 char *	 	utf8path_;
-	 int64_t	start_;
-	 int64_t	end_;
-
-	 int		fd_;
-};
-
-
-typedef std::vector<StorageFile *>	storage_files_t;
-
-
-
-    class Storage {
-
-      public:
-
-        typedef enum {
-            STOR_STATE_INIT,
-            STOR_STATE_MFSPEC_SIZE_KNOWN,
-            STOR_STATE_MFSPEC_COMPLETE,
-            STOR_STATE_SINGLE_FILE
-        } storage_state_t;
-
-        typedef std::vector<StorageFile *>	storage_files_t;
-
-    	Storage(FileTransfer *ft);
-
-    	/** UNIX pread approximation. Does change file pointer. Is not thread-safe */
-    	ssize_t  Read(void *buf, size_t nbyte, int64_t offset); // off_t not 64-bit dynamically on Win32
-
-    	/** UNIX pwrite approximation. Does change file pointer. Is not thread-safe */
-    	ssize_t  Write(const void *buf, size_t nbyte, int64_t offset);
-
-      protected:
-    		/** FileTransfer this Storage belongs to */
-    	    FileTransfer *ft_;
-
-    	    storage_state_t	state_;
-
-    	    int64_t spec_size_;
-
-    	    storage_files_t	sfs_;
-    	    int single_fd_;
-
-    	    int WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
-    	    std::pair<int64_t,int64_t> WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
-    	    StorageFile * FindStorageFile(int64_t offset);
-    	    int ParseSpec(StorageFile *sf);
-
-    };
-
-
-
-Storage::Storage(FileTransfer *ft) : ft_(ft), state_(STOR_STATE_INIT), spec_size_(0), single_fd_(-1)
-{
+	storage_files_t::iterator iter;
+	for (iter = sfs_.begin(); iter < sfs_.end(); iter++)
+	{
+		StorageFile *sf = *iter;
+		delete sf;
+	}
+	sfs_.clear();
 }
 
 
@@ -184,9 +117,8 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 		}
 		else
 		{
-			state_ = STOR_STATE_SINGLE_FILE;
-			// TODO: single_fd_ =
-			return -481;
+			// Is a single file swarm.
+			return OpenSingleFile();
 		}
 	}
 	else if (state_ == STOR_STATE_MFSPEC_SIZE_KNOWN)
@@ -237,7 +169,7 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 
 int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset)
 {
-	fprintf(stderr,"storage: WriteSpecPart: %s %d %lli\n", sf->GetUTF8Path(), nbyte, offset );
+	fprintf(stderr,"storage: WriteSpecPart: %s %d %lli\n", sf->GetPathNameUTF8String().c_str(), nbyte, offset );
 
 	std::pair<int64_t,int64_t> ht = WriteBuffer(sf,buf,nbyte,offset);
 	if (ht.first == -1)
@@ -276,7 +208,7 @@ int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64
 
 std::pair<int64_t,int64_t> Storage::WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset)
 {
-	fprintf(stderr,"storage: WriteBuffer: %s %d %lli\n", sf->GetUTF8Path(), nbyte, offset );
+	fprintf(stderr,"storage: WriteBuffer: %s %d %lli\n", sf->GetPathNameUTF8String().c_str(), nbyte, offset );
 
 	int ret = -1;
 	if (offset+nbyte <= sf->GetEnd()+1)
@@ -334,7 +266,7 @@ StorageFile * Storage::FindStorageFile(int64_t offset)
 int Storage::ParseSpec(StorageFile *sf)
 {
 	char *ret = NULL,line[MULTIFILE_MAX_LINE];
-	FILE *fp = fopen(sf->GetUTF8Path(),"rb"); // FAXME decode UTF-8
+	FILE *fp = fopen(sf->GetPathNameUTF8String().c_str(),"rb"); // FAXME decode UTF-8
 
 
 	int64_t offset=0;
@@ -375,13 +307,27 @@ int Storage::ParseSpec(StorageFile *sf)
 	for (iter = sfs_.begin(); iter < sfs_.end(); iter++)
 	{
 		StorageFile *sf = *iter;
-		fprintf(stderr,"storage: ParseSpec: Got %s start %lli size %lli\n", sf->GetUTF8Path(), sf->GetStart(), sf->GetSize() );
+		fprintf(stderr,"storage: ParseSpec: Got %s start %lli size %lli\n", sf->GetPathNameUTF8String().c_str(), sf->GetStart(), sf->GetSize() );
 	}
 
 
 	fclose(fp);
 	return 0;
 }
+
+
+int Storage::OpenSingleFile()
+{
+	state_ = STOR_STATE_SINGLE_FILE;
+
+	single_fd_ = open(pathname_utf8_str_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+	if (single_fd_<0) {
+		single_fd_ = -1;
+		print_error("storage: cannot open single file");
+	}
+	return single_fd_;
+}
+
 
 
 
@@ -393,8 +339,8 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 	{
 		return pread(single_fd_, buf, nbyte, offset);
 	}
-	// MULTIFILE
 
+	// MULTIFILE
 	if (state_ == STOR_STATE_INIT)
 	{
 		errno = EINVAL;
@@ -409,7 +355,7 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 			return -1;
 		}
 
-		fprintf(stderr,"storage: Read: found file %s for off %lli\n", sf->GetUTF8Path(), offset );
+		fprintf(stderr,"storage: Read: found file %s for off %lli\n", sf->GetPathNameUTF8String().c_str(), offset );
 
 		ssize_t ret = sf->Read(buf,nbyte,offset - sf->GetStart());
 		if (ret < 0)
@@ -417,7 +363,7 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 
 		fprintf(stderr,"storage: Read: read %d\n", ret );
 
-		if (ret < nbyte && offset+ret != ft_->file().size())
+		if (ret < nbyte && offset+ret != ht_->size())
 		{
 			fprintf(stderr,"storage: Read: want %d more\n", nbyte-ret );
 
@@ -435,161 +381,92 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 }
 
 
-typedef std::vector<std::pair<std::string,int64_t> >	filelist_t;
-
-#include <sstream>
-
-#define BLOCKSIZE	200
-
-
-int main()
+int64_t Storage::GetReservedSize()
 {
-	filelist_t	filelist;
-
-	// 1. Make list of files
-	std::string prefix="REALLYBIGSTRINGSOMEwecangetaspecthatislargerthanwhatiswrittenHERE-";
-	filelist.push_back(std::make_pair(prefix+"a.tst",100));
-	filelist.push_back(std::make_pair(prefix+"b.tst",200));
-	filelist.push_back(std::make_pair(prefix+"c.tst",1024));
-	filelist.push_back(std::make_pair(prefix+"d.tst",5*1024));
-
-	// 2. Create spec body
-	std::ostringstream specbody;
-
-	filelist_t::iterator iter;
-	for (iter = filelist.begin(); iter < filelist.end(); iter++)
+	if (state_ == STOR_STATE_SINGLE_FILE)
 	{
-		specbody << (*iter).first << " " << (*iter).second << "\n";
+		return file_size(single_fd_);
 	}
+	else if (state_ != STOR_STATE_MFSPEC_COMPLETE)
+		return -1;
 
-
-	fprintf(stderr,"specbody: <%s>\n", specbody.str().c_str() );
-
-	// 2. Calc specsize
-	int specsize = strlen(MULTIFILE_PATHNAME)+1+0+1+specbody.str().size();
-	char numstr[100];
-	sprintf(numstr,"%d",specsize);
-	char numstr2[100];
-	sprintf(numstr2,"%d",specsize+strlen(numstr));
-	if (strlen(numstr) == strlen(numstr2))
-		specsize += strlen(numstr);
-	else
-		specsize += strlen(numstr)+(strlen(numstr2)-strlen(numstr));
-
-	// 3. Create spec as string
-	std::ostringstream spec;
-	spec << MULTIFILE_PATHNAME;
-	spec << " ";
-	spec << specsize;
-	spec << "\n";
-	spec << specbody.str();
-
-	fprintf(stderr,"spec: <%s>\n", spec.str().c_str() );
-
-	// 4. Create byte space
-	std::ostringstream asset;
-	asset << spec.str();
-	char c = 'A';
-	for (iter = filelist.begin(); iter < filelist.end(); iter++)
+	// MULTIFILE
+	storage_files_t::iterator iter;
+	int64_t totaldisksize=0;
+	for (iter = sfs_.begin(); iter < sfs_.end(); iter++)
 	{
-		int64_t count = (*iter).second;
-		fprintf(stderr,"count: %d\n", count );
-		for (int64_t i=0; i<count; i++)
-			asset << c;
-
-		c++; // TODO: more than 256-ord('A') files
-	}
-
-	const char *assetbytes = asset.str().c_str();
-
-	fprintf(stderr,"asset2: <%s> size %d\n", asset.str().c_str(), asset.str().size() );
-
-	FileTransfer *ft = new FileTransfer(asset.str().size());
-
-	Storage *s = new Storage(ft);
-	int64_t off=0;
-	int ret = 0;
-	while (ret >=0 && off < asset.str().size())
-	{
-		int nbyte = min(asset.str().size()-off,BLOCKSIZE);
-
-		ret = s->Write(asset.str().c_str()+off,nbyte,off);
-		fprintf(stderr,"main: wrote %d\n", ret );
-		off += ret;
-	}
-
-
-	// Read back via OS
-	c = 'A';
-	for (iter = filelist.begin(); iter < filelist.end(); iter++)
-	{
-		char *filename = strdup( (*iter).first.c_str() );
-		int64_t fsize = (*iter).second;
-
+		StorageFile *sf = *iter;
 #ifdef WIN32
 		struct _stat statbuf;
 #else
 		struct stat statbuf;
 #endif
-		int res = stat( filename, &statbuf );
-		if( res < 0)
+		int ret = stat( sf->GetPathNameUTF8String().c_str(), &statbuf );
+		if( ret < 0)
 		{
-			fprintf(stderr,"main: read OS: stat %d\n", ret );
-			continue;
+			fprintf(stderr,"storage: getsize: cannot stat file %s\n", sf->GetPathNameUTF8String().c_str() );
+			return ret;
 		}
-
-		if (statbuf.st_size != fsize)
-			fprintf(stderr,"main: read OS: size wrong %s exp %lli got %lli\n", filename, fsize, statbuf.st_size );
-
-		FILE *fp = fopen(filename,"rb");
-		char buf[512];
-		while(!feof(fp))
-		{
-			ret = fread(buf,sizeof(char),sizeof(buf), fp);
-			if (ret < 0)
-			{
-				fprintf(stderr,"main: read OS: %d\n", ret );
-				continue;
-			}
-			for (int i=0; i<ret; i++)
-			{
-				if (buf[i] != c)
-				{
-					fprintf(stderr,"main: read OS: wrong bytes %d\n", buf[i] );
-					break;
-				}
-
-			}
-		}
-		fclose(fp);
-
-		c++;
+		else
+			totaldisksize += statbuf.st_size;
 	}
 
-
-	// Read back via Storage API
-	off = 0;
-	while(true)
-	{
-		char readbuf[512];
-
-		fprintf(stderr,"main: read API: reading %lli\n", off );
-
-		int ret = s->Read(readbuf,sizeof(readbuf),off);
-		if (ret < 0)
-		{
-			fprintf(stderr,"main: read API: %d errno %s\n", ret, strerror(errno) );
-			break;
-		}
-
-		fprintf(stderr,"main: read API: got %d\n", ret );
-
-		if (memcmp(readbuf,asset.str().c_str()+off,ret))
-		{
-			fprintf(stderr,"main: read API: asset mismatch\n" );
-		}
-
-		off += ret;
-	}
+	return totaldisksize;
 }
+
+
+int Storage::ResizeReserved(int64_t size)
+{
+	if (state_ == STOR_STATE_SINGLE_FILE)
+	{
+		return file_resize(single_fd_,size);
+	}
+	else if (state_ != STOR_STATE_MFSPEC_COMPLETE)
+		return -1;
+
+	// MULTIFILE
+	if (size > GetReservedSize())
+	{
+		// Resize files to wanted size, so pread() / pwrite() works for all offsets.
+		storage_files_t::iterator iter;
+		for (iter = sfs_.begin(); iter < sfs_.end(); iter++)
+		{
+			StorageFile *sf = *iter;
+			int ret = sf->ResizeReserved();
+			if (ret < 0)
+				return ret;
+		}
+	}
+
+	return 0;
+}
+
+
+
+
+/*
+ * StorageFile
+ */
+
+
+
+StorageFile::StorageFile(std::string utf8path, int64_t start, int64_t size) : fd_(-1)
+{
+	 pathname_utf8_str_ = utf8path;
+	 start_ = start;
+	 end_ = start+size-1;
+
+	 fd_ = open(pathname_utf8_str_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+	 if (fd_<0) {
+		 fprintf(stderr,"storage: file: Could not open %s\n", pathname_utf8_str_.c_str() );
+         return;
+	 }
+}
+
+StorageFile::~StorageFile()
+{
+	 if (fd_ < 0)
+		 close(fd_);
+}
+
 

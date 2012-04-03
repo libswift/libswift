@@ -132,19 +132,8 @@ void CmdGwGotCHECKPOINT(Sha1Hash &want_hash)
 	cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
 	if (req == NULL)
     	return;
-    FileTransfer *ft = FileTransfer::file(req->transfer);
 
-	std::string binmap_filename = ft->file().filename();
-	binmap_filename.append(".mbinmap");
-	fprintf(stderr,"cmdgw: GotCHECKPOINT: checkpointing to %s\n", binmap_filename.c_str() );
-	FILE *fp = fopen(binmap_filename.c_str(),"wb");
-	if (!fp) {
-		print_error("cannot open mbinmap for writing");
-		return;
-	}
-	if (ft->file().serialize(fp) < 0)
-		print_error("writing to mbinmap");
-	fclose(fp);
+    swift::Checkpoint(req->transfer);
 }
 
 

@@ -28,13 +28,28 @@ std::vector<FileTransfer*> FileTransfer::files(20);
 
 // FIXME: separate Bootstrap() and Download(), then Size(), Progress(), SeqProgress()
 
-FileTransfer::FileTransfer (const char* filename, const Sha1Hash& _root_hash, bool check_hashes, uint32_t chunk_size) :
-    file_(filename,_root_hash,chunk_size,NULL,check_hashes), cb_installed(0), mychannels_(),
+FileTransfer::FileTransfer(std::string filename, const Sha1Hash& _root_hash, bool check_hashes, uint32_t chunk_size) :
+    cb_installed(0), mychannels_(),
     speedzerocount_(0), tracker_(), tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START), tracker_retry_time_(NOW)
 {
     if (files.size()<fd()+1)
         files.resize(fd()+1);
     files[fd()] = this;
+
+    // MULTIFILE
+    storage_ = new Storage(filename);
+
+	std::string hash_filename;
+	hash_filename.assign(filename);
+	hash_filename.append(".mhash");
+
+	std::string binmap_filename;
+	binmap_filename.assign(filename);
+	binmap_filename.append(".mbinmap");
+
+    hashtree_ = new HashTree(storage_,_root_hash,chunk_size,hash_filename,check_hashes,binmap_filename);
+    storage_->SetHashTree(hashtree_);
+
     if (ENABLE_VOD_PIECEPICKER) {
     	// Ric: init availability
     	availability_ = new Availability();

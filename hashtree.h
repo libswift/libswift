@@ -47,6 +47,8 @@ struct Sha1Hash {
 #define SWIFT_DEFAULT_CHUNK_SIZE 1024
 
 
+class Storage;
+
 /** This class controls data integrity of some file; hash tree is put to
     an auxilliary file next to it. The hash tree file is mmap'd for
     performance reasons. Actually, I'd like the data file itself to be
@@ -86,6 +88,9 @@ class HashTree : Serializable {
 	binmap_t		is_hash_verified_; // binmap being abused as bitmap, only layer 0 used
 	// FAXME: make is_hash_verified_ part of persistent state?
 
+	//MULTIFILE
+	Storage *		storage_;
+
     int 			internal_deserialize(FILE *fp,bool contentavail=true);
 
 protected:
@@ -99,8 +104,8 @@ protected:
     
 public:
     
-    HashTree (const char* file_name, const Sha1Hash& root=Sha1Hash::ZERO, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE,
-              const char* hash_filename=NULL, bool check_hashes=true, const char* binmap_filename=NULL);
+    HashTree (Storage *storage, const Sha1Hash& root=Sha1Hash::ZERO, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE,
+              std::string hash_filename=NULL, bool check_hashes=true, std::string binmap_filename=NULL);
     
     // Arno, 2012-01-03: Hack to quickly learn root hash from a checkpoint
     HashTree (bool dummy, const char* binmap_filename);
@@ -144,7 +149,6 @@ public:
         { return size_ && complete_==size_; }
     /** The binmap of complete chunks. */
     binmap_t&       ack_out () { return ack_out_; }
-    std::string		filename() { return filename_; } // Arno
     uint32_t		chunk_size() { return chunk_size_; } // CHUNKSIZE
     ~HashTree ();
 

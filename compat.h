@@ -109,6 +109,13 @@ typedef void* setsockoptptr_t;
 #endif
 
 
+#ifdef _WIN32
+#define OPENFLAGS         O_RDWR|O_CREAT|_O_BINARY
+#else
+#define OPENFLAGS         O_RDWR|O_CREAT
+#endif
+
+
 namespace swift {
 
 /** tint is the time integer type; microsecond-precise. */

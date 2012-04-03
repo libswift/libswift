@@ -22,7 +22,7 @@ TestDir='tests'
 target = 'swift'
 source = [ 'bin.cpp', 'binmap.cpp','binheap.cpp', 'sha1.cpp','hashtree.cpp',
     	   'transfer.cpp', 'channel.cpp', 'sendrecv.cpp', 'send_control.cpp', 
-    	   'compat.cpp','avgspeed.cpp', 'availability.cpp']
+    	   'compat.cpp','avgspeed.cpp', 'availability.cpp', 'storage.cpp']
 
 
 env = Environment()
@@ -130,14 +130,6 @@ env.Program(
    source=APPSOURCE,
    #CPPPATH=cpppath,
    LIBS=[libs,'libswift'],
-   LIBPATH=libpath+':.')
-
-
-env.Program(
-   target='storage',
-   source=['storage.cpp','compat.cpp'],
-   #CPPPATH=cpppath,
-   LIBS=[libs],
    LIBPATH=libpath+':.')
 
    

@@ -470,6 +470,23 @@ void    swift::AddPeer (Address address, const Sha1Hash& root) {
 }
 
 
+ssize_t  swift::Read(int fdes, void *buf, size_t nbyte, int64_t offset)
+{
+    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
+        return FileTransfer::files[fdes]->GetStorage()->Read(buf,nbyte,offset);
+    else
+        return -1;
+}
+
+ssize_t  swift::Write(int fdes, const void *buf, size_t nbyte, int64_t offset)
+{
+    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
+        return FileTransfer::files[fdes]->GetStorage()->Write(buf,nbyte,offset);
+    else
+        return -1;
+}
+
+
 uint64_t  swift::Size (int fdes) {
     if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
         return FileTransfer::files[fdes]->file().size();
@@ -521,23 +538,27 @@ uint32_t	  swift::ChunkSize(int fdes)
 
 
 // CHECKPOINT
-void swift::Checkpoint(int transfer) {
+int swift::Checkpoint(int transfer) {
 	// Save transfer's binmap for zero-hashcheck restart
 	FileTransfer *ft = FileTransfer::file(transfer);
 	if (ft == NULL)
-		return;
+		return -1;
 
-	std::string binmap_filename = ft->file().filename();
+	std::string binmap_filename = ft->GetStorage()->GetPathNameUTF8String();
 	binmap_filename.append(".mbinmap");
 	//fprintf(stderr,"swift: checkpointing %s at %lli\n", binmap_filename.c_str(), Complete(transfer));
 	FILE *fp = fopen(binmap_filename.c_str(),"wb");
 	if (!fp) {
 		print_error("cannot open mbinmap for writing");
-		return;
+		return -1;
 	}
 	if (ft->file().serialize(fp) < 0)
+	{
 		print_error("writing to mbinmap");
+		return -1;
+	}
 	fclose(fp);
+	return 0;
 }
 
 

@@ -20,12 +20,6 @@
 
 #include <iostream>
 
-#ifdef _WIN32
-#define OPENFLAGS         O_RDWR|O_CREAT|_O_BINARY
-#else
-#define OPENFLAGS         O_RDWR|O_CREAT
-#endif
-
 
 using namespace swift;
 
@@ -83,31 +77,11 @@ std::string    Sha1Hash::hex() const {
 /**     H a s h   t r e e       */
 
 
-HashTree::HashTree (const char* filename, const Sha1Hash& root_hash, uint32_t chunk_size, const char* hash_filename, bool check_hashes, const char* binmap_filename) :
-root_hash_(root_hash), hashes_(NULL), peak_count_(0), fd_(0), hash_fd_(0),
-filename_(filename), size_(0), sizec_(0), complete_(0), completec_(0),
+HashTree::HashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool check_hashes, std::string binmap_filename) :
+storage_(storage), root_hash_(root_hash), hashes_(NULL), peak_count_(0), hash_fd_(0),
+ size_(0), sizec_(0), complete_(0), completec_(0),
 chunk_size_(chunk_size)
 {
-    fd_ = open(filename,OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-    if (fd_<0) {
-        fd_ = 0;
-        print_error("cannot open the file");
-        return;
-    }
-	std::string hfn;
-	if (!hash_filename){
-		hfn.assign(filename);
-		hfn.append(".mhash");
-		hash_filename = hfn.c_str();
-	}
-
-	std::string bfn;
-	if (!binmap_filename){
-		bfn.assign(filename);
-		bfn.append(".mbinmap");
-		binmap_filename = bfn.c_str();
-	}
-
 	// Arno: if user doesn't want to check hashes but no .mhash, check hashes anyway
 	bool actually_check_hashes = check_hashes;
     bool mhash_exists=true;
@@ -116,7 +90,7 @@ chunk_size_(chunk_size)
 #else
     struct stat buf;
 #endif
-    int res = stat( hash_filename, &buf );
+    int res = stat( hash_filename.c_str(), &buf );
     if( res < 0 && errno == ENOENT)
     	mhash_exists = false;
     if (!mhash_exists && !check_hashes)
@@ -126,13 +100,13 @@ chunk_size_(chunk_size)
     // Arno: if the remainder of the hashtree state is on disk we can
     // hashcheck very quickly
     bool binmap_exists=true;
-    res = stat( binmap_filename, &buf );
+    res = stat( binmap_filename.c_str(), &buf );
     if( res < 0 && errno == ENOENT)
     	binmap_exists = false;
 
     //fprintf(stderr,"hashtree: hashchecking want %s do %s binmap-on-disk %s\n", (check_hashes ? "yes" : "no"), (actually_check_hashes? "yes" : "no"), (binmap_exists? "yes" : "no") );
 
-    hash_fd_ = open(hfn.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+    hash_fd_ = open(hash_filename.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (hash_fd_<0) {
         hash_fd_ = 0;
         print_error("cannot open hash file");
@@ -140,15 +114,15 @@ chunk_size_(chunk_size)
     }
 
     // Arno: if user wants to or no .mhash, and if root hash unknown (new file) and no checkpoint, (re)calc root hash
-    if (file_size(fd_) && ((actually_check_hashes) || (root_hash_==Sha1Hash::ZERO && !binmap_exists) || (!mhash_exists)) ) {
+    if (storage_->GetReservedSize() && ((actually_check_hashes) || (root_hash_==Sha1Hash::ZERO && !binmap_exists) || (!mhash_exists)) ) {
     	// fresh submit, hash it
     	dprintf("%s hashtree full compute\n",tintstr());
-        assert(file_size(fd_));
+        assert(storage_->GetReservedSize());
         Submit();
     } else if (mhash_exists && binmap_exists && file_size(hash_fd_)) {
     	// Arno: recreate hash tree without rereading content
     	dprintf("%s hashtree read from checkpoint\n",tintstr());
-    	FILE *fp = fopen(binmap_filename,"rb");
+    	FILE *fp = fopen(binmap_filename.c_str(),"rb");
     	if (!fp) {
     		 print_error("hashtree: cannot open .mbinmap file");
     		 return;
@@ -168,7 +142,7 @@ chunk_size_(chunk_size)
 
 
 HashTree::HashTree(bool dummy, const char* binmap_filename) :
-root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), fd_(0), hash_fd_(0),
+root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), hash_fd_(0),
 filename_(""), size_(0), sizec_(0), complete_(0), completec_(0),
 chunk_size_(0)
 {
@@ -184,7 +158,7 @@ chunk_size_(0)
 
 // Reads complete file and constructs hash tree
 void            HashTree::Submit () {
-    size_ = file_size(fd_);
+    size_ = storage_->GetReservedSize();
     sizec_ = (size_ + chunk_size_-1) / chunk_size_;
 
     //fprintf(stderr,"hashtree: submit: cs %i\n", chunk_size_);
@@ -203,7 +177,7 @@ void            HashTree::Submit () {
     char *chunk = new char[chunk_size_];
     for (uint64_t i=0; i<sizec_; i++) {
 
-        size_t rd = read(fd_,chunk,chunk_size_);
+        ssize_t rd = storage_->Read(chunk,chunk_size_,i*chunk_size_);
         if (rd<(chunk_size_) && i!=sizec_-1) {
             free(hashes_);
             hashes_=NULL;
@@ -255,7 +229,7 @@ void            HashTree::RecoverProgress () {
         bin_t pos(0,p);
         if (hashes_[pos.toUInt()]==Sha1Hash::ZERO)
             continue;
-        size_t rd = read(fd_,buf,chunk_size_);
+        ssize_t rd = storage_->Read(buf,chunk_size_,p*chunk_size_);
         if (rd!=(chunk_size_) && p!=size_in_chunks()-1)
             break;
         if (rd==(chunk_size_) && !memcmp(buf, zero_chunk, rd) &&
@@ -276,7 +250,7 @@ void            HashTree::RecoverProgress () {
 /** Precondition: root hash known */
 bool HashTree::RecoverPeakHashes()
 {
-    uint64_t size = file_size(fd_);
+    uint64_t size = storage_->GetReservedSize();
     uint64_t sizek = (size + chunk_size_-1) / chunk_size_;
 
 	// Arno: Calc location of peak hashes, read them from hash file and check if
@@ -352,7 +326,7 @@ int HashTree::internal_deserialize(FILE *fp,bool contentavail) {
 	// Are reset by RecoverPeakHashes() for some reason.
 	complete_ = c;
 	completec_ = cc;
-    size_ = file_size(fd_);
+    size_ = storage_->GetReservedSize();
     sizec_ = (size_ + chunk_size_-1) / chunk_size_;
 
     return 0;
@@ -388,10 +362,10 @@ bool            HashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
 
     // ARNOTODO: win32: this is pretty slow for ~200 MB already. Perhaps do
     // on-demand sizing for Win32?
-    uint64_t cur_size = file_size(fd_);
+    uint64_t cur_size = storage_->GetReservedSize();
     if ( cur_size<=(sizec_-1)*chunk_size_  || cur_size>sizec_*chunk_size_ ) {
     	dprintf("%s hashtree offerpeak resizing file\n",tintstr() );
-        if (file_resize(fd_, size_)) {
+        if (storage_->ResizeReserved(size_)) {
             print_error("cannot set file size\n");
             size_=0; // remain in the 0-state
             return false;
@@ -552,14 +526,14 @@ bool            HashTree::OfferData (bin_t pos, const char* data, size_t length)
     //printf("g %lli %s\n",(uint64_t)pos,hash.hex().c_str());
     ack_out_.set(pos);
     // Arno,2011-10-03: appease g++
-    if (pwrite(fd_,data,length,pos.base_offset()*chunk_size_) < 0)
+    if (storage_->Write(data,length,pos.base_offset()*chunk_size_) < 0)
     	print_error("pwrite failed");
     complete_ += length;
     completec_++;
     if (pos.base_offset()==sizec_-1) {
         size_ = ((sizec_-1)*chunk_size_) + length;
-        if (file_size(fd_)!=size_)
-            file_resize(fd_,size_);
+        if (storage_->GetReservedSize()!=size_)
+        	storage_->ResizeReserved(size_);
     }
     return true;
 }
@@ -576,8 +550,6 @@ uint64_t      HashTree::seq_complete () {
 HashTree::~HashTree () {
     if (hashes_)
         memory_unmap(hash_fd_, hashes_, sizec_*2*sizeof(Sha1Hash));
-    if (fd_)
-        close(fd_);
     if (hash_fd_)
         close(hash_fd_);
 }
