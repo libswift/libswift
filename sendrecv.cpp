@@ -240,7 +240,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
     // RATELIMIT
     // 2. Calc max of what is allowed by the rate limiter
-    int rate_allowed_hints = INT_MAX;
+    int rate_allowed_hints = LONG_MAX;
     if (transfer().GetMaxSpeed(DDIR_DOWNLOAD) < DBL_MAX)
     {
 		uint64_t rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
