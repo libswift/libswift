@@ -48,7 +48,9 @@ Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), spec_size_(0),
 	if (ret < 0)
 		return;
 
-	if (!strcmp(readbuf,MULTIFILE_PATHNAME.c_str()))
+	fprintf(stderr,"storage: Readbuf is <%s> want <%s>\n", readbuf, MULTIFILE_PATHNAME.c_str() );
+
+	if (!strncmp(readbuf,MULTIFILE_PATHNAME.c_str(),MULTIFILE_PATHNAME.length()))
 	{
 		// Pathname points to a multi-file spec, assume we're seeding
 		state_ = STOR_STATE_MFSPEC_COMPLETE;

@@ -48,8 +48,7 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& _root_hash, boo
 	binmap_filename.append(".mbinmap");
 
     hashtree_ = new HashTree(storage_,_root_hash,chunk_size,hash_filename,check_hashes,binmap_filename);
-    storage_->SetHashTree(hashtree_);
-
+    
     if (ENABLE_VOD_PIECEPICKER) {
     	// Ric: init availability
     	availability_ = new Availability();

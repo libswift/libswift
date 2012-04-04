@@ -82,6 +82,9 @@ storage_(storage), root_hash_(root_hash), hashes_(NULL), peak_count_(0), hash_fd
  size_(0), sizec_(0), complete_(0), completec_(0),
 chunk_size_(chunk_size)
 {
+	// MULTIFILE
+	storage_->SetHashTree(this);
+
 	// Arno: if user doesn't want to check hashes but no .mhash, check hashes anyway
 	bool actually_check_hashes = check_hashes;
     bool mhash_exists=true;
