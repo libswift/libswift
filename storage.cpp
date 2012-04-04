@@ -58,6 +58,7 @@ Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), spec_size_(0),
 		fprintf(stderr,"storage: Found multifile-spec, will seed it.\n");
 
 		StorageFile *sf = new StorageFile(pathname,0,statbuf.st_size);
+		sfs_.push_back(sf);
 		if (ParseSpec(sf) < 0)
 			print_error("storage: error parsing multi-file spec");
 	}
