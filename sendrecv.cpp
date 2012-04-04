@@ -11,6 +11,7 @@
 #include <algorithm>  // kill it
 #include <cassert>
 #include <math.h>
+#include <cfloat>
 #include "compat.h"
 
 using namespace swift;
@@ -215,14 +216,14 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
 	// RATELIMIT
 	// Policy is to not send hints when we are above speed limit
-	//fprintf(stderr,"AddHint: cur %f max %f\n", transfer().GetCurrentSpeed(DDIR_DOWNLOAD), transfer().GetMaxSpeed(DDIR_DOWNLOAD));
-
 	if (transfer().GetCurrentSpeed(DDIR_DOWNLOAD) > transfer().GetMaxSpeed(DDIR_DOWNLOAD)) {
 		if (DEBUGTRAFFIC)
 			fprintf(stderr,"hint: forbidden#");
 		return;
 	}
 
+
+	// 1. Calc max of what we are allowed to request, uncongested bandwidth wise
     tint plan_for = max(TINT_SEC,rtt_avg_*4);
 
     tint timed_out = NOW - plan_for*2;
@@ -233,31 +234,40 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
     int first_plan_pck = max ( (tint)1, plan_for / dip_avg_ );
 
+    // Riccardo, 2012-04-04: Actually allowed is max minus what we already asked for
+    int queue_allowed_hints = max(0,first_plan_pck-(int)hint_out_size_);
+
+
     // RATELIMIT
-    uint64_t rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
-    std::set<Channel *>::iterator iter;
-    for (iter=transfer().mychannels_.begin(); iter!=transfer().mychannels_.end(); iter++)
+    // 2. Calc max of what is allowed by the rate limiter
+    int rate_allowed_hints = INT_MAX;
+    if (transfer().GetMaxSpeed(DDIR_DOWNLOAD) < DBL_MAX)
     {
-		Channel *c = *iter;
-		if (c != NULL)
-			rough_global_hint_out_size += c->hint_out_size_;
+		uint64_t rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
+		std::set<Channel *>::iterator iter;
+		for (iter=transfer().mychannels_.begin(); iter!=transfer().mychannels_.end(); iter++)
+		{
+			Channel *c = *iter;
+			if (c != NULL)
+				rough_global_hint_out_size += c->hint_out_size_;
+		}
+
+		// Policy: this channel is allowed to hint at the limit - global_hinted_at
+		// Handle MaxSpeed = unlimited
+		double rate_hints_limit_float = transfer().GetMaxSpeed(DDIR_DOWNLOAD)/((double)file().chunk_size());
+
+		int rate_hints_limit = (int)min((double)LONG_MAX,rate_hints_limit_float);
+
+		// Actually allowed is max minus what we already asked for, globally (=all channels)
+		rate_allowed_hints = max(0,rate_hints_limit-(int)rough_global_hint_out_size);
     }
 
-    // Policy: this channel is allowed to hint at the limit - global_hinted_at
-    // Handle MaxSpeed = unlimited
-    double hints_limit_float = transfer().GetMaxSpeed(DDIR_DOWNLOAD)/((double)file().chunk_size());
+    // 3. Take the smallest allowance from rate and queue limit
+    uint64_t plan_pck = (uint64_t)min(rate_allowed_hints,queue_allowed_hints);
 
-    int hints_limit = (int)min((double)LONG_MAX,hints_limit_float);
-    int allowed_hints = max(0,hints_limit-(int)rough_global_hint_out_size);
-
-    if (DEBUGTRAFFIC)
-    	fprintf(stderr,"hint c%d: %f want %d allow %d chanout %llu globout %llu\n", id(), transfer().GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, allowed_hints, hint_out_size_, rough_global_hint_out_size );
-
-    // Take into account network limit
-    uint64_t plan_pck = (uint64_t)min(allowed_hints,first_plan_pck);
-    //fprintf(stderr,"send c%d: %f fp %d p %d count %d ghs %d allow %d\n", id(), transfer().GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, plan_pck, count, rough_global_hint_out_size, allowed_hints );
-    if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY) {
-    //if (hint_out_size_ == 0 || hint_out_size_+HINT_GRANULARITY < plan_pck ) {
+    // 4. Ask allowance in blocks of chunks to get pipelining going from serving peer.
+    if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY)
+    {
         bin_t hint = transfer().picker().Pick(ack_in_,plan_pck,NOW+plan_for*2);
         if (!hint.is_none()) {
         	if (DEBUGTRAFFIC)
@@ -279,6 +289,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
     }
 }
+
 
 bin_t        Channel::AddData (struct evbuffer *evb) {
 	// RATELIMIT
@@ -1036,7 +1047,7 @@ void Channel::Reschedule () {
 
     	assert(next_send_time_<NOW+TINT_MIN);
         tint duein = next_send_time_-NOW;
-        if (duein == 0) {
+        if (duein <= 0) {
         	// Arno, 2011-10-18: libevent's timer implementation appears to be
         	// really slow, i.e., timers set for 100 usec from now get called
         	// at least two times later :-( Hence, for sends after receives
