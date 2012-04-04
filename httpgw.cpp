@@ -153,7 +153,7 @@ void HttpGwMayWriteCallback (int transfer) {
 #else
         uint64_t tosend = std::min((uint64_t)HTTPGW_MAX_WRITE_BYTES,complete-req->offset);
 #endif
-        size_t rd = pread(req->transfer,buf,tosend,req->offset); // hope it is cached
+        size_t rd = swift::Read(transfer,buf,tosend,req->offset); // hope it is cached
         if (rd<0) {
         	print_error("httpgw: MayWrite: error pread");
             HttpGwCloseConnection(req);

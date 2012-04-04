@@ -439,7 +439,7 @@ void    swift::Shutdown (int sock_des) {
 
 int      swift::Open (const char* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size) {
     FileTransfer* ft = new FileTransfer(filename, hash, check_hashes, chunk_size);
-    if (ft && ft->file().file_descriptor()) {
+    if (ft && ft->fd()) {
 
         /*if (FileTransfer::files.size()<fdes)  // FIXME duplication
             FileTransfer::files.resize(fdes);
@@ -450,7 +450,7 @@ int      swift::Open (const char* filename, const Sha1Hash& hash, Address tracke
     	ft->SetTracker(tracker);
     	ft->ConnectToTracker();
 
-    	return ft->file().file_descriptor();
+    	return ft->fd();
     } else {
         if (ft)
             delete ft;

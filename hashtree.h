@@ -68,7 +68,6 @@ class HashTree : Serializable {
     bin_t           peaks_[64];
     int             peak_count_;
     /** File descriptor to put hashes to */
-    int             fd_;
     int             hash_fd_;
     std::string		filename_; // for easy serialization
     /** Base size, as derived from the hashes. */
@@ -120,7 +119,6 @@ public:
     /** For live streaming. Not implemented yet. */
     int             AppendData (char* data, int length) ;
     
-    int             file_descriptor () const { return fd_; }
     /** Returns the number of peaks (read on peak hashes). */
     int             peak_count () const { return peak_count_; }
     /** Returns the i-th peak's bin number. */
@@ -151,6 +149,9 @@ public:
     binmap_t&       ack_out () { return ack_out_; }
     uint32_t		chunk_size() { return chunk_size_; } // CHUNKSIZE
     ~HashTree ();
+
+    // for transfertest.cpp
+    Storage *	    get_storage() { return storage_; }
 
     // Arno: persistent storage for state other than hashes (which are in .mhash)
     int serialize(FILE *fp);

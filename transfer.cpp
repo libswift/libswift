@@ -29,7 +29,7 @@ std::vector<FileTransfer*> FileTransfer::files(20);
 // FIXME: separate Bootstrap() and Download(), then Size(), Progress(), SeqProgress()
 
 FileTransfer::FileTransfer(std::string filename, const Sha1Hash& _root_hash, bool check_hashes, uint32_t chunk_size) :
-    cb_installed(0), mychannels_(),
+    fd_(files.size()+1), cb_installed(0), mychannels_(),
     speedzerocount_(0), tracker_(), tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START), tracker_retry_time_(NOW)
 {
     if (files.size()<fd()+1)

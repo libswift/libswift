@@ -11,6 +11,7 @@
 #include "compat.h"
 #include "swift.h"
 #include <cfloat>
+#include <sstream>
 
 using namespace swift;
 
@@ -27,7 +28,7 @@ int OpenSwiftDirectory(const TCHAR* dirname, Address tracker, bool check_hashes,
 void ReportCallback(int fd, short event, void *arg);
 void EndCallback(int fd, short event, void *arg);
 void RescanDirCallback(int fd, short event, void *arg);
-
+int CreateMultifileSpec(char *specfilename, int argc, char *argv[], int argidx);
 
 // Gateway stuff
 bool InstallHTTPGateway(struct event_base *evbase,Address addr,uint32_t chunk_size, double *maxspeed);
@@ -49,6 +50,7 @@ bool exitoncomplete=false;
 bool httpgw_enabled=false,cmdgw_enabled=false;
 // Gertjan fix
 bool do_nat_test = false;
+bool generate_multifile=false;
 
 char *scan_dirname = 0;
 uint32_t chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;
@@ -77,6 +79,7 @@ int main (int argc, char** argv)
         {"checkpoint",no_argument, 0, 'H'},
         {"chunksize",required_argument, 0, 'z'}, // CHUNKSIZE
         {"printurl",no_argument, 0, 'm'},
+        {"multifile",required_argument, 0, 'M'}, // MULTIFILE
         {0, 0, 0, 0}
     };
 
@@ -95,7 +98,7 @@ int main (int argc, char** argv)
     Channel::evbase = event_base_new();
 
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHm", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:", long_options, 0)) ) {
         switch (c) {
             case 'h':
                 if (strlen(optarg)!=40)
@@ -200,6 +203,11 @@ int main (int argc, char** argv)
             	quiet = true;
             	wait_time = 0;
             	break;
+            case 'M': // MULTIFILE
+            	filename = strdup(optarg);
+            	generate_multifile = true;
+            	break;
+
         }
 
     }   // arguments parsed
@@ -260,37 +268,46 @@ int main (int argc, char** argv)
     if (!cmdgw_enabled && !httpgw_enabled)
     {
 		int ret = -1;
-		if (filename || root_hash != Sha1Hash::ZERO) {
-			// Single file
-			if (root_hash!=Sha1Hash::ZERO && !filename)
-				filename = strdup(root_hash.hex().c_str());
+		if (!generate_multifile)
+		{
+			if (filename || root_hash != Sha1Hash::ZERO) {
+				// Single file
+				if (root_hash!=Sha1Hash::ZERO && !filename)
+					filename = strdup(root_hash.hex().c_str());
 
-			single_fd = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size);
-			if (single_fd < 0)
-				quit("cannot open file %s",filename);
-			if (printurl) {
-				if (trackerargstr == NULL)
-					trackerargstr = "";
-				printf("tswift://%s/%s$%i\n", trackerargstr, RootMerkleHash(single_fd).hex().c_str(), chunk_size);
+				single_fd = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size);
+				if (single_fd < 0)
+					quit("cannot open file %s",filename);
+				if (printurl) {
+					if (trackerargstr == NULL)
+						trackerargstr = "";
+					printf("tswift://%s/%s$%i\n", trackerargstr, RootMerkleHash(single_fd).hex().c_str(), chunk_size);
 
-				// Arno, 2012-01-04: LivingLab: Create checkpoint such that content
-				// can be copied to scanned dir and quickly loaded
-				swift::Checkpoint(single_fd);
+					// Arno, 2012-01-04: LivingLab: Create checkpoint such that content
+					// can be copied to scanned dir and quickly loaded
+					swift::Checkpoint(single_fd);
+				}
+				else
+					printf("Root hash: %s\n", RootMerkleHash(single_fd).hex().c_str());
+
+				// RATELIMIT
+				FileTransfer *ft = FileTransfer::file(single_fd);
+				ft->SetMaxSpeed(DDIR_DOWNLOAD,maxspeed[DDIR_DOWNLOAD]);
+				ft->SetMaxSpeed(DDIR_UPLOAD,maxspeed[DDIR_UPLOAD]);
+
+				ret = single_fd;
 			}
+			else if (scan_dirname != NULL)
+				ret = OpenSwiftDirectory(scan_dirname,Address(),false,chunk_size);
 			else
-				printf("Root hash: %s\n", RootMerkleHash(single_fd).hex().c_str());
-
-			// RATELIMIT
-			FileTransfer *ft = FileTransfer::file(single_fd);
-			ft->SetMaxSpeed(DDIR_DOWNLOAD,maxspeed[DDIR_DOWNLOAD]);
-			ft->SetMaxSpeed(DDIR_UPLOAD,maxspeed[DDIR_UPLOAD]);
-
-			ret = single_fd;
+				ret = -1;
 		}
-		else if (scan_dirname != NULL)
-			ret = OpenSwiftDirectory(scan_dirname,Address(),false,chunk_size);
 		else
-			ret = -1;
+		{
+			// MULTIFILE
+			// Generate multi-file spec
+			ret = CreateMultifileSpec(filename,argc,argv,optind); //optind is global var points to first non-opt cmd line argument
+		}
 
 		// No file/dir nor HTTP gateway nor CMD gateway, will never know what to swarm
 		if (ret == -1) {
@@ -578,6 +595,85 @@ void RescanDirCallback(int fd, short event, void *arg) {
 
 	evtimer_add(&evrescan, tint2tv(RESCAN_DIR_INTERVAL*TINT_SEC));
 }
+
+
+// MULTIFILE
+typedef std::vector<std::pair<std::string,int64_t> >	filelist_t;
+int CreateMultifileSpec(char *specfilename, int argc, char *argv[], int argidx)
+{
+	fprintf(stderr,"CreateMultiFileSpec: %s nfiles %d\n", specfilename, argc-argidx );
+
+	filelist_t	filelist;
+
+	// 1. Make list of files
+	for (int i=argidx; i<argc; i++)
+	{
+		char *pathname = argv[i];
+#ifdef WIN32
+		struct _stat statbuf;
+#else
+		struct stat statbuf;
+#endif
+		int ret = stat( pathname, &statbuf );
+		if( ret < 0)
+		{
+			print_error("cannot open file in multi-spec list");
+			return ret;
+		}
+
+		// TODO: strip off common path from source pathnames
+		// TODO: convert path separator to standard
+		std::string pathstr = pathname; // TODO: UTF8-encode
+		off_t fsize = statbuf.st_size;
+
+		filelist.push_back(std::make_pair(pathstr,fsize));
+	}
+
+	// 2. Files in multi-file spec must be sorted, such that creating a swarm
+	// from the same set of files results in the same swarm.
+	sort(filelist.begin(), filelist.end());
+
+
+	// 3. Create spec body
+	std::ostringstream specbody;
+
+	filelist_t::iterator iter;
+	for (iter = filelist.begin(); iter < filelist.end(); iter++)
+	{
+		specbody << (*iter).first << " " << (*iter).second << "\n";
+	}
+
+	// 4. Calc specsize
+	int specsize = Storage::MULTIFILE_PATHNAME.size()+1+0+1+specbody.str().size();
+	char numstr[100];
+	sprintf(numstr,"%d",specsize);
+	char numstr2[100];
+	sprintf(numstr2,"%d",specsize+strlen(numstr));
+	if (strlen(numstr) == strlen(numstr2))
+		specsize += strlen(numstr);
+	else
+		specsize += strlen(numstr)+(strlen(numstr2)-strlen(numstr));
+
+	// 5. Create spec as string
+	std::ostringstream spec;
+	spec << Storage::MULTIFILE_PATHNAME;
+	spec << " ";
+	spec << specsize;
+	spec << "\n";
+	spec << specbody.str();
+
+	fprintf(stderr,"spec: <%s>\n", spec.str().c_str() );
+
+	// 6. Write to specfile
+	FILE *fp = fopen(specfilename,"wb");
+	int ret = fwrite(spec.str().c_str(),sizeof(char),spec.str().length(),fp);
+	if (ret < 0)
+		print_error("cannot write multi-file spec");
+	fclose(fp);
+
+	return ret;
+}
+
 
 
 

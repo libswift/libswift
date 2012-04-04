@@ -138,4 +138,4 @@ Export("libs")
 Export("libpath")
 Export("DEBUG")
 # Arno: uncomment to build tests
-SConscript('tests/SConscript')
+#SConscript('tests/SConscript')

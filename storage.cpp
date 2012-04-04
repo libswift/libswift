@@ -19,12 +19,11 @@
 
 using namespace swift;
 
-#define MULTIFILE_PATHNAME	"META-INF-multifile.txt"  // TODO: META-INF/
-#define MULTIFILE_MAX_PATH	2048
-#define MULTIFILE_MAX_LINE	MULTIFILE_MAX_PATH+1+32+1
+
+const std::string Storage::MULTIFILE_PATHNAME = "META-INF-multifilespec.txt";
 
 
-Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), spec_size_(0), single_fd_(-1)
+Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), spec_size_(0), single_fd_(-1), reserved_size_(-1)
 {
 	pathname_utf8_str_ = pathname;
 
@@ -36,24 +35,36 @@ Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), spec_size_(0),
 	int ret = stat( pathname.c_str(), &statbuf );
 	if( ret < 0 && errno == ENOENT)
 	{
+		// File does not exist, assume we're a client and all will be revealed
+		// (single file, multi-spec) when chunks come in.
 		return;
 	}
 
-	// File exists
+	// File exists. Check first bytes to see if a multifile-spec
+	FILE *fp = fopen(pathname.c_str(),"rb");
+	char readbuf[1024];
+	ret = fread(readbuf,sizeof(char),MULTIFILE_PATHNAME.length(),fp);
+	fclose(fp);
+	if (ret < 0)
+		return;
 
-	std::string ps = pathname;
-	unsigned int last = ps.rfind(MULTIFILE_PATHNAME); // Find the last occurrence of ending
-	if (last != std::string::npos)
+	if (!strcmp(readbuf,MULTIFILE_PATHNAME.c_str()))
 	{
 		// Pathname points to a multi-file spec, assume we're seeding
-		StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,statbuf.st_size);
+		state_ = STOR_STATE_MFSPEC_COMPLETE;
+
+		fprintf(stderr,"storage: Found multifile-spec, will seed it.\n");
+
+		StorageFile *sf = new StorageFile(pathname,0,statbuf.st_size);
 		if (ParseSpec(sf) < 0)
 			print_error("storage: error parsing multi-file spec");
 	}
 	else
 	{
 		// Normal swarm
-		(void)OpenSingleFile();
+		fprintf(stderr,"storage: Found single file, will check it.\n");
+
+		(void)OpenSingleFile(); // sets state to STOR_STATE_SINGLE_FILE
 	}
 }
 
@@ -93,13 +104,13 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 		fprintf(stderr,"storage: Write: chunk 0\n");
 
 		// Check for multifile spec. If present, multifile, otherwise single
-		if (!strncmp((const char *)buf,MULTIFILE_PATHNAME,strlen(MULTIFILE_PATHNAME)))
+		if (!strncmp((const char *)buf,MULTIFILE_PATHNAME.c_str(),strlen(MULTIFILE_PATHNAME.c_str())))
 		{
 			fprintf(stderr,"storage: Write: Is multifile\n");
 
 			// multifile entry will fit into first chunk
 			const char *bufstr = (const char *)buf;
-			int n = sscanf((const char *)&bufstr[strlen(MULTIFILE_PATHNAME)+1],"%lli",&spec_size_);
+			int n = sscanf((const char *)&bufstr[strlen(MULTIFILE_PATHNAME.c_str())+1],"%lli",&spec_size_);
 			if (n != 1)
 			{
 				errno = EINVAL;
@@ -109,7 +120,7 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 			fprintf(stderr,"storage: Write: multifile: specsize %lli\n", spec_size_ );
 
 			// Create StorageFile for multi-file spec.
-			StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,spec_size_);
+			StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME.c_str(),0,spec_size_);
 			sfs_.push_back(sf);
 
 			// Write all, or part of spec and set state_
@@ -118,7 +129,12 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 		else
 		{
 			// Is a single file swarm.
-			return OpenSingleFile();
+			int ret = OpenSingleFile(); // sets state to STOR_STATE_SINGLE_FILE
+			if (ret < 0)
+				return -1;
+
+			// Write chunk to file via recursion.
+			return Write(buf,nbyte,offset);
 		}
 	}
 	else if (state_ == STOR_STATE_MFSPEC_SIZE_KNOWN)
@@ -265,15 +281,20 @@ StorageFile * Storage::FindStorageFile(int64_t offset)
 
 int Storage::ParseSpec(StorageFile *sf)
 {
-	char *ret = NULL,line[MULTIFILE_MAX_LINE];
+	char *retstr = NULL,line[MULTIFILE_MAX_LINE+1];
 	FILE *fp = fopen(sf->GetPathNameUTF8String().c_str(),"rb"); // FAXME decode UTF-8
-
+	if (fp == NULL)
+	{
+		print_error("cannot open multifile-spec");
+		return -1;
+	}
 
 	int64_t offset=0;
+	int ret=0;
 	while(1)
 	{
-		ret = fgets(line,MULTIFILE_MAX_LINE,fp);
-		if (ret == NULL)
+		retstr = fgets(line,MULTIFILE_MAX_LINE,fp);
+		if (retstr == NULL)
 			break;
 
 		char *savetok = NULL;
@@ -281,19 +302,31 @@ int Storage::ParseSpec(StorageFile *sf)
 
 		char * token = strtok_r(line," ",&savetok); // filename
         if (token == NULL)
-        	return -1;
+        {
+        	ret = -1;
+        	break;
+        }
         char *utf8path = token;
         token = strtok_r(NULL," ",&savetok);       // size
         if (token == NULL)
-        	return -1;
+        {
+        	ret = -1;
+        	break;
+        }
+
         char *sizestr = token;
         int n = sscanf(sizestr,"%lli",&fsize);
         if (n == 0)
-			return -1;
+        {
+        	ret = -1;
+        	break;
+        }
 
 		if (offset == 0)
+		{
 			// sf already created for multifile-spec entry
-			offset += spec_size_;
+			offset += sf->GetSize();
+		}
 		else
 		{
 			StorageFile *sf = new StorageFile(utf8path,offset,fsize);
@@ -307,12 +340,12 @@ int Storage::ParseSpec(StorageFile *sf)
 	for (iter = sfs_.begin(); iter < sfs_.end(); iter++)
 	{
 		StorageFile *sf = *iter;
-		fprintf(stderr,"storage: ParseSpec: Got %s start %lli size %lli\n", sf->GetPathNameUTF8String().c_str(), sf->GetStart(), sf->GetSize() );
+		fprintf(stderr,"storage: parsespec: Got %s start %lli size %lli\n", sf->GetPathNameUTF8String().c_str(), sf->GetStart(), sf->GetSize() );
 	}
 
 
 	fclose(fp);
-	return 0;
+	return ret;
 }
 
 
@@ -325,6 +358,15 @@ int Storage::OpenSingleFile()
 		single_fd_ = -1;
 		print_error("storage: cannot open single file");
 	}
+
+	// Perform postponed resize.
+	if (reserved_size_ != -1)
+	{
+		int ret = ResizeReserved(reserved_size_);
+		if (ret < 0)
+			return ret;
+	}
+
 	return single_fd_;
 }
 
@@ -419,7 +461,14 @@ int Storage::ResizeReserved(int64_t size)
 {
 	if (state_ == STOR_STATE_SINGLE_FILE)
 	{
+		fprintf(stderr,"storage: Resizing single file %d to %lli\n", single_fd_, size);
 		return file_resize(single_fd_,size);
+	}
+	else if (state_ == STOR_STATE_INIT)
+	{
+		fprintf(stderr,"storage: Postpone resize to %lli\n", size);
+		reserved_size_ = size;
+		return 0;
 	}
 	else if (state_ != STOR_STATE_MFSPEC_COMPLETE)
 		return -1;
@@ -427,6 +476,8 @@ int Storage::ResizeReserved(int64_t size)
 	// MULTIFILE
 	if (size > GetReservedSize())
 	{
+		fprintf(stderr,"storage: Resizing multi file to %lli\n", size);
+
 		// Resize files to wanted size, so pread() / pwrite() works for all offsets.
 		storage_files_t::iterator iter;
 		for (iter = sfs_.begin(); iter < sfs_.end(); iter++)
@@ -437,6 +488,8 @@ int Storage::ResizeReserved(int64_t size)
 				return ret;
 		}
 	}
+	else
+		fprintf(stderr,"storage: Resize multi-file to smaller %lli, ignored\n", size);
 
 	return 0;
 }

@@ -295,7 +295,7 @@ namespace swift {
         /** Hash tree checked file; all the hashes and data are kept here. */
         HashTree&       file() { return *hashtree_; }
         /** File descriptor for the data file. */
-        int             fd () const { return hashtree_->file_descriptor(); }
+        int             fd () const { return fd_; }
         /** Root SHA1 hash of the transfer (and the data file). */
         const Sha1Hash& root_hash () const { return hashtree_->root_hash(); }
         /** Ric: the availability in the swarm */
@@ -381,6 +381,8 @@ namespace swift {
 
         // MULTIFILE
         Storage				*storage_;
+        int					fd_;
+
 
     public:
         void            OnDataIn (bin_t pos);
@@ -718,6 +720,10 @@ namespace swift {
 
 	  public:
 
+		static const std::string MULTIFILE_PATHNAME;
+		static const int 		 MULTIFILE_MAX_PATH = 2048;
+		static const int 		 MULTIFILE_MAX_LINE = MULTIFILE_MAX_PATH+1+32+1;
+
 		typedef enum {
 			STOR_STATE_INIT,
 			STOR_STATE_MFSPEC_SIZE_KNOWN,
@@ -759,8 +765,11 @@ namespace swift {
 
 			int64_t spec_size_;
 
+			// TODO: DOCUMENT
+
 			storage_files_t	sfs_;
 			int single_fd_;
+			int64_t reserved_size_;
 
 			int WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
 			std::pair<int64_t,int64_t> WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);

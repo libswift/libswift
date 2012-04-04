@@ -355,7 +355,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
 	print_error("error on evbuffer_reserve_space");
 	return bin_t::NONE;
     }
-    size_t r = pread(file().file_descriptor(),(char *)vec.iov_base,
+    size_t r = transfer().GetStorage()->Read((char *)vec.iov_base,
 		     file().chunk_size(),tosend.base_offset()*file().chunk_size());
     // TODO: corrupted data, retries, caching
     if (r<0) {

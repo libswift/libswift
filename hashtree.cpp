@@ -106,6 +106,8 @@ chunk_size_(chunk_size)
 
     //fprintf(stderr,"hashtree: hashchecking want %s do %s binmap-on-disk %s\n", (check_hashes ? "yes" : "no"), (actually_check_hashes? "yes" : "no"), (binmap_exists? "yes" : "no") );
 
+    fprintf(stderr,"hashtree: hashfn %s binfn %s reserved %lli\n", hash_filename.c_str(), binmap_filename.c_str(), storage_->GetReservedSize() );
+
     hash_fd_ = open(hash_filename.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (hash_fd_<0) {
         hash_fd_ = 0;
@@ -114,10 +116,10 @@ chunk_size_(chunk_size)
     }
 
     // Arno: if user wants to or no .mhash, and if root hash unknown (new file) and no checkpoint, (re)calc root hash
-    if (storage_->GetReservedSize() && ((actually_check_hashes) || (root_hash_==Sha1Hash::ZERO && !binmap_exists) || (!mhash_exists)) ) {
+    if (storage_->GetReservedSize() > 0 && (actually_check_hashes || (root_hash_==Sha1Hash::ZERO && !binmap_exists) || !mhash_exists) ) {
     	// fresh submit, hash it
     	dprintf("%s hashtree full compute\n",tintstr());
-        assert(storage_->GetReservedSize());
+        //assert(storage_->GetReservedSize());
         Submit();
     } else if (mhash_exists && binmap_exists && file_size(hash_fd_)) {
     	// Arno: recreate hash tree without rereading content
@@ -165,7 +167,7 @@ void            HashTree::Submit () {
 
     peak_count_ = gen_peaks(sizec_,peaks_);
     int hashes_size = Sha1Hash::SIZE*sizec_*2;
-    dprintf("%s hashtree submit resizing hash file\n",tintstr() );
+    dprintf("%s hashtree submit resizing hash file to %d\n",tintstr(), hashes_size );
     file_resize(hash_fd_,hashes_size);
     hashes_ = (Sha1Hash*) memory_map(hash_fd_,hashes_size);
     if (!hashes_) {
