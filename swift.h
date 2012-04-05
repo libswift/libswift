@@ -716,8 +716,20 @@ namespace swift {
     /*
      * Class representing the persistent storage layer. Supports a swarm
      * stored as multiple files.
+     *
+     * This is implemented by storing a multi-file specification in chunk 0
+     * (and further if needed). This spec lists what other files the swarm
+     * contains and their sizes. E.g.
+     *
+     * META-INF-multifilespec.txt 113
+	 * seeder/190557.ts 249798796
+	 * seeder/berta.dat 2395920988
+	 * seeder/bunny.ogg 166825767
+	 *
+	 * The concatenation of these files (starting with the multi-file spec with
+	 * pseudo filename META-INF-multifile-spec.txt) are the contents of the
+	 * swarm.
      */
-
 	class Storage {
 
 	  public:
@@ -736,6 +748,7 @@ namespace swift {
 
 		typedef std::vector<StorageFile *>	storage_files_t;
 
+		/** convert multi-file spec filename (UTF-8 encoded Unicode) to OS name and vv. */
 		static std::string spec2ospn(std::string specpn);
 		static std::string os2specpn(std::string ospn);
 

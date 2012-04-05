@@ -7,7 +7,6 @@
  *
  * TODO:
  * - Unicode?
- * - Other piece pickers.
  * - Slow resume after alloc big file (Win32, work on swift-trunk)
  */
 
