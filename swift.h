@@ -696,13 +696,13 @@ namespace swift {
     	 int64_t GetStart() { return start_; }
     	 int64_t GetEnd() { return end_; }
     	 int64_t GetSize() { return end_+1-start_; }
-    	 std::string GetPathNameUTF8String() { return pathname_utf8_str_; }
+    	 std::string GetSpecPathName() { return spec_pathname_; }
     	 ssize_t  Write(const void *buf, size_t nbyte, int64_t offset) { return pwrite(fd_,buf,nbyte,offset); }
     	 ssize_t  Read(void *buf, size_t nbyte, int64_t offset) {  return pread(fd_,buf,nbyte,offset); }
     	 int ResizeReserved() { return file_resize(fd_,GetSize()); }
 
        protected:
-    	 std::string pathname_utf8_str_;
+    	 std::string spec_pathname_;
     	 int64_t	start_;
     	 int64_t	end_;
 
@@ -721,6 +721,7 @@ namespace swift {
 	  public:
 
 		static const std::string MULTIFILE_PATHNAME;
+		static const std::string MULTIFILE_PATHNAME_FILE_SEP;
 		static const int 		 MULTIFILE_MAX_PATH = 2048;
 		static const int 		 MULTIFILE_MAX_LINE = MULTIFILE_MAX_PATH+1+32+1;
 
@@ -732,6 +733,9 @@ namespace swift {
 		} storage_state_t;
 
 		typedef std::vector<StorageFile *>	storage_files_t;
+
+		static std::string spec2ospn(std::string specpn);
+		static std::string os2specpn(std::string ospn);
 
 		/** Constructor */
 		Storage(std::string pathname);
@@ -752,13 +756,13 @@ namespace swift {
 		/** Change size reserved for storage */
 		int ResizeReserved(int64_t size);
 
-		std::string GetPathNameUTF8String() { return pathname_utf8_str_; }
+		std::string GetOSPathName() { return os_pathname_; }
 
 
 	  protected:
 			storage_state_t	state_;
 
-			std::string pathname_utf8_str_;
+			std::string os_pathname_;
 
 			/** HashTree this Storage is linked to */
 			HashTree *ht_;

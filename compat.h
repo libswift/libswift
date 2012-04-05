@@ -27,6 +27,7 @@ typedef unsigned __int64 uint64_t;
 #include <sys/stat.h>
 #include <io.h>
 #include <xutility> // for std::min/max
+#include <direct.h>
 #else
 #include <sys/mman.h>
 #include <arpa/inet.h>
@@ -115,6 +116,13 @@ typedef void* setsockoptptr_t;
 #define OPENFLAGS         O_RDWR|O_CREAT
 #endif
 
+#ifdef _WIN32
+#define FILE_SEP          "\\"
+#else
+#define FILE_SEP		  "/"
+#endif
+
+
 
 namespace swift {
 
@@ -171,6 +179,20 @@ bool    make_socket_nonblocking(evutil_socket_t s);
 bool    close_socket (evutil_socket_t sock);
 
 struct timeval* tint2tv (tint t);
+
+
+int inline stringreplace(std::string& source, const std::string& find, const std::string& replace)
+{
+    int num=0;
+    std::string::size_type fLen = find.size();
+    std::string::size_type rLen = replace.size();
+    for (std::string::size_type pos=0; (pos=source.find(find, pos))!=std::string::npos; pos+=rLen)
+    {
+        num++;
+        source.replace(pos, fLen, replace);
+    }
+    return num;
+}
 
 
 };

@@ -6,9 +6,10 @@
  *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  * TODO:
- * - mkdir for META-INF
  * - Unicode?
  * - If multi-file spec, then exact size known after 1st few chunks. Use for swift::Size()?
+ * - Filenames with spaces in.
+ * - berta.dat and ostringstream and 64-bit
  */
 
 #include "swift.h"
@@ -21,11 +22,11 @@ using namespace swift;
 
 
 const std::string Storage::MULTIFILE_PATHNAME = "META-INF-multifilespec.txt";
-
+const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 
 Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), spec_size_(0), single_fd_(-1), reserved_size_(-1)
 {
-	pathname_utf8_str_ = pathname;
+	os_pathname_ = pathname;
 
 #ifdef WIN32
 	struct _stat statbuf;
@@ -47,8 +48,6 @@ Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), spec_size_(0),
 	fclose(fp);
 	if (ret < 0)
 		return;
-
-	fprintf(stderr,"storage: Readbuf is <%s> want <%s>\n", readbuf, MULTIFILE_PATHNAME.c_str() );
 
 	if (!strncmp(readbuf,MULTIFILE_PATHNAME.c_str(),MULTIFILE_PATHNAME.length()))
 	{
@@ -188,7 +187,7 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 
 int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset)
 {
-	fprintf(stderr,"storage: WriteSpecPart: %s %d %lli\n", sf->GetPathNameUTF8String().c_str(), nbyte, offset );
+	fprintf(stderr,"storage: WriteSpecPart: %s %d %lli\n", sf->GetSpecPathName().c_str(), nbyte, offset );
 
 	std::pair<int64_t,int64_t> ht = WriteBuffer(sf,buf,nbyte,offset);
 	if (ht.first == -1)
@@ -227,7 +226,7 @@ int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64
 
 std::pair<int64_t,int64_t> Storage::WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset)
 {
-	fprintf(stderr,"storage: WriteBuffer: %s %d %lli\n", sf->GetPathNameUTF8String().c_str(), nbyte, offset );
+	fprintf(stderr,"storage: WriteBuffer: %s %d %lli\n", sf->GetSpecPathName().c_str(), nbyte, offset );
 
 	int ret = -1;
 	if (offset+nbyte <= sf->GetEnd()+1)
@@ -285,7 +284,7 @@ StorageFile * Storage::FindStorageFile(int64_t offset)
 int Storage::ParseSpec(StorageFile *sf)
 {
 	char *retstr = NULL,line[MULTIFILE_MAX_LINE+1];
-	FILE *fp = fopen(sf->GetPathNameUTF8String().c_str(),"rb"); // FAXME decode UTF-8
+	FILE *fp = fopen(sf->GetSpecPathName().c_str(),"rb"); // FAXME decode UTF-8
 	if (fp == NULL)
 	{
 		print_error("cannot open multifile-spec");
@@ -300,27 +299,32 @@ int Storage::ParseSpec(StorageFile *sf)
 		if (retstr == NULL)
 			break;
 
-		char *savetok = NULL;
+		// Format: "specpath filesize\n"
+		std::string pline(line);
+		size_t idx = pline.rfind(' ',pline.length()-1);
+
+		std::string specpath = pline.substr(0,idx);
+		std::string sizestr = pline.substr(idx+1,pline.length());
+
 		int64_t fsize=0;
-
-		char * token = strtok_r(line," ",&savetok); // filename
-        if (token == NULL)
-        {
-        	ret = -1;
-        	break;
-        }
-        char *utf8path = token;
-        token = strtok_r(NULL," ",&savetok);       // size
-        if (token == NULL)
-        {
-        	ret = -1;
-        	break;
-        }
-
-        char *sizestr = token;
-        int n = sscanf(sizestr,"%lli",&fsize);
+        int n = sscanf(sizestr.c_str(),"%lli",&fsize);
         if (n == 0)
         {
+        	ret = -1;
+        	break;
+        }
+
+        // Check pathname safety
+        if (specpath.substr(0,1) == MULTIFILE_PATHNAME_FILE_SEP)
+        {
+        	// Must not start with /
+        	ret = -1;
+        	break;
+        }
+    	idx = specpath.find("..",0);
+    	if (idx != std::string::npos)
+        {
+    		// Must not contain .. path escapes
         	ret = -1;
         	break;
         }
@@ -332,7 +336,7 @@ int Storage::ParseSpec(StorageFile *sf)
 		}
 		else
 		{
-			StorageFile *sf = new StorageFile(utf8path,offset,fsize);
+			StorageFile *sf = new StorageFile(specpath,offset,fsize);
 			sfs_.push_back(sf);
 			offset += fsize;
 		}
@@ -343,7 +347,7 @@ int Storage::ParseSpec(StorageFile *sf)
 	for (iter = sfs_.begin(); iter < sfs_.end(); iter++)
 	{
 		StorageFile *sf = *iter;
-		fprintf(stderr,"storage: parsespec: Got %s start %lli size %lli\n", sf->GetPathNameUTF8String().c_str(), sf->GetStart(), sf->GetSize() );
+		fprintf(stderr,"storage: parsespec: Got %s start %lli size %lli\n", sf->GetSpecPathName().c_str(), sf->GetStart(), sf->GetSize() );
 	}
 
 
@@ -356,7 +360,7 @@ int Storage::OpenSingleFile()
 {
 	state_ = STOR_STATE_SINGLE_FILE;
 
-	single_fd_ = open(pathname_utf8_str_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+	single_fd_ = open(os_pathname_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
 	if (single_fd_<0) {
 		single_fd_ = -1;
 		print_error("storage: cannot open single file");
@@ -378,7 +382,7 @@ int Storage::OpenSingleFile()
 
 ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 {
-	fprintf(stderr,"storage: Read: nbyte " PRISIZET " off %lli\n", nbyte, offset );
+	//fprintf(stderr,"storage: Read: nbyte " PRISIZET " off %lli\n", nbyte, offset );
 
 	if (state_ == STOR_STATE_SINGLE_FILE)
 	{
@@ -400,13 +404,13 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 			return -1;
 		}
 
-		fprintf(stderr,"storage: Read: found file %s for off %lli\n", sf->GetPathNameUTF8String().c_str(), offset );
+		//fprintf(stderr,"storage: Read: Found file %s for off %lli\n", sf->GetSpecPathName().c_str(), offset );
 
 		ssize_t ret = sf->Read(buf,nbyte,offset - sf->GetStart());
 		if (ret < 0)
 			return ret;
 
-		fprintf(stderr,"storage: Read: read %d\n", ret );
+		//fprintf(stderr,"storage: Read: read %d\n", ret );
 
 		if (ret < nbyte && offset+ret != ht_->size())
 		{
@@ -446,10 +450,10 @@ int64_t Storage::GetReservedSize()
 #else
 		struct stat statbuf;
 #endif
-		int ret = stat( sf->GetPathNameUTF8String().c_str(), &statbuf );
+		int ret = stat( sf->GetSpecPathName().c_str(), &statbuf );
 		if( ret < 0)
 		{
-			fprintf(stderr,"storage: getsize: cannot stat file %s\n", sf->GetPathNameUTF8String().c_str() );
+			fprintf(stderr,"storage: getsize: cannot stat file %s\n", sf->GetSpecPathName().c_str() );
 			return ret;
 		}
 		else
@@ -498,6 +502,30 @@ int Storage::ResizeReserved(int64_t size)
 }
 
 
+std::string Storage::spec2ospn(std::string specpn)
+{
+	std::string dest = specpn;
+	// TODO: convert to UTF-8
+	if (MULTIFILE_PATHNAME_FILE_SEP != FILE_SEP)
+	{
+		// Replace OS filesep with spec
+		swift::stringreplace(dest,MULTIFILE_PATHNAME_FILE_SEP,FILE_SEP);
+	}
+	return dest;
+}
+
+std::string Storage::os2specpn(std::string ospn)
+{
+	std::string dest = ospn;
+	// TODO: convert to UTF-8
+	if (MULTIFILE_PATHNAME_FILE_SEP != FILE_SEP)
+	{
+		// Replace OS filesep with spec
+		swift::stringreplace(dest,FILE_SEP,MULTIFILE_PATHNAME_FILE_SEP);
+	}
+	return dest;
+}
+
 
 
 /*
@@ -508,15 +536,51 @@ int Storage::ResizeReserved(int64_t size)
 
 StorageFile::StorageFile(std::string utf8path, int64_t start, int64_t size) : fd_(-1)
 {
-	 pathname_utf8_str_ = utf8path;
-	 start_ = start;
-	 end_ = start+size-1;
+	spec_pathname_ = utf8path;
+	start_ = start;
+	end_ = start+size-1;
 
-	 fd_ = open(pathname_utf8_str_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-	 if (fd_<0) {
-		 fprintf(stderr,"storage: file: Could not open %s\n", pathname_utf8_str_.c_str() );
-         return;
-	 }
+	// Convert specname to OS name
+	std::string ospathname = Storage::spec2ospn(spec_pathname_);
+
+	// Handle subdirs
+	if (ospathname.find(FILE_SEP,0) != std::string::npos)
+	{
+		// Path contains dirs, make them
+		size_t i = 0;
+		while(true)
+		{
+			i = ospathname.find(FILE_SEP,i+1);
+			if (i == std::string::npos)
+				 break;
+			std::string path = ospathname.substr(0,i);
+#ifdef WIN32
+			struct _stat statbuf;
+#else
+			struct stat statbuf;
+#endif
+			int ret = stat( path.c_str(), &statbuf );
+			if( (ret < 0 && errno == ENOENT)) // TODO isdir || (ret == 0 && statbuf.st_mode))
+			{
+#ifdef WIN32
+				ret = _mkdir(path.c_str());
+#else
+				ret = mkdir(path.c_str(),S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+#endif
+				if (ret < 0)
+					return;
+			}
+		}
+	}
+
+
+	// Open
+	fd_ = open(ospathname.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+	if (fd_<0) {
+		print_error("storage: file: Could not open");
+		fprintf(stderr,"storage: file: Could not open %s\n", ospathname.c_str() );
+        return;
+	}
 }
 
 StorageFile::~StorageFile()

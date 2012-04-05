@@ -544,7 +544,7 @@ int swift::Checkpoint(int transfer) {
 	if (ft == NULL)
 		return -1;
 
-	std::string binmap_filename = ft->GetStorage()->GetPathNameUTF8String();
+	std::string binmap_filename = ft->GetStorage()->GetOSPathName();
 	binmap_filename.append(".mbinmap");
 	//fprintf(stderr,"swift: checkpointing %s at %lli\n", binmap_filename.c_str(), Complete(transfer));
 	FILE *fp = fopen(binmap_filename.c_str(),"wb");

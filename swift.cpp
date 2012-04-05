@@ -474,7 +474,7 @@ int CleanSwiftDirectory(const TCHAR* dirname)
 	{
 		FileTransfer *ft = *iter;
 		if (ft != NULL) {
-			std::string filename = ft->GetStorage()->GetPathNameUTF8String();
+			std::string filename = ft->GetStorage()->GetOSPathName();
 #ifdef WIN32
 			struct _stat buf;
 #else
@@ -532,7 +532,7 @@ void ReportCallback(int fd, short event, void *arg) {
     	// CHECKPOINT
     	if (file_enable_checkpoint && !file_checkpointed && IsComplete(single_fd))
     	{
-    		std::string binmap_filename = ft->GetStorage()->GetPathNameUTF8String();
+    		std::string binmap_filename = ft->GetStorage()->GetOSPathName();
     		binmap_filename.append(".mbinmap");
     		fprintf(stderr,"swift: Complete, checkpointing %s\n", binmap_filename.c_str() );
 
@@ -640,7 +640,9 @@ int CreateMultifileSpec(char *specfilename, int argc, char *argv[], int argidx)
 	filelist_t::iterator iter;
 	for (iter = filelist.begin(); iter < filelist.end(); iter++)
 	{
-		specbody << (*iter).first << " " << (*iter).second << "\n";
+		specbody << Storage::os2specpn( (*iter).first );
+		specbody << " ";
+		specbody << (uint64_t)(*iter).second << "\n"; // MS VS2008 give -1... for a 2.x GB file if not cast
 	}
 
 	// 4. Calc specsize
