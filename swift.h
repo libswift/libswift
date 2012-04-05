@@ -656,6 +656,8 @@ namespace swift {
          * May not be equal to peer_. 2PEERSBEHINDSAMENAT */
         Address     recv_peer_;
 
+		bool		direct_sending_;
+
         int         PeerBPS() const {
             return TINT_SEC / dip_avg_ * 1024;
         }
@@ -781,7 +783,7 @@ namespace swift {
 			int WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
 			std::pair<int64_t,int64_t> WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
 			StorageFile * FindStorageFile(int64_t offset);
-			int ParseSpec(StorageFile *sf);
+			int64_t ParseSpec(StorageFile *sf);
 			int OpenSingleFile();
 
 	};

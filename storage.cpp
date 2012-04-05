@@ -7,7 +7,8 @@
  *
  * TODO:
  * - Unicode?
- * - If multi-file spec, then exact size known after 1st few chunks. Use for swift::Size()?
+ * - Other piece pickers.
+ * - Slow resume after alloc big file (Win32, work on swift-trunk)
  */
 
 #include "swift.h"
@@ -201,11 +202,16 @@ int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64
 		// Wrote last part of spec
 		state_ = STOR_STATE_MFSPEC_COMPLETE;
 
-		if (ParseSpec(sf) < 0)
+		int64_t totalsize = ParseSpec(sf);
+		if (totalsize < 0)
 		{
 			errno = EINVAL;
 			return -1;
 		}
+
+		// We know exact size after chunk 0, inform hash tree (which doesn't
+		// know until chunk N-1) is in.
+		ht_->set_size(totalsize);
 
 		// Write tail to next StorageFile(s) using recursion
 		const char *bufstr = (const char *)buf;
@@ -281,7 +287,7 @@ StorageFile * Storage::FindStorageFile(int64_t offset)
 }
 
 
-int Storage::ParseSpec(StorageFile *sf)
+int64_t Storage::ParseSpec(StorageFile *sf)
 {
 	char *retstr = NULL,line[MULTIFILE_MAX_LINE+1];
 	FILE *fp = fopen(sf->GetSpecPathName().c_str(),"rb"); // FAXME decode UTF-8
@@ -352,7 +358,10 @@ int Storage::ParseSpec(StorageFile *sf)
 
 
 	fclose(fp);
-	return ret;
+	if (ret < 0)
+		return (int64_t)ret;
+	else
+		return offset;
 }
 
 
@@ -409,7 +418,7 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 				return -1;
 			}
 			last_sf_ = sf;
-			dprintf("%s %s storage: Read: Found file %s for off %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), offset );
+			//dprintf("%s %s storage: Read: Found file %s for off %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), offset );
 		}
 
 		ssize_t ret = sf->Read(buf,nbyte,offset - sf->GetStart());

@@ -256,8 +256,10 @@ void    Channel::AddHint (struct evbuffer *evb) {
     // Take into account network limit
     uint64_t plan_pck = (uint64_t)min(allowed_hints,first_plan_pck);
     //fprintf(stderr,"send c%d: %f fp %d p %d count %d ghs %d allow %d\n", id(), transfer().GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, plan_pck, count, rough_global_hint_out_size, allowed_hints );
-    //if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY) {
-    if (hint_out_size_ == 0 || hint_out_size_+HINT_GRANULARITY < plan_pck ) {
+
+    if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY) {
+
+    //if (hint_out_size_ == 0 || hint_out_size_+HINT_GRANULARITY < plan_pck ) {
         bin_t hint = transfer().picker().Pick(ack_in_,plan_pck,NOW+plan_for*2);
         if (!hint.is_none()) {
         	if (DEBUGTRAFFIC)
@@ -1032,13 +1034,15 @@ void Channel::Reschedule () {
 
     	assert(next_send_time_<NOW+TINT_MIN);
         tint duein = next_send_time_-NOW;
-        if (duein <= 0) {
+        if (duein <= 0 && !direct_sending_) {
         	// Arno, 2011-10-18: libevent's timer implementation appears to be
         	// really slow, i.e., timers set for 100 usec from now get called
         	// at least two times later :-( Hence, for sends after receives
         	// perform them directly.
         	dprintf("%s #%u requeue direct send\n",tintstr(),id_);
+            direct_sending_ = true;
         	LibeventSendCallback(-1,EV_TIMEOUT,this);
+            direct_sending_ = false;
         }
         else {
         	if (evsend_ptr_ != NULL) {
