@@ -157,7 +157,6 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 				errno = EINVAL;
 				return -1;
 			}
-			fprintf(stderr,"*");
 			last_sf_ = sf;
 		}
 
@@ -410,7 +409,6 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 				return -1;
 			}
 			last_sf_ = sf;
-			fprintf(stderr,"*");
 			dprintf("%s %s storage: Read: Found file %s for off %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), offset );
 		}
 
