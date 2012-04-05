@@ -107,9 +107,7 @@ chunk_size_(chunk_size)
     if( res < 0 && errno == ENOENT)
     	binmap_exists = false;
 
-    //fprintf(stderr,"hashtree: hashchecking want %s do %s binmap-on-disk %s\n", (check_hashes ? "yes" : "no"), (actually_check_hashes? "yes" : "no"), (binmap_exists? "yes" : "no") );
-
-    fprintf(stderr,"hashtree: hashfn %s binfn %s reserved %lli\n", hash_filename.c_str(), binmap_filename.c_str(), storage_->GetReservedSize() );
+    fprintf(stderr,"hashtree: hashchecking want %s do %s binmap-on-disk %s\n", (check_hashes ? "yes" : "no"), (actually_check_hashes? "yes" : "no"), (binmap_exists? "yes" : "no") );
 
     hash_fd_ = open(hash_filename.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (hash_fd_<0) {

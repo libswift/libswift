@@ -156,6 +156,8 @@ int     file_resize (int fd, int64_t new_size);
 void*   memory_map (int fd, size_t size=0);
 void    memory_unmap (int fd, void*, size_t size);
 
+int64_t file_size_by_path(const char *path);
+
 void    print_error (const char* msg);
 
 #ifdef _WIN32

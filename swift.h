@@ -758,6 +758,8 @@ namespace swift {
 
 		std::string GetOSPathName() { return os_pathname_; }
 
+		std::string roothashhex() { if (ht_ == NULL) return "0000000000000000000000000000000000000000"; else return ht_->root_hash().hex(); }
+
 
 	  protected:
 			storage_state_t	state_;

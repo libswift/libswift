@@ -967,7 +967,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
     //dprintf("recvd %i bytes for %i\n",data.size(),channel->id);
     bool wasestablished = channel->is_established();
 
-    dprintf("%s #%u peer %s recv_peer %s addr %s\n", tintstr(),mych, channel->peer().str(), channel->recv_peer().str(), addr.str() );
+    //dprintf("%s #%u peer %s recv_peer %s addr %s\n", tintstr(),mych, channel->peer().str(), channel->recv_peer().str(), addr.str() );
 
     channel->Recv(evb);
 

@@ -60,6 +60,23 @@ int     file_resize (int fd, int64_t new_size) {
 #endif
 }
 
+
+int64_t file_size_by_path(const char *path) {
+	int ret = 0;
+#ifdef WIN32
+	struct __stat64 st;
+    ret = _stat64(path, &st);
+#else
+    struct stat st;
+    ret = stat(path, &st);
+#endif
+    if (ret < 0)
+    	return ret;
+    else
+    	return st.st_size;
+}
+
+
 void print_error(const char* msg) {
     perror(msg);
 #ifdef _WIN32

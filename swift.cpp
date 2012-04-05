@@ -213,27 +213,29 @@ int main (int argc, char** argv)
     }   // arguments parsed
 
 
-    if (httpgw_enabled)
-    {
-    	// Change current directory to a temporary one
+	// Change dir to destdir, if set, or to tempdir if HTTPGW
 #ifdef _WIN32
-    	if (destdir == 0) {
-    		std::string destdirstr = gettmpdir();
-    		!::SetCurrentDirectory(destdirstr.c_str());
-    	}
-    	else
-    		!::SetCurrentDirectory(destdir);
-        TCHAR szDirectory[MAX_PATH] = "";
+	if (destdir == 0) {
+		if (httpgw_enabled) {
+    			std::string destdirstr = gettmpdir();
+    			!::SetCurrentDirectory(destdirstr.c_str());
+    		}
+	}
+	else
+		!::SetCurrentDirectory(destdir);
+	TCHAR szDirectory[MAX_PATH] = "";
 
-        !::GetCurrentDirectory(sizeof(szDirectory) - 1, szDirectory);
-        fprintf(stderr,"CWD %s\n",szDirectory);
+	!::GetCurrentDirectory(sizeof(szDirectory) - 1, szDirectory);
+	fprintf(stderr,"CWD %s\n",szDirectory);
 #else
-        if (destdir == 0)
+	if (destdir == 0) {
+		if (httpgw_enabled) {
         	chdir(gettmpdir().c_str());
-        else
-        	chdir(destdir);
+		}
+	}
+	else
+		chdir(destdir);
 #endif
-    }
       
     if (bindaddr!=Address()) { // seeding
         if (Listen(bindaddr)<=0)
@@ -597,6 +599,8 @@ void RescanDirCallback(int fd, short event, void *arg) {
 }
 
 
+#include <iostream>
+
 // MULTIFILE
 typedef std::vector<std::pair<std::string,int64_t> >	filelist_t;
 int CreateMultifileSpec(char *specfilename, int argc, char *argv[], int argidx)
@@ -609,23 +613,16 @@ int CreateMultifileSpec(char *specfilename, int argc, char *argv[], int argidx)
 	for (int i=argidx; i<argc; i++)
 	{
 		char *pathname = argv[i];
-#ifdef WIN32
-		struct _stat statbuf;
-#else
-		struct stat statbuf;
-#endif
-		int ret = stat( pathname, &statbuf );
-		if( ret < 0)
+		int64_t fsize = file_size_by_path(pathname);
+		if( fsize < 0)
 		{
 			print_error("cannot open file in multi-spec list");
-			return ret;
+			return fsize;
 		}
 
 		// TODO: strip off common path from source pathnames
 		// TODO: convert path separator to standard
 		std::string pathstr = pathname; // TODO: UTF8-encode
-		off_t fsize = statbuf.st_size;
-
 		filelist.push_back(std::make_pair(pathstr,fsize));
 	}
 
@@ -642,7 +639,7 @@ int CreateMultifileSpec(char *specfilename, int argc, char *argv[], int argidx)
 	{
 		specbody << Storage::os2specpn( (*iter).first );
 		specbody << " ";
-		specbody << (uint64_t)(*iter).second << "\n"; // MS VS2008 give -1... for a 2.x GB file if not cast
+		specbody << (*iter).second << "\n";
 	}
 
 	// 4. Calc specsize

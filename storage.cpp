@@ -8,8 +8,6 @@
  * TODO:
  * - Unicode?
  * - If multi-file spec, then exact size known after 1st few chunks. Use for swift::Size()?
- * - Filenames with spaces in.
- * - berta.dat and ostringstream and 64-bit
  */
 
 #include "swift.h"
@@ -28,13 +26,8 @@ Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), spec_size_(0),
 {
 	os_pathname_ = pathname;
 
-#ifdef WIN32
-	struct _stat statbuf;
-#else
-	struct stat statbuf;
-#endif
-	int ret = stat( pathname.c_str(), &statbuf );
-	if( ret < 0 && errno == ENOENT)
+	int64_t fsize = file_size_by_path(pathname.c_str());
+	if (fsize < 0 && errno == ENOENT)
 	{
 		// File does not exist, assume we're a client and all will be revealed
 		// (single file, multi-spec) when chunks come in.
@@ -44,7 +37,7 @@ Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), spec_size_(0),
 	// File exists. Check first bytes to see if a multifile-spec
 	FILE *fp = fopen(pathname.c_str(),"rb");
 	char readbuf[1024];
-	ret = fread(readbuf,sizeof(char),MULTIFILE_PATHNAME.length(),fp);
+	int ret = fread(readbuf,sizeof(char),MULTIFILE_PATHNAME.length(),fp);
 	fclose(fp);
 	if (ret < 0)
 		return;
@@ -54,9 +47,9 @@ Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), spec_size_(0),
 		// Pathname points to a multi-file spec, assume we're seeding
 		state_ = STOR_STATE_MFSPEC_COMPLETE;
 
-		fprintf(stderr,"storage: Found multifile-spec, will seed it.\n");
+		dprintf("%s %s storage: Found multifile-spec, will seed it.\n", tintstr(), roothashhex().c_str() );
 
-		StorageFile *sf = new StorageFile(pathname,0,statbuf.st_size);
+		StorageFile *sf = new StorageFile(pathname,0,fsize);
 		sfs_.push_back(sf);
 		if (ParseSpec(sf) < 0)
 			print_error("storage: error parsing multi-file spec");
@@ -64,7 +57,7 @@ Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), spec_size_(0),
 	else
 	{
 		// Normal swarm
-		fprintf(stderr,"storage: Found single file, will check it.\n");
+		dprintf("%s %s storage: Found single file, will check it.\n", tintstr(), roothashhex().c_str() );
 
 		(void)OpenSingleFile(); // sets state to STOR_STATE_SINGLE_FILE
 	}
@@ -88,7 +81,7 @@ Storage::~Storage()
 
 ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 {
-	fprintf(stderr,"storage: Write: nbyte %d off %lli\n", nbyte,offset);
+	//dprintf("%s %s storage: Write: nbyte %d off %lld\n", tintstr(), roothashhex().c_str(), nbyte,offset);
 
 	if (state_ == STOR_STATE_SINGLE_FILE)
 	{
@@ -103,23 +96,23 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 			return -1;
 		}
 
-		fprintf(stderr,"storage: Write: chunk 0\n");
+		//dprintf("%s %s storage: Write: chunk 0\n");
 
 		// Check for multifile spec. If present, multifile, otherwise single
 		if (!strncmp((const char *)buf,MULTIFILE_PATHNAME.c_str(),strlen(MULTIFILE_PATHNAME.c_str())))
 		{
-			fprintf(stderr,"storage: Write: Is multifile\n");
+			dprintf("%s %s storage: Write: Is multifile\n", tintstr(), roothashhex().c_str() );
 
 			// multifile entry will fit into first chunk
 			const char *bufstr = (const char *)buf;
-			int n = sscanf((const char *)&bufstr[strlen(MULTIFILE_PATHNAME.c_str())+1],"%lli",&spec_size_);
+			int n = sscanf((const char *)&bufstr[strlen(MULTIFILE_PATHNAME.c_str())+1],"%lld",&spec_size_);
 			if (n != 1)
 			{
 				errno = EINVAL;
 				return -1;
 			}
 
-			fprintf(stderr,"storage: Write: multifile: specsize %lli\n", spec_size_ );
+			//dprintf("%s %s storage: Write: multifile: specsize %lld\n", tintstr(), roothashhex().c_str(), spec_size_ );
 
 			// Create StorageFile for multi-file spec.
 			StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME.c_str(),0,spec_size_);
@@ -143,19 +136,19 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 	{
 		StorageFile *sf = sfs_[0];
 
-		fprintf(stderr,"storage: Write: mf spec size known\n");
+		dprintf("%s %s storage: Write: mf spec size known\n", tintstr(), roothashhex().c_str());
 
 		return WriteSpecPart(sf,buf,nbyte,offset);
 	}
 	else
 	{
 		// state_ == STOR_STATE_MFSPEC_COMPLETE;
-		fprintf(stderr,"storage: Write: complete\n");
+		//dprintf("%s %s storage: Write: complete\n", tintstr(), roothashhex().c_str());
 
 		StorageFile *sf = FindStorageFile(offset);
 		if (sf == NULL)
 		{
-			fprintf(stderr,"storage: Write: File not found!\n");
+			dprintf("%s %s storage: Write: File not found!\n", tintstr(), roothashhex().c_str());
 			errno = EINVAL;
 			return -1;
 		}
@@ -167,7 +160,7 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 			return -1;
 		}
 
-		fprintf(stderr,"storage: Write: complete: first %lli second %lli\n", ht.first, ht.second);
+		//dprintf("%s %s storage: Write: complete: first %lld second %lld\n", tintstr(), roothashhex().c_str(), ht.first, ht.second);
 
 		if (ht.second > 0)
 		{
@@ -187,7 +180,7 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 
 int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset)
 {
-	fprintf(stderr,"storage: WriteSpecPart: %s %d %lli\n", sf->GetSpecPathName().c_str(), nbyte, offset );
+	dprintf("%s %s storage: WriteSpecPart: %s %d %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), nbyte, offset );
 
 	std::pair<int64_t,int64_t> ht = WriteBuffer(sf,buf,nbyte,offset);
 	if (ht.first == -1)
@@ -226,7 +219,7 @@ int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64
 
 std::pair<int64_t,int64_t> Storage::WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset)
 {
-	fprintf(stderr,"storage: WriteBuffer: %s %d %lli\n", sf->GetSpecPathName().c_str(), nbyte, offset );
+	//dprintf("%s %s storage: WriteBuffer: %s %d %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), nbyte, offset );
 
 	int ret = -1;
 	if (offset+nbyte <= sf->GetEnd()+1)
@@ -234,7 +227,7 @@ std::pair<int64_t,int64_t> Storage::WriteBuffer(StorageFile *sf, const void *buf
 		// Chunk belongs completely in sf
 		ret = sf->Write(buf,nbyte,offset - sf->GetStart());
 
-		fprintf(stderr,"storage: WriteBuffer: Write: covered ret %d\n", ret );
+		//dprintf("%s %s storage: WriteBuffer: Write: covered ret %d\n", tintstr(), roothashhex().c_str(), ret );
 
 		if (ret < 0)
 			return std::make_pair(-1,-1);
@@ -250,7 +243,7 @@ std::pair<int64_t,int64_t> Storage::WriteBuffer(StorageFile *sf, const void *buf
 		// Write last part of file
 		ret = sf->Write(buf,head,offset - sf->GetStart() );
 
-		fprintf(stderr,"storage: WriteBuffer: Write: partial ret %d\n", ret );
+		//dprintf("%s %s storage: WriteBuffer: Write: partial ret %d\n", tintstr(), roothashhex().c_str(), ret );
 
 		if (ret < 0)
 			return std::make_pair(-1,-1);
@@ -307,7 +300,7 @@ int Storage::ParseSpec(StorageFile *sf)
 		std::string sizestr = pline.substr(idx+1,pline.length());
 
 		int64_t fsize=0;
-        int n = sscanf(sizestr.c_str(),"%lli",&fsize);
+        int n = sscanf(sizestr.c_str(),"%lld",&fsize);
         if (n == 0)
         {
         	ret = -1;
@@ -347,7 +340,7 @@ int Storage::ParseSpec(StorageFile *sf)
 	for (iter = sfs_.begin(); iter < sfs_.end(); iter++)
 	{
 		StorageFile *sf = *iter;
-		fprintf(stderr,"storage: parsespec: Got %s start %lli size %lli\n", sf->GetSpecPathName().c_str(), sf->GetStart(), sf->GetSize() );
+		dprintf("%s %s storage: parsespec: Got %s start %lld size %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), sf->GetStart(), sf->GetSize() );
 	}
 
 
@@ -382,7 +375,7 @@ int Storage::OpenSingleFile()
 
 ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 {
-	//fprintf(stderr,"storage: Read: nbyte " PRISIZET " off %lli\n", nbyte, offset );
+	//dprintf("%s %s storage: Read: nbyte " PRISIZET " off %lld\n", tintstr(), roothashhex().c_str(), nbyte, offset );
 
 	if (state_ == STOR_STATE_SINGLE_FILE)
 	{
@@ -404,17 +397,17 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 			return -1;
 		}
 
-		//fprintf(stderr,"storage: Read: Found file %s for off %lli\n", sf->GetSpecPathName().c_str(), offset );
+		//dprintf("%s %s storage: Read: Found file %s for off %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), offset );
 
 		ssize_t ret = sf->Read(buf,nbyte,offset - sf->GetStart());
 		if (ret < 0)
 			return ret;
 
-		//fprintf(stderr,"storage: Read: read %d\n", ret );
+		//dprintf("%s %s storage: Read: read %d\n", tintstr(), roothashhex().c_str(), ret );
 
 		if (ret < nbyte && offset+ret != ht_->size())
 		{
-			fprintf(stderr,"storage: Read: want %d more\n", nbyte-ret );
+			//dprintf("%s %s storage: Read: want %d more\n", tintstr(), roothashhex().c_str(), nbyte-ret );
 
 			// Not at end, and can fit more in buffer. Do recursion
 			char *bufstr = (char *)buf;
@@ -445,19 +438,14 @@ int64_t Storage::GetReservedSize()
 	for (iter = sfs_.begin(); iter < sfs_.end(); iter++)
 	{
 		StorageFile *sf = *iter;
-#ifdef WIN32
-		struct _stat statbuf;
-#else
-		struct stat statbuf;
-#endif
-		int ret = stat( sf->GetSpecPathName().c_str(), &statbuf );
-		if( ret < 0)
+		int64_t fsize = file_size_by_path( sf->GetSpecPathName().c_str() );
+		if( fsize < 0)
 		{
-			fprintf(stderr,"storage: getsize: cannot stat file %s\n", sf->GetSpecPathName().c_str() );
-			return ret;
+			dprintf("%s %s storage: getsize: cannot stat file %s\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str() );
+			return fsize;
 		}
 		else
-			totaldisksize += statbuf.st_size;
+			totaldisksize += fsize;
 	}
 
 	return totaldisksize;
@@ -468,12 +456,12 @@ int Storage::ResizeReserved(int64_t size)
 {
 	if (state_ == STOR_STATE_SINGLE_FILE)
 	{
-		fprintf(stderr,"storage: Resizing single file %d to %lli\n", single_fd_, size);
+		dprintf("%s %s storage: Resizing single file %d to %lld\n", tintstr(), roothashhex().c_str(), single_fd_, size);
 		return file_resize(single_fd_,size);
 	}
 	else if (state_ == STOR_STATE_INIT)
 	{
-		fprintf(stderr,"storage: Postpone resize to %lli\n", size);
+		dprintf("%s %s storage: Postpone resize to %lld\n", tintstr(), roothashhex().c_str(), size);
 		reserved_size_ = size;
 		return 0;
 	}
@@ -483,7 +471,7 @@ int Storage::ResizeReserved(int64_t size)
 	// MULTIFILE
 	if (size > GetReservedSize())
 	{
-		fprintf(stderr,"storage: Resizing multi file to %lli\n", size);
+		dprintf("%s %s storage: Resizing multi file to %lld\n", tintstr(), roothashhex().c_str(), size);
 
 		// Resize files to wanted size, so pread() / pwrite() works for all offsets.
 		storage_files_t::iterator iter;
@@ -496,7 +484,7 @@ int Storage::ResizeReserved(int64_t size)
 		}
 	}
 	else
-		fprintf(stderr,"storage: Resize multi-file to smaller %lli, ignored\n", size);
+		dprintf("%s %s storage: Resize multi-file to smaller %lld, ignored\n", tintstr(), roothashhex().c_str(), size);
 
 	return 0;
 }
@@ -560,7 +548,7 @@ StorageFile::StorageFile(std::string utf8path, int64_t start, int64_t size) : fd
 			struct stat statbuf;
 #endif
 			int ret = stat( path.c_str(), &statbuf );
-			if( (ret < 0 && errno == ENOENT)) // TODO isdir || (ret == 0 && statbuf.st_mode))
+			if (ret < 0 && errno == ENOENT)
 			{
 #ifdef WIN32
 				ret = _mkdir(path.c_str());
@@ -570,6 +558,11 @@ StorageFile::StorageFile(std::string utf8path, int64_t start, int64_t size) : fd
 				if (ret < 0)
 					return;
 			}
+			else if (ret == 0 && !(statbuf.st_mode & S_IFDIR))
+			{
+				// Something already exists and it is not a dir
+				return;
+			}
 		}
 	}
 
@@ -577,8 +570,8 @@ StorageFile::StorageFile(std::string utf8path, int64_t start, int64_t size) : fd
 	// Open
 	fd_ = open(ospathname.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
 	if (fd_<0) {
-		print_error("storage: file: Could not open");
-		fprintf(stderr,"storage: file: Could not open %s\n", ospathname.c_str() );
+		//print_error("storage: file: Could not open");
+		dprintf("%s %s storage: file: Could not open %s\n", tintstr(), "0000000000000000000000000000000000000000", ospathname.c_str() );
         return;
 	}
 }
