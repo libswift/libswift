@@ -776,6 +776,7 @@ namespace swift {
 			storage_files_t	sfs_;
 			int single_fd_;
 			int64_t reserved_size_;
+			StorageFile *last_sf_;
 
 			int WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
 			std::pair<int64_t,int64_t> WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);

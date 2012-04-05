@@ -22,7 +22,7 @@ using namespace swift;
 const std::string Storage::MULTIFILE_PATHNAME = "META-INF-multifilespec.txt";
 const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 
-Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), spec_size_(0), single_fd_(-1), reserved_size_(-1)
+Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), ht_(NULL), spec_size_(0), single_fd_(-1), reserved_size_(-1), last_sf_(NULL)
 {
 	os_pathname_ = pathname;
 
@@ -145,12 +145,20 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 		// state_ == STOR_STATE_MFSPEC_COMPLETE;
 		//dprintf("%s %s storage: Write: complete\n", tintstr(), roothashhex().c_str());
 
-		StorageFile *sf = FindStorageFile(offset);
-		if (sf == NULL)
+		StorageFile *sf = NULL;
+		if (last_sf_ != NULL && offset >= last_sf_->GetStart() && offset <= last_sf_->GetEnd())
+			sf = last_sf_;
+		else
 		{
-			dprintf("%s %s storage: Write: File not found!\n", tintstr(), roothashhex().c_str());
-			errno = EINVAL;
-			return -1;
+			sf = FindStorageFile(offset);
+			if (sf == NULL)
+			{
+				dprintf("%s %s storage: Write: File not found!\n", tintstr(), roothashhex().c_str());
+				errno = EINVAL;
+				return -1;
+			}
+			fprintf(stderr,"*");
+			last_sf_ = sf;
 		}
 
 		std::pair<int64_t,int64_t> ht = WriteBuffer(sf,buf,nbyte,offset);
@@ -180,7 +188,7 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 
 int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset)
 {
-	dprintf("%s %s storage: WriteSpecPart: %s %d %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), nbyte, offset );
+	//dprintf("%s %s storage: WriteSpecPart: %s %d %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), nbyte, offset );
 
 	std::pair<int64_t,int64_t> ht = WriteBuffer(sf,buf,nbyte,offset);
 	if (ht.first == -1)
@@ -390,14 +398,21 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 	}
 	else
 	{
-		StorageFile *sf = FindStorageFile(offset);
-		if (sf == NULL)
+		StorageFile *sf = NULL;
+		if (last_sf_ != NULL && offset >= last_sf_->GetStart() && offset <= last_sf_->GetEnd())
+			sf = last_sf_;
+		else
 		{
-			errno = EINVAL;
-			return -1;
+			sf = FindStorageFile(offset);
+			if (sf == NULL)
+			{
+				errno = EINVAL;
+				return -1;
+			}
+			last_sf_ = sf;
+			fprintf(stderr,"*");
+			dprintf("%s %s storage: Read: Found file %s for off %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), offset );
 		}
-
-		//dprintf("%s %s storage: Read: Found file %s for off %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), offset );
 
 		ssize_t ret = sf->Read(buf,nbyte,offset - sf->GetStart());
 		if (ret < 0)
