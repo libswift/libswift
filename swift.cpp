@@ -22,13 +22,13 @@ using namespace swift;
 
 // Local prototypes
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
-int OpenSwiftFile(const TCHAR* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size);
-int OpenSwiftDirectory(const TCHAR* dirname, Address tracker, bool check_hashes, uint32_t chunk_size);
+int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size);
+int OpenSwiftDirectory(std::string dirname, Address tracker, bool check_hashes, uint32_t chunk_size);
 
 void ReportCallback(int fd, short event, void *arg);
 void EndCallback(int fd, short event, void *arg);
 void RescanDirCallback(int fd, short event, void *arg);
-int CreateMultifileSpec(char *specfilename, int argc, char *argv[], int argidx);
+int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int argidx);
 
 // Gateway stuff
 bool InstallHTTPGateway(struct event_base *evbase,Address addr,uint32_t chunk_size, double *maxspeed);
@@ -52,12 +52,14 @@ bool httpgw_enabled=false,cmdgw_enabled=false;
 bool do_nat_test = false;
 bool generate_multifile=false;
 
-char *scan_dirname = 0;
+std::string scan_dirname="";
 uint32_t chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;
 Address tracker;
 
 
-int main (int argc, char** argv)
+// UNICODE: TODO, convert to std::string carrying UTF-8 arguments. Problem is
+// a string based getopt_long type parser.
+int utf8main (int argc, char** argv)
 {
     static struct option long_options[] =
     {
@@ -84,8 +86,7 @@ int main (int argc, char** argv)
     };
 
     Sha1Hash root_hash;
-    char* filename = 0;
-    const char *destdir = 0, *trackerargstr = 0; // UNICODE?
+    std::string filename = "",destdir = "", trackerargstr= "";
     bool printurl=false;
     Address bindaddr;
     Address httpaddr;
@@ -127,7 +128,7 @@ int main (int argc, char** argv)
                 SetTracker(tracker);
                 break;
             case 'D':
-                Channel::debug_file = optarg ? fopen(optarg,"a") : stderr;
+                Channel::debug_file = optarg ? fopen_utf8(optarg,"a") : stderr;
                 break;
             // Arno hack: get opt diff Win32 doesn't allow -D without arg
             case 'B':
@@ -214,29 +215,17 @@ int main (int argc, char** argv)
 
 
 	// Change dir to destdir, if set, or to tempdir if HTTPGW
-#ifdef _WIN32
-	if (destdir == 0) {
+	if (destdir == "") {
 		if (httpgw_enabled) {
-    			std::string destdirstr = gettmpdir();
-    			!::SetCurrentDirectory(destdirstr.c_str());
-    		}
-	}
-	else
-		!::SetCurrentDirectory(destdir);
-	TCHAR szDirectory[MAX_PATH] = "";
-
-	!::GetCurrentDirectory(sizeof(szDirectory) - 1, szDirectory);
-	fprintf(stderr,"CWD %s\n",szDirectory);
-#else
-	if (destdir == 0) {
-		if (httpgw_enabled) {
-        	chdir(gettmpdir().c_str());
+			std::string dd = gettmpdir_utf8();
+			chdir_utf8(dd);
 		}
 	}
 	else
-		chdir(destdir);
-#endif
-      
+		chdir_utf8(destdir);
+	fprintf(stderr,"CWD %s\n",getcwd_utf8() );
+
+
     if (bindaddr!=Address()) { // seeding
         if (Listen(bindaddr)<=0)
             quit("cant listen to %s\n",bindaddr.str())
@@ -272,17 +261,15 @@ int main (int argc, char** argv)
 		int ret = -1;
 		if (!generate_multifile)
 		{
-			if (filename || root_hash != Sha1Hash::ZERO) {
+			if (filename != "" || root_hash != Sha1Hash::ZERO) {
 				// Single file
-				if (root_hash!=Sha1Hash::ZERO && !filename)
+				if (root_hash!=Sha1Hash::ZERO && filename == "")
 					filename = strdup(root_hash.hex().c_str());
 
 				single_fd = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size);
 				if (single_fd < 0)
 					quit("cannot open file %s",filename);
 				if (printurl) {
-					if (trackerargstr == NULL)
-						trackerargstr = "";
 					printf("tswift://%s/%s$%i\n", trackerargstr, RootMerkleHash(single_fd).hex().c_str(), chunk_size);
 
 					// Arno, 2012-01-04: LivingLab: Create checkpoint such that content
@@ -299,7 +286,7 @@ int main (int argc, char** argv)
 
 				ret = single_fd;
 			}
-			else if (scan_dirname != NULL)
+			else if (scan_dirname != "")
 				ret = OpenSwiftDirectory(scan_dirname,Address(),false,chunk_size);
 			else
 				ret = -1;
@@ -355,7 +342,7 @@ int main (int argc, char** argv)
 
 
 		// Arno:
-		if (scan_dirname != NULL) {
+		if (scan_dirname != "") {
 			evtimer_assign(&evrescan, Channel::evbase, RescanDirCallback, NULL);
 			evtimer_add(&evrescan, tint2tv(RESCAN_DIR_INTERVAL*TINT_SEC));
 		}
@@ -384,12 +371,10 @@ int main (int argc, char** argv)
 
 
 
-int OpenSwiftFile(const TCHAR* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size)
+int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size)
 {
-	std::string bfn;
-	bfn.assign(filename);
-	bfn.append(".mbinmap");
-	const char *binmap_filename = bfn.c_str();
+	std::string binmap_filename = filename;
+	binmap_filename.append(".mbinmap");
 
 	// Arno, 2012-01-03: Hack to discover root hash of a file on disk, such that
 	// we don't load it twice while rescanning a dir of content.
@@ -410,65 +395,36 @@ int OpenSwiftFile(const TCHAR* filename, const Sha1Hash& hash, Address tracker, 
 }
 
 
-int OpenSwiftDirectory(const TCHAR* dirname, Address tracker, bool check_hashes, uint32_t chunk_size)
+int OpenSwiftDirectory(std::string dirname, Address tracker, bool check_hashes, uint32_t chunk_size)
 {
-#ifdef _WIN32
-	HANDLE hFind;
-	WIN32_FIND_DATA FindFileData;
-
-	TCHAR pathsearch[MAX_PATH];
-	strcpy(pathsearch,dirname);
-	strcat(pathsearch,"\\*.*");
-	hFind = FindFirstFile(pathsearch, &FindFileData);
-	if(hFind != INVALID_HANDLE_VALUE) {
-	    do {
-	    	//fprintf(stderr,"swift: parsedir: %s\n", FindFileData.cFileName);
-	    	if ((FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 && !strstr(FindFileData.cFileName,".mhash") && !strstr(FindFileData.cFileName,".mbinmap") ) {
-				TCHAR path[MAX_PATH];
-				strcpy(path,dirname);
-				strcat(path,"\\");
-				strcat(path,FindFileData.cFileName);
-
-				int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,check_hashes,chunk_size);
-				if (fd >= 0)
-					Checkpoint(fd);
-	    	}
-	    } while(FindNextFile(hFind, &FindFileData));
-
-	    FindClose(hFind);
-	    return 1;
-	}
-	else
-		return -1;
-#else
-	DIR *dirp = opendir(dirname);
-	if (dirp == NULL)
+	DirEntry *de = opendir_utf8(dirname);
+	if (de == NULL)
 		return -1;
 
 	while(1)
 	{
-		struct dirent *de = readdir(dirp);
+		if (!(de->isdir_ || de->filename_.rfind(".mhash") == std::string::npos || de->filename_.rfind(".mbinmap") == std::string::npos))
+		{
+			// Not dir, or metafile
+			std::string path = dirname;
+			path.append(FILE_SEP);
+			path.append(de->filename_);
+			int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,check_hashes,chunk_size);
+			if (fd >= 0)
+				Checkpoint(fd);
+		}
+		DirEntry *newde = readdir_utf8(de);
+		delete de;
+		de = newde;
 		if (de == NULL)
 			break;
-		if ((de->d_type & DT_DIR) !=0 || strstr(de->d_name,".mhash") || strstr(de->d_name,".mbinmap"))
-			continue;
-		char path[PATH_MAX];
-		strcpy(path,dirname);
-		strcat(path,"/");
-		strcat(path,de->d_name);
-
-		int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,check_hashes,chunk_size);
-		if (fd >= 0)
-			Checkpoint(fd);
 	}
-	closedir(dirp);
 	return 1;
-#endif
 }
 
 
 
-int CleanSwiftDirectory(const TCHAR* dirname)
+int CleanSwiftDirectory(std::string dirname)
 {
 	std::set<int>	delset;
 	std::vector<FileTransfer*>::iterator iter;
@@ -477,14 +433,9 @@ int CleanSwiftDirectory(const TCHAR* dirname)
 		FileTransfer *ft = *iter;
 		if (ft != NULL) {
 			std::string filename = ft->GetStorage()->GetOSPathName();
-#ifdef WIN32
-			struct _stat buf;
-#else
-			struct stat buf;
-#endif
 			fprintf(stderr,"swift: clean: Checking %s\n", filename.c_str() );
-			int res = stat( filename.c_str(), &buf );
-			if( res < 0 && errno == ENOENT) {
+			int res = file_exists_utf8( filename );
+			if (res == 0) {
 				fprintf(stderr,"swift: clean: Missing %s\n", filename.c_str() );
 				delset.insert(ft->fd());
 			}
@@ -603,17 +554,17 @@ void RescanDirCallback(int fd, short event, void *arg) {
 
 // MULTIFILE
 typedef std::vector<std::pair<std::string,int64_t> >	filelist_t;
-int CreateMultifileSpec(char *specfilename, int argc, char *argv[], int argidx)
+int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int argidx)
 {
-	fprintf(stderr,"CreateMultiFileSpec: %s nfiles %d\n", specfilename, argc-argidx );
+	fprintf(stderr,"CreateMultiFileSpec: %s nfiles %d\n", specfilename.c_str(), argc-argidx );
 
 	filelist_t	filelist;
 
 	// 1. Make list of files
 	for (int i=argidx; i<argc; i++)
 	{
-		char *pathname = argv[i];
-		int64_t fsize = file_size_by_path(pathname);
+		std::string pathname = argv[i];
+		int64_t fsize = file_size_by_path_utf8(pathname);
 		if( fsize < 0)
 		{
 			print_error("cannot open file in multi-spec list");
@@ -664,7 +615,7 @@ int CreateMultifileSpec(char *specfilename, int argc, char *argv[], int argidx)
 	fprintf(stderr,"spec: <%s>\n", spec.str().c_str() );
 
 	// 6. Write to specfile
-	FILE *fp = fopen(specfilename,"wb");
+	FILE *fp = fopen_utf8(specfilename.c_str(),"wb");
 	int ret = fwrite(spec.str().c_str(),sizeof(char),spec.str().length(),fp);
 	if (ret < 0)
 		print_error("cannot write multi-file spec");
@@ -674,12 +625,36 @@ int CreateMultifileSpec(char *specfilename, int argc, char *argv[], int argidx)
 }
 
 
-
-
 #ifdef _WIN32
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
+
+// UTF-16 version of app entry point for console Windows-apps
+int wmain( int wargc, wchar_t *wargv[ ], wchar_t *envp[ ] )
 {
-    return main(__argc,__argv);
+	char **utf8args = (char **)malloc(wargc*sizeof(char *));
+	for (int i=0; i<wargc; i++)
+	{
+		std::string utf8c = utf16to8(wargv[i]);
+		utf8args[i] = strdup(utf8c.c_str());
+	}
+	return utf8main(wargc,utf8args);
 }
+
+// UTF-16 version of app entry point for non-console Windows apps
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
+{
+	int wargc=0;
+	LPWSTR* wargv = CommandLineToArgvW(pCmdLine, &wargc );
+    return wmain(wargc,wargv,NULL);
+}
+
+#else
+
+// UNIX version of app entry point for console apps
+int main(int argc, char *argv[])
+{
+	// TODO: Convert to UTF-8 if locale not UTF-8
+	return utf8main(argc,argv);
+}
+
 #endif
 

@@ -438,7 +438,7 @@ void    swift::Shutdown (int sock_des) {
     Channel::Shutdown();
 }
 
-int      swift::Open (const char* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size) {
+int      swift::Open (std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size) {
     FileTransfer* ft = new FileTransfer(filename, hash, check_hashes, chunk_size);
     if (ft && ft->fd()) {
 
@@ -548,7 +548,7 @@ int swift::Checkpoint(int transfer) {
 	std::string binmap_filename = ft->GetStorage()->GetOSPathName();
 	binmap_filename.append(".mbinmap");
 	//fprintf(stderr,"swift: checkpointing %s at %lli\n", binmap_filename.c_str(), Complete(transfer));
-	FILE *fp = fopen(binmap_filename.c_str(),"wb");
+	FILE *fp = fopen_utf8(binmap_filename.c_str(),"wb");
 	if (!fp) {
 		print_error("cannot open mbinmap for writing");
 		return -1;

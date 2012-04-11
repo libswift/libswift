@@ -26,7 +26,7 @@ Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), ht_(NULL), spe
 {
 	os_pathname_ = pathname;
 
-	int64_t fsize = file_size_by_path(pathname.c_str());
+	int64_t fsize = file_size_by_path_utf8(pathname.c_str());
 	if (fsize < 0 && errno == ENOENT)
 	{
 		// File does not exist, assume we're a client and all will be revealed
@@ -35,7 +35,7 @@ Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), ht_(NULL), spe
 	}
 
 	// File exists. Check first bytes to see if a multifile-spec
-	FILE *fp = fopen(pathname.c_str(),"rb");
+	FILE *fp = fopen_utf8(pathname.c_str(),"rb");
 	char readbuf[1024];
 	int ret = fread(readbuf,sizeof(char),MULTIFILE_PATHNAME.length(),fp);
 	fclose(fp);
@@ -289,7 +289,7 @@ StorageFile * Storage::FindStorageFile(int64_t offset)
 int64_t Storage::ParseSpec(StorageFile *sf)
 {
 	char *retstr = NULL,line[MULTIFILE_MAX_LINE+1];
-	FILE *fp = fopen(sf->GetSpecPathName().c_str(),"rb"); // FAXME decode UTF-8
+	FILE *fp = fopen_utf8(sf->GetSpecPathName().c_str(),"rb"); // FAXME decode UTF-8
 	if (fp == NULL)
 	{
 		print_error("cannot open multifile-spec");
@@ -368,7 +368,7 @@ int Storage::OpenSingleFile()
 {
 	state_ = STOR_STATE_SINGLE_FILE;
 
-	single_fd_ = open(os_pathname_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+	single_fd_ = open_utf8(os_pathname_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
 	if (single_fd_<0) {
 		single_fd_ = -1;
 		print_error("storage: cannot open single file");
@@ -459,7 +459,7 @@ int64_t Storage::GetReservedSize()
 	for (iter = sfs_.begin(); iter < sfs_.end(); iter++)
 	{
 		StorageFile *sf = *iter;
-		int64_t fsize = file_size_by_path( sf->GetSpecPathName().c_str() );
+		int64_t fsize = file_size_by_path_utf8( sf->GetSpecPathName().c_str() );
 		if( fsize < 0)
 		{
 			dprintf("%s %s storage: getsize: cannot stat file %s\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str() );
@@ -514,7 +514,7 @@ int Storage::ResizeReserved(int64_t size)
 std::string Storage::spec2ospn(std::string specpn)
 {
 	std::string dest = specpn;
-	// TODO: convert to UTF-8
+	// compat.h I/O layer does UTF-8 to OS encoding
 	if (MULTIFILE_PATHNAME_FILE_SEP != FILE_SEP)
 	{
 		// Replace OS filesep with spec
@@ -526,7 +526,7 @@ std::string Storage::spec2ospn(std::string specpn)
 std::string Storage::os2specpn(std::string ospn)
 {
 	std::string dest = ospn;
-	// TODO: convert to UTF-8
+	// compat.h I/O layer does OS to UTF-8 encoding
 	if (MULTIFILE_PATHNAME_FILE_SEP != FILE_SEP)
 	{
 		// Replace OS filesep with spec
@@ -563,23 +563,14 @@ StorageFile::StorageFile(std::string utf8path, int64_t start, int64_t size) : fd
 			if (i == std::string::npos)
 				 break;
 			std::string path = ospathname.substr(0,i);
-#ifdef WIN32
-			struct _stat statbuf;
-#else
-			struct stat statbuf;
-#endif
-			int ret = stat( path.c_str(), &statbuf );
-			if (ret < 0 && errno == ENOENT)
+			int ret = file_exists_utf8( path.c_str() );
+			if (ret <= 0)
 			{
-#ifdef WIN32
-				ret = _mkdir(path.c_str());
-#else
-				ret = mkdir(path.c_str(),S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-#endif
+				ret = mkdir_utf8(path.c_str());
 				if (ret < 0)
 					return;
 			}
-			else if (ret == 0 && !(statbuf.st_mode & S_IFDIR))
+			else if (ret == 1)
 			{
 				// Something already exists and it is not a dir
 				return;
@@ -589,7 +580,7 @@ StorageFile::StorageFile(std::string utf8path, int64_t start, int64_t size) : fd
 
 
 	// Open
-	fd_ = open(ospathname.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+	fd_ = open_utf8(ospathname.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
 	if (fd_<0) {
 		//print_error("storage: file: Could not open");
 		dprintf("%s %s storage: file: Could not open %s\n", tintstr(), "0000000000000000000000000000000000000000", ospathname.c_str() );

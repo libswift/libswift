@@ -107,7 +107,7 @@ public:
               std::string hash_filename=NULL, bool check_hashes=true, std::string binmap_filename=NULL);
     
     // Arno, 2012-01-03: Hack to quickly learn root hash from a checkpoint
-    HashTree (bool dummy, const char* binmap_filename);
+    HashTree (bool dummy, std::string binmap_filename);
 
     /** Offer a hash; returns true if it verified; false otherwise.
      Once it cannot be verified (no sibling or parent), the hash

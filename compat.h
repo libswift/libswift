@@ -52,10 +52,8 @@ typedef unsigned __int64 uint64_t;
 #endif
 
 #ifdef _WIN32
-#define open(a,b,c)    _open(a,b,c)
 #define strcasecmp	   stricmp
 #define strtok_r	   strtok_s
-#define stat(a,b)      _stat(a,b)
 #endif
 #ifndef S_IRUSR
 #define S_IRUSR _S_IREAD
@@ -109,6 +107,11 @@ typedef void* setsockoptptr_t;
 #define ssize_t		SSIZE_T
 #endif
 
+#ifdef _WIN32
+#define mode_t		int
+#endif
+
+
 
 #ifdef _WIN32
 #define OPENFLAGS         O_RDWR|O_CREAT|_O_BINARY
@@ -142,9 +145,54 @@ typedef int64_t tint;
 #endif
 
 
-#ifndef _WIN32
-#define TCHAR	char
+/*
+ * UNICODE
+ *
+ * All filenames, etc. are stored internally as UTF-8 encoded std::strings
+ * which are converted when used to UTF-16 (Windows) or the locale (UNIX).
+ */
+
+// Return UTF-16 representation of utf8str. Caller must free returned value.
+wchar_t* utf8to16(std::string utf8str);
+std::string utf16to8(wchar_t* utf16str);
+
+int open_utf8(const char *pathname, int flags, mode_t mode);
+
+FILE *fopen_utf8(const char *filename, const char *mode);
+
+// Returns OS temporary directory in UTF-8 encoding
+std::string gettmpdir_utf8(void);
+// Changes current working dir to dirname in UTF-8
+int chdir_utf8(std::string dirname);
+
+// Returns current working directory in UTF-8.
+std::string getcwd_utf8(void);
+
+// Returns the 64-bit size of a filename in UTF-8.
+int64_t file_size_by_path_utf8(std::string pathname);
+
+/* Returns -1 on error, 0 on non-existence, 1 on existence and being a non-dir, 2 on existence and being a dir */
+int file_exists_utf8(std::string pathname);
+
+int mkdir_utf8(std::string dirname);
+
+
+class DirEntry
+{
+  public:
+	DirEntry(std::string filename, bool isdir) : filename_(filename), isdir_(isdir) {}
+	std::string filename_;
+	bool isdir_;
+
+#ifdef _WIN32
+	HANDLE hFind_;
+#else
+	DIR *dirp_;
 #endif
+};
+
+DirEntry *opendir_utf8(std::string pathname);
+DirEntry *readdir_utf8(DirEntry *prevde);
 
 
 int64_t  file_size (int fd);
@@ -155,8 +203,6 @@ int     file_resize (int fd, int64_t new_size);
 
 void*   memory_map (int fd, size_t size=0);
 void    memory_unmap (int fd, void*, size_t size);
-
-int64_t file_size_by_path(const char *path);
 
 void    print_error (const char* msg);
 
@@ -171,8 +217,6 @@ size_t  pwrite(int fildes, const void *buf, size_t nbyte, __int64 offset);
 int     inet_aton(const char *cp, struct in_addr *inp);
 
 #endif
-
-std::string gettmpdir(void);
 
 tint    usec_time ();
 

@@ -17,6 +17,7 @@
 #include <sys/timeb.h>
 #include <vector>
 #include <stdexcept>
+#include <atlbase.h>
 #else
 #include <unistd.h>
 #include <sys/time.h>
@@ -58,22 +59,6 @@ int     file_resize (int fd, int64_t new_size) {
     else
     	return 0;
 #endif
-}
-
-
-int64_t file_size_by_path(const char *path) {
-	int ret = 0;
-#ifdef WIN32
-	struct __stat64 st;
-    ret = _stat64(path, &st);
-#else
-    struct stat st;
-    ret = stat(path, &st);
-#endif
-    if (ret < 0)
-    	return ret;
-    else
-    	return st.st_size;
 }
 
 
@@ -202,23 +187,230 @@ void LibraryInit(void)
 }
 
 
-std::string gettmpdir(void)
+/*
+ * UNICODE
+ */
+
+wchar_t* utf8to16(std::string utf8str)
+{
+	CA2W utf16obj(utf8str.c_str());
+
+	size_t utf16bytelen = wcslen(utf16obj.m_psz) * sizeof(wchar_t);
+	wchar_t *utf16str = (wchar_t *)malloc(utf16bytelen);
+	memcpy(utf16str,utf16obj.m_psz,utf16bytelen);
+	return utf16str;
+}
+
+std::string utf16to8(wchar_t* utf16str)
+{
+	CW2A utf8obj(utf16str, CP_UTF8);
+	return std::string(utf8obj.m_psz);
+}
+
+
+#ifdef _WIN32
+int open_utf8(const char *filename, int flags, mode_t mode)
+{
+	wchar_t *utf16fn = utf8to16(filename);
+	int ret = _wopen(utf16fn,flags,mode);
+	free(utf16fn);
+	return ret;
+}
+#else
+#define 	open_utf8	open	// TODO: UNIX with locale != UTF-8
+#endif
+
+
+
+#ifdef _WIN32
+FILE *fopen_utf8(const char *filename, const char *mode)
+{
+	wchar_t *utf16fn = utf8to16(filename);
+	wchar_t *utf16mode = utf8to16(mode);
+	FILE *fp = _wfopen(utf16fn,utf16mode);
+	free(utf16fn);
+	free(utf16mode);
+	return fp;
+}
+#else
+#define 	fopen_utf8	fopen	// TODO: UNIX with locale != UTF-8
+#endif
+
+
+
+
+int64_t file_size_by_path_utf8(std::string pathname) {
+	int ret = 0;
+#ifdef WIN32
+	struct __stat64 st;
+	wchar_t *utf16c = utf8to16(pathname);
+    ret = _wstat64(utf16c, &st);
+	free(utf16c);
+#else
+    struct stat st;
+    ret = stat(pathname.c_str(), &st);  // TODO: UNIX with locale != UTF-8
+#endif
+    if (ret < 0)
+    	return ret;
+    else
+    	return st.st_size;
+}
+
+int file_exists_utf8(std::string pathname)
+{
+	int ret = 0;
+#ifdef WIN32
+	struct __stat64 st;
+	wchar_t *utf16c = utf8to16(pathname);
+    ret = _wstat64(utf16c, &st);
+	free(utf16c);
+#else
+    struct stat st;
+    ret = stat(path, &st);
+#endif
+    if (ret < 0)
+    {
+    	if (errno == ENOENT)
+    		return 0;
+    	else
+    		return ret;
+    }
+    else if (st.st_mode & S_IFDIR)
+    	return 2;
+    else
+    	return 1;
+}
+
+
+int mkdir_utf8(std::string dirname)
+{
+#ifdef WIN32
+	wchar_t *utf16c = utf8to16(dirname);
+	int ret = _wmkdir(utf16c);
+	free(utf16c);
+#else
+	int ret = mkdir(dirname.c_str(),S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH); // TODO: UNIX with locale != UTF-8
+#endif
+	return ret;
+}
+
+
+DirEntry *opendir_utf8(std::string pathname)
 {
 #ifdef _WIN32
-  DWORD result = ::GetTempPath(0, _T(""));
-  if (result == 0)
-	throw std::runtime_error("Could not get system temp path");
+	HANDLE hFind;
+	WIN32_FIND_DATAW ffd;
 
-  std::vector<TCHAR> tempPath(result + 1);
-  result = ::GetTempPath(static_cast<DWORD>(tempPath.size()), &tempPath[0]);
-  if((result == 0) || (result >= tempPath.size()))
-	throw std::runtime_error("Could not get system temp path");
-
-  return std::string(tempPath.begin(), tempPath.begin() + static_cast<std::size_t>(result));
+	std::string pathsearch = pathname + "\\*.*";
+	wchar_t *pathsearch_utf16 = utf8to16(pathsearch);
+	hFind = FindFirstFileW(pathsearch_utf16, &ffd);
+	free(pathsearch_utf16);
+	if (hFind != INVALID_HANDLE_VALUE)
+	{
+		std::string utf8fn = utf16to8(ffd.cFileName);
+		DirEntry *de = new DirEntry(utf8fn,(bool)((ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0));
+		de->hFind_ = hFind;
+		return de;
+	}
+	else
+		return NULL;
 #else
-	  return std::string("/tmp/");
+	DIR *dirp = opendir( pathname.c_str() ); // TODO: UNIX with locale != UTF-8
+	if (dirp == NULL)
+		return NULL;
+	struct dirent *unixde = readdir(dirp);
+	if (unixde == NULL)
+		return NULL;
+	else
+	{
+		DirEntry *de = new DirEntry(unixde->d_name,(bool)(unixde->d_type & DT_DIR));
+		de->dirp_ = dirp;
+		return de;
+	}
 #endif
 }
+
+
+DirEntry *readdir_utf8(DirEntry *prevde)
+{
+#ifdef _WIN32
+	WIN32_FIND_DATAW ffd;
+	BOOL ret = FindNextFileW(prevde->hFind_, &ffd);
+	if (!ret)
+	{
+		FindClose(prevde->hFind_);
+		return NULL;
+	}
+	else
+	{
+		std::string utf8fn = utf16to8(ffd.cFileName);
+		DirEntry *de = new DirEntry(utf8fn,(bool)((ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0));
+		return de;
+	}
+#else
+	struct dirent *unixde = readdir(prevde->dirp_);
+	if (unixde == NULL)
+	{
+		closedir(prevde->dirp_);
+		return NULL;
+	}
+	else
+	{
+		DirEntry *de = new DirEntry(unixde->d_name,(bool)(unixde->d_type & DT_DIR));
+		return de;
+	}
+#endif
+}
+
+
+
+
+
+std::string gettmpdir_utf8(void)
+{
+#ifdef _WIN32
+	DWORD ret = 0;
+	wchar_t utf16c[MAX_PATH];
+	ret = GetTempPathW(MAX_PATH,utf16c);
+	if (ret == 0 || ret > MAX_PATH)
+	{
+		return "./";
+	}
+	else
+	{
+		return utf16to8(utf16c);
+	}
+#else
+	return "/tmp/";
+#endif
+}
+
+int chdir_utf8(std::string dirname)
+{
+#ifdef _WIN32
+	wchar_t *utf16c = utf8to16(dirname);
+	int ret = !::SetCurrentDirectoryW(utf16c);
+	free(utf16c);
+	return ret;
+#else
+	return chdir(dirname); // TODO: UNIX with locale != UTF-8
+#endif
+}
+
+
+std::string getcwd_utf8(void)
+{
+#ifdef _WIN32
+	wchar_t szDirectory[MAX_PATH];
+	!::GetCurrentDirectoryW(sizeof(szDirectory) - 1, szDirectory);
+	return utf16to8(szDirectory);
+#else
+	return getcwd();
+#endif
+}
+
+
+
 
 bool    make_socket_nonblocking(evutil_socket_t fd) {
 #ifdef _WIN32

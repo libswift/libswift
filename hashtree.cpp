@@ -88,13 +88,8 @@ chunk_size_(chunk_size)
 	// Arno: if user doesn't want to check hashes but no .mhash, check hashes anyway
 	bool actually_check_hashes = check_hashes;
     bool mhash_exists=true;
-#ifdef WIN32
-    struct _stat buf;
-#else
-    struct stat buf;
-#endif
-    int res = stat( hash_filename.c_str(), &buf );
-    if( res < 0 && errno == ENOENT)
+    int res = file_exists_utf8( hash_filename.c_str());
+    if( res <= 0)
     	mhash_exists = false;
     if (!mhash_exists && !check_hashes)
     	actually_check_hashes = true;
@@ -103,13 +98,13 @@ chunk_size_(chunk_size)
     // Arno: if the remainder of the hashtree state is on disk we can
     // hashcheck very quickly
     bool binmap_exists=true;
-    res = stat( binmap_filename.c_str(), &buf );
-    if( res < 0 && errno == ENOENT)
+    res = file_exists_utf8( binmap_filename.c_str() );
+    if( res <= 0)
     	binmap_exists = false;
 
     fprintf(stderr,"hashtree: hashchecking want %s do %s binmap-on-disk %s\n", (check_hashes ? "yes" : "no"), (actually_check_hashes? "yes" : "no"), (binmap_exists? "yes" : "no") );
 
-    hash_fd_ = open(hash_filename.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+    hash_fd_ = open_utf8(hash_filename.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (hash_fd_<0) {
         hash_fd_ = 0;
         print_error("cannot open hash file");
@@ -125,7 +120,7 @@ chunk_size_(chunk_size)
     } else if (mhash_exists && binmap_exists && file_size(hash_fd_)) {
     	// Arno: recreate hash tree without rereading content
     	dprintf("%s hashtree read from checkpoint\n",tintstr());
-    	FILE *fp = fopen(binmap_filename.c_str(),"rb");
+    	FILE *fp = fopen_utf8(binmap_filename.c_str(),"rb");
     	if (!fp) {
     		 print_error("hashtree: cannot open .mbinmap file");
     		 return;
@@ -144,12 +139,12 @@ chunk_size_(chunk_size)
 }
 
 
-HashTree::HashTree(bool dummy, const char* binmap_filename) :
+HashTree::HashTree(bool dummy, std::string binmap_filename) :
 root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), hash_fd_(0),
 filename_(""), size_(0), sizec_(0), complete_(0), completec_(0),
 chunk_size_(0)
 {
-	FILE *fp = fopen(binmap_filename,"rb");
+	FILE *fp = fopen_utf8(binmap_filename.c_str(),"rb");
 	if (!fp) {
 		 return;
 	}
