@@ -156,12 +156,15 @@ typedef int64_t tint;
 wchar_t* utf8to16(std::string utf8str);
 std::string utf16to8(wchar_t* utf16str);
 
+// open with filename in UTF-8
 int open_utf8(const char *pathname, int flags, mode_t mode);
 
+// fopen with filename in UTF-8
 FILE *fopen_utf8(const char *filename, const char *mode);
 
 // Returns OS temporary directory in UTF-8 encoding
 std::string gettmpdir_utf8(void);
+
 // Changes current working dir to dirname in UTF-8
 int chdir_utf8(std::string dirname);
 
@@ -174,9 +177,10 @@ int64_t file_size_by_path_utf8(std::string pathname);
 /* Returns -1 on error, 0 on non-existence, 1 on existence and being a non-dir, 2 on existence and being a dir */
 int file_exists_utf8(std::string pathname);
 
+// mkdir with filename in UTF-8
 int mkdir_utf8(std::string dirname);
 
-
+// opendir() + readdir() UTF-8 versions
 class DirEntry
 {
   public:
@@ -191,9 +195,16 @@ class DirEntry
 #endif
 };
 
+// Returns NULL on error.
 DirEntry *opendir_utf8(std::string pathname);
+
+// Returns NULL on error, last entry. Automatically does closedir()
 DirEntry *readdir_utf8(DirEntry *prevde);
 
+
+/*
+ * Other filename-less functions
+ */
 
 int64_t  file_size (int fd);
 

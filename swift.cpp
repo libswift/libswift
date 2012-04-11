@@ -391,12 +391,12 @@ int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, b
 	int fd = swift::Find(ht->root_hash());
 	if (fd == -1) {
 		if (!quiet)
-			fprintf(stderr,"swift: parsedir: Opening %s\n", filename);
+			fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
 
 		fd = swift::Open(filename,hash,tracker,check_hashes,chunk_size);
 	}
 	else if (!quiet)
-		fprintf(stderr,"swift: parsedir: Ignoring loaded %s\n", filename);
+		fprintf(stderr,"swift: parsedir: Ignoring loaded %s\n", filename.c_str() );
 	return fd;
 }
 
