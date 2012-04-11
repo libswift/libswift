@@ -222,34 +222,34 @@ std::string utf16to8(wchar_t* utf16str)
 }
 
 
-#ifdef _WIN32
+
 int open_utf8(const char *filename, int flags, mode_t mode)
 {
-	wchar_t *utf16fn = utf8to16(filename);
+#ifdef _WIN32
+        wchar_t *utf16fn = utf8to16(filename);
 	int ret = _wopen(utf16fn,flags,mode);
 	free(utf16fn);
 	return ret;
-}
 #else
-#define 	open_utf8	open	// TODO: UNIX with locale != UTF-8
+	return open(filename,flags,mode); // TODO: UNIX with locale != UTF-8
 #endif
+}
+  
 
-
-
-#ifdef _WIN32
 FILE *fopen_utf8(const char *filename, const char *mode)
 {
-	wchar_t *utf16fn = utf8to16(filename);
+#ifdef _WIN32
+        wchar_t *utf16fn = utf8to16(filename);
 	wchar_t *utf16mode = utf8to16(mode);
 	FILE *fp = _wfopen(utf16fn,utf16mode);
 	free(utf16fn);
 	free(utf16mode);
 	return fp;
-}
 #else
-#define 	fopen_utf8	fopen	// TODO: UNIX with locale != UTF-8
+	return fopen(filename,mode);	// TODO: UNIX with locale != UTF-8
 #endif
-
+}
+  
 
 
 
@@ -280,7 +280,7 @@ int file_exists_utf8(std::string pathname)
 	free(utf16c);
 #else
     struct stat st;
-    ret = stat(path, &st);
+    ret = stat(pathname.c_str(), &st); // TODO: UNIX with locale != UTF-8
 #endif
     if (ret < 0)
     {
@@ -409,7 +409,7 @@ int chdir_utf8(std::string dirname)
 	free(utf16c);
 	return ret;
 #else
-	return chdir(dirname); // TODO: UNIX with locale != UTF-8
+	return chdir(dirname.c_str()); // TODO: UNIX with locale != UTF-8
 #endif
 }
 
@@ -421,7 +421,10 @@ std::string getcwd_utf8(void)
 	!::GetCurrentDirectoryW(sizeof(szDirectory) - 1, szDirectory);
 	return utf16to8(szDirectory);
 #else
-	return getcwd();
+        char *cwd = getcwd(NULL,0);
+        std::string cwdstr(cwd);
+        free(cwd);
+  	return cwdstr;
 #endif
 }
 
