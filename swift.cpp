@@ -274,9 +274,9 @@ int utf8main (int argc, char** argv)
 
 				single_fd = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size);
 				if (single_fd < 0)
-					quit("cannot open file %s",filename);
+					quit("cannot open file %s",filename.c_str());
 				if (printurl) {
-					printf("tswift://%s/%s$%i\n", trackerargstr, RootMerkleHash(single_fd).hex().c_str(), chunk_size);
+					printf("tswift://%s/%s$%i\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str(), chunk_size);
 
 					// Arno, 2012-01-04: LivingLab: Create checkpoint such that content
 					// can be copied to scanned dir and quickly loaded
