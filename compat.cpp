@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 #endif
+#include <iostream>
 
 namespace swift {
 
@@ -191,18 +192,23 @@ void LibraryInit(void)
  * UNICODE
  */
 
+
 wchar_t* utf8to16(std::string utf8str)
 {
-	CA2W utf16obj(utf8str.c_str());
+	CA2W utf16obj(utf8str.c_str(), CP_UTF8);
 
-	size_t utf16bytelen = wcslen(utf16obj.m_psz) * sizeof(wchar_t);
+	size_t utf16bytelen = (wcslen(utf16obj.m_psz)+1) * sizeof(wchar_t);
 	wchar_t *utf16str = (wchar_t *)malloc(utf16bytelen);
-	memcpy(utf16str,utf16obj.m_psz,utf16bytelen);
+	wcscpy(utf16str,utf16obj.m_psz);
+	
+	std::wcerr << "utf8to16: return <" << utf16str << ">" << std::endl;
+
 	return utf16str;
 }
 
 std::string utf16to8(wchar_t* utf16str)
 {
+	std::wcerr << "utf16to8: in " << utf16str << std::endl;
 	CW2A utf8obj(utf16str, CP_UTF8);
 	return std::string(utf8obj.m_psz);
 }

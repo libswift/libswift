@@ -61,6 +61,12 @@ Address tracker;
 // a string based getopt_long type parser.
 int utf8main (int argc, char** argv)
 {
+	for (int j=0; j<argc; j++)
+	{
+		fprintf(stderr,"ARGV%d %s\n", j, argv[j] );
+	}
+
+
     static struct option long_options[] =
     {
         {"hash",    required_argument, 0, 'h'},
@@ -223,7 +229,7 @@ int utf8main (int argc, char** argv)
 	}
 	else
 		chdir_utf8(destdir);
-	fprintf(stderr,"CWD %s\n",getcwd_utf8() );
+	fprintf(stderr,"CWD %s\n",getcwd_utf8().c_str() );
 
 
     if (bindaddr!=Address()) { // seeding
@@ -633,8 +639,19 @@ int wmain( int wargc, wchar_t *wargv[ ], wchar_t *envp[ ] )
 	char **utf8args = (char **)malloc(wargc*sizeof(char *));
 	for (int i=0; i<wargc; i++)
 	{
+		//fwprintf(stderr,L"wmain: argv %S\n", wargv[i]);
+
+		std::wcerr << "wmain: orig " << wargv[i] << std::endl;
+
 		std::string utf8c = utf16to8(wargv[i]);
+		wchar_t *back = utf8to16(utf8c);
+
+		std::wcerr << "wmain: back " << back << std::endl;
+
 		utf8args[i] = strdup(utf8c.c_str());
+
+		std::wcerr << std::endl << std::endl;
+
 	}
 	return utf8main(wargc,utf8args);
 }
@@ -643,6 +660,7 @@ int wmain( int wargc, wchar_t *wargv[ ], wchar_t *envp[ ] )
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
 	int wargc=0;
+	fprintf(stderr,"wWinMain: enter\n");
 	LPWSTR* wargv = CommandLineToArgvW(pCmdLine, &wargc );
     return wmain(wargc,wargv,NULL);
 }
