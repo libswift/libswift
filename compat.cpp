@@ -195,6 +195,7 @@ void LibraryInit(void)
 
 wchar_t* utf8to16(std::string utf8str)
 {
+#ifdef _WIN32
 	CA2W utf16obj(utf8str.c_str(), CP_UTF8);
 
 	size_t utf16bytelen = (wcslen(utf16obj.m_psz)+1) * sizeof(wchar_t);
@@ -204,13 +205,20 @@ wchar_t* utf8to16(std::string utf8str)
 	std::wcerr << "utf8to16: return <" << utf16str << ">" << std::endl;
 
 	return utf16str;
+#else
+	return NULL;
+#endif
 }
 
 std::string utf16to8(wchar_t* utf16str)
 {
+#ifdef _WIN32
 	std::wcerr << "utf16to8: in " << utf16str << std::endl;
 	CW2A utf8obj(utf16str, CP_UTF8);
 	return std::string(utf8obj.m_psz);
+#else
+	return "(nul)";
+#endif
 }
 
 
