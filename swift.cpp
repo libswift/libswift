@@ -409,7 +409,7 @@ int OpenSwiftDirectory(std::string dirname, Address tracker, bool check_hashes, 
 
 	while(1)
 	{
-		if (!(de->isdir_ || de->filename_.rfind(".mhash") == std::string::npos || de->filename_.rfind(".mbinmap") == std::string::npos))
+		if (!(de->isdir_ || de->filename_.rfind(".mhash") != std::string::npos || de->filename_.rfind(".mbinmap") != std::string::npos))
 		{
 			// Not dir, or metafile
 			std::string path = dirname;
@@ -419,6 +419,7 @@ int OpenSwiftDirectory(std::string dirname, Address tracker, bool check_hashes, 
 			if (fd >= 0)
 				Checkpoint(fd);
 		}
+
 		DirEntry *newde = readdir_utf8(de);
 		delete de;
 		de = newde;

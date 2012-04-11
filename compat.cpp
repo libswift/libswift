@@ -351,6 +351,7 @@ DirEntry *readdir_utf8(DirEntry *prevde)
 	{
 		std::string utf8fn = utf16to8(ffd.cFileName);
 		DirEntry *de = new DirEntry(utf8fn,(bool)((ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0));
+		de->hFind_ = prevde->hFind_;
 		return de;
 	}
 #else
@@ -363,6 +364,7 @@ DirEntry *readdir_utf8(DirEntry *prevde)
 	else
 	{
 		DirEntry *de = new DirEntry(unixde->d_name,(bool)(unixde->d_type & DT_DIR));
+		de->dirp_ = prevde->dirp_;
 		return de;
 	}
 #endif
