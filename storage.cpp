@@ -22,11 +22,11 @@ using namespace swift;
 const std::string Storage::MULTIFILE_PATHNAME = "META-INF-multifilespec.txt";
 const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 
-Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), ht_(NULL), spec_size_(0), single_fd_(-1), reserved_size_(-1), last_sf_(NULL)
+Storage::Storage(std::string ospathname) : state_(STOR_STATE_INIT), ht_(NULL), spec_size_(0), single_fd_(-1), reserved_size_(-1), last_sf_(NULL)
 {
-	os_pathname_ = pathname;
+	os_pathname_ = ospathname;
 
-	int64_t fsize = file_size_by_path_utf8(pathname.c_str());
+	int64_t fsize = file_size_by_path_utf8(ospathname.c_str());
 	if (fsize < 0 && errno == ENOENT)
 	{
 		// File does not exist, assume we're a client and all will be revealed
@@ -35,7 +35,7 @@ Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), ht_(NULL), spe
 	}
 
 	// File exists. Check first bytes to see if a multifile-spec
-	FILE *fp = fopen_utf8(pathname.c_str(),"rb");
+	FILE *fp = fopen_utf8(ospathname.c_str(),"rb");
 	char readbuf[1024];
 	int ret = fread(readbuf,sizeof(char),MULTIFILE_PATHNAME.length(),fp);
 	fclose(fp);
@@ -49,7 +49,7 @@ Storage::Storage(std::string pathname) : state_(STOR_STATE_INIT), ht_(NULL), spe
 
 		dprintf("%s %s storage: Found multifile-spec, will seed it.\n", tintstr(), roothashhex().c_str() );
 
-		StorageFile *sf = new StorageFile(pathname,0,fsize);
+		StorageFile *sf = new StorageFile(ospathname,0,fsize,ospathname);
 		sfs_.push_back(sf);
 		if (ParseSpec(sf) < 0)
 			print_error("storage: error parsing multi-file spec");
@@ -115,7 +115,7 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 			//dprintf("%s %s storage: Write: multifile: specsize %lld\n", tintstr(), roothashhex().c_str(), spec_size_ );
 
 			// Create StorageFile for multi-file spec.
-			StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME.c_str(),0,spec_size_);
+			StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,spec_size_,MULTIFILE_PATHNAME);
 			sfs_.push_back(sf);
 
 			// Write all, or part of spec and set state_
@@ -289,7 +289,7 @@ StorageFile * Storage::FindStorageFile(int64_t offset)
 int64_t Storage::ParseSpec(StorageFile *sf)
 {
 	char *retstr = NULL,line[MULTIFILE_MAX_LINE+1];
-	FILE *fp = fopen_utf8(sf->GetSpecPathName().c_str(),"rb"); // FAXME decode UTF-8
+	FILE *fp = fopen_utf8(sf->GetOSPathName().c_str(),"rb");
 	if (fp == NULL)
 	{
 		print_error("cannot open multifile-spec");
@@ -341,7 +341,12 @@ int64_t Storage::ParseSpec(StorageFile *sf)
 		}
 		else
 		{
-			StorageFile *sf = new StorageFile(specpath,offset,fsize);
+			// Convert specname to OS name
+			// The entries are assumed to be in the same dir as the multi-file spec.
+			std::string ospath = dirname_utf8(os_pathname_);
+			ospath += Storage::spec2ospn(specpath);
+
+			StorageFile *sf = new StorageFile(specpath,offset,fsize,ospath);
 			sfs_.push_back(sf);
 			offset += fsize;
 		}
@@ -459,17 +464,21 @@ int64_t Storage::GetReservedSize()
 	for (iter = sfs_.begin(); iter < sfs_.end(); iter++)
 	{
 		StorageFile *sf = *iter;
-		int64_t fsize = file_size_by_path_utf8( sf->GetSpecPathName().c_str() );
+
+		fprintf(stderr,"storage: getsize: statting %s\n", sf->GetOSPathName().c_str() );
+
+		int64_t fsize = file_size_by_path_utf8( sf->GetOSPathName().c_str() );
 		if( fsize < 0)
 		{
-			dprintf("%s %s storage: getsize: cannot stat file %s\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str() );
+			dprintf("%s %s storage: getsize: cannot stat file %s\n", tintstr(), roothashhex().c_str(), sf->GetOSPathName().c_str() );
 			return fsize;
 		}
 		else
 			totaldisksize += fsize;
 	}
 
-	fprintf(stderr,"storage: total currently on disk %lld\n", totaldisksize );
+	fprintf(stderr,"storage: getsize: total is %lld\n", totaldisksize );
+
 	return totaldisksize;
 }
 
@@ -558,26 +567,24 @@ std::string Storage::os2specpn(std::string ospn)
 
 
 
-StorageFile::StorageFile(std::string utf8path, int64_t start, int64_t size) : fd_(-1)
+StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std::string ospath) : fd_(-1)
 {
-	spec_pathname_ = utf8path;
+	spec_pathname_ = specpath;
 	start_ = start;
 	end_ = start+size-1;
+	os_pathname_ = ospath;
 
-	// Convert specname to OS name
-	std::string ospathname = Storage::spec2ospn(spec_pathname_);
-
-	// Handle subdirs
-	if (start_ != 0 && ospathname.find(FILE_SEP,0) != std::string::npos)
+	// Handle subdirs, if not multifilespec.txt
+	if (start_ != 0 && os_pathname_.find(FILE_SEP,0) != std::string::npos)
 	{
 		// Path contains dirs, make them
 		size_t i = 0;
 		while(true)
 		{
-			i = ospathname.find(FILE_SEP,i+1);
+			i = os_pathname_.find(FILE_SEP,i+1);
 			if (i == std::string::npos)
 				 break;
-			std::string path = ospathname.substr(0,i);
+			std::string path = os_pathname_.substr(0,i);
 			int ret = file_exists_utf8( path.c_str() );
 			if (ret <= 0)
 			{
@@ -595,10 +602,10 @@ StorageFile::StorageFile(std::string utf8path, int64_t start, int64_t size) : fd
 
 
 	// Open
-	fd_ = open_utf8(ospathname.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+	fd_ = open_utf8(os_pathname_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
 	if (fd_<0) {
 		//print_error("storage: file: Could not open");
-		dprintf("%s %s storage: file: Could not open %s\n", tintstr(), "0000000000000000000000000000000000000000", ospathname.c_str() );
+		dprintf("%s %s storage: file: Could not open %s\n", tintstr(), "0000000000000000000000000000000000000000", os_pathname_.c_str() );
         return;
 	}
 }

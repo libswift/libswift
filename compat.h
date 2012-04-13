@@ -202,6 +202,8 @@ DirEntry *opendir_utf8(std::string pathname);
 DirEntry *readdir_utf8(DirEntry *prevde);
 
 
+std::string dirname_utf8(std::string pathname);
+
 /*
  * Other filename-less functions
  */

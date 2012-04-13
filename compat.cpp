@@ -429,6 +429,17 @@ std::string getcwd_utf8(void)
 }
 
 
+std::string dirname_utf8(std::string pathname)
+{
+	int idx = pathname.rfind(FILE_SEP);
+	if (idx != std::string::npos)
+	{
+		return pathname.substr(0,idx+1);
+	}
+	else
+		return "";
+}
+
 
 
 bool    make_socket_nonblocking(evutil_socket_t fd) {

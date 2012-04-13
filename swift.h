@@ -693,18 +693,20 @@ namespace swift {
     class StorageFile
     {
        public:
-    	 StorageFile(std::string utf8pathstr, int64_t start, int64_t size);
+    	 StorageFile(std::string specpath, int64_t start, int64_t size, std::string ospath);
     	 ~StorageFile();
     	 int64_t GetStart() { return start_; }
     	 int64_t GetEnd() { return end_; }
     	 int64_t GetSize() { return end_+1-start_; }
     	 std::string GetSpecPathName() { return spec_pathname_; }
+    	 std::string GetOSPathName() { return os_pathname_; }
     	 ssize_t  Write(const void *buf, size_t nbyte, int64_t offset) { return pwrite(fd_,buf,nbyte,offset); }
     	 ssize_t  Read(void *buf, size_t nbyte, int64_t offset) {  return pread(fd_,buf,nbyte,offset); }
     	 int ResizeReserved() { return file_resize(fd_,GetSize()); }
 
        protected:
     	 std::string spec_pathname_;
+    	 std::string os_pathname_;
     	 int64_t	start_;
     	 int64_t	end_;
 
