@@ -585,16 +585,27 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
 			if (i == std::string::npos)
 				 break;
 			std::string path = os_pathname_.substr(0,i);
+#ifdef _WIN32
+			if (path.size() == 2 && path[1] == ':')
+				// Windows drive spec, ignore
+				continue;
+#endif
 			int ret = file_exists_utf8( path.c_str() );
 			if (ret <= 0)
 			{
 				ret = mkdir_utf8(path.c_str());
+
+				fprintf(stderr,"StorageFile: mkdir %s returns %d\n", path.c_str(), ret );
+
 				if (ret < 0)
 					return;
 			}
 			else if (ret == 1)
 			{
 				// Something already exists and it is not a dir
+
+				fprintf(stderr,"StorageFile: exists %s but is not dir %d\n", path.c_str(), ret );
+
 				return;
 			}
 		}
