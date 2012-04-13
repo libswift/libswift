@@ -22,6 +22,7 @@ using namespace swift;
 
 // Local prototypes
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
+int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, double *maxspeed);
 int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size);
 int OpenSwiftDirectory(std::string dirname, Address tracker, bool check_hashes, uint32_t chunk_size);
 
@@ -268,29 +269,9 @@ int utf8main (int argc, char** argv)
 		if (!generate_multifile)
 		{
 			if (filename != "" || root_hash != Sha1Hash::ZERO) {
+
 				// Single file
-				if (root_hash!=Sha1Hash::ZERO && filename == "")
-					filename = strdup(root_hash.hex().c_str());
-
-				single_fd = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size);
-				if (single_fd < 0)
-					quit("cannot open file %s",filename.c_str());
-				if (printurl) {
-					printf("tswift://%s/%s$%i\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str(), chunk_size);
-
-					// Arno, 2012-01-04: LivingLab: Create checkpoint such that content
-					// can be copied to scanned dir and quickly loaded
-					swift::Checkpoint(single_fd);
-				}
-				else
-					printf("Root hash: %s\n", RootMerkleHash(single_fd).hex().c_str());
-
-				// RATELIMIT
-				FileTransfer *ft = FileTransfer::file(single_fd);
-				ft->SetMaxSpeed(DDIR_DOWNLOAD,maxspeed[DDIR_DOWNLOAD]);
-				ft->SetMaxSpeed(DDIR_UPLOAD,maxspeed[DDIR_UPLOAD]);
-
-				ret = single_fd;
+				ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,maxspeed);
 			}
 			else if (scan_dirname != "")
 				ret = OpenSwiftDirectory(scan_dirname,Address(),false,chunk_size);
@@ -302,6 +283,11 @@ int utf8main (int argc, char** argv)
 			// MULTIFILE
 			// Generate multi-file spec
 			ret = CreateMultifileSpec(filename,argc,argv,optind); //optind is global var points to first non-opt cmd line argument
+			if (ret < 0)
+				quit("Cannot generate multi-file spec")
+			else
+				// Calc roothash
+				ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,maxspeed);
 		}
 
 		// No file/dir nor HTTP gateway nor CMD gateway, will never know what to swarm
@@ -375,6 +361,35 @@ int utf8main (int argc, char** argv)
     return 0;
 }
 
+
+int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, double *maxspeed)
+{
+	if (root_hash!=Sha1Hash::ZERO && filename == "")
+		filename = strdup(root_hash.hex().c_str());
+
+	single_fd = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size);
+	if (single_fd < 0)
+		quit("cannot open file %s",filename.c_str());
+	if (printurl) {
+		if (chunk_size == SWIFT_DEFAULT_CHUNK_SIZE)
+			printf("tswift://%s/%s\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str());
+		else
+			printf("tswift://%s/%s$%i\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str(), chunk_size);
+
+		// Arno, 2012-01-04: LivingLab: Create checkpoint such that content
+		// can be copied to scanned dir and quickly loaded
+		swift::Checkpoint(single_fd);
+	}
+	else
+		printf("Root hash: %s\n", RootMerkleHash(single_fd).hex().c_str());
+
+	// RATELIMIT
+	FileTransfer *ft = FileTransfer::file(single_fd);
+	ft->SetMaxSpeed(DDIR_DOWNLOAD,maxspeed[DDIR_DOWNLOAD]);
+	ft->SetMaxSpeed(DDIR_UPLOAD,maxspeed[DDIR_UPLOAD]);
+
+	return single_fd;
+}
 
 
 int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size)
@@ -567,6 +582,10 @@ int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int ar
 
 	filelist_t	filelist;
 
+
+	// MULTIFILE TODO: if arg is a directory, include all files
+
+
 	// 1. Make list of files
 	for (int i=argidx; i<argc; i++)
 	{
@@ -640,19 +659,9 @@ int wmain( int wargc, wchar_t *wargv[ ], wchar_t *envp[ ] )
 	char **utf8args = (char **)malloc(wargc*sizeof(char *));
 	for (int i=0; i<wargc; i++)
 	{
-		//fwprintf(stderr,L"wmain: argv %S\n", wargv[i]);
-
-		std::wcerr << "wmain: orig " << wargv[i] << std::endl;
-
+		//std::wcerr << "wmain: orig " << wargv[i] << std::endl;
 		std::string utf8c = utf16to8(wargv[i]);
-		wchar_t *back = utf8to16(utf8c);
-
-		std::wcerr << "wmain: back " << back << std::endl;
-
 		utf8args[i] = strdup(utf8c.c_str());
-
-		std::wcerr << std::endl << std::endl;
-
 	}
 	return utf8main(wargc,utf8args);
 }

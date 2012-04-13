@@ -112,7 +112,7 @@ chunk_size_(chunk_size)
     }
 
     // Arno: if user wants to or no .mhash, and if root hash unknown (new file) and no checkpoint, (re)calc root hash
-    if (storage_->GetReservedSize() > 0 && (actually_check_hashes || (root_hash_==Sha1Hash::ZERO && !binmap_exists) || !mhash_exists) ) {
+    if (storage_->GetReservedSize() > storage_->GetMinimalReservedSize() && (actually_check_hashes || (root_hash_==Sha1Hash::ZERO && !binmap_exists) || !mhash_exists) ) {
     	// fresh submit, hash it
     	dprintf("%s hashtree full compute\n",tintstr());
         //assert(storage_->GetReservedSize());

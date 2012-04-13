@@ -768,6 +768,9 @@ namespace swift {
 		/** Size reserved for storage */
 		int64_t GetReservedSize();
 
+		/** 0 for single file, spec size for multi-file */
+		int64_t GetMinimalReservedSize();
+
 		/** Change size reserved for storage */
 		int ResizeReserved(int64_t size);
 

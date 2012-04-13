@@ -469,7 +469,22 @@ int64_t Storage::GetReservedSize()
 			totaldisksize += fsize;
 	}
 
+	fprintf(stderr,"storage: total currently on disk %lld\n", totaldisksize );
 	return totaldisksize;
+}
+
+
+int64_t Storage::GetMinimalReservedSize()
+{
+	if (state_ == STOR_STATE_SINGLE_FILE)
+	{
+		return 0;
+	}
+	else if (state_ != STOR_STATE_MFSPEC_COMPLETE)
+		return -1;
+
+	StorageFile *sf = sfs_[0];
+	return sf->GetSize();
 }
 
 
@@ -553,7 +568,7 @@ StorageFile::StorageFile(std::string utf8path, int64_t start, int64_t size) : fd
 	std::string ospathname = Storage::spec2ospn(spec_pathname_);
 
 	// Handle subdirs
-	if (ospathname.find(FILE_SEP,0) != std::string::npos)
+	if (start_ != 0 && ospathname.find(FILE_SEP,0) != std::string::npos)
 	{
 		// Path contains dirs, make them
 		size_t i = 0;
