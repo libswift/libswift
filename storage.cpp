@@ -22,10 +22,10 @@ using namespace swift;
 const std::string Storage::MULTIFILE_PATHNAME = "META-INF-multifilespec.txt";
 const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 
-Storage::Storage(std::string ospathname) : state_(STOR_STATE_INIT), ht_(NULL), spec_size_(0), single_fd_(-1), reserved_size_(-1), last_sf_(NULL)
+Storage::Storage(std::string ospathname, std::string destdir) : state_(STOR_STATE_INIT),
+		os_pathname_(ospathname), destdir_(destdir), ht_(NULL), spec_size_(0),
+		single_fd_(-1), reserved_size_(-1), last_sf_(NULL)
 {
-	os_pathname_ = ospathname;
-
 	int64_t fsize = file_size_by_path_utf8(ospathname.c_str());
 	if (fsize < 0 && errno == ENOENT)
 	{
@@ -49,7 +49,7 @@ Storage::Storage(std::string ospathname) : state_(STOR_STATE_INIT), ht_(NULL), s
 
 		dprintf("%s %s storage: Found multifile-spec, will seed it.\n", tintstr(), roothashhex().c_str() );
 
-		StorageFile *sf = new StorageFile(ospathname,0,fsize,ospathname);
+		StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,fsize,ospathname);
 		sfs_.push_back(sf);
 		if (ParseSpec(sf) < 0)
 			print_error("storage: error parsing multi-file spec");
@@ -115,7 +115,8 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 			//dprintf("%s %s storage: Write: multifile: specsize %lld\n", tintstr(), roothashhex().c_str(), spec_size_ );
 
 			// Create StorageFile for multi-file spec.
-			StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,spec_size_,MULTIFILE_PATHNAME);
+			std::string ospath = destdir_+FILE_SEP+MULTIFILE_PATHNAME;
+			StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,spec_size_,ospath);
 			sfs_.push_back(sf);
 
 			// Write all, or part of spec and set state_
@@ -342,8 +343,7 @@ int64_t Storage::ParseSpec(StorageFile *sf)
 		else
 		{
 			// Convert specname to OS name
-			// The entries are assumed to be in the same dir as the multi-file spec.
-			std::string ospath = dirname_utf8(os_pathname_);
+			std::string ospath = destdir_+FILE_SEP;
 			ospath += Storage::spec2ospn(specpath);
 
 			StorageFile *sf = new StorageFile(specpath,offset,fsize,ospath);
@@ -574,17 +574,26 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
 	end_ = start+size-1;
 	os_pathname_ = ospath;
 
+	fprintf(stderr,"StorageFile: os_pathname_ is %s\n", os_pathname_.c_str() );
+
+	std::string normospath = os_pathname_;
+#ifdef _WIN32
+	swift::stringreplace(normospath,"\\\\","\\");
+#else
+	swift::stringreplace(normospath,"//","/");
+#endif
+
 	// Handle subdirs, if not multifilespec.txt
-	if (start_ != 0 && os_pathname_.find(FILE_SEP,0) != std::string::npos)
+	if (start_ != 0 && normospath.find(FILE_SEP,0) != std::string::npos)
 	{
 		// Path contains dirs, make them
 		size_t i = 0;
-		while(true)
+		while (true)
 		{
-			i = os_pathname_.find(FILE_SEP,i+1);
+			i = normospath.find(FILE_SEP,i+1);
 			if (i == std::string::npos)
 				 break;
-			std::string path = os_pathname_.substr(0,i);
+			std::string path = normospath.substr(0,i);
 #ifdef _WIN32
 			if (path.size() == 2 && path[1] == ':')
 				// Windows drive spec, ignore

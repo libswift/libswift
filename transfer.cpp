@@ -37,7 +37,10 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& _root_hash, boo
     files[fd()] = this;
 
     // MULTIFILE
-    storage_ = new Storage(filename);
+    std::string destdir = dirname_utf8(filename);
+    if (destdir == "")
+    	destdir = ".";
+    storage_ = new Storage(filename,destdir);
 
 	std::string hash_filename;
 	hash_filename.assign(filename);

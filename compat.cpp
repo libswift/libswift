@@ -434,7 +434,7 @@ std::string dirname_utf8(std::string pathname)
 	int idx = pathname.rfind(FILE_SEP);
 	if (idx != std::string::npos)
 	{
-		return pathname.substr(0,idx+1);
+		return pathname.substr(0,idx);
 	}
 	else
 		return "";

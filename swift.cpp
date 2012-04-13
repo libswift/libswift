@@ -129,10 +129,9 @@ int utf8main (int argc, char** argv)
                 break;
             case 't':
                 tracker = Address(optarg);
-                trackerargstr = strdup(optarg); // UNICODE
+                trackerargstr = strdup(optarg);
                 if (tracker==Address())
                     quit("address must be hostname:port, ip:port or just port\n");
-                SetTracker(tracker);
                 break;
             case 'D':
                 Channel::debug_file = optarg ? fopen_utf8(optarg,"a") : stderr;
@@ -250,7 +249,7 @@ int utf8main (int argc, char** argv)
         	fprintf(stderr,"swift: My listen port is %d\n", BoundAddress(sock).port() );
     }
 
-    if (tracker!=Address())
+    if (tracker!=Address() && !printurl)
         SetTracker(tracker);
 
     if (httpgw_enabled)
@@ -371,6 +370,9 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
 	if (single_fd < 0)
 		quit("cannot open file %s",filename.c_str());
 	if (printurl) {
+
+		if (swift::Complete(single_fd) == 0)
+			quit("cannot open file %s",filename.c_str());
 		if (chunk_size == SWIFT_DEFAULT_CHUNK_SIZE)
 			printf("tswift://%s/%s\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str());
 		else

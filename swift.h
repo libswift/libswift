@@ -755,7 +755,7 @@ namespace swift {
 		static std::string os2specpn(std::string ospn);
 
 		/** Constructor */
-		Storage(std::string pathname);
+		Storage(std::string ospathname, std::string destdir);
 		~Storage();
 
 		/** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
@@ -780,11 +780,14 @@ namespace swift {
 
 		std::string roothashhex() { if (ht_ == NULL) return "0000000000000000000000000000000000000000"; else return ht_->root_hash().hex(); }
 
+		std::string GetDestDir() { return destdir_; }
+
 
 	  protected:
 			storage_state_t	state_;
 
 			std::string os_pathname_;
+			std::string destdir_;
 
 			/** HashTree this Storage is linked to */
 			HashTree *ht_;
