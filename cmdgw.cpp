@@ -228,6 +228,9 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
     char cmd[MAX_CMD_MESSAGE];
     uint64_t size = swift::Size(req->transfer);
     uint64_t complete = swift::Complete(req->transfer);
+
+    fprintf(stderr,"cmdgw: SendInfo: complete %llu, size %llu\n", size, complete );
+
     if (size == complete)
     	dlstatus = DLSTATUS_SEEDING;
 
@@ -547,7 +550,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         		return ERROR_BAD_ARG;
         }
 
-        dprintf("cmd: START: %s with tracker %s chunksize %i duration %i\n",hashstr,trackerstr,chunksize,duration);
+        //dprintf("cmd: START: %s with tracker %s chunksize %i duration %i\n",hashstr,trackerstr,chunksize,duration);
 
         // FAXME: return duration in HTTPGW
 

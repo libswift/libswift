@@ -84,6 +84,10 @@ chunk_size_(chunk_size)
 {
 	// MULTIFILE
 	storage_->SetHashTree(this);
+	// If multi-file spec we know the exact size even before getting peaks+last chunk
+	int64_t sizefromspec = storage_->GetSizeFromSpec();
+	if (sizefromspec != -1)
+		set_size(sizefromspec);
 
 	// Arno: if user doesn't want to check hashes but no .mhash, check hashes anyway
 	bool actually_check_hashes = check_hashes;
@@ -335,7 +339,7 @@ bool            HashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
 	char bin_name_buf[32];
 	dprintf("%s hashtree offer peak %s\n",tintstr(),pos.str(bin_name_buf));
 
-    assert(!size_);
+    //assert(!size_);
     if (peak_count_) {
         bin_t last_peak = peaks_[peak_count_-1];
         if ( pos.layer()>=last_peak.layer() ||
@@ -354,7 +358,8 @@ bool            HashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
 
     // bingo, we now know the file size (rounded up to a chunk_size() unit)
 
-    size_ = sizec_ * chunk_size_;
+    if (!size_) // MULTIFILE: not known from spec
+    	size_ = sizec_ * chunk_size_;
     completec_ = complete_ = 0;
     sizec_ = (size_ + chunk_size_-1) / chunk_size_;
 

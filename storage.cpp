@@ -24,7 +24,7 @@ const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 
 Storage::Storage(std::string ospathname, std::string destdir) : state_(STOR_STATE_INIT),
 		os_pathname_(ospathname), destdir_(destdir), ht_(NULL), spec_size_(0),
-		single_fd_(-1), reserved_size_(-1), last_sf_(NULL)
+		single_fd_(-1), reserved_size_(-1), total_size_from_spec_(-1), last_sf_(NULL)
 {
 	int64_t fsize = file_size_by_path_utf8(ospathname.c_str());
 	if (fsize < 0 && errno == ENOENT)
@@ -202,8 +202,8 @@ int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64
 		// Wrote last part of spec
 		state_ = STOR_STATE_MFSPEC_COMPLETE;
 
-		int64_t totalsize = ParseSpec(sf);
-		if (totalsize < 0)
+		int ret = ParseSpec(sf);
+		if (ret < 0)
 		{
 			errno = EINVAL;
 			return -1;
@@ -211,11 +211,11 @@ int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64
 
 		// We know exact size after chunk 0, inform hash tree (which doesn't
 		// know until chunk N-1) is in.
-		ht_->set_size(totalsize);
+		ht_->set_size(GetSizeFromSpec());
 
 		// Write tail to next StorageFile(s) using recursion
 		const char *bufstr = (const char *)buf;
-		int ret = Write(&bufstr[ht.first], ht.second, offset+ht.first );
+		ret = Write(&bufstr[ht.first], ht.second, offset+ht.first );
 		if (ret < 0)
 			return ret;
 		else
@@ -287,7 +287,7 @@ StorageFile * Storage::FindStorageFile(int64_t offset)
 }
 
 
-int64_t Storage::ParseSpec(StorageFile *sf)
+int Storage::ParseSpec(StorageFile *sf)
 {
 	char *retstr = NULL,line[MULTIFILE_MAX_LINE+1];
 	FILE *fp = fopen_utf8(sf->GetOSPathName().c_str(),"rb");
@@ -363,9 +363,11 @@ int64_t Storage::ParseSpec(StorageFile *sf)
 
 	fclose(fp);
 	if (ret < 0)
-		return (int64_t)ret;
-	else
-		return offset;
+		return ret;
+	else {
+		total_size_from_spec_ = offset;
+		return 0;
+	}
 }
 
 
@@ -449,6 +451,16 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 }
 
 
+int64_t Storage::GetSizeFromSpec()
+{
+	if (state_ == STOR_STATE_SINGLE_FILE)
+		return -1;
+	else
+		return total_size_from_spec_;
+}
+
+
+
 int64_t Storage::GetReservedSize()
 {
 	if (state_ == STOR_STATE_SINGLE_FILE)
@@ -465,19 +477,19 @@ int64_t Storage::GetReservedSize()
 	{
 		StorageFile *sf = *iter;
 
-		fprintf(stderr,"storage: getsize: statting %s\n", sf->GetOSPathName().c_str() );
+		fprintf(stderr,"storage: getdisksize: statting %s\n", sf->GetOSPathName().c_str() );
 
 		int64_t fsize = file_size_by_path_utf8( sf->GetOSPathName().c_str() );
 		if( fsize < 0)
 		{
-			dprintf("%s %s storage: getsize: cannot stat file %s\n", tintstr(), roothashhex().c_str(), sf->GetOSPathName().c_str() );
+			dprintf("%s %s storage: getdisksize: cannot stat file %s\n", tintstr(), roothashhex().c_str(), sf->GetOSPathName().c_str() );
 			return fsize;
 		}
 		else
 			totaldisksize += fsize;
 	}
 
-	fprintf(stderr,"storage: getsize: total is %lld\n", totaldisksize );
+	fprintf(stderr,"storage: getdisksize: total already sized is %lld\n", totaldisksize );
 
 	return totaldisksize;
 }

@@ -767,6 +767,9 @@ namespace swift {
 		/** Link to HashTree */
 		void SetHashTree(HashTree *ht) { ht_ = ht; }
 
+		/** Size of content according to multi-file spec, -1 if unknown or single file */
+		int64_t GetSizeFromSpec();
+
 		/** Size reserved for storage */
 		int64_t GetReservedSize();
 
@@ -799,12 +802,13 @@ namespace swift {
 			storage_files_t	sfs_;
 			int single_fd_;
 			int64_t reserved_size_;
+			int64_t total_size_from_spec_;
 			StorageFile *last_sf_;
 
 			int WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
 			std::pair<int64_t,int64_t> WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
 			StorageFile * FindStorageFile(int64_t offset);
-			int64_t ParseSpec(StorageFile *sf);
+			int ParseSpec(StorageFile *sf);
 			int OpenSingleFile();
 
 	};
