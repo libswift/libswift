@@ -908,7 +908,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
     size_t evboriglen = evbuffer_get_length(evb);
 #define return_log(...) { fprintf(stderr,__VA_ARGS__); evbuffer_free(evb); return; }
     if (evbuffer_get_length(evb)<4)
-        return_log("socket layer weird: datagram shorter than 4 bytes from %s (prob ICMP unreach)\n",addr.str());
+        return_log("socket layer weird: datagram < 4 bytes from %s (prob ICMP unreach)\n",addr.str());
     uint32_t mych = evbuffer_remove_32be(evb);
     Sha1Hash hash;
     Channel* channel = NULL;
