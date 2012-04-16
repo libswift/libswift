@@ -228,9 +228,6 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
     char cmd[MAX_CMD_MESSAGE];
     uint64_t size = swift::Size(req->transfer);
     uint64_t complete = swift::Complete(req->transfer);
-
-    fprintf(stderr,"cmdgw: SendInfo: complete %llu, size %llu\n", size, complete );
-
     if (size == complete)
     	dlstatus = DLSTATUS_SEEDING;
 
