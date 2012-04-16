@@ -372,7 +372,7 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
 	if (printurl) {
 
 		if (swift::Complete(single_fd) == 0)
-			quit("cannot open file %s",filename.c_str());
+			quit("cannot open empty file %s",filename.c_str());
 		if (chunk_size == SWIFT_DEFAULT_CHUNK_SIZE)
 			printf("tswift://%s/%s\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str());
 		else
