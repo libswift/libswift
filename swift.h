@@ -825,7 +825,8 @@ namespace swift {
         automatically, .mbinmap files must be written by checkpointing the
         transfer by calling FileTransfer::serialize(). If the reconstruction
         fails, it will hashcheck anyway. Roothash is optional for new files or
-        files already hashchecked and checkpointed.
+        files already hashchecked and checkpointed. If roothash is set and
+        filename is a directory, swift will download the content to dir/roothash-in-hex.
         */
     int     Open (std::string filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(), bool check_hashes=true,uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** Get the root hash for the transmission. */

@@ -28,7 +28,7 @@ std::vector<FileTransfer*> FileTransfer::files(20);
 
 // FIXME: separate Bootstrap() and Download(), then Size(), Progress(), SeqProgress()
 
-FileTransfer::FileTransfer(std::string filename, const Sha1Hash& _root_hash, bool check_hashes, uint32_t chunk_size) :
+FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool check_hashes, uint32_t chunk_size) :
     fd_(files.size()+1), cb_installed(0), mychannels_(),
     speedzerocount_(0), tracker_(), tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START), tracker_retry_time_(NOW)
 {
@@ -36,10 +36,19 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& _root_hash, boo
         files.resize(fd()+1);
     files[fd()] = this;
 
-    // MULTIFILE
-    std::string destdir = dirname_utf8(filename);
-    if (destdir == "")
-    	destdir = ".";
+    std::string destdir;
+	int ret = file_exists_utf8(filename);
+	if (ret == 2 && root_hash != Sha1Hash::ZERO) {
+		// Filename is a directory, download root_hash there
+		destdir = filename;
+		filename = destdir+FILE_SEP+root_hash.hex();
+	} else {
+		destdir = dirname_utf8(filename);
+		if (destdir == "")
+			destdir = ".";
+	}
+
+	// MULTIFILE
     storage_ = new Storage(filename,destdir);
 
 	std::string hash_filename;
@@ -50,7 +59,7 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& _root_hash, boo
 	binmap_filename.assign(filename);
 	binmap_filename.append(".mbinmap");
 
-    hashtree_ = new HashTree(storage_,_root_hash,chunk_size,hash_filename,check_hashes,binmap_filename);
+    hashtree_ = new HashTree(storage_,root_hash,chunk_size,hash_filename,check_hashes,binmap_filename);
     
     if (ENABLE_VOD_PIECEPICKER) {
     	// Ric: init availability

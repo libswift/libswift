@@ -456,7 +456,18 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
         //fprintf(stderr,"cmd: START: new request %i\n",req->id);
 
-    	char *url = paramstr;
+        // Arno, 2012-04-13: See if URL followed by storagepath for seeding
+        char *url = NULL, *storagepath = NULL;
+        token = strtok_r(paramstr," ",&savetok);      // storagepath?
+        if (token == NULL)
+        	url = paramstr;
+        else
+        	url = token;
+			token = strtok_r(NULL,"",&savetok);		 //  storagepath
+			if (token == NULL)
+				return ERROR_BAD_ARG;
+			storagepath = token;
+
         // parse URL
 		// tswift://tracker/roothash-as-hex$chunksize@duration-in-secs
         char *trackerstr=NULL,*hashstr=NULL,*durationstr=NULL,*chunksizestr=NULL;
@@ -517,7 +528,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         	hashstr = token;
         }
 
-        dprintf("cmd: START: parsed tracker %s hash %s dur %s cs %s\n",trackerstr,hashstr,durationstr,chunksizestr);
+        dprintf("cmd: START: parsed tracker %s hash %s dur %s cs %s spath %s\n",trackerstr,hashstr,durationstr,chunksizestr,storagepath);
 
         if (strlen(hashstr)!=40) {
         	dprintf("cmd: START: roothash too short %i\n", strlen(hashstr) );
@@ -557,8 +568,15 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
 		// ARNOSMPTODO: disable/interleave hashchecking at startup
         int transfer = swift::Find(root_hash);
-        if (transfer==-1)
-            transfer = swift::Open(std::string(hashstr),root_hash,trackaddr,false,chunksize);
+        if (transfer==-1) {
+
+        	std::string filename;
+        	if (storagepath != NULL)
+        		filename = storagepath;
+        	else
+        		filename = hashstr;
+            transfer = swift::Open(filename,root_hash,trackaddr,false,chunksize);
+        }
 
         // RATELIMIT
         //FileTransfer::file(transfer)->SetMaxSpeed(DDIR_DOWNLOAD,512*1024);
