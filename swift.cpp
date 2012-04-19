@@ -595,7 +595,8 @@ int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int ar
 		int64_t fsize = file_size_by_path_utf8(pathname);
 		if( fsize < 0)
 		{
-			print_error("cannot open file in multi-spec list");
+			fprintf(stderr,"cannot open file in multi-spec list: %s\n", pathname.c_str() );
+			print_error("cannot open file in multi-spec list" );
 			return fsize;
 		}
 

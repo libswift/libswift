@@ -557,7 +557,7 @@ uint64_t      HashTree::seq_complete (int64_t offset) {
 	{
 		// SEEK: Calc sequentially complete bytes from an offset
 		bin_t binoff = bin_t(0,(offset - (offset % chunk_size_)) / chunk_size_);
-		bin_t nextempty = ack_out_->find_empty(binoff);
+		bin_t nextempty = ack_out_.find_empty(binoff);
 		if (nextempty == bin_t::NONE || nextempty.base_offset() * chunk_size_ > size_)
 			return size_-offset; // All filled from offset
 

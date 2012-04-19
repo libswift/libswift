@@ -245,13 +245,20 @@ public:
         return hint;
     }
 
-    int Seek(bin_t binoff, int whence)
+    int Seek(bin_t offbin, int whence)
     {
-    	if (whence != SEEK_CUR)
+    	char binstr[32];
+    	fprintf(stderr,"vodpp: seek: %s whence %d\n", offbin.str(binstr), whence );
+
+    	if (whence != SEEK_SET)
     		return -1;
 
     	// TODO: convert playback_pos_ to a bin number
-    	uint64_t cid = binoff.toUInt()/2;
+    	uint64_t cid = offbin.toUInt()/2;
+    	cid--; // Riccardo assumes playbackpos is already in.
+
+    	fprintf(stderr,"vodpp: pos in K %llu size %llu\n", cid, file().size_in_chunks() );
+
     	if (cid > file().size_in_chunks())
     		return -1;
 

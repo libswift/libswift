@@ -566,6 +566,8 @@ int swift::Checkpoint(int transfer) {
 // SEEK
 int swift::Seek(int fd, int64_t offset, int whence)
 {
+	dprintf("%s F%i Seek: to %lld\n",tintstr(), fd, offset );
+
 	FileTransfer *ft = FileTransfer::file(fd);
 	if (ft == NULL)
 		return -1;
@@ -575,6 +577,9 @@ int swift::Seek(int fd, int64_t offset, int whence)
 		// Which bin to seek to?
 		int64_t coff = offset - (offset % ft->file().chunk_size()); // ceil to chunk
 		bin_t offbin = bin_t(0,coff/ft->file().chunk_size());
+
+		char binstr[32];
+		dprintf("%s F%i Seek: to bin %s\n",tintstr(), fd, offbin.str(binstr) );
 
 		return ft->picker().Seek(offbin,whence);
 	}

@@ -38,7 +38,7 @@ struct http_gw_t {
     std::string xcontentdur;
     bool   closing;
     uint64_t startoff; // MULTIFILE
-    uint64_t endoff; // MULTIFILE
+    uint64_t endoff; // MULTIFILE	(careful, for an e.g. 100 byte interval this is 99)
 
 } http_requests[HTTPGW_MAX_REQUEST];
 
@@ -76,17 +76,13 @@ void HttpGwCloseConnection (http_gw_t* req) {
 
 	struct evhttp_connection *evconn = evhttp_request_get_connection(req->sinkevreq);
 
-	dprintf("%s @%i cleanup: before send reply\n",tintstr(),req->id);
-
 	req->closing = true;
-	if (req->offset > 0)
+	if (req->offset > req->startoff)
 		evhttp_send_reply_end(req->sinkevreq); //WARNING: calls HttpGwLibeventCloseCallback
 	else
 		evhttp_request_free(req->sinkevreq);
 
-	dprintf("%s @%i cleanup: reset evreq\n",tintstr(),req->id);
 	req->sinkevreq = NULL;
-	dprintf("%s @%i cleanup: after reset evreq\n",tintstr(),req->id);
 
 	// Note: for some reason calling conn_free here prevents the last chunks
 	// to be sent to the requester?
@@ -119,7 +115,10 @@ void HttpGwLibeventCloseCallback(struct evhttp_connection *evconn, void *evreqvo
 		if (req->closing)
 			dprintf("%s http conn already closing\n",tintstr() );
 		else
+		{
+			dprintf("%s http conn being closed\n",tintstr() );
 			HttpGwCloseConnection(req);
+		}
 	}
 }
 
@@ -139,14 +138,14 @@ void HttpGwMayWriteCallback (int transfer) {
 
 	// Update endoff as size becomes less fuzzy
 	if (swift::Size(req->transfer) < req->endoff)
-		req->endoff = swift::Size(req->transfer);
+		req->endoff = swift::Size(req->transfer)-1;
 
     uint64_t relcomplete = swift::SeqComplete(req->transfer,req->startoff);
     if (relcomplete > req->endoff)
-    	relcomplete = req->endoff;
-    int64_t avail = relcomplete-req->offset-req->startoff;
+    	relcomplete = req->endoff+1-req->startoff;
+    int64_t avail = relcomplete-(req->offset-req->startoff);
 
-    //dprintf("%s @%i http write complete %lli offset %lli\n",tintstr(),req->id, complete, req->offset);
+    dprintf("%s @%i http write: avail %lld relcomp %llu offset %llu start %llu end %llu tosend %llu\n",tintstr(),req->id, avail, relcomplete, req->offset, req->startoff, req->endoff,  req->tosend );
     //fprintf(stderr,"offset %lli seqcomp %lli comp %lli\n",req->offset, complete, swift::Complete(req->transfer) );
 
 	struct evhttp_connection *evconn = evhttp_request_get_connection(req->sinkevreq);
@@ -182,7 +181,7 @@ void HttpGwMayWriteCallback (int transfer) {
             return;
         }
 
-        if (req->offset == 0) {
+        if (req->offset == req->startoff) {
         	// Not just for chunked encoding, see libevent2's http.c
         	evhttp_send_reply_start(req->sinkevreq, 200, "OK");
         }
@@ -201,13 +200,14 @@ void HttpGwMayWriteCallback (int transfer) {
     }
 
     // Arno, 2010-11-30: tosend is set to fuzzy len, so need extra/other test.
-    if (req->tosend==0 || req->offset == req->endoff) {
+    if (req->tosend==0 || req->offset == req->endoff+1) {
     	// done; wait for new HTTP request
         dprintf("%s @%i done\n",tintstr(),req->id);
         //fprintf(stderr,"httpgw: MayWrite: done, wait for buffer empty before send_end_reply\n" );
 
         if (evbuffer_get_length(outbuf) == 0) {
         	//fprintf(stderr,"httpgw: MayWrite: done, buffer empty, end req\n" );
+        	dprintf("%s http write: done, buffer empty, end req\n",tintstr() );
         	HttpGwCloseConnection(req);
         }
     }
@@ -281,86 +281,115 @@ void HttpGwFirstProgressCallback (int transfer, bin_t bin) {
 	// First chunk of data available
 	dprintf("%s T%i http first progress\n",tintstr(),transfer);
 
-	if (!bin.contains(bin_t(0,0))) // need the first chunk
+	// Need the first chunk
+	if (swift::SeqComplete(transfer) == 0)
+	{
+		dprintf("%s T%i first: not enough seqcomp\n",tintstr(),transfer );
         return;
+	}
 
+	http_gw_t* req = HttpGwFindRequestByTransfer(transfer);
+	if (req == NULL)
+	{
+		dprintf("%s T%i first: req not found\n",tintstr(),transfer );
+		return;
+	}
+
+	// MULTIFILE
+	// Is storage ready?
+	FileTransfer *ft = FileTransfer::file(req->transfer);
+	if (ft == NULL) {
+		dprintf("%s T%i first: FileTransfer not found\n",tintstr(),transfer );
+    	evhttp_send_error(req->sinkevreq,500,"Internal error: Content not found although downloading it.");
+    	return;
+	}
+	if (!ft->GetStorage()->IsReady())
+	{
+		dprintf("%s T%i first: Storage not ready\n",tintstr(),transfer );
+		return; // wait for some more data
+	}
+
+	// Protection against spurious callback
+	if (req->tosend > 0)
+	{
+		dprintf("%s T%i first: already set tosend\n",tintstr(),transfer );
+		return;
+	}
+
+	// Good to go. Reconfigure callbacks
 	swift::RemoveProgressCallback(transfer,&HttpGwFirstProgressCallback);
     int progresslayer = bytes2layer(HTTPGW_PROGRESS_STEP_BYTES,swift::ChunkSize(transfer));
     swift::AddProgressCallback(transfer,&HttpGwSwiftProgressCallback,progresslayer);
 
-	http_gw_t* req = HttpGwFindRequestByTransfer(transfer);
-	if (req == NULL)
-		return;
-	if (req->tosend==0) {
-
-		uint64_t filesize = 0;
-		if (req->mfspecname != "")
+    // Send header of HTTP reply
+	uint64_t filesize = 0;
+	if (req->mfspecname != "")
+	{
+		// MULTIFILE
+		// Find out size of selected file
+		storage_files_t sfs = ft->GetStorage()->GetStorageFiles();
+		storage_files_t::iterator iter;
+		bool found = false;
+		for (iter = sfs.begin(); iter < sfs.end(); iter++)
 		{
-			// MULTIFILE
-			FileTransfer *ft = FileTransfer::file(req->transfer);
-			if (ft == NULL) {
-		    	evhttp_send_error(req->sinkevreq,500,"Internal error: Content not found although downloading it.");
-		    	return;
-			}
-			storage_files_t sfs = ft->GetStorage()->GetStorageFiles();
-			storage_files_t::iterator iter;
-			bool found = false;
-			for (iter = sfs.begin(); iter < sfs.end(); iter++)
+			StorageFile *sf = *iter;
+
+			dprintf("%s T%i first: mf: comp <%s> <%s>\n",tintstr(),transfer, sf->GetSpecPathName().c_str(), req->mfspecname.c_str() );
+
+			if (sf->GetSpecPathName() == req->mfspecname)
 			{
-				StorageFile *sf = *iter;
-				if (sf->GetSpecPathName() == req->mfspecname)
-				{
-					req->startoff = sf->GetStart(); // SEEKTODO HTTP RANGE REQUEST
-					req->endoff = sf->GetEnd();
-					break;
-				}
+				found = true;
+				req->startoff = sf->GetStart(); // SEEKTODO HTTP RANGE REQUEST
+				req->endoff = sf->GetEnd();
+				filesize = sf->GetSize();
+				break;
 			}
-			if (!found) {
-		    	evhttp_send_error(req->sinkevreq,404,"Individual file not found in multi-file content.");
-		    	return;
-			}
-
-			// Seek to multifile start
-			// SEEKTODO: if multi-file spec > 1 chunk, ensure it dl's till spec known.
-			int ret = swift::Seek(req->transfer,req->startoff,SEEK_SET);
-			if (ret < 0) {
-		    	evhttp_send_error(req->sinkevreq,500,"Internal error: Cannot seek to file start in multi-file content.");
-		    	return;
-			}
-
 		}
-		else
-		{
-			req->startoff = 0; //SEEKTODO: HTTP RANGE REQUEST
-			req->endoff = swift::Size(req->transfer);
-			filesize = swift::Size(transfer);
+		if (!found) {
+			evhttp_send_error(req->sinkevreq,404,"Individual file not found in multi-file content.");
+			return;
 		}
 
-		// Convert to local strings
-		char filesizestr[256],durcstr[256];
-		sprintf(filesizestr,"%lli",filesize);
-		strcpy(durcstr,req->xcontentdur.c_str());
+		// Seek to multifile start
+		int ret = swift::Seek(req->transfer,req->startoff,SEEK_SET);
+		if (ret < 0) {
+			evhttp_send_error(req->sinkevreq,500,"Internal error: Cannot seek to file start in multi-file content.");
+			return;
+		}
+	}
+	else
+	{
+		req->startoff = 0; //SEEKTODO: HTTP RANGE REQUEST
+		req->endoff = swift::Size(req->transfer)-1;
+		filesize = swift::Size(transfer);
+	}
 
-		struct evkeyvalq *headers = evhttp_request_get_output_headers(req->sinkevreq);
-		//evhttp_add_header(headers, "Connection", "keep-alive" );
-		evhttp_add_header(headers, "Connection", "close" );
-		evhttp_add_header(headers, "Content-Type", "video/ogg" );
-		evhttp_add_header(headers, "X-Content-Duration",durcstr );
-		evhttp_add_header(headers, "Content-Length", filesizestr );
-		evhttp_add_header(headers, "Accept-Ranges", "none" );
+	// Convert sizes to local strings
+	char filesizestr[256],durcstr[256];
+	sprintf(filesizestr,"%lli",filesize);
+	strcpy(durcstr,req->xcontentdur.c_str());
 
-		req->tosend = filesize;
-		dprintf("%s @%i headers_sent size %lli\n",tintstr(),req->id,filesize);
+	struct evkeyvalq *headers = evhttp_request_get_output_headers(req->sinkevreq);
+	//evhttp_add_header(headers, "Connection", "keep-alive" );
+	evhttp_add_header(headers, "Connection", "close" );
+	evhttp_add_header(headers, "Content-Type", "video/ogg" );
+	evhttp_add_header(headers, "X-Content-Duration",durcstr );
+	evhttp_add_header(headers, "Content-Length", filesizestr );
+	evhttp_add_header(headers, "Accept-Ranges", "none" );
 
-		/*
-		 * Arno, 2011-10-17: Swift ProgressCallbacks are only called when
-		 * the data is downloaded, not when it is already on disk. So we need
-		 * to handle the situation where all or part of the data is already
-		 * on disk. Subscribing to writability of the socket works,
-		 * but requires libevent2 >= 2.1 (or our backported version)
-		 */
-		HttpGwSubscribeToWrite(req);
-    }
+	req->tosend = filesize;
+	req->offset = req->startoff;
+
+	dprintf("%s @%i headers_sent size %lli\n",tintstr(),req->id,filesize);
+
+	/*
+	 * Arno, 2011-10-17: Swift ProgressCallbacks are only called when
+	 * the data is downloaded, not when it is already on disk. So we need
+	 * to handle the situation where all or part of the data is already
+	 * on disk. Subscribing to writability of the socket works,
+	 * but requires libevent2 >= 2.1 (or our backported version)
+	 */
+	HttpGwSubscribeToWrite(req);
 }
 
 
@@ -393,8 +422,8 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     	hashstr = uri.substr(1,uri.length());
     } else if (sidx != std::string::npos && aidx == std::string::npos) {
     	// multi-file, no duration
-    	hashstr = uri.substr(1,sidx);
-    	mfstr = uri.substr(sidx,uri.length()-sidx);
+    	hashstr = uri.substr(1,sidx-1);
+    	mfstr = uri.substr(sidx+1,uri.length()-sidx);
     } else if (sidx == std::string::npos && aidx != std::string::npos) {
     	// No multi-file, duration
     	hashstr = uri.substr(1,aidx-1);
