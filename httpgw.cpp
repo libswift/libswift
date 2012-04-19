@@ -9,6 +9,7 @@
 #include "swift.h"
 #include <event2/http.h>
 #include <event2/bufferevent.h>
+#include <sstream>
 
 using namespace swift;
 
@@ -37,8 +38,11 @@ struct http_gw_t {
     std::string	mfspecname; // (optional) name from multi-file spec
     std::string xcontentdur;
     bool   closing;
-    uint64_t startoff; // MULTIFILE
-    uint64_t endoff; // MULTIFILE	(careful, for an e.g. 100 byte interval this is 99)
+    uint64_t startoff;   // MULTIFILE: starting offset in content range of desired file
+    uint64_t endoff;     // MULTIFILE: ending offset (careful, for an e.g. 100 byte interval this is 99)
+    int replycode;	     // HTTP status code
+    int64_t  rangefirst; // First byte wanted in HTTP GET Range request or -1
+    int64_t  rangelast;  // Last byte wanted in HTTP GET Range request (also 99 for 100 byte interval) or -1
 
 } http_requests[HTTPGW_MAX_REQUEST];
 
@@ -183,7 +187,7 @@ void HttpGwMayWriteCallback (int transfer) {
 
         if (req->offset == req->startoff) {
         	// Not just for chunked encoding, see libevent2's http.c
-        	evhttp_send_reply_start(req->sinkevreq, 200, "OK");
+        	evhttp_send_reply_start(req->sinkevreq, req->replycode, "OK");
         }
 
         evhttp_send_reply_chunk(req->sinkevreq, evb);
@@ -277,6 +281,121 @@ void HttpGwSwiftProgressCallback (int transfer, bin_t bin) {
 }
 
 
+bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
+{
+    struct evkeyvalq *headers =	evhttp_request_get_input_headers(req->sinkevreq);
+    const char *contentrangecstr =evhttp_find_header(headers,"Range");
+
+	if (contentrangecstr == NULL) {
+		req->rangefirst = -1;
+		req->rangelast = -1;
+		req->replycode = 200;
+		return true;
+	}
+	std::string range = contentrangecstr;
+
+	// Handle RANGE query
+	bool bad = false;
+	int idx = range.find("=");
+	if (idx == std::string::npos)
+		return false;
+	std::string seek = range.substr(idx+1);
+
+	dprintf("%s @%i http range request spec %s\n",tintstr(),req->id, seek.c_str() );
+
+	if (seek.find(",") != std::string::npos) {
+		// - Range header contains set, not supported at the moment
+		bad = true;
+	} else 	{
+		// Determine first and last bytes of requested range
+		idx = seek.find("-");
+
+		dprintf("%s @%i http range request idx %d\n", tintstr(),req->id, idx );
+
+		if (idx == std::string::npos)
+			return false;
+		if (idx == 0) {
+			// -444 format
+			req->rangefirst = -1;
+		} else {
+			std::istringstream(seek.substr(0,idx)) >> req->rangefirst;
+		}
+
+
+		dprintf("%s @%i http range request first %s %lld\n", tintstr(),req->id, seek.substr(0,idx).c_str(), req->rangefirst );
+
+		if (idx == seek.length()-1)
+			req->rangelast = -1;
+		else {
+			// 444- format
+			std::istringstream(seek.substr(idx+1)) >> req->rangelast;
+		}
+
+		dprintf("%s @%i http range request last %s %lld\n", tintstr(),req->id, seek.substr(idx+1).c_str(), req->rangelast );
+
+		// Check sanity of range request
+		if (filesize == -1) {
+			// - No length (live)
+			bad = true;
+		}
+		else if (req->rangefirst == -1 && req->rangelast == -1) {
+			// - Invalid input
+			bad = true;
+		}
+		else if (req->rangefirst >= (int64_t)filesize) {
+			bad = true;
+		}
+		else if (req->rangelast >= (int64_t)filesize) {
+			if (req->rangefirst == -1) 	{
+				// If the entity is shorter than the specified
+				// suffix-length, the entire entity-body is used.
+				req->rangelast = filesize-1;
+			}
+			else
+				bad = true;
+		}
+	}
+
+	if (bad) {
+		// Send 416 - Requested Range not satisfiable
+		std::ostringstream cross;
+		if (filesize == -1)
+			cross << "bytes */*";
+		else
+			cross << "bytes */" << filesize;
+		evhttp_add_header(headers, "Content-Range", cross.str().c_str() );
+
+		evhttp_send_error(req->sinkevreq,416,"Malformed range specification");
+
+		dprintf("%s @%i http invalid range %lld-%lld\n",tintstr(),req->id,req->rangefirst,req->rangelast );
+		return false;
+	}
+
+	// Convert wildcards into actual values
+	if (req->rangefirst != -1 && req->rangelast == -1) {
+		// "100-" : byte 100 and further
+		req->rangelast = filesize - 1;
+	}
+	else if (req->rangefirst == -1 && req->rangelast != -1) {
+		// "-100" = last 100 bytes
+		req->rangefirst = filesize - req->rangelast;
+		req->rangelast = filesize - 1;
+	}
+
+	// Generate header
+	std::ostringstream cross;
+	cross << "bytes " << req->rangefirst << "-" << req->rangelast << "/" << filesize;
+	evhttp_add_header(headers, "Content-Range", cross.str().c_str() );
+
+	// Reply is sent when content is avail
+	req->replycode = 206;
+
+	dprintf("%s @%i http valid range %lld-%lld\n",tintstr(),req->id,req->rangefirst,req->rangelast );
+
+	return true;
+}
+
+
 void HttpGwFirstProgressCallback (int transfer, bin_t bin) {
 	// First chunk of data available
 	dprintf("%s T%i http first progress\n",tintstr(),transfer);
@@ -339,7 +458,7 @@ void HttpGwFirstProgressCallback (int transfer, bin_t bin) {
 			if (sf->GetSpecPathName() == req->mfspecname)
 			{
 				found = true;
-				req->startoff = sf->GetStart(); // SEEKTODO HTTP RANGE REQUEST
+				req->startoff = sf->GetStart();
 				req->endoff = sf->GetEnd();
 				filesize = sf->GetSize();
 				break;
@@ -349,38 +468,61 @@ void HttpGwFirstProgressCallback (int transfer, bin_t bin) {
 			evhttp_send_error(req->sinkevreq,404,"Individual file not found in multi-file content.");
 			return;
 		}
-
-		// Seek to multifile start
-		int ret = swift::Seek(req->transfer,req->startoff,SEEK_SET);
-		if (ret < 0) {
-			evhttp_send_error(req->sinkevreq,500,"Internal error: Cannot seek to file start in multi-file content.");
-			return;
-		}
 	}
 	else
 	{
-		req->startoff = 0; //SEEKTODO: HTTP RANGE REQUEST
+		// Single file
+		req->startoff = 0;
 		req->endoff = swift::Size(req->transfer)-1;
 		filesize = swift::Size(transfer);
 	}
 
-	// Convert sizes to local strings
-	char filesizestr[256],durcstr[256];
-	sprintf(filesizestr,"%lli",filesize);
-	strcpy(durcstr,req->xcontentdur.c_str());
+	// Handle HTTP GET Range request, i.e. additional offset within content or file
+	if (!HttpGwParseContentRangeHeader(req,filesize))
+	{
+
+		exit(-1);
+
+		return;
+	}
+
+	if (req->rangefirst != -1)
+	{
+		// Range request
+		req->startoff += req->rangefirst;
+		req->endoff = req->startoff + req->rangelast;
+		req->tosend = req->rangelast+1-req->rangefirst;
+	}
+	else
+	{
+		req->tosend = filesize;
+	}
+	req->offset = req->startoff;
+
+	// SEEKTODO: concurrent requests to same resource
+	if (req->startoff != 0)
+	{
+		// Seek to multifile/range start
+		int ret = swift::Seek(req->transfer,req->startoff,SEEK_SET);
+		if (ret < 0) {
+			evhttp_send_error(req->sinkevreq,500,"Internal error: Cannot seek to file start in range request or multi-file content.");
+			return;
+		}
+	}
+
+	// Convert size to string
+	std::ostringstream closs;
+	closs << req->tosend;
 
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(req->sinkevreq);
 	//evhttp_add_header(headers, "Connection", "keep-alive" );
 	evhttp_add_header(headers, "Connection", "close" );
 	evhttp_add_header(headers, "Content-Type", "video/ogg" );
-	evhttp_add_header(headers, "X-Content-Duration",durcstr );
-	evhttp_add_header(headers, "Content-Length", filesizestr );
-	evhttp_add_header(headers, "Accept-Ranges", "none" );
+	evhttp_add_header(headers, "X-Content-Duration", req->xcontentdur.c_str() );
+	evhttp_add_header(headers, "Content-Length", closs.str().c_str() );
+	//evhttp_add_header(headers, "Accept-Ranges", "none" );
 
-	req->tosend = filesize;
-	req->offset = req->startoff;
-
-	dprintf("%s @%i headers_sent size %lli\n",tintstr(),req->id,filesize);
+	dprintf("%s @%i headers_sent size %lli\n",tintstr(),req->id,req->tosend);
 
 	/*
 	 * Arno, 2011-10-17: Swift ProgressCallbacks are only called when
@@ -391,6 +533,8 @@ void HttpGwFirstProgressCallback (int transfer, bin_t bin) {
 	 */
 	HttpGwSubscribeToWrite(req);
 }
+
+
 
 
 void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
@@ -408,7 +552,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     std::string uri = evhttp_request_get_uri(evreq);
 
     struct evkeyvalq *headers =	evhttp_request_get_input_headers(evreq);
-    //const char *contentrangestr =evhttp_find_header(headers,"Content-Range");
+    const char *contentrangestr =evhttp_find_header(headers,"Content-Range");
 
     // Arno, 2012-04-19: libevent adds "Connection: keep-alive" to reply headers
     // if there is one in the request headers, even if a different Connection
@@ -458,6 +602,10 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
         FileTransfer *ft = FileTransfer::file(transfer);
         ft->SetMaxSpeed(DDIR_DOWNLOAD,httpgw_maxspeed[DDIR_DOWNLOAD]);
         ft->SetMaxSpeed(DDIR_UPLOAD,httpgw_maxspeed[DDIR_UPLOAD]);
+    }
+    else
+    {
+    	// SEEKTODO: concurrency control on playbackpos
     }
 
     // 4. Record request
