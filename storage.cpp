@@ -548,7 +548,7 @@ int Storage::ResizeReserved(int64_t size)
 		}
 	}
 	else
-		dprintf("%s %s storage: Resize multi-file to smaller %lld, ignored\n", tintstr(), roothashhex().c_str(), size);
+		dprintf("%s %s storage: Resize multi-file to <= %lld, ignored\n", tintstr(), roothashhex().c_str(), size);
 
 	return 0;
 }
