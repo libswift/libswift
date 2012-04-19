@@ -572,9 +572,9 @@ int swift::Seek(int fd, int64_t offset, int whence)
 
 	if (whence == SEEK_SET)
 	{
-		// When bin to seek to?
+		// Which bin to seek to?
 		int64_t coff = offset - (offset % ft->file().chunk_size()); // ceil to chunk
-		bin_t offbin = bin_t((coff/ft->file().chunk_size())*2);
+		bin_t offbin = bin_t(0,coff/ft->file().chunk_size());
 
 		return ft->picker().Seek(offbin,whence);
 	}

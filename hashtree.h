@@ -140,8 +140,8 @@ public:
     /** Number of chunks retrieved and checked. */
     uint64_t        chunks_complete () const { return completec_; }
     /** The number of bytes completed sequentially, i.e. from the beginning of
-        the file, uninterrupted. */
-    uint64_t        seq_complete(int64_t offset) ;
+        the file (or offset), uninterrupted. */
+    uint64_t        seq_complete(int64_t offset); // SEEK
     /** Whether the file is complete. */
     bool            is_complete () 
         { return size_ && complete_==size_; }

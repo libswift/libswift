@@ -760,6 +760,8 @@ bin_t binmap_t::find_empty(bin_t start) const
 {
 	bin_t cur_bin = start;
 
+	fprintf(stderr,"find_empty: Root bin %llu\n", root_bin_.toUInt() );
+
 	if (is_empty(cur_bin))
 		return cur_bin;
 	do
