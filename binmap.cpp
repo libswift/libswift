@@ -760,8 +760,6 @@ bin_t binmap_t::find_empty(bin_t start) const
 {
 	bin_t cur_bin = start;
 
-	fprintf(stderr,"find_empty: Root bin %llu\n", root_bin_.toUInt() );
-
 	if (is_empty(cur_bin))
 		return cur_bin;
 	do
@@ -775,13 +773,13 @@ bin_t binmap_t::find_empty(bin_t start) const
 		}
 		if (cur_bin == root_bin_)
 		{
-			// Hit top, full tree TODO: WHAT IF UNBALANCED TREE?
+			// Hit top, full tree, sort of. For some reason root_bin_ not
+			// set to real top (but to ALL), so we may actually return a
+			// bin that is outside the size of the content here.
 			return bin_t::NONE;
 		}
 	}
 	while (true);
-
-	fprintf(stderr,"find_empty: Found parent %llu\n", cur_bin.toUInt() );
 
 	// Move down
 	do
@@ -794,9 +792,6 @@ bin_t binmap_t::find_empty(bin_t start) const
 		{
 			cur_bin.to_right();
 		}
-
-		fprintf(stderr,"find_empty: Down %llu\n", cur_bin.toUInt() );
-
 		if (cur_bin.is_base())
 		{
 			// Found empty bin
