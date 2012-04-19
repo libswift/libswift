@@ -152,7 +152,7 @@ public:
 
     // for transfertest.cpp
     Storage *       get_storage() { return storage_; }
-    void            set_size(uint64_t size) { size_ = size; }
+    void            set_size(uint64_t size) { size_ = size; fprintf(stderr,"hashtree: set_size %llu\n", size ); }
 
     // Arno: persistent storage for state other than hashes (which are in .mhash)
     int serialize(FILE *fp);
