@@ -402,13 +402,21 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     }
 	sawhttpconn = true;
 
-    // 1. Parse URI
+    // 1. Get URI
 	// Format: /roothash[/multi-file][@duration]
 	// ARNOTODO: allow for chunk size to be set via URL?
     std::string uri = evhttp_request_get_uri(evreq);
-    //struct evkeyvalq *headers =	evhttp_request_get_input_headers(evreq);
+
+    struct evkeyvalq *headers =	evhttp_request_get_input_headers(evreq);
     //const char *contentrangestr =evhttp_find_header(headers,"Content-Range");
 
+    // Arno, 2012-04-19: libevent adds "Connection: keep-alive" to reply headers
+    // if there is one in the request headers, even if a different Connection
+    // reply header has already been set. And we don't do persistent conns here.
+    //
+    evhttp_remove_header(headers,"Connection"); // Remove Connection: keep-alive
+
+    // 2. Parse URI
     std::string hashstr = "", mfstr="", durstr="";
 
     if (uri.length() == 1)     {
@@ -438,8 +446,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     dprintf("%s @%i demands %s %s %s\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str(),mfstr.c_str(),durstr.c_str() );
 
 
-
-    // 2. Initiate transfer
+    // 3. Initiate transfer
     Sha1Hash root_hash = Sha1Hash(true,hashstr.c_str());
     int transfer = swift::Find(root_hash);
     if (transfer==-1) {
@@ -453,7 +460,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
         ft->SetMaxSpeed(DDIR_UPLOAD,httpgw_maxspeed[DDIR_UPLOAD]);
     }
 
-    // 3. Record request
+    // 4. Record request
     http_gw_t* req = http_requests + http_gw_reqs_open++;
     req->id = ++http_gw_reqs_count;
     req->sinkevreq = evreq;
