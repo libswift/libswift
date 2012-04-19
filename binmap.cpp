@@ -754,7 +754,7 @@ bin_t binmap_t::find_filled() const
 
 
 /**
- * Arno: Find first empty bin right of start
+ * Arno: Find first empty bin right of start (start inclusive)
  */
 bin_t binmap_t::find_empty(bin_t start) const
 {
