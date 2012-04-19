@@ -542,7 +542,11 @@ bool            HashTree::OfferData (bin_t pos, const char* data, size_t length)
 }
 
 
-uint64_t      HashTree::seq_complete () {
+uint64_t      HashTree::seq_complete (int64_t offset) {
+
+
+	//SEEKTODO: find_empty(offset)
+
     uint64_t seqc = ack_out_.find_empty().base_offset();
     if (seqc==sizec_)
         return size_;

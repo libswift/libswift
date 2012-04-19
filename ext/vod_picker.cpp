@@ -245,14 +245,19 @@ public:
         return hint;
     }
 
-
-    void updatePlaybackPos(int size = 1)
+    int Seek(bin_t binoff, int whence)
     {
-    	assert(size>-1);
-    	if (size< file().size_in_chunks() - playback_pos_ - 2)
-    		playback_pos_ += size;
-    }
+    	if (whence != SEEK_CUR)
+    		return -1;
 
+    	// TODO: convert playback_pos_ to a bin number
+    	uint64_t cid = binoff.toUInt()/2;
+    	if (cid > file().size_in_chunks())
+    		return -1;
+
+    	playback_pos_ = cid;
+    	return 0;
+    }
 
     void status()
 	{

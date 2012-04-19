@@ -74,9 +74,8 @@ public:
         return hint;
     }
 
-    void updatePlaybackPos(int size = 1)
+    int Seek(bin_t offbin, int whence)
     {
-    	return;
+    	return -1;
     }
-
 };

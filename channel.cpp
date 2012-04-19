@@ -512,9 +512,9 @@ uint64_t  swift::Complete (int fdes) {
 }
 
 
-uint64_t  swift::SeqComplete (int fdes) {
+uint64_t  swift::SeqComplete (int fdes, int64_t offset) {
     if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->file().seq_complete();
+        return FileTransfer::files[fdes]->file().seq_complete(offset);
     else
         return 0;
 }
@@ -562,6 +562,25 @@ int swift::Checkpoint(int transfer) {
 	return 0;
 }
 
+
+// SEEK
+int swift::Seek(int fd, int64_t offset, int whence)
+{
+	FileTransfer *ft = FileTransfer::file(fd);
+	if (ft == NULL)
+		return -1;
+
+	if (whence == SEEK_SET)
+	{
+		// When bin to seek to?
+		int64_t coff = offset - (offset % ft->file().chunk_size()); // ceil to chunk
+		bin_t offbin = bin_t((coff/ft->file().chunk_size())*2);
+
+		return ft->picker().Seek(offbin,whence);
+	}
+	else
+		return -1; // TODO
+}
 
 
 /*
