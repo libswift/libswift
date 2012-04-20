@@ -283,8 +283,9 @@ void HttpGwSwiftProgressCallback (int transfer, bin_t bin) {
 
 bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
 {
-    struct evkeyvalq *headers =	evhttp_request_get_input_headers(req->sinkevreq);
-    const char *contentrangecstr =evhttp_find_header(headers,"Range");
+    struct evkeyvalq *reqheaders =	evhttp_request_get_input_headers(req->sinkevreq);
+    struct evkeyvalq *repheaders = evhttp_request_get_output_headers(req->sinkevreq);
+    const char *contentrangecstr =evhttp_find_header(reqheaders,"Range");
 
 	if (contentrangecstr == NULL) {
 		req->rangefirst = -1;
@@ -363,7 +364,7 @@ bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
 			cross << "bytes */*";
 		else
 			cross << "bytes */" << filesize;
-		evhttp_add_header(headers, "Content-Range", cross.str().c_str() );
+		evhttp_add_header(repheaders, "Content-Range", cross.str().c_str() );
 
 		evhttp_send_error(req->sinkevreq,416,"Malformed range specification");
 
@@ -385,7 +386,7 @@ bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
 	// Generate header
 	std::ostringstream cross;
 	cross << "bytes " << req->rangefirst << "-" << req->rangelast << "/" << filesize;
-	evhttp_add_header(headers, "Content-Range", cross.str().c_str() );
+	evhttp_add_header(repheaders, "Content-Range", cross.str().c_str() );
 
 	// Reply is sent when content is avail
 	req->replycode = 206;
@@ -514,15 +515,16 @@ void HttpGwFirstProgressCallback (int transfer, bin_t bin) {
 	std::ostringstream closs;
 	closs << req->tosend;
 
-	struct evkeyvalq *headers = evhttp_request_get_output_headers(req->sinkevreq);
-	//evhttp_add_header(headers, "Connection", "keep-alive" );
-	evhttp_add_header(headers, "Connection", "close" );
-	evhttp_add_header(headers, "Content-Type", "video/ogg" );
-	evhttp_add_header(headers, "X-Content-Duration", req->xcontentdur.c_str() );
-	evhttp_add_header(headers, "Content-Length", closs.str().c_str() );
-	//evhttp_add_header(headers, "Accept-Ranges", "none" );
+	struct evkeyvalq *reqheaders = evhttp_request_get_output_headers(req->sinkevreq);
+	//evhttp_add_header(reqheaders, "Connection", "keep-alive" );
+	evhttp_add_header(reqheaders, "Connection", "close" );
+	evhttp_add_header(reqheaders, "Content-Type", "video/ogg" );
+	if (req->xcontentdur.length() > 0)
+		evhttp_add_header(reqheaders, "X-Content-Duration", req->xcontentdur.c_str() );
+	evhttp_add_header(reqheaders, "Content-Length", closs.str().c_str() );
+	//evhttp_add_header(reqheaders, "Accept-Ranges", "none" );
 
-	dprintf("%s @%i headers_sent size %lli\n",tintstr(),req->id,req->tosend);
+	dprintf("%s @%i headers sent, size %lli\n",tintstr(),req->id,req->tosend);
 
 	/*
 	 * Arno, 2011-10-17: Swift ProgressCallbacks are only called when
@@ -551,14 +553,13 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 	// ARNOTODO: allow for chunk size to be set via URL?
     std::string uri = evhttp_request_get_uri(evreq);
 
-    struct evkeyvalq *headers =	evhttp_request_get_input_headers(evreq);
-    const char *contentrangestr =evhttp_find_header(headers,"Content-Range");
+    struct evkeyvalq *reqheaders =	evhttp_request_get_input_headers(evreq);
 
     // Arno, 2012-04-19: libevent adds "Connection: keep-alive" to reply headers
     // if there is one in the request headers, even if a different Connection
     // reply header has already been set. And we don't do persistent conns here.
     //
-    evhttp_remove_header(headers,"Connection"); // Remove Connection: keep-alive
+    evhttp_remove_header(reqheaders,"Connection"); // Remove Connection: keep-alive
 
     // 2. Parse URI
     std::string hashstr = "", mfstr="", durstr="";
