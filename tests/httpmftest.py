@@ -11,6 +11,7 @@ import shutil
 import time
 import subprocess
 import urllib2
+import string
 from traceback import print_exc
 
 DEBUG=False
@@ -102,10 +103,69 @@ def filelist2spec(filelist):
     spec += specbody
     return spec
     
+    
+def bytestr2int(b):
+    if b == "":
+        return None
+    else:
+        return int(b)
+    
+    
+def rangestr2triple(rangestr,length):
+    # Handle RANGE query
+    bad = False
+    type, seek = string.split(rangestr,'=')
+    if seek.find(",") != -1:
+        # - Range header contains set, not supported at the moment
+        bad = True
+    else:
+        firstbytestr, lastbytestr = string.split(seek,'-')
+        firstbyte = bytestr2int(firstbytestr)
+        lastbyte = bytestr2int(lastbytestr)
 
+        if length is None:
+            # - No length (live) 
+            bad = True
+        elif firstbyte is None and lastbyte is None:
+            # - Invalid input
+            bad = True
+        elif firstbyte >= length:
+            bad = True
+        elif lastbyte >= length:
+            if firstbyte is None:
+                """ If the entity is shorter than the specified 
+                suffix-length, the entire entity-body is used.
+                """
+                lastbyte = length-1
+            else:
+                bad = True
+        
+    if bad:
+        return (-1,-1,-1)
+    
+    if firstbyte is not None and lastbyte is None:
+        # "100-" : byte 100 and further
+        nbytes2send = length - firstbyte
+        lastbyte = length - 1
+    elif firstbyte is None and lastbyte is not None:
+        # "-100" = last 100 bytes
+        nbytes2send = lastbyte
+        firstbyte = length - lastbyte
+        lastbyte = length - 1
+        
+    else:
+        nbytes2send = lastbyte+1 - firstbyte
 
+    return (firstbyte,lastbyte,nbytes2send)
+    
 
-class TestMultiFileSeek(TestAsServer):
+class TestFrameMultiFileSeek(TestAsServer):
+    """
+    Framework for multi-file tests.
+    
+    Note: For some reason this super class is also actually tested, so
+    setUpFileList() has to be sane.
+    """
 
     def setUpPreSession(self):
         TestAsServer.setUpPreSession(self)
@@ -114,50 +174,47 @@ class TestMultiFileSeek(TestAsServer):
         
         print >>sys.stderr,"test: destdir is",self.destdir
         
+        self.setUpFileList()
         
-        specprefix = "MyCollection"
-        filelist = []
-        filelist.append((specprefix+"/anita.ts",1234))
-        filelist.append((specprefix+"/harry.ts",5000))
-        filelist.append((specprefix+"/sjaak.ts",24567))
+        idx = self.filelist[0][0].find("/")
+        specprefix = self.filelist[0][0][0:idx]
         
         prefixdir = os.path.join(self.destdir,specprefix)
         os.mkdir(prefixdir)
         
         # Create content
-        for fn,s in filelist:
+        for fn,s in self.filelist:
             osfn = fn.replace("/",os.sep)
             fullpath = os.path.join(self.destdir,osfn)
             f = open(fullpath,"wb")
-            data = fn[0] * s
+            data = fn[len(specprefix)+1] * s
             f.write(data)
             f.close()
         
         # Create spec
-        self.spec = filelist2spec(filelist)
+        self.spec = filelist2spec(self.filelist)
         
         fullpath = os.path.join(self.destdir,MULTIFILE_PATHNAME)
         f = open(fullpath,"wb")
         f.write(self.spec)
         f.close()
         
-        self.filelist = filelist
         self.filename = fullpath
+
+    def setUpFileList(self):
+        self.filelist = []
+        # Minimum 1 entry
+        self.filelist.append(("MyCollection/anita.ts",1234))
 
     def setUpPostSession(self):
         TestAsServer.setUpPostSession(self)
         
-        # Allow it to write
+        # Allow it to write root hash
         time.sleep(2)
-        print >>sys.stderr,"POPEN READING"
         
         f = open(self.stdoutfile.name,"rb")
         output = f.read(1024)
         f.close()
-        
-        print >>sys.stderr,"POPEN POST READING"
-        
-        print >>sys.stderr,"POPEN OUTPUT",output
         
         prefix = "Root hash: "
         idx = output.find(prefix)
@@ -169,39 +226,128 @@ class TestMultiFileSeek(TestAsServer):
         print >>sys.stderr,"test: setUpPostSession: roothash is",self.roothashhex
         
         self.urlprefix = "http://127.0.0.1:"+str(self.httpport)+"/"+self.roothashhex
-        
-    def test_simple(self):
+
+    """ 
+    def test_read_all(self):
         
         url = self.urlprefix        
         req = urllib2.Request(url)
         resp = urllib2.urlopen(req)
         data = resp.read()
         
-        # Create content
+        # Read and compare content
         if data[0:len(self.spec)] != self.spec:
             self.assert_(False,"returned content doesn't match spec")
-            print >>sys.stderr,"bad spec"
         offset = len(self.spec)
         for fn,s in self.filelist:
-            fn.replace("/",os.sep)
-            fullpath = os.path.join(self.destdir,fn)
+            osfn = fn.replace("/",os.sep)
+            fullpath = os.path.join(self.destdir,osfn)
             f = open(fullpath,"rb")
             content = f.read() 
             f.close()
             
             if data[offset:offset+s] != content:
                 self.assert_(False,"returned content doesn't match file "+fn )
-                print >>sys.stderr,"bad"
                 
             offset += s
         
         self.assertEqual(offset, len(data), "returned less content than expected" )
-        print >>sys.stderr,"expected",offset,"got",len(data)
         
+
+    def test_read_file0(self):
+        wanttup = self.filelist[0]
+        self._test_read_file(wanttup)
+
+    def test_read_file1(self):
+        if len(self.filelist) > 1:
+            wanttup = self.filelist[1]
+            self._test_read_file(wanttup)
+        
+    def test_read_file2(self):
+        if len(self.filelist) > 2:
+            wanttup = self.filelist[2]
+            self._test_read_file(wanttup)
+
+    def _test_read_file(self,wanttup):
+        url = self.urlprefix+"/"+wanttup[0]    
+        req = urllib2.Request(url)
+        resp = urllib2.urlopen(req)
+        data = resp.read()
+        resp.close()
+        
+        osfn = wanttup[0].replace("/",os.sep)
+        fullpath = os.path.join(self.destdir,osfn)
+        f = open(fullpath,"rb")
+        content = f.read() 
+        f.close()
+            
+        if data != content:
+            self.assert_(False,"returned content doesn't match file "+osfn )
+                
+        self.assertEqual(len(content), len(data), "returned less content than expected" )
+
+    """
+
+    def test_read_file0_range(self):
+        wanttup = self.filelist[0]
+        self._test_read_file_range(wanttup,"-2")
+        self._test_read_file_range(wanttup,"0-2")
+        self._test_read_file_range(wanttup,"2-")
+
+
+    def _test_read_file_range(self,wanttup,rangestr):
+        url = self.urlprefix+"/"+wanttup[0]    
+        req = urllib2.Request(url)
+        val = "bytes="+rangestr
+        req.add_header("Range", val)
+        (firstbyte,lastbyte,nbytes) = rangestr2triple(val,wanttup[1])
+            
+        print >>sys.stderr,"test: Requesting",firstbyte,"to",lastbyte,"total",nbytes,"from",wanttup[0]
+            
+        resp = urllib2.urlopen(req)
+        data = resp.read()
+        resp.close()
+        
+        osfn = wanttup[0].replace("/",os.sep)
+        fullpath = os.path.join(self.destdir,osfn)
+        f = open(fullpath,"rb")
+        content = f.read() 
+        f.close()
+            
+        #print >>sys.stderr,"test: got",`data`
+        #print >>sys.stderr,"test: want",`content[firstbyte:lastbyte+1]`
+            
+        if data != content[firstbyte:lastbyte+1]:
+            self.assert_(False,"returned content doesn't match file "+osfn )
+                
+        self.assertEqual(nbytes, len(data), "returned less content than expected" )
+
+"""
+
+class TestMFSAllAbove1K(TestFrameMultiFileSeek):
+
+    def setUpFileList(self):
+        self.filelist = []
+        self.filelist.append(("MyCollection/anita.ts",1234))
+        self.filelist.append(("MyCollection/harry.ts",5000))
+        self.filelist.append(("MyCollection/sjaak.ts",24567))
+
+
+class TestMFS1stSmall(TestFrameMultiFileSeek):
+
+    def setUpFileList(self):
+        self.filelist = []
+        self.filelist.append(("MyCollection/anita.ts",123))
+        self.filelist.append(("MyCollection/harry.ts",5000))
+        self.filelist.append(("MyCollection/sjaak.ts",24567))
+
+"""
 
 def test_suite():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(TestMultiFileSeek))
+    suite.addTest(unittest.makeSuite(TestFrameMultiFileSeek))
+    #suite.addTest(unittest.makeSuite(TestMFSAllAbove1K))
+    #suite.addTest(unittest.makeSuite(TestMFS1stSmall))
     
     return suite
 
