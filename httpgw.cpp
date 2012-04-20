@@ -75,6 +75,21 @@ http_gw_t *HttpGwFindRequestByTransfer(int transfer) {
 	return NULL;
 }
 
+http_gw_t *HttpGwFindRequestByRoothash(Sha1Hash &wanthash) {
+	for (int httpc=0; httpc<http_gw_reqs_open; httpc++) {
+		http_gw_t *req = &http_requests[httpc];
+		if (req == NULL)
+			continue;
+		FileTransfer *ft = FileTransfer::file(req->transfer);
+		if (ft == NULL)
+			continue;
+		if (ft->root_hash() == wanthash)
+			return req;
+	}
+	return NULL;
+}
+
+
 void HttpGwCloseConnection (http_gw_t* req) {
 	dprintf("%s @%i cleanup http request evreq %p\n",tintstr(),req->id, req->sinkevreq);
 
@@ -591,8 +606,16 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     dprintf("%s @%i demands %s %s %s\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str(),mfstr.c_str(),durstr.c_str() );
 
 
-    // 3. Initiate transfer
+    // 3. Check for concurrent requests, currently not supported.
     Sha1Hash root_hash = Sha1Hash(true,hashstr.c_str());
+    http_gw_t *existreq = HttpGwFindRequestByRoothash(root_hash);
+    if (existreq != NULL)
+    {
+    	evhttp_send_error(evreq,409,"Conflict: server does not support concurrent requests to same swarm.");
+    	return;
+    }
+
+    // 4. Initiate transfer
     int transfer = swift::Find(root_hash);
     if (transfer==-1) {
         transfer = swift::Open(hashstr,root_hash,Address(),false,httpgw_chunk_size);
@@ -604,12 +627,8 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
         ft->SetMaxSpeed(DDIR_DOWNLOAD,httpgw_maxspeed[DDIR_DOWNLOAD]);
         ft->SetMaxSpeed(DDIR_UPLOAD,httpgw_maxspeed[DDIR_UPLOAD]);
     }
-    else
-    {
-    	// SEEKTODO: concurrency control on playbackpos
-    }
 
-    // 4. Record request
+    // 5. Record request
     http_gw_t* req = http_requests + http_gw_reqs_open++;
     req->id = ++http_gw_reqs_count;
     req->sinkevreq = evreq;
