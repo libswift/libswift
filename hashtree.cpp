@@ -257,7 +257,6 @@ void            HashTree::RecoverProgress () {
 bool HashTree::RecoverPeakHashes()
 {
 	int64_t ret = storage_->GetReservedSize();
-	fprintf(stderr,"hashtree: RecoverPeakHashes: reserved is %lld\n", ret );
 	if (ret < 0)
 		return false;
 
@@ -272,17 +271,11 @@ bool HashTree::RecoverPeakHashes()
         Sha1Hash peak_hash;
         file_seek(hash_fd_,peaks[i].toUInt()*sizeof(Sha1Hash));
         if (read(hash_fd_,&peak_hash,sizeof(Sha1Hash))!=sizeof(Sha1Hash))
-        {
-        	fprintf(stderr,"hashtree: RecoverPeakHashes: bad read\n" );
             return false;
-        }
         OfferPeakHash(peaks[i], peak_hash);
     }
     if (!this->size())
-    {
-    	fprintf(stderr,"hashtree: RecoverPeakHashes: size not known\n" );
         return false; // if no valid peak hashes found
-    }
 
     return true;
 }
@@ -323,27 +316,18 @@ int HashTree::internal_deserialize(FILE *fp,bool contentavail) {
 	fscanf_retiffail(fp,"complete %llu\n", &c );
 	fscanf_retiffail(fp,"completec %llu\n", &cc );
 
-	fprintf(stderr,"hashtree: deserialize: %s %llu ~ %llu * %i\n", hexhashstr, c, cc, cs );
-
 	if (ack_out_.deserialize(fp) < 0)
-	{
-		fprintf(stderr,"hashtree: deserialize: bad binmap\n");
 		return -1;
-	}
 	root_hash_ = Sha1Hash(true, hexhashstr);
 	chunk_size_ = cs;
 
 	// Arno, 2012-01-03: Hack to just get root hash
 	if (!contentavail)
-	{
-		fprintf(stderr,"hashtree: deserialize: not content avail\n");
 		return 2;
-	}
 
 	if (!RecoverPeakHashes()) {
 		root_hash_ = Sha1Hash::ZERO;
 		ack_out_.clear();
-		fprintf(stderr,"hashtree: deserialize: cannot recover peak hashes\n");
 		return -1;
 	}
 
