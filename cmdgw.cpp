@@ -19,9 +19,11 @@
 
 using namespace swift;
 
-// Send PLAY after receiving 2^layer * chunksize bytes
+// Send PLAY after receiving N bytes
 #define CMDGW_MAX_PREBUF_BYTES		(256*1024)
 
+// Report swift download progress every 2^layer * chunksize bytes (so 0 = report every chunk)
+#define CMDGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER 	0
 
 // Status of the swarm download
 #define DLSTATUS_HASHCHECKING  2
@@ -306,15 +308,18 @@ void CmdGwSendPLAY(int transfer)
 
 void CmdGwSwiftFirstProgressCallback (int transfer, bin_t bin)
 {
-	// First CMDGW_MAX_PREBUF_BYTES bytes received via swift,
-	// tell user to PLAY
-	// ARNOSMPTODO: bitrate-dependent prebuffering?
 	if (cmd_gw_debug)
 		fprintf(stderr,"cmd: SwiftFirstProgress: %d\n", transfer );
 
-	swift::RemoveProgressCallback(transfer,&CmdGwSwiftFirstProgressCallback);
+	if (swift::SeqComplete(transfer) >= CMDGW_MAX_PREBUF_BYTES)
+	{
+		// First CMDGW_MAX_PREBUF_BYTES bytes received via swift,
+		// tell user to PLAY
+		// ARNOSMPTODO: bitrate-dependent prebuffering?
+		swift::RemoveProgressCallback(transfer,&CmdGwSwiftFirstProgressCallback);
 
-	CmdGwSendPLAY(transfer);
+		CmdGwSendPLAY(transfer);
+	}
 }
 
 
@@ -593,15 +598,14 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
         // Wait for prebuffering and then send PLAY to user
     	// ARNOSMPTODO: OUTOFORDER: breaks with out-of-order download
-        if (swift::Size(transfer) >= CMDGW_MAX_PREBUF_BYTES)
+        if (swift::SeqComplete(transfer) >= CMDGW_MAX_PREBUF_BYTES)
         {
             CmdGwSwiftFirstProgressCallback(transfer,bin_t(0,0));
             CmdGwSendINFO(req, DLSTATUS_DOWNLOADING);
         }
         else
         {
-        	int progresslayer = bytes2layer(CMDGW_MAX_PREBUF_BYTES,swift::ChunkSize(transfer));
-            swift::AddProgressCallback(transfer,&CmdGwSwiftFirstProgressCallback,progresslayer);
+            swift::AddProgressCallback(transfer,&CmdGwSwiftFirstProgressCallback,CMDGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER);
         }
     }
     else if (!strcmp(method,"REMOVE"))
