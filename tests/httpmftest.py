@@ -79,6 +79,7 @@ class TestAsServer(unittest.TestCase):
             self.popen.kill()
 
 
+
 MULTIFILE_PATHNAME = "META-INF-multifilespec.txt"
 
 def filelist2spec(filelist):
@@ -102,6 +103,7 @@ def filelist2spec(filelist):
     spec = MULTIFILE_PATHNAME+" "+str(specsize)+"\n"
     spec += specbody
     return spec
+    
     
     
 def bytestr2int(b):
@@ -158,13 +160,12 @@ def rangestr2triple(rangestr,length):
 
     return (firstbyte,lastbyte,nbytes2send)
     
+    
+    
 
 class TestFrameMultiFileSeek(TestAsServer):
     """
     Framework for multi-file tests.
-    
-    Note: For some reason this super class is also actually tested, so
-    setUpFileList() has to be sane.
     """
 
     def setUpPreSession(self):
@@ -204,7 +205,6 @@ class TestFrameMultiFileSeek(TestAsServer):
     def setUpFileList(self):
         self.filelist = []
         # Minimum 1 entry
-        self.filelist.append(("MyCollection/anita.ts",1234))
 
     def setUpPostSession(self):
         TestAsServer.setUpPostSession(self)
@@ -227,7 +227,6 @@ class TestFrameMultiFileSeek(TestAsServer):
         
         self.urlprefix = "http://127.0.0.1:"+str(self.httpport)+"/"+self.roothashhex
 
-    """ 
     def test_read_all(self):
         
         url = self.urlprefix        
@@ -286,13 +285,28 @@ class TestFrameMultiFileSeek(TestAsServer):
                 
         self.assertEqual(len(content), len(data), "returned less content than expected" )
 
-    """
-
     def test_read_file0_range(self):
         wanttup = self.filelist[0]
         self._test_read_file_range(wanttup,"-2")
         self._test_read_file_range(wanttup,"0-2")
         self._test_read_file_range(wanttup,"2-")
+        self._test_read_file_range(wanttup,"4-10")
+
+    def test_read_file1_range(self):
+        if len(self.filelist) > 1:
+            wanttup = self.filelist[1]
+            self._test_read_file_range(wanttup,"-2")
+            self._test_read_file_range(wanttup,"0-2")
+            self._test_read_file_range(wanttup,"2-")
+            self._test_read_file_range(wanttup,"4-10")
+
+    def test_read_file2_range(self):
+        if len(self.filelist) > 2:
+            wanttup = self.filelist[2]
+            self._test_read_file_range(wanttup,"-2")
+            self._test_read_file_range(wanttup,"0-2")
+            self._test_read_file_range(wanttup,"2-")
+            self._test_read_file_range(wanttup,"4-10")
 
 
     def _test_read_file_range(self,wanttup,rangestr):
@@ -322,9 +336,11 @@ class TestFrameMultiFileSeek(TestAsServer):
                 
         self.assertEqual(nbytes, len(data), "returned less content than expected" )
 
-"""
 
 class TestMFSAllAbove1K(TestFrameMultiFileSeek):
+    """ 
+    Concrete test of files all > 1024 bytes
+    """
 
     def setUpFileList(self):
         self.filelist = []
@@ -334,23 +350,28 @@ class TestMFSAllAbove1K(TestFrameMultiFileSeek):
 
 
 class TestMFS1stSmall(TestFrameMultiFileSeek):
-
+    """ 
+    Concrete test with 1st file fitting in 1st chunk (i.e. spec+file < 1024)
+    """
     def setUpFileList(self):
         self.filelist = []
         self.filelist.append(("MyCollection/anita.ts",123))
         self.filelist.append(("MyCollection/harry.ts",5000))
         self.filelist.append(("MyCollection/sjaak.ts",24567))
 
-"""
 
 def test_suite():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(TestFrameMultiFileSeek))
-    #suite.addTest(unittest.makeSuite(TestMFSAllAbove1K))
-    #suite.addTest(unittest.makeSuite(TestMFS1stSmall))
+    suite.addTest(unittest.makeSuite(TestMFSAllAbove1K))
+    suite.addTest(unittest.makeSuite(TestMFS1stSmall))
     
     return suite
 
+
+def main():
+    unittest.main(defaultTest='test_suite',argv=[sys.argv[0]])
+
 if __name__ == "__main__":
-    unittest.main()
+    main()
+
         
