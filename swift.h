@@ -398,7 +398,7 @@ namespace swift {
         friend uint64_t  Size (int fdes);
         friend bool      IsComplete (int fdes);
         friend uint64_t  Complete (int fdes);
-        friend uint64_t  SeqComplete (int fdes);
+        friend uint64_t  SeqComplete (int fdes, int64_t offset);
         friend int     Open (const char* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size);
         friend void    Close (int fd) ;
         friend void AddProgressCallback (int transfer,ProgressCallback cb,uint8_t agg);
@@ -421,10 +421,11 @@ namespace swift {
          *  @return             the bin number to request */
         virtual bin_t Pick (binmap_t& offered, uint64_t max_width, tint expires) = 0;
         virtual void LimitRange (bin_t range) = 0;
-        /** updates the playback position for streaming piece picking.
-         *  @param  amount		amount to increment in bin unit size (1KB default) */
-        virtual void updatePlaybackPos (int amount=1) = 0;
         virtual ~PiecePicker() {}
+        /** updates the playback position for streaming piece picking.
+         *  @param  offbin		bin number of new playback pos
+         *  @param  whence      only SEEK_CUR supported */
+        virtual int Seek(bin_t offbin, int whence) = 0;
     };
 
 
@@ -754,7 +755,7 @@ namespace swift {
 		static std::string spec2ospn(std::string specpn);
 		static std::string os2specpn(std::string ospn);
 
-		/** Constructor */
+		/** Create Storage from specified path and destination dir if content turns about to be a multi-file */
 		Storage(std::string ospathname, std::string destdir);
 		~Storage();
 
@@ -779,12 +780,20 @@ namespace swift {
 		/** Change size reserved for storage */
 		int ResizeReserved(int64_t size);
 
+		/** Return the operating system path for this Storage */
 		std::string GetOSPathName() { return os_pathname_; }
 
+		/** Return the root hash of the content being stored */
 		std::string roothashhex() { if (ht_ == NULL) return "0000000000000000000000000000000000000000"; else return ht_->root_hash().hex(); }
 
+		/** Return the destination directory for this Storage */
 		std::string GetDestDir() { return destdir_; }
 
+		/** Whether Storage is ready to be used */
+		bool IsReady() { return state_ == STOR_STATE_SINGLE_FILE || state_ == STOR_STATE_MFSPEC_COMPLETE; }
+
+		/** Return the list of StorageFiles for this Storage, empty if not multi-file */
+		storage_files_t	GetStorageFiles() { return sfs_; }
 
 	  protected:
 			storage_state_t	state_;
@@ -796,8 +805,6 @@ namespace swift {
 			HashTree *ht_;
 
 			int64_t spec_size_;
-
-			// TODO: DOCUMENT
 
 			storage_files_t	sfs_;
 			int single_fd_;
@@ -848,7 +855,10 @@ namespace swift {
 	/** UNIX pwrite approximation. Does change file pointer. Is not thread-safe */
 	ssize_t  Write(int fd, const void *buf, size_t nbyte, int64_t offset);
 
-    void    SetTracker(const Address& tracker);
+    /** Seek, i.e., move start of interest window */
+    int Seek(int fd, int64_t offset, int whence);
+
+	void    SetTracker(const Address& tracker);
     /** Set the default tracker that is used when Open is not passed a tracker
         address. */
 
@@ -861,7 +871,7 @@ namespace swift {
     bool      IsComplete (int fdes);
     /** Returns the number of bytes that are complete sequentially, starting from the
         beginning, till the first not-yet-retrieved packet. */
-    uint64_t  SeqComplete (int fdes);
+    uint64_t  SeqComplete(int fdes, int64_t offset=0);
     /***/
     int       Find (Sha1Hash hash);
     /** Returns the number of bytes in a chunk for this transmission */

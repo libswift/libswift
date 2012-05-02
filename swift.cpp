@@ -262,7 +262,7 @@ int utf8main (int argc, char** argv)
     	InstallStatsGateway(Channel::evbase,statsaddr);
 
 
-    if (!cmdgw_enabled && !httpgw_enabled)
+    if (!cmdgw_enabled)
     {
 		int ret = -1;
 		if (!generate_multifile)
@@ -288,6 +288,10 @@ int utf8main (int argc, char** argv)
 				// Calc roothash
 				ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,maxspeed);
 		}
+
+		// For testing
+		if (httpgw_enabled)
+			ret = 0;
 
 		// No file/dir nor HTTP gateway nor CMD gateway, will never know what to swarm
 		if (ret == -1) {
@@ -383,7 +387,10 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
 		swift::Checkpoint(single_fd);
 	}
 	else
+	{
 		printf("Root hash: %s\n", RootMerkleHash(single_fd).hex().c_str());
+		fflush(stdout); // For testing
+	}
 
 	// RATELIMIT
 	FileTransfer *ft = FileTransfer::file(single_fd);
@@ -595,7 +602,8 @@ int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int ar
 		int64_t fsize = file_size_by_path_utf8(pathname);
 		if( fsize < 0)
 		{
-			print_error("cannot open file in multi-spec list");
+			fprintf(stderr,"cannot open file in multi-spec list: %s\n", pathname.c_str() );
+			print_error("cannot open file in multi-spec list" );
 			return fsize;
 		}
 

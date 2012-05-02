@@ -245,14 +245,27 @@ public:
         return hint;
     }
 
-
-    void updatePlaybackPos(int size = 1)
+    int Seek(bin_t offbin, int whence)
     {
-    	assert(size>-1);
-    	if (size< file().size_in_chunks() - playback_pos_ - 2)
-    		playback_pos_ += size;
-    }
+    	char binstr[32];
+    	fprintf(stderr,"vodpp: seek: %s whence %d\n", offbin.str(binstr), whence );
 
+    	if (whence != SEEK_SET)
+    		return -1;
+
+    	// TODO: convert playback_pos_ to a bin number
+    	uint64_t cid = offbin.toUInt()/2;
+    	if (cid > 0)
+    		cid--; // Riccardo assumes playbackpos is already in.
+
+    	fprintf(stderr,"vodpp: pos in K %llu size %llu\n", cid, file().size_in_chunks() );
+
+    	if (cid > file().size_in_chunks())
+    		return -1;
+
+    	playback_pos_ = cid;
+    	return 0;
+    }
 
     void status()
 	{

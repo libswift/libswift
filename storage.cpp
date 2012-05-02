@@ -26,6 +26,9 @@ Storage::Storage(std::string ospathname, std::string destdir) : state_(STOR_STAT
 		os_pathname_(ospathname), destdir_(destdir), ht_(NULL), spec_size_(0),
 		single_fd_(-1), reserved_size_(-1), total_size_from_spec_(-1), last_sf_(NULL)
 {
+
+	fprintf(stderr,"Storage: ospathname %s destdir %s\n", ospathname.c_str(), destdir.c_str() );
+
 	int64_t fsize = file_size_by_path_utf8(ospathname.c_str());
 	if (fsize < 0 && errno == ENOENT)
 	{
@@ -115,8 +118,7 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 			//dprintf("%s %s storage: Write: multifile: specsize %lld\n", tintstr(), roothashhex().c_str(), spec_size_ );
 
 			// Create StorageFile for multi-file spec.
-			std::string ospath = destdir_+FILE_SEP+MULTIFILE_PATHNAME;
-			StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,spec_size_,ospath);
+			StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,spec_size_,os_pathname_);
 			sfs_.push_back(sf);
 
 			// Write all, or part of spec and set state_
@@ -212,6 +214,11 @@ int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64
 		// We know exact size after chunk 0, inform hash tree (which doesn't
 		// know until chunk N-1) is in.
 		ht_->set_size(GetSizeFromSpec());
+
+		// Resize all files
+		ret = ResizeReserved(GetSizeFromSpec());
+		if (ret < 0)
+			return ret;
 
 		// Write tail to next StorageFile(s) using recursion
 		const char *bufstr = (const char *)buf;
@@ -541,7 +548,7 @@ int Storage::ResizeReserved(int64_t size)
 		}
 	}
 	else
-		dprintf("%s %s storage: Resize multi-file to smaller %lld, ignored\n", tintstr(), roothashhex().c_str(), size);
+		dprintf("%s %s storage: Resize multi-file to <= %lld, ignored\n", tintstr(), roothashhex().c_str(), size);
 
 	return 0;
 }

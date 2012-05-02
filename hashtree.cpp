@@ -87,7 +87,11 @@ chunk_size_(chunk_size)
 	// If multi-file spec we know the exact size even before getting peaks+last chunk
 	int64_t sizefromspec = storage_->GetSizeFromSpec();
 	if (sizefromspec != -1)
+	{
 		set_size(sizefromspec);
+		// Resize all files
+		(void)storage_->ResizeReserved(sizefromspec);
+	}
 
 	// Arno: if user doesn't want to check hashes but no .mhash, check hashes anyway
 	bool actually_check_hashes = check_hashes;
@@ -252,7 +256,11 @@ void            HashTree::RecoverProgress () {
 /** Precondition: root hash known */
 bool HashTree::RecoverPeakHashes()
 {
-    uint64_t size = storage_->GetReservedSize();
+	int64_t ret = storage_->GetReservedSize();
+	if (ret < 0)
+		return false;
+
+    uint64_t size = ret;
     uint64_t sizek = (size + chunk_size_-1) / chunk_size_;
 
 	// Arno: Calc location of peak hashes, read them from hash file and check if
@@ -307,8 +315,6 @@ int HashTree::internal_deserialize(FILE *fp,bool contentavail) {
 	fscanf_retiffail(fp,"chunk size %lu\n", &cs);
 	fscanf_retiffail(fp,"complete %llu\n", &c );
 	fscanf_retiffail(fp,"completec %llu\n", &cc );
-
-	//fprintf(stderr,"hashtree: deserialize: %s %llu ~ %llu * %i\n", hexhashstr, c, cc, cs );
 
 	if (ack_out_.deserialize(fp) < 0)
 		return -1;
@@ -542,13 +548,34 @@ bool            HashTree::OfferData (bin_t pos, const char* data, size_t length)
 }
 
 
-uint64_t      HashTree::seq_complete () {
-    uint64_t seqc = ack_out_.find_empty().base_offset();
-    if (seqc==sizec_)
-        return size_;
-    else
-        return seqc*chunk_size_;
+uint64_t      HashTree::seq_complete (int64_t offset) {
+
+	uint64_t seqc = 0;
+	if (offset == 0)
+	{
+	    uint64_t seqc = ack_out_.find_empty().base_offset();
+	    if (seqc==sizec_)
+	        return size_;
+	    else
+	        return seqc*chunk_size_;
+	}
+	else
+	{
+		// SEEK: Calc sequentially complete bytes from an offset
+		bin_t binoff = bin_t(0,(offset - (offset % chunk_size_)) / chunk_size_);
+		bin_t nextempty = ack_out_.find_empty(binoff);
+		if (nextempty == bin_t::NONE || nextempty.base_offset() * chunk_size_ > size_)
+			return size_-offset; // All filled from offset
+
+		bin_t::uint_t diffc = nextempty.layer_offset() - binoff.layer_offset();
+		uint64_t diffb = diffc * chunk_size_;
+		if (diffb > 0)
+			diffb -= (offset % chunk_size_);
+
+		return diffb;
+	}
 }
+
 
 HashTree::~HashTree () {
     if (hashes_)

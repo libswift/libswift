@@ -140,8 +140,8 @@ public:
     /** Number of chunks retrieved and checked. */
     uint64_t        chunks_complete () const { return completec_; }
     /** The number of bytes completed sequentially, i.e. from the beginning of
-        the file, uninterrupted. */
-    uint64_t        seq_complete () ;
+        the file (or offset), uninterrupted. */
+    uint64_t        seq_complete(int64_t offset); // SEEK
     /** Whether the file is complete. */
     bool            is_complete () 
         { return size_ && complete_==size_; }
@@ -152,7 +152,7 @@ public:
 
     // for transfertest.cpp
     Storage *       get_storage() { return storage_; }
-    void            set_size(uint64_t size) { size_ = size; }
+    void            set_size(uint64_t size) { size_ = size; fprintf(stderr,"hashtree: set_size %llu\n", size ); }
 
     // Arno: persistent storage for state other than hashes (which are in .mhash)
     int serialize(FILE *fp);

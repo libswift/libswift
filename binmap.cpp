@@ -753,6 +753,57 @@ bin_t binmap_t::find_filled() const
 }
 
 
+/**
+ * Arno: Find first empty bin right of start (start inclusive)
+ */
+bin_t binmap_t::find_empty(bin_t start) const
+{
+	bin_t cur_bin = start;
+
+	if (is_empty(cur_bin))
+		return cur_bin;
+	do
+	{
+		// Move up till we find ancestor that is not filled.
+		cur_bin = cur_bin.parent();
+		if (!is_filled(cur_bin))
+		{
+			// Ancestor is not filled
+			break;
+		}
+		if (cur_bin == root_bin_)
+		{
+			// Hit top, full tree, sort of. For some reason root_bin_ not
+			// set to real top (but to ALL), so we may actually return a
+			// bin that is outside the size of the content here.
+			return bin_t::NONE;
+		}
+	}
+	while (true);
+
+	// Move down
+	do
+	{
+		if (!is_filled(cur_bin.left()))
+		{
+			cur_bin.to_left();
+		}
+		else if (!is_filled(cur_bin.right()))
+		{
+			cur_bin.to_right();
+		}
+		if (cur_bin.is_base())
+		{
+			// Found empty bin
+			return cur_bin;
+		}
+	} while(!cur_bin.is_base()); // safety catch
+
+	return bin_t::NONE;
+}
+
+
+
 #define LR_LEFT   (0x00)
 #define RL_RIGHT  (0x01)
 #define RL_LEFT   (0x02)
