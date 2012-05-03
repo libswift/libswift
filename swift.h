@@ -450,10 +450,6 @@ namespace swift {
 	   Normally, API users do not deal with this class. */
     class Channel {
 
-#define DGRAM_MAX_SOCK_OPEN 128
-	static int sock_count;
-	static sckrwecb_t sock_open[DGRAM_MAX_SOCK_OPEN];
-
     public:
         Channel    (FileTransfer* file, int socket=INVALID_SOCKET, Address peer=Address());
         ~Channel();
@@ -580,6 +576,11 @@ namespace swift {
 
 
     protected:
+#define DGRAM_MAX_SOCK_OPEN 128
+   	    static int sock_count;
+	    static sckrwecb_t sock_open[DGRAM_MAX_SOCK_OPEN];
+
+
         /** Channel id: index in the channel array. */
         uint32_t    id_;
         /**    Socket address of the peer. */
@@ -691,6 +692,8 @@ namespace swift {
         friend void     AddPeer (Address address, const Sha1Hash& root);
         friend void     SetTracker(const Address& tracker);
         friend int      Open (const char*, const Sha1Hash&, Address tracker, bool check_hashes, uint32_t chunk_size) ; // FIXME
+        // SOCKTUNNEL
+        friend void 	CmdGwTunnelSendUDP(struct evbuffer *evb);
     };
 
 
@@ -916,6 +919,10 @@ namespace swift {
 
     // Arno: Save transfer's binmap for zero-hashcheck restart
     int Checkpoint(int fdes);
+
+    // SOCKTUNNEL
+    void CmdGwTunnelUDPDataCameIn(Address srcaddr, uint32_t srcchan, struct evbuffer* evb);
+    void CmdGwTunnelSendUDP(struct evbuffer *evb); // for friendship with Channel
 
 } // namespace end
 

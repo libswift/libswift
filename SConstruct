@@ -22,8 +22,8 @@ TestDir='tests'
 target = 'swift'
 source = [ 'bin.cpp', 'binmap.cpp','binheap.cpp', 'sha1.cpp','hashtree.cpp',
     	   'transfer.cpp', 'channel.cpp', 'sendrecv.cpp', 'send_control.cpp', 
-    	   'compat.cpp','avgspeed.cpp', 'availability.cpp', 'storage.cpp']
-
+    	   'compat.cpp','avgspeed.cpp', 'availability.cpp', 'cmdgw.cpp', 'storage.cpp']
+# cmdgw.cpp now in there for SOCKTUNNEL
 
 env = Environment()
 if sys.platform == "win32":
@@ -80,7 +80,7 @@ if sys.platform == "win32":
     if not DEBUG:
     	env.Append(LINKFLAGS="/SUBSYSTEM:WINDOWS")
     
-    APPSOURCE=['swift.cpp','httpgw.cpp','statsgw.cpp','cmdgw.cpp','getopt.c','getopt_long.c']
+    APPSOURCE=['swift.cpp','httpgw.cpp','statsgw.cpp','getopt.c','getopt_long.c']
     
 else:
     libevent2path = '/arno/pkgs/libevent-2.0.15-arno-http'
@@ -114,7 +114,7 @@ else:
     env.Append(LINKFLAGS=linkflags);
 
 
-    APPSOURCE=['swift.cpp','httpgw.cpp','statsgw.cpp','cmdgw.cpp']
+    APPSOURCE=['swift.cpp','httpgw.cpp','statsgw.cpp']
 
 if DEBUG:
     env.Append(CXXFLAGS="-DDEBUG")
