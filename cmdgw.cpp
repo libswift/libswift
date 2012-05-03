@@ -374,6 +374,14 @@ void CmdGwSwiftPrebufferProgressCallback (int transfer, bin_t bin)
 }
 
 
+/*
+ * For single file content, install a new callback that checks whether
+ * we have enough data prebuffered. For multifile, wait till the first chunks
+ * containing the multi-file spec have been loaded, then set download pointer
+ * to the desired file (via swift::Seek) and then wait till enough data is
+ * prebuffered (via CmdGwSwiftPrebufferingProcessCallback).
+ */
+
 void CmdGwSwiftFirstProgressCallback (int transfer, bin_t bin)
 {
 	//
@@ -401,9 +409,6 @@ void CmdGwSwiftFirstProgressCallback (int transfer, bin_t bin)
 	if (req->mfspecname == "")
 	{
 		// Single file
-		if (cmd_gw_debug)
-			fprintf(stderr,"cmd: SwiftFirstProgress: Single file, wait till prebuf %d\n", transfer );
-
 		req->startoff = 0;
 		req->endoff = swift::Size(req->transfer)-1;
 		CmdGwSwiftPrebufferProgressCallback(req->transfer,bin_t(0,0)); // in case file on disk
@@ -412,10 +417,6 @@ void CmdGwSwiftFirstProgressCallback (int transfer, bin_t bin)
 	else
 	{
 		// MULTIFILE
-		if (cmd_gw_debug)
-			fprintf(stderr,"cmd: SwiftFirstProgress: Searching multifile %s %d\n", req->mfspecname.c_str(), transfer );
-
-
 		// Have spec, seek to wanted file
 		storage_files_t sfs = ft->GetStorage()->GetStorageFiles();
 		storage_files_t::iterator iter;
@@ -426,7 +427,7 @@ void CmdGwSwiftFirstProgressCallback (int transfer, bin_t bin)
 			if (sf->GetSpecPathName() == req->mfspecname)
 			{
 				if (cmd_gw_debug)
-					fprintf(stderr,"cmd: SwiftFirstProgress: Seeking to multifile for %d\n", transfer );
+					fprintf(stderr,"cmd: SwiftFirstProgress: Seeking to multifile %s for %d\n", req->mfspecname.c_str(), transfer );
 
 				int ret = swift::Seek(req->transfer,sf->GetStart(),SEEK_SET);
 				if (ret < 0)
