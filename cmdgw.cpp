@@ -678,7 +678,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         if (durationstr.length() > 0)
         	std::istringstream(durationstr) >> duration;
 
-        dprintf("cmd: START: %s with tracker %s chunksize %i duration %i\n",hashstr,trackerstr,chunksize,duration);
+        dprintf("cmd: START: %s with tracker %s chunksize %i duration %i\n",hashstr.c_str(),trackerstr.c_str(),chunksize,duration);
 
         // ARNOTODO: return duration in HTTPGW
 

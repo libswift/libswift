@@ -29,11 +29,12 @@ class VodPiecePicker : public PiecePicker {
     bin_t           range_;
     int				playback_pos_;		// playback position in KB
     int				high_pri_window_;
+    bin_t           initseq_;			// Hack by Arno to avoid large hints at startup
 
 public:
 
     VodPiecePicker (FileTransfer* file_to_pick_from) : ack_hint_out_(),
-           transfer_(file_to_pick_from), twist_(0), range_(bin_t::ALL)
+           transfer_(file_to_pick_from), twist_(0), range_(bin_t::ALL), initseq_(0,0)
     {
     	avail_ = &(transfer_->availability());
         binmap_t::copy(ack_hint_out_, file().ack_out());
@@ -173,6 +174,13 @@ public:
         if (!file().size()) {
 
             return bin_t(0,0);
+        }
+        else if (file().ack_out().is_empty(bin_t(0,0)))
+        {
+        	// Arno, 2012-05-03: big initial hint avoidance hack:
+        	// Just ask sequentially till first chunk in.
+        	initseq_ = bin_t(initseq_.layer(),initseq_.layer_offset()+1);
+        	return initseq_;
         }
 
         do {

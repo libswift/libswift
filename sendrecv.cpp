@@ -256,7 +256,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
     int hints_limit = (int)min((double)LONG_MAX,hints_limit_float);
     int allowed_hints = max(0,hints_limit-(int)rough_global_hint_out_size);
 
-    if (DEBUGTRAFFIC)
+    if (!DEBUGTRAFFIC)
     	fprintf(stderr,"hint c%d: %f want %d allow %d chanout %llu globout %llu\n", id(), transfer().GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, allowed_hints, hint_out_size_, rough_global_hint_out_size );
 
     // Take into account network limit
@@ -277,7 +277,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
             evbuffer_add_32be(evb, bin_toUInt32(hint));
             char bin_name_buf[32];
             dprintf("%s #%u +hint %s [%lli]\n",tintstr(),id_,hint.str(bin_name_buf),hint_out_size_);
-            dprintf("%s #%u +hint base %s\n",tintstr(),id_,hint.base_left().str(bin_name_buf));
+            dprintf("%s #%u +hint base %s width %d\n",tintstr(),id_,hint.base_left().str(bin_name_buf), hint.base_length() );
             hint_out_.push_back(hint);
             hint_out_size_ += hint.base_length();
             //fprintf(stderr,"send c%d: HINTLEN %i\n", id(), hint.base_length());
