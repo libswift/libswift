@@ -495,12 +495,7 @@ void HttpGwFirstProgressCallback (int transfer, bin_t bin) {
 
 	// Handle HTTP GET Range request, i.e. additional offset within content or file
 	if (!HttpGwParseContentRangeHeader(req,filesize))
-	{
-
-		exit(-1);
-
 		return;
-	}
 
 	if (req->rangefirst != -1)
 	{
@@ -554,6 +549,99 @@ void HttpGwFirstProgressCallback (int transfer, bin_t bin) {
 
 
 
+bool swift::ParseURI(std::string uri,parseduri_t &map)
+{
+	//
+	// Format: tswift://tracker:port/roothash-in-hex/filename$chunksize@duration
+	// where the server part, filename, chunksize and duration may be optional
+	//
+	std::string scheme="";
+	std::string server="";
+	std::string path="";
+	if (uri.substr(0,((std::string)SWIFT_URI_SCHEME).length()) == SWIFT_URI_SCHEME)
+	{
+		// scheme present
+		scheme = SWIFT_URI_SCHEME;
+		int sidx = uri.find("//");
+		if (sidx != std::string::npos)
+		{
+			// server part present
+			int eidx = uri.find("/",sidx+2);
+			server = uri.substr(sidx+2,eidx-(sidx+2));
+			path = uri.substr(eidx);
+		}
+		else
+			path = uri.substr(((std::string)SWIFT_URI_SCHEME).length()+1);
+	}
+	else
+		path = uri;
+
+
+	std::string hashstr="";
+	std::string filename="";
+	std::string modstr="";
+
+	int sidx = path.find("/",1);
+	int midx = path.find("$",1);
+	if (midx == std::string::npos)
+		midx = path.find("@",1);
+	if (sidx == std::string::npos && midx == std::string::npos) {
+		// No multi-file, no modifiers
+		hashstr = path.substr(1,path.length());
+	} else if (sidx != std::string::npos && midx == std::string::npos) {
+		// multi-file, no modifiers
+		hashstr = path.substr(1,sidx-1);
+		filename = path.substr(sidx+1,path.length()-sidx);
+	} else if (sidx == std::string::npos && midx != std::string::npos) {
+		// No multi-file, modifiers
+		hashstr = path.substr(1,midx-1);
+		modstr = path.substr(midx,path.length()-midx);
+	} else {
+		// multi-file, modifiers
+		hashstr = path.substr(1,sidx-1);
+		filename = path.substr(sidx+1,midx-(sidx+1));
+		modstr = path.substr(midx,path.length()-midx);
+	}
+
+
+	std::string durstr="";
+	std::string chunkstr="";
+	sidx = modstr.find("@");
+	if (sidx == std::string::npos)
+	{
+		durstr = "";
+		if (modstr.length() > 1)
+			chunkstr = modstr.substr(1);
+	}
+	else
+	{
+		if (sidx == 0)
+		{
+			// Only durstr
+			chunkstr = "";
+			durstr = modstr.substr(sidx+1);
+		}
+		else
+		{
+			chunkstr = modstr.substr(1,sidx-1);
+			durstr = modstr.substr(sidx+1);
+		}
+	}
+
+	map.insert(stringpair("scheme",scheme));
+	map.insert(stringpair("server",server));
+	map.insert(stringpair("path",path));
+	// Derivatives
+	map.insert(stringpair("hash",hashstr));
+	map.insert(stringpair("filename",filename));
+	map.insert(stringpair("chunksizestr",chunkstr));
+	map.insert(stringpair("durationstr",durstr));
+
+	return true;
+}
+
+
+
 void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 
     dprintf("%s @%i http new request\n",tintstr(),http_gw_reqs_count+1);
@@ -583,25 +671,16 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     	evhttp_send_error(evreq,400,"Path must be root hash in hex, 40 bytes.");
     	return;
     }
-    int sidx = uri.find("/",1);
-    int aidx = uri.find("@",1);
-    if (sidx == std::string::npos && aidx == std::string::npos) {
-    	// No multi-file, no duration
-    	hashstr = uri.substr(1,uri.length());
-    } else if (sidx != std::string::npos && aidx == std::string::npos) {
-    	// multi-file, no duration
-    	hashstr = uri.substr(1,sidx-1);
-    	mfstr = uri.substr(sidx+1,uri.length()-sidx);
-    } else if (sidx == std::string::npos && aidx != std::string::npos) {
-    	// No multi-file, duration
-    	hashstr = uri.substr(1,aidx-1);
-    	durstr = uri.substr(aidx+1,uri.length()-aidx);
-    } else {
-    	// multi-file, no duration
-    	hashstr = uri.substr(1,sidx-1);
-    	mfstr = uri.substr(sidx,aidx-sidx);
-    	durstr = uri.substr(aidx+1,uri.length()-aidx);
+
+    parseduri_t puri;
+    if (!swift::ParseURI(uri,puri))
+    {
+    	evhttp_send_error(evreq,400,"Path format is /roothash-in-hex/filename$chunksize@duration");
+    	return;
     }
+    hashstr = puri["hash"];
+    mfstr = puri["filename"];
+    durstr = puri["durationstr"];
 
     dprintf("%s @%i demands %s %s %s\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str(),mfstr.c_str(),durstr.c_str() );
 

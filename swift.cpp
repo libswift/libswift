@@ -58,16 +58,12 @@ uint32_t chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;
 Address tracker;
 
 
+
+
 // UNICODE: TODO, convert to std::string carrying UTF-8 arguments. Problem is
 // a string based getopt_long type parser.
 int utf8main (int argc, char** argv)
 {
-	for (int j=0; j<argc; j++)
-	{
-		fprintf(stderr,"ARGV%d %s\n", j, argv[j] );
-	}
-
-
     static struct option long_options[] =
     {
         {"hash",    required_argument, 0, 'h'},

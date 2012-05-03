@@ -52,6 +52,7 @@
 #include <deque>
 #include <vector>
 #include <set>
+#include <map>
 #include <algorithm>
 #include <string>
 #include <math.h>
@@ -82,6 +83,8 @@ namespace swift {
 
 // Arno, 2011-12-22: Enable Riccardo's VodPiecePicker
 #define ENABLE_VOD_PIECEPICKER		1
+
+#define SWIFT_URI_SCHEME			"tswift"
 
 
 /** IPv4 address, just a nice wrapping around struct sockaddr_in. */
@@ -222,6 +225,10 @@ namespace swift {
             return data_.front();
         }
     };
+
+    typedef std::pair<std::string,std::string> stringpair;
+    typedef std::map<std::string,std::string>  parseduri_t;
+    bool ParseURI(std::string uri,parseduri_t &map);
 
     /** swift protocol message types; these are used on the wire. */
     typedef enum {

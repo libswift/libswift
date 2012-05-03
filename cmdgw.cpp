@@ -42,10 +42,14 @@ using namespace swift;
 struct cmd_gw_t {
     int      id;
     evutil_socket_t   cmdsock;
-    int		 transfer; // swift FD
-    char 	*contentfilename; // basename of content file
+    int		 transfer; 			 // swift FD
+    std::string contentfilename; // basename of content file
     bool	moreinfo;		  // whether to report detailed stats (see SETMOREINFO cmd)
     tint 	startt;			  // ARNOSMPTODO: debug speed measurements, remove
+    std::string mfspecname;	  // MULTIFILE
+    uint64_t startoff;   // MULTIFILE: starting offset in content range of desired file
+    uint64_t endoff;     // MULTIFILE: ending offset (careful, for an e.g. 100 byte interval this is 99)
+
 } cmd_requests[CMDGW_MAX_CLIENT];
 
 
@@ -57,7 +61,7 @@ struct evbuffer *cmd_evbuffer = NULL; // Data received on cmd socket : WARNING: 
 Address cmd_gw_httpaddr;	          // HTTP gateway address for PLAY cmd
 
 
-bool cmd_gw_debug=false;
+bool cmd_gw_debug=true;
 
 
 // Fwd defs
@@ -69,8 +73,6 @@ void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line);
 
 void CmdGwFreeRequest(cmd_gw_t* req)
 {
-    if (req->contentfilename != NULL)
-        free(req->contentfilename);
     // Arno, 2012-02-06: Reset, in particular moreinfo flag.
     memset(req,'\0',sizeof(cmd_gw_t));
 }
@@ -155,24 +157,16 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 
 	// Delete content + .mhash from filesystem, if desired
 	if (removecontent)
-		remove(req->contentfilename);
+		remove(req->contentfilename.c_str());
 
 	if (removestate)
 	{
-		char *mhashfilename = (char *)malloc(strlen(req->contentfilename)+strlen(".mhash")+1);
-		strcpy(mhashfilename,req->contentfilename);
-		strcat(mhashfilename,".mhash");
-
-		remove(mhashfilename);
-		free(mhashfilename);
+		std::string mhashfilename = req->contentfilename + ".mhash";
+		remove(mhashfilename.c_str());
 
 		// Arno, 2012-01-10: .mbinmap gots to go too.
-		char *mbinmapfilename = (char *)malloc(strlen(req->contentfilename)+strlen(".mbinmap")+1);
-		strcpy(mbinmapfilename,req->contentfilename);
-		strcat(mbinmapfilename,".mbinmap");
-
-		remove(mbinmapfilename);
-		free(mbinmapfilename);
+		std::string mbinmapfilename = req->contentfilename + ".mbinmap";
+		remove(mbinmapfilename.c_str());
 	}
 
 	CmdGwFreeRequest(req);
@@ -287,18 +281,20 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 }
 
 
-void CmdGwSendPLAY(int transfer)
+void CmdGwSendPLAY(cmd_gw_t *req)
 {
 	// Send PLAY message to user
 	if (cmd_gw_debug)
-		fprintf(stderr,"cmd: SendPLAY: %d\n", transfer );
+		fprintf(stderr,"cmd: SendPLAY: %d\n", req->transfer );
 
-    cmd_gw_t* req = CmdGwFindRequestByTransfer(transfer);
-    Sha1Hash root_hash = FileTransfer::file(transfer)->root_hash();
+    Sha1Hash root_hash = FileTransfer::file(req->transfer)->root_hash();
 
     char cmd[MAX_CMD_MESSAGE];
     // Slightly diff format: roothash as ID after CMD
-    sprintf(cmd,"PLAY %s http://%s/%s\r\n",root_hash.hex().c_str(),cmd_gw_httpaddr.str(),root_hash.hex().c_str());
+    if (req->mfspecname == "")
+    	sprintf(cmd,"PLAY %s http://%s/%s\r\n",root_hash.hex().c_str(),cmd_gw_httpaddr.str(),root_hash.hex().c_str());
+    else
+    	sprintf(cmd,"PLAY %s http://%s/%s/%s\r\n",root_hash.hex().c_str(),cmd_gw_httpaddr.str(),root_hash.hex().c_str(),req->mfspecname.c_str());
 
     fprintf(stderr,"cmd: SendPlay: %s", cmd);
 
@@ -306,19 +302,135 @@ void CmdGwSendPLAY(int transfer)
 }
 
 
-void CmdGwSwiftFirstProgressCallback (int transfer, bin_t bin)
+void CmdGwSendERRORBySocket(evutil_socket_t cmdsock, std::string msg)
 {
-	if (cmd_gw_debug)
-		fprintf(stderr,"cmd: SwiftFirstProgress: %d\n", transfer );
+	std::string cmd = "ERROR ";
+	cmd += msg;
+	cmd += "\r\n";
+	char *wire = strdup(cmd.c_str());
+	send(cmdsock,wire,strlen(wire),0);
+	free(wire);
+}
 
-	if (swift::SeqComplete(transfer) >= CMDGW_MAX_PREBUF_BYTES)
+void CmdGwSendERRORByTransfer(int transfer, std::string msg)
+{
+	cmd_gw_t* req = CmdGwFindRequestByTransfer(transfer);
+	if (req == NULL)
+		return;
+	CmdGwSendERRORBySocket(req->cmdsock,msg);
+}
+
+
+void CmdGwSwiftPrebufferProgressCallback (int transfer, bin_t bin)
+{
+	//
+	// Subsequent bytes of content downloaded
+	//
+	if (cmd_gw_debug)
+		fprintf(stderr,"cmd: SwiftPrebuffProgress: %d\n", transfer );
+
+	cmd_gw_t* req = CmdGwFindRequestByTransfer(transfer);
+	if (req == NULL)
+		return;
+
+	int64_t wantsize = min(req->endoff+1-req->startoff,CMDGW_MAX_PREBUF_BYTES);
+
+	if (cmd_gw_debug)
+		fprintf(stderr,"cmd: SwiftPrebuffProgress: want %lld got %lld\n", swift::SeqComplete(req->transfer,req->startoff), wantsize );
+
+
+	if (swift::SeqComplete(req->transfer,req->startoff) >= wantsize)
 	{
 		// First CMDGW_MAX_PREBUF_BYTES bytes received via swift,
 		// tell user to PLAY
 		// ARNOSMPTODO: bitrate-dependent prebuffering?
-		swift::RemoveProgressCallback(transfer,&CmdGwSwiftFirstProgressCallback);
+		if (cmd_gw_debug)
+			fprintf(stderr,"cmd: SwiftPrebufferProgress: Prebuf done %d\n", transfer );
 
-		CmdGwSendPLAY(transfer);
+		swift::RemoveProgressCallback(transfer,&CmdGwSwiftPrebufferProgressCallback);
+
+		CmdGwSendPLAY(req);
+	}
+	// wait for prebuffer
+}
+
+
+void CmdGwSwiftFirstProgressCallback (int transfer, bin_t bin)
+{
+	//
+	// First bytes of content downloaded (first in absolute sense)
+	//
+	if (cmd_gw_debug)
+		fprintf(stderr,"cmd: SwiftFirstProgress: %d\n", transfer );
+
+	cmd_gw_t* req = CmdGwFindRequestByTransfer(transfer);
+	if (req == NULL)
+		return;
+
+	FileTransfer *ft = FileTransfer::file(req->transfer);
+	if (ft == NULL) {
+		CmdGwSendERRORBySocket(req->cmdsock,"Unknown transfer?!");
+    	return;
+	}
+	if (!ft->GetStorage()->IsReady()) {
+		// Wait until (multi-file) storage is ready
+		return;
+	}
+
+	swift::RemoveProgressCallback(transfer,&CmdGwSwiftFirstProgressCallback);
+
+	if (req->mfspecname == "")
+	{
+		// Single file
+		if (cmd_gw_debug)
+			fprintf(stderr,"cmd: SwiftFirstProgress: Single file, wait till prebuf %d\n", transfer );
+
+		req->startoff = 0;
+		req->endoff = swift::Size(req->transfer)-1;
+		CmdGwSwiftPrebufferProgressCallback(req->transfer,bin_t(0,0)); // in case file on disk
+		swift::AddProgressCallback(transfer,&CmdGwSwiftPrebufferProgressCallback,CMDGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER);
+	}
+	else
+	{
+		// MULTIFILE
+		if (cmd_gw_debug)
+			fprintf(stderr,"cmd: SwiftFirstProgress: Searching multifile %s %d\n", req->mfspecname.c_str(), transfer );
+
+
+		// Have spec, seek to wanted file
+		storage_files_t sfs = ft->GetStorage()->GetStorageFiles();
+		storage_files_t::iterator iter;
+		bool found = false;
+		for (iter = sfs.begin(); iter < sfs.end(); iter++)
+		{
+			StorageFile *sf = *iter;
+			if (sf->GetSpecPathName() == req->mfspecname)
+			{
+				if (cmd_gw_debug)
+					fprintf(stderr,"cmd: SwiftFirstProgress: Seeking to multifile for %d\n", transfer );
+
+				int ret = swift::Seek(req->transfer,sf->GetStart(),SEEK_SET);
+				if (ret < 0)
+				{
+					CmdGwSendERRORBySocket(req->cmdsock,"Error seeking to file in multi-file content.");
+					return;
+				}
+				found = true;
+				req->startoff = sf->GetStart();
+				req->endoff = sf->GetEnd();
+				CmdGwSwiftPrebufferProgressCallback(req->transfer,bin_t(0,0)); // in case file on disk
+				swift::AddProgressCallback(transfer,&CmdGwSwiftPrebufferProgressCallback,CMDGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER);
+				break;
+			}
+		}
+		if (!found) {
+
+			if (cmd_gw_debug)
+				fprintf(stderr,"cmd: SwiftFirstProgress: Error file not found %d\n", transfer );
+
+			CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.");
+			return;
+		}
 	}
 }
 
@@ -410,6 +522,7 @@ bool CmdGwReadLine(evutil_socket_t cmdsock)
 
 int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline);
 
+
 void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line)
 {
 	// New command received from user
@@ -421,19 +534,22 @@ void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line)
 	int ret = CmdGwHandleCommand(cmdsock,copyline);
 	if (ret < 0) {
 		dprintf("cmd: Error parsing command %s\n", line );
-		char *cmd = NULL;
+		std::string msg = "";
 		if (ret == ERROR_UNKNOWN_CMD)
-			cmd = "ERROR unknown command\r\n";
+			msg = "unknown command";
 		else if (ret == ERROR_MISS_ARG)
-			cmd = "ERROR missing parameter\r\n";
+			msg = "missing parameter";
 		else
-			cmd = "ERROR bad parameter\r\n";
-		send(cmdsock,cmd,strlen(cmd),0);
+			msg = "bad parameter";
+		CmdGwSendERRORBySocket(cmdsock,msg);
         CmdGwCloseConnection(cmdsock);
 	}
 
     free(copyline);
 }
+
+
+
 
 
 int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
@@ -449,7 +565,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
 	method = copyline;
 
-    fprintf(stderr,"cmd: GOT %s %s\n", method, paramstr);
+    fprintf(stderr,"cmd: GOT <%s> <%s>\n", method, paramstr);
 
     char *savetok = NULL;
     if (!strcmp(method,"START"))
@@ -461,103 +577,50 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
         //fprintf(stderr,"cmd: START: new request %i\n",req->id);
 
+        // Format: START url destdir\r\n
         // Arno, 2012-04-13: See if URL followed by storagepath for seeding
-        char *url = NULL, *storagepath = NULL;
-        token = strtok_r(paramstr," ",&savetok);      // storagepath?
-        if (token == NULL)
-        	url = paramstr;
+        std::string pstr = paramstr;
+        std::string url="",storagepath="";
+        int sidx = pstr.find(" ");
+        if (sidx == std::string::npos)
+        {
+        	url = pstr;
+        	storagepath = "";
+        }
         else
-        	url = token;
-			token = strtok_r(NULL,"",&savetok);		 //  storagepath
-			if (token == NULL)
-				return ERROR_BAD_ARG;
-			storagepath = token;
-
-        // parse URL
-		// tswift://tracker/roothash-as-hex$chunksize@duration-in-secs
-        char *trackerstr=NULL,*hashstr=NULL,*durationstr=NULL,*chunksizestr=NULL;
-
-        bool haschunksize = (bool)(strchr(paramstr,'$') != NULL);
-        bool hasduration = (bool)(strchr(paramstr,'@') != NULL); // FAXME: user@ in tracker URL
-
-        token = strtok_r(url,"/",&savetok); // tswift://
-        if (token == NULL)
-        	return ERROR_MISS_ARG;
-        token = strtok_r(NULL,"/",&savetok);      // tracker:port
-        if (token == NULL)
-        	return ERROR_MISS_ARG;
-        trackerstr = token;
-
-        if (haschunksize && hasduration) {
-        	token = strtok_r(NULL,"$",&savetok);       // roothash
-        	if (token == NULL)
-        		return ERROR_BAD_ARG;
-        	hashstr = token;
-
-            token = strtok_r(NULL,"@",&savetok);			// chunksize
-            if (token == NULL)
-                return ERROR_BAD_ARG;
-            chunksizestr = token;
-
-        	token = strtok_r(NULL,"",&savetok);		// duration
-        	if (token == NULL)
-        		return ERROR_BAD_ARG;
-        	durationstr = token;
-        }
-        else if (haschunksize) {
-        	token = strtok_r(NULL,"$",&savetok);       // roothash
-        	if (token == NULL)
-        		return ERROR_BAD_ARG;
-        	hashstr = token;
-
-            token = strtok_r(NULL,"",&savetok);			// chunksize
-            if (token == NULL)
-                	return ERROR_BAD_ARG;
-            chunksizestr = token;
-        }
-        else if (hasduration) {
-        	token = strtok_r(NULL,"@",&savetok);       // roothash
-        	if (token == NULL)
-        		return ERROR_BAD_ARG;
-        	hashstr = token;
-
-            token = strtok_r(NULL,"",&savetok);			// duration
-            if (token == NULL)
-                	return ERROR_BAD_ARG;
-            durationstr = token;
-        }
-        else {
-        	token = strtok_r(NULL,"",&savetok);       // roothash
-        	if (token == NULL)
-        		return ERROR_BAD_ARG;
-        	hashstr = token;
+        {
+        	url = pstr.substr(0,sidx);
+        	storagepath = pstr.substr(sidx+1);
         }
 
-        dprintf("cmd: START: parsed tracker %s hash %s dur %s cs %s spath %s\n",trackerstr,hashstr,durationstr,chunksizestr,storagepath);
+        // Parse URL
+        parseduri_t puri;
+        if (!swift::ParseURI(url,puri))
+        	return ERROR_BAD_ARG;
 
-        if (strlen(hashstr)!=40) {
-        	dprintf("cmd: START: roothash too short %i\n", strlen(hashstr) );
+        std::string trackerstr = puri["server"];
+        std::string hashstr = puri["hash"];
+        std::string mfstr = puri["filename"];
+        std::string chunksizestr = puri["chunksizestr"];
+        std::string durationstr = puri["durationstr"];
+
+        if (hashstr.length()!=40) {
+        	dprintf("cmd: START: roothash too short %i\n", hashstr.length() );
             return ERROR_BAD_ARG;
         }
         uint32_t chunksize=SWIFT_DEFAULT_CHUNK_SIZE;
-        if (haschunksize) {
-        	int n = sscanf(chunksizestr,"%i",&chunksize);
-        	if (n != 1)
-        		return ERROR_BAD_ARG;
-        }
+        if (chunksizestr.length() > 0)
+        	std::istringstream(chunksizestr) >> chunksize;
         int duration=0;
-        if (hasduration) {
-        	int n = sscanf(durationstr,"%i",&duration);
-        	if (n != 1)
-        		return ERROR_BAD_ARG;
-        }
+        if (durationstr.length() > 0)
+        	std::istringstream(durationstr) >> duration;
 
-        //dprintf("cmd: START: %s with tracker %s chunksize %i duration %i\n",hashstr,trackerstr,chunksize,duration);
+        dprintf("cmd: START: %s with tracker %s chunksize %i duration %i\n",hashstr,trackerstr,chunksize,duration);
 
-        // FAXME: return duration in HTTPGW
+        // ARNOTODO: return duration in HTTPGW
 
         Address trackaddr;
-		trackaddr = Address(trackerstr);
+		trackaddr = Address(trackerstr.c_str());
 		if (trackaddr==Address())
 		{
 			dprintf("cmd: START: tracker address must be hostname:port, ip:port or just port\n");
@@ -566,7 +629,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 		// SetTracker(trackaddr); == set default tracker
 
         // initiate transmission
-        Sha1Hash root_hash = Sha1Hash(true,hashstr);
+        Sha1Hash root_hash = Sha1Hash(true,hashstr.c_str());
 
         // Send INFO DLSTATUS_HASHCHECKING
 		CmdGwSendINFOHashChecking(req,root_hash);
@@ -576,7 +639,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         if (transfer==-1) {
 
         	std::string filename;
-        	if (storagepath != NULL)
+        	if (storagepath != "")
         		filename = storagepath;
         	else
         		filename = hashstr;
@@ -588,17 +651,25 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
         req->transfer = transfer;
         req->startt = usec_time();
+        req->mfspecname = mfstr;
 
         // See HashTree::HashTree
-        req->contentfilename = (char *)malloc(strlen(hashstr)+1);
-        strcpy(req->contentfilename,hashstr);
+        req->contentfilename = hashstr;
 
         if (cmd_gw_debug)
         	fprintf(stderr,"cmd: Already on disk is %lli/%lli\n", swift::Complete(transfer), swift::Size(transfer));
 
+        // MULTIFILE
+        int64_t minsize=CMDGW_MAX_PREBUF_BYTES;
+        FileTransfer *ft = FileTransfer::file(transfer);
+        if (ft == NULL)
+        	return ERROR_BAD_ARG;
+		storage_files_t sfs = ft->GetStorage()->GetStorageFiles();
+		if (sfs.size() > 0)
+			minsize = sfs[0]->GetSize();
+
         // Wait for prebuffering and then send PLAY to user
-    	// ARNOSMPTODO: OUTOFORDER: breaks with out-of-order download
-        if (swift::SeqComplete(transfer) >= CMDGW_MAX_PREBUF_BYTES)
+        if (swift::SeqComplete(transfer) >= minsize)
         {
             CmdGwSwiftFirstProgressCallback(transfer,bin_t(0,0));
             CmdGwSendINFO(req, DLSTATUS_DOWNLOADING);

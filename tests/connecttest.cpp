@@ -19,9 +19,9 @@ int size, copy;
 
 void IsCompleteCallback(int fd, short event, void *arg) {
     if (swift::SeqComplete(copy)!=size)
-	evtimer_add(&evcompl, tint2tv(TINT_SEC));
+    	evtimer_add(&evcompl, tint2tv(TINT_SEC));
     else
-	event_base_loopexit(Channel::evbase, NULL);
+    	event_base_loopexit(Channel::evbase, NULL);
 }
 
 TEST(Connection,CwndTest) {
@@ -31,12 +31,10 @@ TEST(Connection,CwndTest) {
     srand ( time(NULL) );
 
     unlink("test_file0-copy.dat");
-#ifdef WIN32
-    struct _stat st;
-#else
     struct stat st;
-#endif
-    ASSERT_EQ(0,stat("test_file0.dat", &st));
+    int ret = stat("test_file0.dat",&st);
+
+    ASSERT_EQ(0,ret);
     size = st.st_size;//, sizek = (st.st_size>>10) + (st.st_size%1024?1:0) ;
     Channel::SELF_CONN_OK = true;
 

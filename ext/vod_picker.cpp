@@ -258,7 +258,7 @@ public:
     	if (cid > 0)
     		cid--; // Riccardo assumes playbackpos is already in.
 
-    	fprintf(stderr,"vodpp: pos in K %llu size %llu\n", cid, file().size_in_chunks() );
+    	//fprintf(stderr,"vodpp: pos in K %llu size %llu\n", cid, file().size_in_chunks() );
 
     	if (cid > file().size_in_chunks())
     		return -1;
