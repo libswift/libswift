@@ -256,7 +256,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
     int hints_limit = (int)min((double)LONG_MAX,hints_limit_float);
     int allowed_hints = max(0,hints_limit-(int)rough_global_hint_out_size);
 
-    if (!DEBUGTRAFFIC)
+    if (DEBUGTRAFFIC)
     	fprintf(stderr,"hint c%d: %f want %d allow %d chanout %llu globout %llu\n", id(), transfer().GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, allowed_hints, hint_out_size_, rough_global_hint_out_size );
 
     // Take into account network limit
