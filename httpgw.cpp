@@ -112,7 +112,15 @@ void HttpGwCloseConnection (http_gw_t* req) {
 	// REMOVE.
 	swift::Checkpoint(req->transfer);
 
+	// Arno, 2012-05-04: MULTIFILE: once the selected file has been downloaded
+	// swift will download all content that comes afterwards too. Poor man's
+	// fix to avoid this: seek to end of content when HTTP done. Better would
+	// be to seek to end when swift partial download is done, not the serving
+	// via HTTP.
+	swift::Seek(req->transfer,swift::Size(req->transfer)-1,SEEK_CUR);
+
 	//swift::Close(req->transfer);
+
 
 	*req = http_requests[--http_gw_reqs_open];
 }
