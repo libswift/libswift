@@ -880,6 +880,7 @@ void CmdGwNewConnectionCallback(struct evconnlistener *listener,
 	bufferevent_setcb(bev, CmdGwDataCameInCallback, NULL, CmdGwEventCameInCallback, NULL);
 	bufferevent_enable(bev, EV_READ|EV_WRITE);
 
+	// ARNOTODO: free bufferevent when conn closes.
 
 	// One buffer for all cmd connections, reset
 	if (cmd_evbuffer != NULL)

@@ -114,9 +114,10 @@ void HttpGwCloseConnection (http_gw_t* req) {
 
 	// Arno, 2012-05-04: MULTIFILE: once the selected file has been downloaded
 	// swift will download all content that comes afterwards too. Poor man's
-	// fix to avoid this: seek to end of content when HTTP done. Better would
-	// be to seek to end when swift partial download is done, not the serving
-	// via HTTP.
+	// fix to avoid this: seek to end of content when HTTP done. VOD PiecePicker
+	// will then no download anything. Better would be to seek to end when
+	// swift partial download is done, not the serving via HTTP.
+	//
 	swift::Seek(req->transfer,swift::Size(req->transfer)-1,SEEK_CUR);
 
 	//swift::Close(req->transfer);
