@@ -628,7 +628,8 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
 	method = copyline;
 
-    fprintf(stderr,"cmd: GOT <%s> <%s>\n", method, paramstr);
+	if (cmd_gw_debug)
+		fprintf(stderr,"cmd: GOT %s %s\n", method, paramstr);
 
     char *savetok = NULL;
     if (!strcmp(method,"START"))
