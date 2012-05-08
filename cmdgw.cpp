@@ -352,7 +352,11 @@ void CmdGwSwiftPrebufferProgressCallback (int transfer, bin_t bin)
 	if (req == NULL)
 		return;
 
+#ifdef WIN32
 	int64_t wantsize = min(req->endoff+1-req->startoff,CMDGW_MAX_PREBUF_BYTES);
+#else
+        int64_t wantsize = std::min(req->endoff+1-req->startoff,(uint64_t)CMDGW_MAX_PREBUF_BYTES);
+#endif
 
 	if (cmd_gw_debug)
 		fprintf(stderr,"cmd: SwiftPrebuffProgress: want %lld got %lld\n", swift::SeqComplete(req->transfer,req->startoff), wantsize );

@@ -190,7 +190,7 @@ void HttpGwMayWriteCallback (int transfer) {
 #ifdef WIN32
         uint64_t tosend = min(HTTPGW_MAX_WRITE_BYTES,avail);
 #else
-        uint64_t tosend = std::min((uint64_t)HTTPGW_MAX_WRITE_BYTES,avail);
+        uint64_t tosend = std::min((int64_t)HTTPGW_MAX_WRITE_BYTES,avail);
 #endif
         size_t rd = swift::Read(transfer,buf,tosend,req->offset); // hope it is cached
         if (rd<0) {
