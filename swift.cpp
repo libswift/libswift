@@ -404,7 +404,7 @@ int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, b
 
 	// Arno, 2012-01-03: Hack to discover root hash of a file on disk, such that
 	// we don't load it twice while rescanning a dir of content.
-	HashTree *ht = new HashTree(true,binmap_filename);
+	MmapHashTree *ht = new MmapHashTree(true,binmap_filename);
 
 	//	fprintf(stderr,"swift: parsedir: File %s may have hash %s\n", filename, ht->root_hash().hex().c_str() );
 

@@ -27,12 +27,12 @@ public:
 
     SeqPiecePicker (FileTransfer* file_to_pick_from) : ack_hint_out_(),
            transfer_(file_to_pick_from), twist_(0), range_(bin_t::ALL) {
-        binmap_t::copy(ack_hint_out_, file().ack_out());
+        binmap_t::copy(ack_hint_out_, *(hashtree()->ack_out()));
     }
     virtual ~SeqPiecePicker() {}
 
-    HashTree& file() {
-        return transfer_->file();
+    HashTree * hashtree() {
+        return transfer_->hashtree();
     }
 
     virtual void Randomize (uint64_t twist) {
@@ -45,25 +45,25 @@ public:
 
     virtual bin_t Pick (binmap_t& offer, uint64_t max_width, tint expires) {
         while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*3/2) { // FIXME sec
-            binmap_t::copy(ack_hint_out_, file().ack_out(), hint_out_.front().bin);
+            binmap_t::copy(ack_hint_out_, *(hashtree()->ack_out()), hint_out_.front().bin);
             hint_out_.pop_front();
         }
-        if (!file().size()) {
+        if (!hashtree()->size()) {
             return bin_t(0,0); // whoever sends it first
         // Arno, 2011-06-28: Partial fix by Victor. exact_size_known() missing
-        //} else if (!file().exact_size_known()) {
-        //    return bin64_t(0,(file().size()>>10)-1); // dirty
+        //} else if (!hashtree()->exact_size_known()) {
+        //    return bin64_t(0,(hashtree()->size()>>10)-1); // dirty
         }
     retry:      // bite me
-        twist_ &= (file().peak(0).toUInt()) & ((1<<6)-1);
+        twist_ &= (hashtree()->peak(0).toUInt()) & ((1<<6)-1);
 
         bin_t hint = binmap_t::find_complement(ack_hint_out_, offer, twist_);
         if (hint.is_none()) {
             return hint; // TODO: end-game mode
         }
 
-        if (!file().ack_out().is_empty(hint)) { // unhinted/late data
-            binmap_t::copy(ack_hint_out_, file().ack_out(), hint);
+        if (!hashtree()->ack_out()->is_empty(hint)) { // unhinted/late data
+            binmap_t::copy(ack_hint_out_, *(hashtree()->ack_out()), hint);
             goto retry;
         }
         while (hint.base_length()>max_width)

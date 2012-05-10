@@ -47,11 +47,11 @@ struct event Channel::evrecv;
  */
 
 void    Channel::AddPeakHashes (struct evbuffer *evb) {
-    for(int i=0; i<file().peak_count(); i++) {
-        bin_t peak = file().peak(i);
+    for(int i=0; i<hashtree()->peak_count(); i++) {
+        bin_t peak = hashtree()->peak(i);
         evbuffer_add_8(evb, SWIFT_HASH);
         evbuffer_add_32be(evb, bin_toUInt32(peak));
-        evbuffer_add_hash(evb, file().peak_hash(i));
+        evbuffer_add_hash(evb, hashtree()->peak_hash(i));
         char bin_name_buf[32];
         dprintf("%s #%u +phash %s\n",tintstr(),id_,peak.str(bin_name_buf));
     }
@@ -63,13 +63,13 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
     char bin_name_buf2[32];
     dprintf("%s #%u +uncle hash for %s\n",tintstr(),id_,pos.str(bin_name_buf2));
 
-    bin_t peak = file().peak_for(pos);
+    bin_t peak = hashtree()->peak_for(pos);
     while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
             ack_in_.is_empty(pos.parent()) ) {
         bin_t uncle = pos.sibling();
         evbuffer_add_8(evb, SWIFT_HASH);
         evbuffer_add_32be(evb, bin_toUInt32(uncle));
-        evbuffer_add_hash(evb,  file().hash(uncle) );
+        evbuffer_add_hash(evb,  hashtree()->hash(uncle) );
         char bin_name_buf[32];
         dprintf("%s #%u +hash %s\n",tintstr(),id_,uncle.str(bin_name_buf));
         pos = pos.parent();
@@ -80,9 +80,9 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
 bin_t           Channel::ImposeHint () {
     uint64_t twist = peer_channel_id_;  // got no hints, send something randomly
 
-    twist &= file().peak(0).toUInt(); // FIXME may make it semi-seq here
+    twist &= hashtree()->peak(0).toUInt(); // FIXME may make it semi-seq here
 
-    bin_t my_pick = binmap_t::find_complement(ack_in_, file().ack_out(), twist);
+    bin_t my_pick = binmap_t::find_complement(ack_in_, *(hashtree()->ack_out()), twist);
 
     my_pick.to_twisted(twist);
     while (my_pick.base_length()>max(1,(int)cwnd_))
@@ -97,7 +97,10 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
 
     // Arno, 2012-01-23: Extra protection against channel loss, don't send DATA
     if (last_recv_time_ < NOW-(3*TINT_SEC))
+    {
+    	dprintf("%s #%u dequeued bad time %llu\n",tintstr(),id_, last_recv_time_ );
     	return bin_t::NONE;
+    }
 
     // Arno, 2012-01-18: Reenable Victor's retransmit
     if (!data_out_tmo_.empty())
@@ -146,9 +149,9 @@ void    Channel::AddHandshake (struct evbuffer *evb) {
     if (!peer_channel_id_) { // initiating
         evbuffer_add_8(evb, SWIFT_HASH);
         evbuffer_add_32be(evb, bin_toUInt32(bin_t::ALL));
-        evbuffer_add_hash(evb, file().root_hash());
+        evbuffer_add_hash(evb, hashtree()->root_hash());
         dprintf("%s #%u +hash ALL %s\n",
-                tintstr(),id_,file().root_hash().hex().c_str());
+                tintstr(),id_,hashtree()->root_hash().hex().c_str());
     }
     evbuffer_add_8(evb, SWIFT_HANDSHAKE);
     int encoded = -1;
@@ -176,7 +179,7 @@ void    Channel::Send () {
 			// FIXME: seeder check
 			AddHave(evb);
 			AddAck(evb);
-			if (!file().is_complete()) {
+			if (!hashtree()->is_complete()) {
 				AddHint(evb);
 				/* Gertjan fix: 7aeea65f3efbb9013f601b22a57ee4a423f1a94d
 				"Only call Reschedule for 'reverse PEX' if the channel is in keep-alive mode"
@@ -251,7 +254,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
     // Policy: this channel is allowed to hint at the limit - global_hinted_at
     // Handle MaxSpeed = unlimited
-    double hints_limit_float = transfer().GetMaxSpeed(DDIR_DOWNLOAD)/((double)file().chunk_size());
+    double hints_limit_float = transfer().GetMaxSpeed(DDIR_DOWNLOAD)/((double)hashtree()->chunk_size());
 
     int hints_limit = (int)min((double)LONG_MAX,hints_limit_float);
     int allowed_hints = max(0,hints_limit-(int)rough_global_hint_out_size);
@@ -296,7 +299,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
 		return bin_t::NONE;
 	}
 
-    if (!file().size()) // know nothing
+    if (!hashtree()->size()) // know nothing
         return bin_t::NONE;
 
     bin_t tosend = bin_t::NONE;
@@ -317,7 +320,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     if (tosend.is_none())// && (last_data_out_time_>NOW-TINT_SEC || data_out_.empty()))
         return bin_t::NONE; // once in a while, empty data is sent just to check rtt FIXED
 
-    if (ack_in_.is_empty() && file().size())
+    if (ack_in_.is_empty() && hashtree()->size())
         AddPeakHashes(evb);
     AddUncleHashes(evb,tosend);
     if (!ack_in_.is_empty()) // TODO: cwnd_>1
@@ -328,7 +331,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     // frame with DATA. Send 2 datagrams then, one with peaks so they have
     // a better chance of arriving. Optimistic violation of atomic datagram
     // principle.
-    if (file().chunk_size() == SWIFT_DEFAULT_CHUNK_SIZE && evbuffer_get_length(evb) > SWIFT_MAX_NONDATA_DGRAM_SIZE) {
+    if (hashtree()->chunk_size() == SWIFT_DEFAULT_CHUNK_SIZE && evbuffer_get_length(evb) > SWIFT_MAX_NONDATA_DGRAM_SIZE) {
         dprintf("%s #%u fsent %ib %s:%x\n",
                 tintstr(),id_,(int)evbuffer_get_length(evb),peer().str(),
                 peer_channel_id_);
@@ -338,7 +341,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         evbuffer_add_32be(evb, peer_channel_id_);
     }
 
-    if (file().chunk_size() != SWIFT_DEFAULT_CHUNK_SIZE && isretransmit) {
+    if (hashtree()->chunk_size() != SWIFT_DEFAULT_CHUNK_SIZE && isretransmit) {
     	/* FRAGRAND
     	 * Arno, 2012-01-17: We observe strange behaviour when using
     	 * fragmented UDP packets. When ULANC sends a specific datagram ("995"),
@@ -360,12 +363,12 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     evbuffer_add_32be(evb, bin_toUInt32(tosend));
 
     struct evbuffer_iovec vec;
-    if (evbuffer_reserve_space(evb, file().chunk_size(), &vec, 1) < 0) {
+    if (evbuffer_reserve_space(evb, hashtree()->chunk_size(), &vec, 1) < 0) {
 	print_error("error on evbuffer_reserve_space");
 	return bin_t::NONE;
     }
     size_t r = transfer().GetStorage()->Read((char *)vec.iov_base,
-		     file().chunk_size(),tosend.base_offset()*file().chunk_size());
+		     hashtree()->chunk_size(),tosend.base_offset()*hashtree()->chunk_size());
     // TODO: corrupted data, retries, caching
     if (r<0) {
         print_error("error on reading");
@@ -390,7 +393,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
 
     // RATELIMIT
     // ARNOSMPTODO: count overhead bytes too? Move to Send() then.
-	transfer_->OnSendData(file().chunk_size());
+	transfer_->OnSendData(hashtree()->chunk_size());
 
     return tosend;
 }
@@ -431,11 +434,23 @@ void    Channel::AddHave (struct evbuffer *evb) {
     }
     if (DEBUGTRAFFIC)
 		fprintf(stderr,"send c%d: HAVE ",id() );
+
+	if (transfer().IsZeroState())
+	{
+		bin_t ack = bin_t::ALL;
+	    evbuffer_add_8(evb, SWIFT_HAVE);
+        evbuffer_add_32be(evb, bin_toUInt32(ack));
+
+		char bin_name_buf[32];
+		dprintf("%s #%u +have %s\n",tintstr(),id_,ack.str(bin_name_buf));
+		return;
+	}
+
     for(int count=0; count<4; count++) {
-        bin_t ack = binmap_t::find_complement(have_out_, file().ack_out(), 0); // FIXME: do rotating queue
+        bin_t ack = binmap_t::find_complement(have_out_, *(hashtree()->ack_out()), 0); // FIXME: do rotating queue
         if (ack.is_none())
             break;
-        ack = file().ack_out().cover(ack);
+        ack = hashtree()->ack_out()->cover(ack);
         have_out_.set(ack);
         evbuffer_add_8(evb, SWIFT_HAVE);
         evbuffer_add_32be(evb, bin_toUInt32(ack));
@@ -480,15 +495,48 @@ void    Channel::Recv (struct evbuffer *evb) {
         	fprintf(stderr," %d", type);
 
         switch (type) {
-            case SWIFT_HANDSHAKE: OnHandshake(evb); break;
-            case SWIFT_DATA:      data=OnData(evb); break;
-            case SWIFT_HAVE:      OnHave(evb); break;
-            case SWIFT_ACK:       OnAck(evb); break;
-            case SWIFT_HASH:      OnHash(evb); break;
-            case SWIFT_HINT:      OnHint(evb); break;
-            case SWIFT_PEX_ADD:   OnPex(evb); break;
-            case SWIFT_PEX_REQ:   OnPexReq(); break;
-            case SWIFT_RANDOMIZE: OnRandomize(evb); break; //FRAGRAND
+            case SWIFT_HANDSHAKE:
+            	OnHandshake(evb);
+            	break;
+            case SWIFT_DATA:
+            	if (!transfer().IsZeroState())
+            		data=OnData(evb);
+            	else
+            		OnDataZeroState(evb);
+            	break;
+            case SWIFT_HAVE:
+            	if (!transfer().IsZeroState())
+            		OnHave(evb);
+            	else
+            		OnHaveZeroState(evb);
+            	break;
+            case SWIFT_ACK:
+            	OnAck(evb);
+            	break;
+            case SWIFT_HASH:
+            	if (!transfer().IsZeroState())
+            		OnHash(evb);
+            	else
+            		OnHashZeroState(evb);
+            	break;
+            case SWIFT_HINT:
+            	OnHint(evb);
+            	break;
+            case SWIFT_PEX_ADD:
+            	if (!transfer().IsZeroState())
+            		OnPexAdd(evb);
+            	else
+            		OnPexAddZeroState(evb);
+            	break;
+            case SWIFT_PEX_REQ:
+            	if (!transfer().IsZeroState())
+            		OnPexReq();
+            	else
+            		OnPexReqZeroState(evb);
+            	break;
+            case SWIFT_RANDOMIZE:
+            	OnRandomize(evb);
+            	break; //FRAGRAND
             default:
                 dprintf("%s #%u ?msg id unknown %i\n",tintstr(),id_,(int)type);
                 return;
@@ -512,7 +560,7 @@ void    Channel::Recv (struct evbuffer *evb) {
 void    Channel::OnHash (struct evbuffer *evb) {
 	bin_t pos = bin_fromUInt32(evbuffer_remove_32be(evb));
     Sha1Hash hash = evbuffer_remove_hash(evb);
-    file().OfferHash(pos,hash);
+    hashtree()->OfferHash(pos,hash);
     char bin_name_buf[32];
     dprintf("%s #%u -hash %s\n",tintstr(),id_,pos.str(bin_name_buf));
 
@@ -555,17 +603,17 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 	bin_t pos = bin_fromUInt32(evbuffer_remove_32be(evb));
 
     // Arno: Assuming DATA last message in datagram
-    if (evbuffer_get_length(evb) > file().chunk_size()) {
-    	dprintf("%s #%u !data chunk size mismatch %s: exp %lu got " PRISIZET "\n",tintstr(),id_,pos.str(bin_name_buf), file().chunk_size(), evbuffer_get_length(evb));
-    	fprintf(stderr,"WARNING: chunk size mismatch: exp %lu got " PRISIZET "\n",file().chunk_size(), evbuffer_get_length(evb));
+    if (evbuffer_get_length(evb) > hashtree()->chunk_size()) {
+    	dprintf("%s #%u !data chunk size mismatch %s: exp %lu got " PRISIZET "\n",tintstr(),id_,pos.str(bin_name_buf), hashtree()->chunk_size(), evbuffer_get_length(evb));
+    	fprintf(stderr,"WARNING: chunk size mismatch: exp %lu got " PRISIZET "\n",hashtree()->chunk_size(), evbuffer_get_length(evb));
     }
 
-    int length = (evbuffer_get_length(evb) < file().chunk_size()) ? evbuffer_get_length(evb) : file().chunk_size();
-    if (!file().ack_out().is_empty(pos)) {
+    int length = (evbuffer_get_length(evb) < hashtree()->chunk_size()) ? evbuffer_get_length(evb) : hashtree()->chunk_size();
+    if (!hashtree()->ack_out()->is_empty(pos)) {
         // Arno, 2012-01-24: print message for duplicate
         dprintf("%s #%u Ddata %s\n",tintstr(),id_,pos.str(bin_name_buf));
         evbuffer_drain(evb, length);
-        data_in_ = tintbin(TINT_NEVER,transfer().ack_out().cover(pos));
+        data_in_ = tintbin(TINT_NEVER,transfer().ack_out()->cover(pos));
 
         // Arno, 2012-01-24: Make sure data interarrival periods don't get
         // screwed up because of these (ignored) duplicates.
@@ -574,7 +622,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     }
     uint8_t *data = evbuffer_pullup(evb, length);
     data_in_ = tintbin(NOW,bin_t::NONE);
-    if (!file().OfferData(pos, (char*)data, length)) {
+    if (!hashtree()->OfferData(pos, (char*)data, length)) {
     	evbuffer_drain(evb, length);
         char bin_name_buf[32];
         dprintf("%s #%u !data %s\n",tintstr(),id_,pos.str(bin_name_buf));
@@ -586,12 +634,12 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     if (DEBUGTRAFFIC)
     	fprintf(stderr,"$ ");
 
-    bin_t cover = transfer().ack_out().cover(pos);
+    bin_t cover = transfer().ack_out()->cover(pos);
     for(int i=0; i<transfer().cb_installed; i++)
         if (cover.layer()>=transfer().cb_agg[i])
             transfer().callbacks[i](transfer().fd(),cover);  // FIXME
     if (cover.layer() >= 5) // Arno: tested with 32K, presently = 2 ** 5 * chunk_size CHUNKSIZE
-    	transfer().OnRecvData( pow((double)2,(double)5)*((double)file().chunk_size()) );
+    	transfer().OnRecvData( pow((double)2,(double)5)*((double)hashtree()->chunk_size()) );
     data_in_.bin = pos;
 
     UpdateDIP(pos);
@@ -620,14 +668,14 @@ void    Channel::OnAck (struct evbuffer *evb) {
     // FIXME FIXME: wrap around here
     if (ackd_pos.is_none())
         return; // likely, broken chunk/ insufficient hashes
-    if (file().size() && ackd_pos.base_offset()>=file().size_in_chunks()) {
+    if (hashtree()->size() && ackd_pos.base_offset()>=hashtree()->size_in_chunks()) {
         char bin_name_buf[32];
         eprintf("invalid ack: %s\n",ackd_pos.str(bin_name_buf));
         return;
     }
     ack_in_.set(ackd_pos);
 
-    //fprintf(stderr,"OnAck: got bin %s is_complete %d\n", ackd_pos.str(), (int)ack_in_.is_complete_arno( file().ack_out().get_height() ));
+    //fprintf(stderr,"OnAck: got bin %s is_complete %d\n", ackd_pos.str(), (int)ack_in_.is_complete_arno( hashtree()->ack_out()->get_height() ));
 
     int di = 0, ri = 0;
     // find an entry for the send (data out) event
@@ -710,9 +758,9 @@ void Channel::OnHave (struct evbuffer *evb) {
     // PPPLUG
     if (ENABLE_VOD_PIECEPICKER) {
 		// Ric: check if we should set the size in the file transfer
-		if (transfer().availability().size() <= 0 && file().size() > 0)
+		if (transfer().availability().size() <= 0 && hashtree()->size() > 0)
 		{
-			transfer().availability().setSize(file().size_in_chunks());
+			transfer().availability().setSize(hashtree()->size_in_chunks());
 		}
 		// Ric: update the availability if needed
 		transfer().availability().set(id_, ack_in_, ackd_pos);
@@ -765,12 +813,12 @@ void Channel::OnHandshake (struct evbuffer *evb) {
 }
 
 
-void Channel::OnPex (struct evbuffer *evb) {
+void Channel::OnPexAdd (struct evbuffer *evb) {
     uint32_t ipv4 = evbuffer_remove_32be(evb);
     uint16_t port = evbuffer_remove_16be(evb);
     Address addr(ipv4,port);
     dprintf("%s #%u -pex %s\n",tintstr(),id_,addr.str());
-    if (transfer().OnPexIn(addr))
+    if (transfer().OnPexAddIn(addr))
         useless_pex_count_ = 0;
     else
     {
@@ -935,7 +983,12 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         hash = evbuffer_remove_hash(evb);
         FileTransfer* ft = FileTransfer::Find(hash);
         if (!ft)
-            return_log ("%s #0 hash %s unknown, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
+        {
+        	ZeroState *zs = ZeroState::GetInstance();
+        	ft = zs->Find(hash);
+        	if (!ft)
+            	return_log ("%s #0 hash %s unknown, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
+        }
         dprintf("%s #0 -hash ALL %s\n",tintstr(),hash.hex().c_str());
 
         // Arno, 2012-02-27: Check for duplicate channel
@@ -985,7 +1038,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
 
     //dprintf("%s #%u peer %s recv_peer %s addr %s\n", tintstr(),mych, channel->peer().str(), channel->recv_peer().str(), addr.str() );
 
-    channel->Recv(evb);
+	channel->Recv(evb);
 
     evbuffer_free(evb);
     //SAFECLOSE
@@ -1027,8 +1080,8 @@ void Channel::Close () {
     if (is_established())
     	this->Send(); // Arno: send explicit close
 
-    if (ENABLE_VOD_PIECEPICKER) {
-		// Ric: remove it's binmap from the availability
+	if (!transfer().IsZeroState() && ENABLE_VOD_PIECEPICKER) {
+		// Ric: remove its binmap from the availability
 		transfer().availability().remove(id_, ack_in_);
     }
 

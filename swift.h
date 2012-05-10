@@ -269,7 +269,7 @@ namespace swift {
          *  @param root_hash    the root hash of the file; zero hash if the file
 	 	 *                      is newly submitted
 	 	 */
-        FileTransfer(std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO,bool check_hashes=true,uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+        FileTransfer(std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO,bool check_hashes=true,uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, bool zerostate=false);
 
         /**    Close everything. */
         ~FileTransfer();
@@ -293,14 +293,14 @@ namespace swift {
             return fd<files.size() ? files[fd] : NULL;
         }
 
-        /** The binmap for data already retrieved and checked. */
-        binmap_t&           ack_out ()  { return hashtree_->ack_out(); }
+        /** The binmap pointer for data already retrieved and checked. */
+        binmap_t *           ack_out ()  { return hashtree_->ack_out(); }
         /** Piece picking strategy used by this transfer. */
         PiecePicker&    picker () { return *picker_; }
         /** The number of channels working for this transfer. */
         int             channel_count () const { return hs_in_.size(); }
         /** Hash tree checked file; all the hashes and data are kept here. */
-        HashTree&       file() { return *hashtree_; }
+        HashTree *       hashtree() { return hashtree_; }
         /** File descriptor for the data file. */
         int             fd () const { return fd_; }
         /** Root SHA1 hash of the transfer (and the data file). */
@@ -349,6 +349,10 @@ namespace swift {
 
 		// SAFECLOSE
 		static void LibeventCleanCallback(int fd, short event, void *arg);
+
+		//ZEROSTATE
+		bool IsZeroState() { return zerostate_; }
+
     protected:
 
         HashTree*		hashtree_;
@@ -390,11 +394,13 @@ namespace swift {
         Storage				*storage_;
         int					fd_;
 
+        //ZEROSTATE
+        bool				zerostate_;
 
     public:
         void            OnDataIn (bin_t pos);
         // Gertjan fix: return bool
-        bool            OnPexIn (const Address& addr);
+        bool            OnPexAddIn (const Address& addr);
 
         static std::vector<FileTransfer*> files;
 
@@ -502,7 +508,7 @@ namespace swift {
         bin_t       OnData (struct evbuffer *evb);
         void        OnHint (struct evbuffer *evb);
         void        OnHash (struct evbuffer *evb);
-        void        OnPex (struct evbuffer *evb);
+        void        OnPexAdd (struct evbuffer *evb);
         void        OnHandshake (struct evbuffer *evb);
         void        OnRandomize (struct evbuffer *evb); //FRAGRAND
         void        AddHandshake (struct evbuffer *evb);
@@ -546,7 +552,7 @@ namespace swift {
         /** A channel is "established" if had already sent and received packets. */
         bool        is_established () { return peer_channel_id_ && own_id_mentioned_; }
         FileTransfer& transfer() { return *transfer_; }
-        HashTree&   file () { return transfer_->file(); }
+        HashTree *   hashtree() { return transfer_->hashtree(); }
         const Address& peer() const { return peer_; }
         const Address& recv_peer() const { return recv_peer_; }
         tint ack_timeout () {
@@ -573,6 +579,15 @@ namespace swift {
         void		ClearEvents();
         void 		Schedule4Close() { scheduled4close_ = true; }
         bool		IsScheduled4Close() { return scheduled4close_; }
+
+
+        //ZEROSTATE
+        void RecvZeroState(struct evbuffer *evb);
+        void OnDataZeroState(struct evbuffer *evb);
+        void OnHaveZeroState(struct evbuffer *evb);
+        void OnHashZeroState(struct evbuffer *evb);
+        void OnPexAddZeroState(struct evbuffer *evb);
+        void OnPexReqZeroState(struct evbuffer *evb);
 
 
     protected:
@@ -830,6 +845,36 @@ namespace swift {
 
 	};
 
+#ifdef LATER
+	class ZeroStatePeer;
+    typedef std::pair<uint32_t,ZeroStatePeer *> zerocidpeerpair_t;
+    typedef std::map<uint32_t,ZeroStatePeer *>  zeropeermap_t;
+
+
+	class ZeroStatePeer
+	{
+	  public:
+		ZeroStatePeer(int hiscid, Sha1Hash &roothash);
+
+	  protected:
+		uint32_t	hiscid_;
+		Sha1Hash	roothash_;
+	};
+
+#endif
+
+
+	class ZeroState
+	{
+	  public:
+    	ZeroState();
+    	static ZeroState *GetInstance();
+    	FileTransfer * ZeroState::Find(Sha1Hash &root_hash);
+
+	  protected:
+    	static ZeroState *__singleton;
+
+	};
 
 
     /*************** The top-level API ****************/

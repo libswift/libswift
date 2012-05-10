@@ -28,9 +28,9 @@ std::vector<FileTransfer*> FileTransfer::files(20);
 
 // FIXME: separate Bootstrap() and Download(), then Size(), Progress(), SeqProgress()
 
-FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool check_hashes, uint32_t chunk_size) :
+FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool check_hashes, uint32_t chunk_size, bool zerostate) :
     fd_(files.size()+1), cb_installed(0), mychannels_(),
-    speedzerocount_(0), tracker_(), tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START), tracker_retry_time_(NOW)
+    speedzerocount_(0), tracker_(), tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START), tracker_retry_time_(NOW), zerostate_(zerostate)
 {
     if (files.size()<fd()+1)
         files.resize(fd()+1);
@@ -59,17 +59,26 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
 	binmap_filename.assign(filename);
 	binmap_filename.append(".mbinmap");
 
-    hashtree_ = new HashTree(storage_,root_hash,chunk_size,hash_filename,check_hashes,binmap_filename);
-    
-    if (ENABLE_VOD_PIECEPICKER) {
-    	// Ric: init availability
-    	availability_ = new Availability();
-    	// Ric: TODO assign picker based on input params...
-    	picker_ = new VodPiecePicker(this);
-    }
-    else
-    	picker_ = new SeqPiecePicker(this);
-    picker_->Randomize(rand()&63);
+	if (!zerostate_)
+	{
+		hashtree_ = (HashTree *)new MmapHashTree(storage_,root_hash,chunk_size,hash_filename,check_hashes,binmap_filename);
+
+		if (ENABLE_VOD_PIECEPICKER) {
+			// Ric: init availability
+			availability_ = new Availability();
+			// Ric: TODO assign picker based on input params...
+			picker_ = new VodPiecePicker(this);
+		}
+		else
+			picker_ = new SeqPiecePicker(this);
+		picker_->Randomize(rand()&63);
+	}
+	else
+	{
+		// ZEROHASH
+		hashtree_ = (HashTree *)new ZeroHashTree(storage_,root_hash,chunk_size,hash_filename,check_hashes,binmap_filename);
+	}
+
     init_time_ = Channel::Time();
     cur_speed_[DDIR_UPLOAD] = MovingAverageSpeed();
     cur_speed_[DDIR_DOWNLOAD] = MovingAverageSpeed();
@@ -106,7 +115,7 @@ void FileTransfer::LibeventCleanCallback(int fd, short event, void *arg)
 
 			if (c->is_established ()) {
 				hasestablishedpeers = true;
-				//fprintf(stderr,"%s peer %s\n", ft->file().root_hash().hex().c_str(), c->peer().str() );
+				//fprintf(stderr,"%s peer %s\n", ft->hashtree()->root_hash().hex().c_str(), c->peer().str() );
 			}
 		}
 	}
@@ -210,7 +219,7 @@ void swift::ExternallyRetrieved (int transfer,bin_t piece) {
     FileTransfer* trans = FileTransfer::file(transfer);
     if (!trans)
         return;
-    trans->ack_out().set(piece); // that easy
+    trans->ack_out()->set(piece); // that easy
 }
 
 
@@ -264,9 +273,9 @@ int swift:: Find (Sha1Hash hash) {
 
 
 
-bool FileTransfer::OnPexIn (const Address& addr) {
+bool FileTransfer::OnPexAddIn (const Address& addr) {
 
-	//fprintf(stderr,"FileTransfer::OnPexIn: %s\n", addr.str() );
+	//fprintf(stderr,"FileTransfer::OnPexAddIn: %s\n", addr.str() );
 	// Arno: this brings safety, but prevents private swift installations.
 	// TODO: detect public internet.
 	//if (addr.is_private())

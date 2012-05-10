@@ -117,11 +117,11 @@ void Channel::ClearEvents()
 
 bool Channel::IsComplete() {
  	// Check if peak hash bins are filled.
-	if (file().peak_count() == 0)
+	if (hashtree()->peak_count() == 0)
 		return false;
 
-    for(int i=0; i<file().peak_count(); i++) {
-        bin_t peak = file().peak(i);
+    for(int i=0; i<hashtree()->peak_count(); i++) {
+        bin_t peak = hashtree()->peak(i);
         if (!ack_in_.is_filled(peak))
             return false;
     }
@@ -490,7 +490,7 @@ ssize_t  swift::Write(int fdes, const void *buf, size_t nbyte, int64_t offset)
 
 uint64_t  swift::Size (int fdes) {
     if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->file().size();
+        return FileTransfer::files[fdes]->hashtree()->size();
     else
         return 0;
 }
@@ -498,7 +498,7 @@ uint64_t  swift::Size (int fdes) {
 
 bool  swift::IsComplete (int fdes) {
     if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->file().is_complete();
+        return FileTransfer::files[fdes]->hashtree()->is_complete();
     else
         return 0;
 }
@@ -506,7 +506,7 @@ bool  swift::IsComplete (int fdes) {
 
 uint64_t  swift::Complete (int fdes) {
     if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->file().complete();
+        return FileTransfer::files[fdes]->hashtree()->complete();
     else
         return 0;
 }
@@ -514,7 +514,7 @@ uint64_t  swift::Complete (int fdes) {
 
 uint64_t  swift::SeqComplete (int fdes, int64_t offset) {
     if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->file().seq_complete(offset);
+        return FileTransfer::files[fdes]->hashtree()->seq_complete(offset);
     else
         return 0;
 }
@@ -524,7 +524,7 @@ const Sha1Hash& swift::RootMerkleHash (int file) {
     FileTransfer* trans = FileTransfer::file(file);
     if (!trans)
         return Sha1Hash::ZERO;
-    return trans->file().root_hash();
+    return trans->hashtree()->root_hash();
 }
 
 
@@ -532,7 +532,7 @@ const Sha1Hash& swift::RootMerkleHash (int file) {
 uint32_t	  swift::ChunkSize(int fdes)
 {
     if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->file().chunk_size();
+        return FileTransfer::files[fdes]->hashtree()->chunk_size();
     else
         return 0;
 }
@@ -544,6 +544,8 @@ int swift::Checkpoint(int transfer) {
 	FileTransfer *ft = FileTransfer::file(transfer);
 	if (ft == NULL)
 		return -1;
+	if (ft->IsZeroState())
+		return -1;
 
 	std::string binmap_filename = ft->GetStorage()->GetOSPathName();
 	binmap_filename.append(".mbinmap");
@@ -553,7 +555,7 @@ int swift::Checkpoint(int transfer) {
 		print_error("cannot open mbinmap for writing");
 		return -1;
 	}
-	if (ft->file().serialize(fp) < 0)
+	if (((Serializable *)ft->hashtree())->serialize(fp) < 0)
 	{
 		print_error("writing to mbinmap");
 		return -1;
@@ -578,8 +580,8 @@ int swift::Seek(int fd, int64_t offset, int whence)
 			return -1; // seek beyond end of content
 
 		// Which bin to seek to?
-		int64_t coff = offset - (offset % ft->file().chunk_size()); // ceil to chunk
-		bin_t offbin = bin_t(0,coff/ft->file().chunk_size());
+		int64_t coff = offset - (offset % ft->hashtree()->chunk_size()); // ceil to chunk
+		bin_t offbin = bin_t(0,coff/ft->hashtree()->chunk_size());
 
 		char binstr[32];
 		dprintf("%s F%i Seek: to bin %s\n",tintstr(), fd, offbin.str(binstr) );

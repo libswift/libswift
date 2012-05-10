@@ -37,15 +37,15 @@ public:
            transfer_(file_to_pick_from), twist_(0), range_(bin_t::ALL), initseq_(0,0)
     {
     	avail_ = &(transfer_->availability());
-        binmap_t::copy(ack_hint_out_, file().ack_out());
+        binmap_t::copy(ack_hint_out_, *(hashtree()->ack_out()));
         playback_pos_ = -1;
         high_pri_window_ = HIGHPRIORITYWINDOW;
     }
 
     virtual ~VodPiecePicker() {}
 
-    HashTree& file() {
-        return transfer_->file();
+    HashTree * hashtree() {
+        return transfer_->hashtree();
     }
 
     virtual void Randomize (uint64_t twist) {
@@ -166,16 +166,16 @@ public:
 
     	// TODO check... the seconds should depend on previous speed of the peer
         while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*3/2) { // FIXME sec
-            binmap_t::copy(ack_hint_out_, file().ack_out(), hint_out_.front().bin);
+            binmap_t::copy(ack_hint_out_, *(hashtree()->ack_out()), hint_out_.front().bin);
             hint_out_.pop_front();
         }
 
         // get the first piece to estimate the size, whoever sends it first
-        if (!file().size()) {
+        if (!hashtree()->size()) {
 
             return bin_t(0,0);
         }
-        else if (file().ack_out().is_empty(bin_t(0,0)))
+        else if (hashtree()->ack_out()->is_empty(bin_t(0,0)))
         {
         	// Arno, 2012-05-03: big initial hint avoidance hack:
         	// Just ask sequentially till first chunk in.
@@ -184,7 +184,7 @@ public:
         }
 
         do {
-        	uint64_t max_size = file().size_in_chunks() - playback_pos_ - 1;
+        	uint64_t max_size = hashtree()->size_in_chunks() - playback_pos_ - 1;
         	max_size = high_pri_window_ < max_size ? high_pri_window_ : max_size;
 
 			// check the high priority window for data we r missing
@@ -192,21 +192,21 @@ public:
 
 			// check the mid priority window
 			uint64_t start = (1 + playback_pos_) + HIGHPRIORITYWINDOW;	// start in KB
-			if (hint.is_none() && start < file().size_in_chunks())
+			if (hint.is_none() && start < hashtree()->size_in_chunks())
 			{
 				int mid = MIDPRIORITYWINDOW;
 				int size = mid * HIGHPRIORITYWINDOW;						// size of window in KB
 				// check boundaries
-				max_size = file().size_in_chunks() - start;
+				max_size = hashtree()->size_in_chunks() - start;
 				max_size = size < max_size ? size : max_size;
 
 				hint = pickRarest(offer, max_width, start, max_size);
 
 				//check low priority
 				start += max_size;
-				if (hint.is_none() && start < file().size_in_chunks())
+				if (hint.is_none() && start < hashtree()->size_in_chunks())
 				{
-					size = file().size_in_chunks() - start;
+					size = hashtree()->size_in_chunks() - start;
 					hint = pickRarest(offer, max_width, start, size);
 					set = 'L';
 				}
@@ -217,8 +217,8 @@ public:
 				set = 'H';
 
 			// unhinted/late data
-			if (!file().ack_out().is_empty(hint)) {
-				binmap_t::copy(ack_hint_out_, file().ack_out(), hint);
+			if (!hashtree()->ack_out()->is_empty(hint)) {
+				binmap_t::copy(ack_hint_out_, *(hashtree()->ack_out()), hint);
 				retry = true;
 			}
 			else
@@ -266,9 +266,9 @@ public:
     	if (cid > 0)
     		cid--; // Riccardo assumes playbackpos is already in.
 
-    	//fprintf(stderr,"vodpp: pos in K %llu size %llu\n", cid, file().size_in_chunks() );
+    	//fprintf(stderr,"vodpp: pos in K %llu size %llu\n", cid, hashtree()->size_in_chunks() );
 
-    	if (cid > file().size_in_chunks())
+    	if (cid > hashtree()->size_in_chunks())
     		return -1;
 
     	playback_pos_ = cid;
@@ -288,7 +288,7 @@ public:
 
 		while (i<=end_high)
 		{
-			if (!file().ack_out().is_empty(bin_t(i)))
+			if (!hashtree()->ack_out()->is_empty(bin_t(i)))
 				t++;
 			i++;
 		}
@@ -298,7 +298,7 @@ public:
 		t = 0;
 		while (i<=end_mid)
 		{
-			if (!file().ack_out().is_empty(bin_t(i)))
+			if (!hashtree()->ack_out()->is_empty(bin_t(i)))
 				t++;
 			i++;
 		}
@@ -306,14 +306,14 @@ public:
 		t = t*100/((x*y)<<1);
 		fprintf(stderr, "mid %u, ", t);
 		t = 0;
-		while (i<=file().size_in_chunks()<<1)
+		while (i<=hashtree()->size_in_chunks()<<1)
 		{
-			if (!file().ack_out().is_empty(bin_t(i)))
+			if (!hashtree()->ack_out()->is_empty(bin_t(i)))
 				t++;
 			i++;
 		}
 		total += t;
-		t = t*100/((file().size_in_chunks()-(x*y+playback_pos_))<<1);
+		t = t*100/((hashtree()->size_in_chunks()-(x*y+playback_pos_))<<1);
 		fprintf(stderr, "low %u  -> in total: %i\t pp: %i\n", t, total, playback_pos_);
 	}
 

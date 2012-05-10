@@ -77,7 +77,7 @@ std::string    Sha1Hash::hex() const {
 /**     H a s h   t r e e       */
 
 
-HashTree::HashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool check_hashes, std::string binmap_filename) :
+MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool check_hashes, std::string binmap_filename) :
 storage_(storage), root_hash_(root_hash), hashes_(NULL), peak_count_(0), hash_fd_(0),
  size_(0), sizec_(0), complete_(0), completec_(0),
 chunk_size_(chunk_size)
@@ -147,7 +147,7 @@ chunk_size_(chunk_size)
 }
 
 
-HashTree::HashTree(bool dummy, std::string binmap_filename) :
+MmapHashTree::MmapHashTree(bool dummy, std::string binmap_filename) :
 root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), hash_fd_(0),
 filename_(""), size_(0), sizec_(0), complete_(0), completec_(0),
 chunk_size_(0)
@@ -163,7 +163,7 @@ chunk_size_(0)
 
 
 // Reads complete file and constructs hash tree
-void            HashTree::Submit () {
+void            MmapHashTree::Submit () {
     size_ = storage_->GetReservedSize();
     sizec_ = (size_ + chunk_size_-1) / chunk_size_;
 
@@ -212,7 +212,7 @@ void            HashTree::Submit () {
 /** Basically, simulated receiving every single chunk, except
  for some optimizations.
  Precondition: root hash known */
-void            HashTree::RecoverProgress () {
+void            MmapHashTree::RecoverProgress () {
 
 	//fprintf(stderr,"hashtree: recover: cs %i\n", chunk_size_);
 
@@ -254,7 +254,7 @@ void            HashTree::RecoverProgress () {
 }
 
 /** Precondition: root hash known */
-bool HashTree::RecoverPeakHashes()
+bool MmapHashTree::RecoverPeakHashes()
 {
 	int64_t ret = storage_->GetReservedSize();
 	if (ret < 0)
@@ -280,7 +280,7 @@ bool HashTree::RecoverPeakHashes()
     return true;
 }
 
-int HashTree::serialize(FILE *fp)
+int MmapHashTree::serialize(FILE *fp)
 {
 	fprintf_retiffail(fp,"version %i\n", 1 );
 	fprintf_retiffail(fp,"root hash %s\n", root_hash_.hex().c_str() );
@@ -294,16 +294,16 @@ int HashTree::serialize(FILE *fp)
 /** Arno: recreate hash tree from .mbinmap file without rereading content.
  * Precondition: root hash known
  */
-int HashTree::deserialize(FILE *fp) {
+int MmapHashTree::deserialize(FILE *fp) {
 	return internal_deserialize(fp,true);
 }
 
-int HashTree::partial_deserialize(FILE *fp) {
+int MmapHashTree::partial_deserialize(FILE *fp) {
 	return internal_deserialize(fp,false);
 }
 
 
-int HashTree::internal_deserialize(FILE *fp,bool contentavail) {
+int MmapHashTree::internal_deserialize(FILE *fp,bool contentavail) {
 
 	char hexhashstr[256];
 	uint64_t c,cc;
@@ -341,7 +341,7 @@ int HashTree::internal_deserialize(FILE *fp,bool contentavail) {
 }
 
 
-bool            HashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
+bool            MmapHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
 	char bin_name_buf[32];
 	dprintf("%s hashtree offer peak %s\n",tintstr(),pos.str(bin_name_buf));
 
@@ -408,7 +408,7 @@ bool            HashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
 }
 
 
-Sha1Hash        HashTree::DeriveRoot () {
+Sha1Hash        MmapHashTree::DeriveRoot () {
 
 	dprintf("%s hashtree deriving root\n",tintstr() );
 
@@ -430,6 +430,9 @@ Sha1Hash        HashTree::DeriveRoot () {
             c--;
         }
     }
+
+    fprintf(stderr,"hashtree: derive: root hash is %s\n", hash.hex().c_str() );
+
     //fprintf(stderr,"root bin is %lli covers %lli\n", p.toUInt(), p.base_length() );
     return hash;
 }
@@ -437,19 +440,19 @@ Sha1Hash        HashTree::DeriveRoot () {
 
 /** For live streaming: appends the data, adjusts the tree.
     @ return the number of fresh (tail) peak hashes */
-int         HashTree::AppendData (char* data, int length) {
+int         MmapHashTree::AppendData (char* data, int length) {
     return 0;
 }
 
 
-bin_t         HashTree::peak_for (bin_t pos) const {
+bin_t         MmapHashTree::peak_for (bin_t pos) const {
     int pi=0;
     while (pi<peak_count_ && !peaks_[pi].contains(pos))
         pi++;
     return pi==peak_count_ ? bin_t(bin_t::NONE) : peaks_[pi];
 }
 
-bool            HashTree::OfferHash (bin_t pos, const Sha1Hash& hash) {
+bool            MmapHashTree::OfferHash (bin_t pos, const Sha1Hash& hash) {
     if (!size_)  // only peak hashes are accepted at this point
         return OfferPeakHash(pos,hash);
     bin_t peak = peak_for(pos);
@@ -510,7 +513,7 @@ bool            HashTree::OfferHash (bin_t pos, const Sha1Hash& hash) {
 }
 
 
-bool            HashTree::OfferData (bin_t pos, const char* data, size_t length) {
+bool            MmapHashTree::OfferData (bin_t pos, const char* data, size_t length) {
     if (!size())
         return false;
     if (!pos.is_base())
@@ -548,7 +551,7 @@ bool            HashTree::OfferData (bin_t pos, const char* data, size_t length)
 }
 
 
-uint64_t      HashTree::seq_complete (int64_t offset) {
+uint64_t      MmapHashTree::seq_complete (int64_t offset) {
 
 	uint64_t seqc = 0;
 	if (offset == 0)
@@ -577,7 +580,7 @@ uint64_t      HashTree::seq_complete (int64_t offset) {
 }
 
 
-HashTree::~HashTree () {
+MmapHashTree::~MmapHashTree () {
     if (hashes_)
         memory_unmap(hash_fd_, hashes_, sizec_*2*sizeof(Sha1Hash));
     if (hash_fd_)

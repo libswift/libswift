@@ -49,17 +49,63 @@ struct Sha1Hash {
 
 class Storage;
 
+
 /** This class controls data integrity of some file; hash tree is put to
     an auxilliary file next to it. The hash tree file is mmap'd for
     performance reasons. Actually, I'd like the data file itself to be
-    mmap'd, but 32-bit platforms do not allow that for bigger files. 
- 
-    There are two variants of the general workflow: either a HashTree
+    mmap'd, but 32-bit platforms do not allow that for bigger files.
+
+    There are two variants of the general workflow: either a MmapHashTree
     is initialized with a root hash and the rest of hashes and data is
-    spoon-fed later, OR a HashTree is initialized with a data file, so
+    spoon-fed later, OR a MmapHashTree is initialized with a data file, so
     the hash tree is derived, including the root hash.
  */
-class HashTree : Serializable {
+class HashTree {
+  public:
+    /** Offer a hash; returns true if it verified; false otherwise.
+     Once it cannot be verified (no sibling or parent), the hash
+     is remembered, while returning false. */
+    virtual bool            OfferHash (bin_t pos, const Sha1Hash& hash) = 0;
+    /** Offer data; the behavior is the same as with a hash:
+     accept or remember or drop. Returns true => ACK is sent. */
+    virtual bool            OfferData (bin_t bin, const char* data, size_t length) = 0;
+    /** Returns the number of peaks (read on peak hashes). */
+    virtual int             peak_count () const = 0;
+    /** Returns the i-th peak's bin number. */
+    virtual bin_t           peak (int i) const = 0;
+    /** Returns peak hash #i. */
+    virtual const Sha1Hash& peak_hash (int i) const = 0;
+    /** Return the peak bin the given bin belongs to. */
+    virtual bin_t           peak_for (bin_t pos) const  = 0;;
+    /** Return a (Merkle) hash for the given bin. */
+    virtual const Sha1Hash& hash (bin_t pos) const  = 0;
+    /** Give the root hash, which is effectively an identifier of this file. */
+    virtual const Sha1Hash& root_hash () const  = 0;
+    /** Get file size, in bytes. */
+    virtual uint64_t        size () const  = 0;
+    /** Get file size in chunks (in kilobytes, rounded up). */
+    virtual uint64_t        size_in_chunks () const  = 0;
+    /** Number of bytes retrieved and checked. */
+    virtual uint64_t        complete () const  = 0;
+    /** Number of chunks retrieved and checked. */
+    virtual uint64_t        chunks_complete () const = 0;
+    /** The number of bytes completed sequentially, i.e. from the beginning of
+        the file (or offset), uninterrupted. */
+    virtual uint64_t        seq_complete(int64_t offset)  = 0;// SEEK
+    /** Whether the file is complete. */
+    virtual bool            is_complete ()  = 0;
+    /** The binmap of complete chunks. */
+    virtual binmap_t *      ack_out() = 0;
+    virtual uint32_t		chunk_size()  = 0; // CHUNKSIZE
+
+    // for transfertest.cpp
+    virtual Storage *       get_storage() = 0;
+    virtual void            set_size(uint64_t size) = 0;
+};
+
+
+/** This class implements the HashTree interface via a memory mapped file. */
+class MmapHashTree : public HashTree, Serializable {
     /** Merkle hash tree: root */
     Sha1Hash        root_hash_;
     Sha1Hash        *hashes_;
@@ -103,52 +149,32 @@ protected:
     
 public:
     
-    HashTree (Storage *storage, const Sha1Hash& root=Sha1Hash::ZERO, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE,
+    MmapHashTree (Storage *storage, const Sha1Hash& root=Sha1Hash::ZERO, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE,
               std::string hash_filename=NULL, bool check_hashes=true, std::string binmap_filename=NULL);
     
     // Arno, 2012-01-03: Hack to quickly learn root hash from a checkpoint
-    HashTree (bool dummy, std::string binmap_filename);
+    MmapHashTree (bool dummy, std::string binmap_filename);
 
-    /** Offer a hash; returns true if it verified; false otherwise.
-     Once it cannot be verified (no sibling or parent), the hash
-     is remembered, while returning false. */
     bool            OfferHash (bin_t pos, const Sha1Hash& hash);
-    /** Offer data; the behavior is the same as with a hash:
-     accept or remember or drop. Returns true => ACK is sent. */
     bool            OfferData (bin_t bin, const char* data, size_t length);
     /** For live streaming. Not implemented yet. */
     int             AppendData (char* data, int length) ;
     
-    /** Returns the number of peaks (read on peak hashes). */
     int             peak_count () const { return peak_count_; }
-    /** Returns the i-th peak's bin number. */
     bin_t           peak (int i) const { return peaks_[i]; }
-    /** Returns peak hash #i. */
     const Sha1Hash& peak_hash (int i) const { return peak_hashes_[i]; }
-    /** Return the peak bin the given bin belongs to. */
     bin_t           peak_for (bin_t pos) const;
-    /** Return a (Merkle) hash for the given bin. */
     const Sha1Hash& hash (bin_t pos) const {return hashes_[pos.toUInt()];}
-    /** Give the root hash, which is effectively an identifier of this file. */
     const Sha1Hash& root_hash () const { return root_hash_; }
-    /** Get file size, in bytes. */
     uint64_t        size () const { return size_; }
-    /** Get file size in chunks (in kilobytes, rounded up). */
     uint64_t        size_in_chunks () const { return sizec_; }
-    /** Number of bytes retrieved and checked. */
     uint64_t        complete () const { return complete_; }
-    /** Number of chunks retrieved and checked. */
     uint64_t        chunks_complete () const { return completec_; }
-    /** The number of bytes completed sequentially, i.e. from the beginning of
-        the file (or offset), uninterrupted. */
     uint64_t        seq_complete(int64_t offset); // SEEK
-    /** Whether the file is complete. */
-    bool            is_complete () 
-        { return size_ && complete_==size_; }
-    /** The binmap of complete chunks. */
-    binmap_t&       ack_out () { return ack_out_; }
+    bool            is_complete () { return size_ && complete_==size_; }
+    binmap_t *       ack_out () { return &ack_out_; }
     uint32_t		chunk_size() { return chunk_size_; } // CHUNKSIZE
-    ~HashTree ();
+    ~MmapHashTree ();
 
     // for transfertest.cpp
     Storage *       get_storage() { return storage_; }
@@ -159,6 +185,78 @@ public:
     int deserialize(FILE *fp);
     int partial_deserialize(FILE *fp);
 };
+
+
+
+
+/** This class implements the HashTree interface by reading directly from disk */
+class ZeroHashTree : public HashTree {
+    /** Merkle hash tree: root */
+    Sha1Hash        root_hash_;
+    /** Merkle hash tree: peak hashes */
+    //Sha1Hash        peak_hashes_[64]; // now read from disk live too
+    bin_t           peaks_[64];
+    int             peak_count_;
+    /** File descriptor to put hashes to */
+    int             hash_fd_;
+    /** Base size, as derived from the hashes. */
+    uint64_t        size_;
+    uint64_t        sizec_;
+    /**    Part of the tree currently checked. */
+    uint64_t        complete_;
+    uint64_t        completec_;
+
+	// CHUNKSIZE
+	/** Arno: configurable fixed chunk size in bytes */
+    uint32_t			chunk_size_;
+
+	//MULTIFILE
+	Storage *		storage_;
+
+protected:
+
+    bool 			RecoverPeakHashes();
+    Sha1Hash        DeriveRoot();
+    bool            OfferPeakHash (bin_t pos, const Sha1Hash& hash);
+
+public:
+
+    ZeroHashTree (Storage *storage, const Sha1Hash& root=Sha1Hash::ZERO, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE,
+              std::string hash_filename=NULL, bool check_hashes=true, std::string binmap_filename=NULL);
+
+    // Arno, 2012-01-03: Hack to quickly learn root hash from a checkpoint
+    ZeroHashTree (bool dummy, std::string binmap_filename);
+
+    bool            OfferHash (bin_t pos, const Sha1Hash& hash);
+    bool            OfferData (bin_t bin, const char* data, size_t length);
+    /** For live streaming. Not implemented yet. */
+    int             AppendData (char* data, int length) ;
+
+    int             peak_count () const { return peak_count_; }
+    bin_t           peak (int i) const { return peaks_[i]; }
+    const Sha1Hash& peak_hash (int i) const;
+    bin_t           peak_for (bin_t pos) const;
+    const Sha1Hash& hash (bin_t pos) const;
+    const Sha1Hash& root_hash () const { return root_hash_; }
+    uint64_t        size () const { return size_; }
+    uint64_t        size_in_chunks () const { return sizec_; }
+    uint64_t        complete () const { return complete_; }
+    uint64_t        chunks_complete () const { return completec_; }
+    uint64_t        seq_complete(int64_t offset); // SEEK
+	bool            is_complete () { return size_ && complete_==size_; }
+    binmap_t *       ack_out () { return NULL; }
+    uint32_t		chunk_size() { return chunk_size_; } // CHUNKSIZE
+    ~ZeroHashTree ();
+
+    // for transfertest.cpp
+    Storage *       get_storage() { return storage_; }
+    void            set_size(uint64_t size) { size_ = size; fprintf(stderr,"zerohashtree: set_size %llu\n", size ); }
+};
+
+
+
+
+
 
 }
 

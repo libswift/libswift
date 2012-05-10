@@ -721,7 +721,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         req->startt = usec_time();
         req->mfspecname = mfstr;
 
-        // See HashTree::HashTree
+        // See MmapHashTree::MmapHashTree
         req->contentfilename = hashstr;
 
         if (cmd_gw_debug)
