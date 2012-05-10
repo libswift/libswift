@@ -845,34 +845,19 @@ namespace swift {
 
 	};
 
-#ifdef LATER
-	class ZeroStatePeer;
-    typedef std::pair<uint32_t,ZeroStatePeer *> zerocidpeerpair_t;
-    typedef std::map<uint32_t,ZeroStatePeer *>  zeropeermap_t;
-
-
-	class ZeroStatePeer
-	{
-	  public:
-		ZeroStatePeer(int hiscid, Sha1Hash &roothash);
-
-	  protected:
-		uint32_t	hiscid_;
-		Sha1Hash	roothash_;
-	};
-
-#endif
-
-
 	class ZeroState
 	{
 	  public:
     	ZeroState();
+    	~ZeroState();
     	static ZeroState *GetInstance();
-    	FileTransfer * ZeroState::Find(Sha1Hash &root_hash);
+    	FileTransfer * Find(Sha1Hash &root_hash);
+
+    	static void LibeventCleanCallback(int fd, short event, void *arg);
 
 	  protected:
     	static ZeroState *__singleton;
+        struct event 		evclean_;
 
 	};
 

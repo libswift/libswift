@@ -442,10 +442,6 @@ int      swift::Open (std::string filename, const Sha1Hash& hash, Address tracke
     FileTransfer* ft = new FileTransfer(filename, hash, check_hashes, chunk_size);
     if (ft && ft->fd()) {
 
-        /*if (FileTransfer::files.size()<fdes)  // FIXME duplication
-            FileTransfer::files.resize(fdes);
-        FileTransfer::files[fdes] = ft;*/
-
         // initiate tracker connections
     	// SWIFTPROC
     	ft->SetTracker(tracker);

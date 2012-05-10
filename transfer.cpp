@@ -247,9 +247,13 @@ void swift::RemoveProgressCallback (int transfer, ProgressCallback cb) {
 FileTransfer::~FileTransfer ()
 {
     Channel::CloseTransfer(this);
+	delete hashtree_;
     files[fd()] = NULL;
-    delete picker_;
-    delete availability_;
+	if (!IsZeroState())
+	{
+		delete picker_;
+		delete availability_;
+	}
   
     // Arno, 2012-02-06: Cancel cleanup timer, otherwise chaos!
     evtimer_del(&evclean_);
