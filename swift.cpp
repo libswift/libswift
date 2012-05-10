@@ -85,11 +85,12 @@ int utf8main (int argc, char** argv)
         {"chunksize",required_argument, 0, 'z'}, // CHUNKSIZE
         {"printurl",no_argument, 0, 'm'},
         {"multifile",required_argument, 0, 'M'}, // MULTIFILE
+        {"zerosdir",required_argument, 0, 'e'},  // ZEROSTATE
         {0, 0, 0, 0}
     };
 
     Sha1Hash root_hash;
-    std::string filename = "",destdir = "", trackerargstr= "";
+    std::string filename = "",destdir = "", trackerargstr= "", zerostatedir="";
     bool printurl=false;
     Address bindaddr;
     Address httpaddr;
@@ -102,7 +103,7 @@ int utf8main (int argc, char** argv)
     Channel::evbase = event_base_new();
 
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:", long_options, 0)) ) {
         switch (c) {
             case 'h':
                 if (strlen(optarg)!=40)
@@ -210,6 +211,10 @@ int utf8main (int argc, char** argv)
             	filename = strdup(optarg);
             	generate_multifile = true;
             	break;
+            case 'e': // ZEROSTATE
+                zerostatedir = strdup(optarg); // UNICODE
+                break;
+
 
         }
 
@@ -256,6 +261,10 @@ int utf8main (int argc, char** argv)
     // TRIALM36: Allow browser to retrieve stats via AJAX and as HTML page
     if (statsaddr != Address())
     	InstallStatsGateway(Channel::evbase,statsaddr);
+
+    // ZEROSTATE
+    ZeroState *zs = ZeroState::GetInstance()
+    zs->SetContentDir(zerostatedir);
 
 
     if (!cmdgw_enabled)

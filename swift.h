@@ -851,13 +851,17 @@ namespace swift {
     	ZeroState();
     	~ZeroState();
     	static ZeroState *GetInstance();
+    	void SetContentDir(std::string contentdir);
     	FileTransfer * Find(Sha1Hash &root_hash);
+
 
     	static void LibeventCleanCallback(int fd, short event, void *arg);
 
 	  protected:
     	static ZeroState *__singleton;
-        struct event 		evclean_;
+
+    	struct event 		evclean_;
+        std::string 		contentdir_;
 
 	};
 
