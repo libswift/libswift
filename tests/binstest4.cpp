@@ -7,7 +7,6 @@
  *
  */
 #include "binmap.h"
-#include "binheap.h"
 
 #include <time.h>
 #include <set>

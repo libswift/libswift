@@ -7,7 +7,6 @@
  *
  */
 #include "binmap.h"
-#include "binheap.h"
 
 #include <time.h>
 #include <set>
@@ -378,26 +377,6 @@ TEST(BinsTest,EmptyFilled) {
     EXPECT_TRUE(b.is_filled(bin_t(2,1)));
 }
 
-TEST(BinheapTest,Eat) {
-    
-    binheap b;
-    b.push(bin_t(0,1));
-    b.push(bin_t(0,3));
-    b.push(bin_t(2,0));
-    b.push(bin_t(2,4));
-    
-    EXPECT_EQ(bin_t(2,0),b.pop());
-    EXPECT_EQ(bin_t(2,4),b.pop());
-    EXPECT_EQ(bin_t::NONE,b.pop());
-    
-    for (int i=0; i<64; i++) {
-        b.push(bin_t(0,i));
-    }
-    b.push(bin_t(5,0));
-    EXPECT_EQ(bin_t(5,0),b.pop());
-    for (int i=32; i<64; i++)
-        EXPECT_EQ(bin_t(0,i),b.pop());
-}
 
 /*TEST(BinsTest,RangeOpTest) {
     binmap_t a, b;
