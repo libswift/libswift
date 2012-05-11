@@ -93,8 +93,8 @@ void ZeroState::SetContentDir(std::string contentdir)
 
 FileTransfer * ZeroState::Find(Sha1Hash &root_hash)
 {
-	std::string file_name = "content.avi";
-	//std::string file_name = contentdir_+FILE_SEP+root_hash.hex()+".torrent";
+	//std::string file_name = "content.avi";
+	std::string file_name = contentdir_+FILE_SEP+root_hash.hex();
 	uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE;
 
 	FileTransfer *ft = new FileTransfer(file_name,root_hash,false,chunk_size,true);
