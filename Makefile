@@ -5,7 +5,7 @@ LDFLAGS+=-L${LIBEVENT_HOME}/lib -Wl,-rpath,${LIBEVENT_HOME}/lib -levent -lstdc++
 
 all: swift
 
-swift: swift.o sha1.o compat.o sendrecv.o send_control.o hashtree.o bin.o binmap.o binheap.o channel.o transfer.o httpgw.o statsgw.o cmdgw.o avgspeed.o availability.o storage.o zerostate.o zerohashtree.o
+swift: swift.o sha1.o compat.o sendrecv.o send_control.o hashtree.o bin.o binmap.o channel.o transfer.o httpgw.o statsgw.o cmdgw.o avgspeed.o availability.o storage.o zerostate.o zerohashtree.o
 #nat_test.o
 	g++ ${CPPFLAGS} -o swift *.o ${LDFLAGS}
 
