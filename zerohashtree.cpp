@@ -35,7 +35,7 @@ chunk_size_(chunk_size)
 	// MULTIFILE
 	storage_->SetHashTree(this);
 
-    hash_fd_ = open_utf8(hash_filename.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+    hash_fd_ = open_utf8(hash_filename.c_str(),ROOPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (hash_fd_<0) {
         hash_fd_ = 0;
         print_error("cannot open hash file");

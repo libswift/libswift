@@ -115,8 +115,10 @@ typedef void* setsockoptptr_t;
 
 #ifdef _WIN32
 #define OPENFLAGS         O_RDWR|O_CREAT|_O_BINARY
+#define ROOPENFLAGS       O_RDONLY|_O_BINARY
 #else
 #define OPENFLAGS         O_RDWR|O_CREAT
+#define ROOPENFLAGS       O_RDONLY
 #endif
 
 #ifdef _WIN32

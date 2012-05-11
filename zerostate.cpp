@@ -85,7 +85,7 @@ ZeroState * ZeroState::GetInstance()
 }
 
 
-void ZeroState::SetContentDir(std::string contendir)
+void ZeroState::SetContentDir(std::string contentdir)
 {
 	contentdir_ = contentdir;
 }

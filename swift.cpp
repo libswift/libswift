@@ -263,7 +263,7 @@ int utf8main (int argc, char** argv)
     	InstallStatsGateway(Channel::evbase,statsaddr);
 
     // ZEROSTATE
-    ZeroState *zs = ZeroState::GetInstance()
+    ZeroState *zs = ZeroState::GetInstance();
     zs->SetContentDir(zerostatedir);
 
 
