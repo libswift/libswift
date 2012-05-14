@@ -351,7 +351,14 @@ namespace swift {
 		static void LibeventCleanCallback(int fd, short event, void *arg);
 
 		//ZEROSTATE
+		/** Returns whether this FileTransfer is running in zero-state mode,
+		 * meaning that the hash tree is not mmapped into memory but read
+		 * directly from disk, and other memory saving measures.
+		 */
 		bool IsZeroState() { return zerostate_; }
+
+		/** Add a peer to the set of addresses to connect to */
+		void AddPeer(Address &peer);
 
     protected:
 

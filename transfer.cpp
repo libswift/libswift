@@ -397,3 +397,9 @@ uint32_t	FileTransfer::GetNumSeeders()
     }
     return count;
 }
+
+
+void FileTransfer::AddPeer(Address &peer)
+{
+	Channel *c = new Channel(this,INVALID_SOCKET,peer);
+}

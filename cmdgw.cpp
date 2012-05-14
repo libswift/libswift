@@ -214,6 +214,19 @@ void CmdGwGotSETMOREINFO(Sha1Hash &want_hash, bool enable)
 	req->moreinfo = enable;
 }
 
+void CmdGwGotPEERADDR(Sha1Hash &want_hash, Address &peer)
+{
+	cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
+	if (req == NULL)
+    	return;
+	FileTransfer *ft = FileTransfer::file(req->transfer);
+	if (ft == NULL)
+		return;
+
+	ft->AddPeer(peer);
+}
+
+
 
 void CmdGwSendINFOHashChecking(cmd_gw_t* req, Sha1Hash root_hash)
 {
@@ -847,6 +860,22 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         if (cmd_gw_debug)
         	fprintf(stderr,"cmdgw: Want tunnel %d bytes to %s\n", cmd_tunnel_expect, cmd_tunnel_dest_addr.str() );
     }
+    else if (!strcmp(method,"PEERADDR"))
+    {
+    	// PEERADDR roothash addrstr\r\n
+        token = strtok_r(paramstr," ",&savetok); // hash
+        if (token == NULL)
+        	return ERROR_MISS_ARG;
+        char *hashstr = token;
+        token = strtok_r(NULL," ",&savetok);      // bool
+        if (token == NULL)
+        	return ERROR_MISS_ARG;
+        char *addrstr = token;
+        Address peer(addrstr);
+    	Sha1Hash root_hash = Sha1Hash(true,hashstr);
+    	CmdGwGotPEERADDR(root_hash,peer);
+    }
+
     else
     {
     	return ERROR_UNKNOWN_CMD;
