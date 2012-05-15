@@ -230,8 +230,9 @@ int utf8main (int argc, char** argv)
 	}
 	else
 		chdir_utf8(destdir);
-	fprintf(stderr,"CWD %s\n",getcwd_utf8().c_str() );
 
+	if (httpgw_enabled)
+		fprintf(stderr,"CWD %s\n",getcwd_utf8().c_str() );
 
     if (bindaddr!=Address()) { // seeding
         if (Listen(bindaddr)<=0)

@@ -27,7 +27,7 @@ Storage::Storage(std::string ospathname, std::string destdir) : state_(STOR_STAT
 		single_fd_(-1), reserved_size_(-1), total_size_from_spec_(-1), last_sf_(NULL)
 {
 
-	fprintf(stderr,"Storage: ospathname %s destdir %s\n", ospathname.c_str(), destdir.c_str() );
+	//fprintf(stderr,"Storage: ospathname %s destdir %s\n", ospathname.c_str(), destdir.c_str() );
 
 	int64_t fsize = file_size_by_path_utf8(ospathname.c_str());
 	if (fsize < 0 && errno == ENOENT)
