@@ -54,7 +54,7 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
         		delset.insert(ft);
         	}
         	else
-        		dprintf("%s #%u zero clean %s has %d peers\n",tintstr(),ft->root_hash().hex().c_str(), ft->GetChannels().size() );
+        		dprintf("%s zero clean %s has %d peers\n",tintstr(),ft->root_hash().hex().c_str(), ft->GetChannels().size() );
         }
     }
 
@@ -93,14 +93,33 @@ void ZeroState::SetContentDir(std::string contentdir)
 
 FileTransfer * ZeroState::Find(Sha1Hash &root_hash)
 {
+	fprintf(stderr,"swift: zero: Got request for %s\n",root_hash.hex().c_str() );
+
 	//std::string file_name = "content.avi";
 	std::string file_name = contentdir_+FILE_SEP+root_hash.hex();
 	uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE;
 
-	fprintf(stderr,"swift: zero: Got request for %s\n",root_hash.hex().c_str() );
+	std::string reqfilename = file_name;
+    int ret = file_exists_utf8(reqfilename);
+	if (ret == 0 || ret == 2)
+		return NULL;
+	reqfilename = file_name+".mbinmap";
+    ret = file_exists_utf8(reqfilename);
+	if (ret == 0 || ret == 2)
+		return NULL;
+	reqfilename = file_name+".mhash";
+    ret = file_exists_utf8(reqfilename);
+	if (ret == 0 || ret == 2)
+		return NULL;
 
 	FileTransfer *ft = new FileTransfer(file_name,root_hash,false,chunk_size,true);
-	return ft;
+	if (ft->hashtree() == NULL || !ft->hashtree()->is_complete())
+	{
+		// Safety catch
+		return NULL; 
+	}
+	else
+  	    return ft;
 }
 
 

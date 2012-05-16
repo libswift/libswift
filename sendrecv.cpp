@@ -989,6 +989,10 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         	if (!ft)
             	return_log ("%s #0 hash %s unknown, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
         }
+		else if (ft->IsZeroState() && !ft->hashtree()->is_complete())
+		{
+			return_log ("%s #0 zero hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
+		}
         dprintf("%s #0 -hash ALL %s\n",tintstr(),hash.hex().c_str());
 
         // Arno, 2012-02-27: Check for duplicate channel
