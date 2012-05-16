@@ -15,7 +15,7 @@ ZeroState::ZeroState() : contentdir_(".")
 		__singleton = this;
 	}
 
-	fprintf(stderr,"ZeroState: registering clean up\n");
+	//fprintf(stderr,"ZeroState: registering clean up\n");
 	evtimer_assign(&evclean_,Channel::evbase,&ZeroState::LibeventCleanCallback,this);
 	evtimer_add(&evclean_,tint2tv(CLEANUP_INTERVAL*TINT_SEC));
 }
@@ -23,7 +23,7 @@ ZeroState::ZeroState() : contentdir_(".")
 
 ZeroState::~ZeroState()
 {
-	fprintf(stderr,"ZeroState: deconstructor\n");
+	//fprintf(stderr,"ZeroState: deconstructor\n");
 
     // Arno, 2012-02-06: Cancel cleanup timer, otherwise chaos!
     evtimer_del(&evclean_);
@@ -32,7 +32,7 @@ ZeroState::~ZeroState()
 
 void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 {
-	fprintf(stderr,"zero clean: enter\n");
+	//fprintf(stderr,"zero clean: enter\n");
 
 	// Arno, 2012-02-24: Why-oh-why, update NOW
 	Channel::Time();
@@ -64,7 +64,7 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 	{
 		FileTransfer *ft = *iter;
 		dprintf("%s F%u zero clean close\n",tintstr(),ft->fd() );
-		fprintf(stderr,"%s F%u zero clean close\n",tintstr(),ft->fd() );
+		//fprintf(stderr,"%s F%u zero clean close\n",tintstr(),ft->fd() );
 		swift::Close(ft->fd());
 	}
 
@@ -96,6 +96,8 @@ FileTransfer * ZeroState::Find(Sha1Hash &root_hash)
 	//std::string file_name = "content.avi";
 	std::string file_name = contentdir_+FILE_SEP+root_hash.hex();
 	uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE;
+
+	fprintf(stderr,"swift: zero: Got request for %s\n",root_hash.hex().c_str() );
 
 	FileTransfer *ft = new FileTransfer(file_name,root_hash,false,chunk_size,true);
 	return ft;

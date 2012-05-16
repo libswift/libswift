@@ -538,7 +538,7 @@ void ReportCallback(int fd, short event, void *arg) {
 	}
     if (httpgw_enabled)
     {
-        fprintf(stderr,".");
+        //fprintf(stderr,".");
 
         // ARNOSMPTODO: Restore fail behaviour when used in SwarmPlayer 3000.
         if (!HTTPIsSending()) {
