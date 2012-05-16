@@ -431,7 +431,7 @@ Sha1Hash        MmapHashTree::DeriveRoot () {
         }
     }
 
-    fprintf(stderr,"hashtree: derive: root hash is %s\n", hash.hex().c_str() );
+    //fprintf(stderr,"hashtree: derive: root hash is %s\n", hash.hex().c_str() );
 
     //fprintf(stderr,"root bin is %lli covers %lli\n", p.toUInt(), p.base_length() );
     return hash;
