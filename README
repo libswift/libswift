@@ -4,7 +4,7 @@ swift: the multiparty transport protocol
     abstraction. Effectively, it splits a file into 1KB packets and sends
     them around. The secret sauce is Merkle hash trees and binmaps.
  
-    Requires libevent-2.0 or higher.
+    Requires libevent-2.0.17 or higher.
 
 see doc/index.html for marketing stuff, ideas and rants
     doc/draft-ietf-ppsp-grishchenko-swift.txt for protocol draft spec
