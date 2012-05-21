@@ -1,4 +1,4 @@
-LIBEVENT_HOME=/Users/tribler/pkgs/libevent-2.0.15-arno-http
+LIBEVENT_HOME=/Users/tribler/pkgs/libevent-2.0.19-stable
 
 CPPFLAGS+=-O2 -I. -Wall -Wno-sign-compare -Wno-unused -g -I${LIBEVENT_HOME}/include -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
 LDFLAGS+=-L${LIBEVENT_HOME}/lib -Wl,-rpath,${LIBEVENT_HOME}/lib -levent -lstdc++

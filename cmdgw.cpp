@@ -936,6 +936,8 @@ void CmdGwNewConnectionCallback(struct evconnlistener *listener,
 void CmdGwListenErrorCallback(struct evconnlistener *listener, void *ctx)
 {
 	// libevent got error on cmd listener
+
+    fprintf(stderr,"CmdGwListenErrorCallback: Something wrong with CMDGW\n" );
     struct event_base *base = evconnlistener_get_base(listener);
     int err = EVUTIL_SOCKET_ERROR();
     char errmsg[1024];
