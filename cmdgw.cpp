@@ -92,8 +92,15 @@ void CmdGwProcessData(evutil_socket_t cmdsock);
 
 void CmdGwFreeRequest(cmd_gw_t* req)
 {
-    // Arno, 2012-02-06: Reset, in particular moreinfo flag.
-    memset(req,'\0',sizeof(cmd_gw_t));
+    req->id = -1;
+    req->cmdsock = -1;
+    req->transfer = -1;
+    req->contentfilename = "";
+    req->moreinfo = false;
+    req->startt = 0;
+    req->mfspecname = "";
+    req->startoff = -1;
+    req->endoff = -1;
 }
 
 
