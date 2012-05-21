@@ -6,7 +6,7 @@
  *  Copyright 2009-2012 Delft University of Technology. All rights reserved.
  *
  */
-#include "availability.h"
+#include "swift.h"
 
 using namespace swift;
 

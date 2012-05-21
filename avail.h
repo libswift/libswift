@@ -6,10 +6,11 @@
  *  Copyright 2009-2012 Delft University of Technology. All rights reserved.
  *
  */
-//#include "bin.h"
-//#include "binmap.h"
-#include "swift.h"
+#include "bin.h"
+#include "binmap.h"
+#include "compat.h"
 #include <cassert>
+#include <vector>
 
 #ifndef AVAILABILITY_H
 #define AVAILABILITY_H

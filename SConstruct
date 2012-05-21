@@ -22,7 +22,7 @@ TestDir='tests'
 target = 'swift'
 source = [ 'bin.cpp', 'binmap.cpp', 'sha1.cpp','hashtree.cpp',
     	   'transfer.cpp', 'channel.cpp', 'sendrecv.cpp', 'send_control.cpp', 
-    	   'compat.cpp','avgspeed.cpp', 'availability.cpp', 'cmdgw.cpp', 
+    	   'compat.cpp','avgspeed.cpp', 'avail.cpp', 'cmdgw.cpp', 
            'storage.cpp', 'zerostate.cpp', 'zerohashtree.cpp']
 # cmdgw.cpp now in there for SOCKTUNNEL
 

@@ -65,7 +65,8 @@
 #include "binmap.h"
 #include "hashtree.h"
 #include "avgspeed.h"
-#include "availability.h"
+// Arno, 2012-05-21: MacOS X has an Availability.h :-(
+#include "avail.h"
 
 
 namespace swift {
