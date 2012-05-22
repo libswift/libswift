@@ -156,11 +156,11 @@ cmd_gw_t* CmdGwFindRequestByRootHash(Sha1Hash &want_hash)
 
 void CmdGwGotCHECKPOINT(Sha1Hash &want_hash)
 {
-	// Checkpoint the specified download
-	fprintf(stderr,"cmd: GotCHECKPOINT: %s\n",want_hash.hex().c_str());
+    // Checkpoint the specified download
+    fprintf(stderr,"cmd: GotCHECKPOINT: %s\n",want_hash.hex().c_str());
 
-	cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
-	if (req == NULL)
+    cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
+    if (req == NULL)
     	return;
 
     swift::Checkpoint(req->transfer);

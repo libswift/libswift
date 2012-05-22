@@ -551,7 +551,15 @@ int swift::Checkpoint(int transfer) {
 		print_error("cannot open mbinmap for writing");
 		return -1;
 	}
-	if (((Serializable *)ft->hashtree())->serialize(fp) < 0)
+        //fprintf(stderr,"swift: checkpointing: before serialize\n");
+        HashTree *ht = ft->hashtree();
+        if (ht == NULL)
+        {
+             fprintf(stderr,"swift: checkpointing: ht is NULL\n");
+	     return -1;
+        }
+        Serializable *ser = (Serializable *)ht;
+  	if (ser->serialize(fp) < 0)
 	{
 		print_error("writing to mbinmap");
 		return -1;
