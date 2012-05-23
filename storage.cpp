@@ -651,7 +651,7 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
 
 StorageFile::~StorageFile()
 {
-	 if (fd_ < 0)
+	 if (fd_ != -1)
 		 close(fd_);
 }
 

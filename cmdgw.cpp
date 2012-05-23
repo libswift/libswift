@@ -43,7 +43,6 @@ struct cmd_gw_t {
     int      id;
     evutil_socket_t   cmdsock;
     int		 transfer; 			 // swift FD
-    std::string contentfilename; // basename of content file
     bool	moreinfo;		  // whether to report detailed stats (see SETMOREINFO cmd)
     tint 	startt;			  // ARNOSMPTODO: debug speed measurements, remove
     std::string mfspecname;	  // MULTIFILE
@@ -95,7 +94,6 @@ void CmdGwFreeRequest(cmd_gw_t* req)
     req->id = -1;
     req->cmdsock = -1;
     req->transfer = -1;
-    req->contentfilename = "";
     req->moreinfo = false;
     req->startt = 0;
     req->mfspecname = "";
@@ -176,33 +174,59 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 	if (req == NULL)
     	return;
     FileTransfer *ft = FileTransfer::file(req->transfer);
+    if (ft == NULL)
+    	return;
 
 	fprintf(stderr, "%s @%i remove transfer %i\n",tintstr(),req->id,req->transfer);
 	dprintf("%s @%i remove transfer %i\n",tintstr(),req->id,req->transfer);
-	swift::Close(req->transfer);
+
+	//MULTIFILE
+	// Arno, 2012-05-23: Copy all filename to be deleted to a set. This info is lost after
+	// swift::Close() and we need to call Close() to let the storage layer close the open files.
+    // TODO: remove the dirs we created, if now empty.
+	std::set<std::string>	delset;
+	std::string contentfilename = ft->GetStorage()->GetOSPathName();
 
 	// Delete content + .mhash from filesystem, if desired
 	if (removecontent)
-		remove(req->contentfilename.c_str());
+		delset.insert(contentfilename);
 
 	if (removestate)
 	{
-		std::string mhashfilename = req->contentfilename + ".mhash";
-		//fprintf(stderr,"CmdGwGotREMOVE: removing mhash %s\n", mhashfilename.c_str() );
-		int ret = remove(mhashfilename.c_str());
-		if (ret < 0)
-		{
-			print_error("Could not remove .mhash");
-		}
+		std::string mhashfilename = contentfilename + ".mhash";
+		delset.insert(mhashfilename);
 
 		// Arno, 2012-01-10: .mbinmap gots to go too.
-		std::string mbinmapfilename = req->contentfilename + ".mbinmap";
-		//fprintf(stderr,"CmdGwGotREMOVE: removing mbinmap %s\n", mbinmapfilename.c_str() );
+		std::string mbinmapfilename = contentfilename + ".mbinmap";
+		delset.insert(mbinmapfilename);
+	}
 
-		ret = remove(mbinmapfilename.c_str());
+	// MULTIFILE
+	if (ft->GetStorage()->IsReady())
+	{
+		storage_files_t::iterator iter;
+		storage_files_t sfs = ft->GetStorage()->GetStorageFiles();
+		for (iter = sfs.begin(); iter < sfs.end(); iter++)
+		{
+			StorageFile *sf = *iter;
+			std::string cfn = sf->GetOSPathName();
+			delset.insert(cfn);
+		}
+	}
+
+	swift::Close(req->transfer);
+	ft = NULL;
+	// All ft info now invalid
+
+	std::set<std::string>::iterator iter;
+	for (iter=delset.begin(); iter!=delset.end(); iter++)
+	{
+		std::string filename = *iter;
+		fprintf(stderr,"CmdGwREMOVE: removing %s\n", filename.c_str() );
+		int ret = remove(filename.c_str());
 		if (ret < 0)
 		{
-			print_error("Could not remove .mbinmap");
+			print_error("Could not remove file");
 		}
 	}
 
@@ -734,10 +758,9 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 		CmdGwSendINFOHashChecking(req,root_hash);
 
 		// ARNOSMPTODO: disable/interleave hashchecking at startup
-		std::string filename;
         int transfer = swift::Find(root_hash);
         if (transfer==-1) {
-
+        	std::string filename;
         	if (storagepath != "")
         		filename = storagepath;
         	else
@@ -763,11 +786,6 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 		storage_files_t sfs = ft->GetStorage()->GetStorageFiles();
 		if (sfs.size() > 0)
 			minsize = sfs[0]->GetSize();
-			filename = ft->GetStorage()->GetOSPathName();
-
-        // See MmapHashTree::MmapHashTree
-        req->contentfilename = filename;
-
 
         // Wait for prebuffering and then send PLAY to user
         if (swift::SeqComplete(transfer) >= minsize)

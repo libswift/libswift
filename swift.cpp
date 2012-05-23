@@ -319,6 +319,7 @@ int utf8main (int argc, char** argv)
 			fprintf(stderr,"  -H, --checkpoint\tcreate checkpoint of file when complete for fast restart\n");
 			fprintf(stderr,"  -z, --chunksize\tchunk size in bytes (default: %d)\n", SWIFT_DEFAULT_CHUNK_SIZE);
 			fprintf(stderr,"  -m, --printurl\tcompose URL from tracker, file and chunksize\n");
+			fprintf(stderr,"  -M, --multifile\tcreate multi-file spec with given files\n");
 			return 1;
 		}
     }

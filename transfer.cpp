@@ -248,6 +248,7 @@ FileTransfer::~FileTransfer ()
 {
     Channel::CloseTransfer(this);
 	delete hashtree_;
+	delete storage_;
     files[fd()] = NULL;
 	if (!IsZeroState())
 	{
