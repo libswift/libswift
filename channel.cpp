@@ -539,30 +539,28 @@ int swift::Checkpoint(int transfer) {
 	// Save transfer's binmap for zero-hashcheck restart
 	FileTransfer *ft = FileTransfer::file(transfer);
 	if (ft == NULL)
-		return -1;
+            return -1;
 	if (ft->IsZeroState())
-		return -1;
+	    return -1;
 
 	std::string binmap_filename = ft->GetStorage()->GetOSPathName();
 	binmap_filename.append(".mbinmap");
-	//fprintf(stderr,"swift: checkpointing %s at %lli\n", binmap_filename.c_str(), Complete(transfer));
+	//fprintf(stderr,"swift: HACK checkpointing %s at %lli\n", binmap_filename.c_str(), Complete(transfer));
 	FILE *fp = fopen_utf8(binmap_filename.c_str(),"wb");
 	if (!fp) {
-		print_error("cannot open mbinmap for writing");
-		return -1;
+             print_error("cannot open mbinmap for writing");
+             return -1;
 	}
-        //fprintf(stderr,"swift: checkpointing: before serialize\n");
-        HashTree *ht = ft->hashtree();
+        MmapHashTree *ht = (MmapHashTree *)ft->hashtree();
         if (ht == NULL)
         {
              fprintf(stderr,"swift: checkpointing: ht is NULL\n");
 	     return -1;
         }
-        Serializable *ser = (Serializable *)ht;
-  	if (ser->serialize(fp) < 0)
+  	if (ht->serialize(fp) < 0)
 	{
-		print_error("writing to mbinmap");
-		return -1;
+             print_error("writing to mbinmap");
+             return -1;
 	}
 	fclose(fp);
 	return 0;
