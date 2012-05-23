@@ -101,6 +101,7 @@ class HashTree {
     // for transfertest.cpp
     virtual Storage *       get_storage() = 0;
     virtual void            set_size(uint64_t size) = 0;
+    virtual ~HashTree() {};
 };
 
 

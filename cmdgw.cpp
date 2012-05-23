@@ -188,11 +188,22 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 	if (removestate)
 	{
 		std::string mhashfilename = req->contentfilename + ".mhash";
-		remove(mhashfilename.c_str());
+		//fprintf(stderr,"CmdGwGotREMOVE: removing mhash %s\n", mhashfilename.c_str() );
+		int ret = remove(mhashfilename.c_str());
+		if (ret < 0)
+		{
+			print_error("Could not remove .mhash");
+		}
 
 		// Arno, 2012-01-10: .mbinmap gots to go too.
 		std::string mbinmapfilename = req->contentfilename + ".mbinmap";
-		remove(mbinmapfilename.c_str());
+		//fprintf(stderr,"CmdGwGotREMOVE: removing mbinmap %s\n", mbinmapfilename.c_str() );
+
+		ret = remove(mbinmapfilename.c_str());
+		if (ret < 0)
+		{
+			print_error("Could not remove .mbinmap");
+		}
 	}
 
 	CmdGwFreeRequest(req);
@@ -723,10 +734,10 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 		CmdGwSendINFOHashChecking(req,root_hash);
 
 		// ARNOSMPTODO: disable/interleave hashchecking at startup
+		std::string filename;
         int transfer = swift::Find(root_hash);
         if (transfer==-1) {
 
-        	std::string filename;
         	if (storagepath != "")
         		filename = storagepath;
         	else
@@ -741,9 +752,6 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         req->startt = usec_time();
         req->mfspecname = mfstr;
 
-        // See MmapHashTree::MmapHashTree
-        req->contentfilename = hashstr;
-
         if (cmd_gw_debug)
         	fprintf(stderr,"cmd: Already on disk is %lli/%lli\n", swift::Complete(transfer), swift::Size(transfer));
 
@@ -755,6 +763,11 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 		storage_files_t sfs = ft->GetStorage()->GetStorageFiles();
 		if (sfs.size() > 0)
 			minsize = sfs[0]->GetSize();
+			filename = ft->GetStorage()->GetOSPathName();
+
+        // See MmapHashTree::MmapHashTree
+        req->contentfilename = filename;
+
 
         // Wait for prebuffering and then send PLAY to user
         if (swift::SeqComplete(transfer) >= minsize)
