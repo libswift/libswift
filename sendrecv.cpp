@@ -438,11 +438,14 @@ void    Channel::AddHave (struct evbuffer *evb) {
 	// ZEROSTATE
 	if (transfer().IsZeroState())
 	{
+		if (is_established())
+			return;
+
+		// Say we have peaks
         for(int i=0; i<hashtree()->peak_count(); i++) {
             bin_t peak = hashtree()->peak(i);
 			evbuffer_add_8(evb, SWIFT_HAVE);
             evbuffer_add_32be(evb, bin_toUInt32(peak));
-            evbuffer_add_hash(evb, hashtree()->peak_hash(i));
 			char bin_name_buf[32];
 		    dprintf("%s #%u +have %s\n",tintstr(),id_,peak.str(bin_name_buf));
         }
