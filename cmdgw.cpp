@@ -54,6 +54,7 @@ struct cmd_gw_t {
 
 int cmd_gw_reqs_open = 0;
 int cmd_gw_reqs_count = 0;
+int cmd_gw_conns_open = 0;
 
 struct evconnlistener *cmd_evlistener = NULL;
 struct evbuffer *cmd_evbuffer = NULL; // Data received on cmd socket : WARNING: one for all cmd sockets
@@ -109,6 +110,9 @@ void CmdGwCloseConnection(evutil_socket_t sock)
 	// Close cmd connection and stop all associated downloads.
 	// Doesn't remove .mhash state or content
 
+	if (cmd_gw_debug)
+		fprintf(stderr,"CmdGwCloseConnection: ENTER\n");
+
 	bool scanning = true;
 	while (scanning)
 	{
@@ -129,6 +133,8 @@ void CmdGwCloseConnection(evutil_socket_t sock)
 	        }
 	    }
 	}
+
+	cmd_gw_conns_open--;
 }
 
 
@@ -563,12 +569,13 @@ void CmdGwUpdateDLStatesCallback()
     	CmdGwUpdateDLStateCallback(req);
     }
 
-    if (cmd_gw_reqs_open == 0)
+    // Arno, 2012-05-24: Autoclose if CMD *connection* not *re*established soon
+    if (cmd_gw_conns_open == 0)
     {
     	if (cmd_gw_last_open > 0)
     	{
     		tint diff = NOW - cmd_gw_last_open;
-    		fprintf(stderr,"diff %lld\n", diff );
+    		//fprintf(stderr,"cmd: time since last conn diff %lld\n", diff );
     		if (diff > 10*TINT_SEC)
     		{
     			fprintf(stderr,"cmd: No CMD connection since X sec, shutting down\n");
@@ -980,6 +987,8 @@ void CmdGwNewConnectionCallback(struct evconnlistener *listener,
 
     // SOCKTUNNEL: assume 1 command connection
     cmd_tunnel_sock = fd;
+
+    cmd_gw_conns_open++;
 }
 
 
