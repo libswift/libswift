@@ -26,6 +26,7 @@ using namespace swift;
 #define CMDGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER 	0
 
 // Status of the swarm download
+#define DLSTATUS_ALLOCATING_DISKSPACE 0
 #define DLSTATUS_HASHCHECKING  2
 #define DLSTATUS_DOWNLOADING  3
 #define DLSTATUS_SEEDING 4
@@ -532,6 +533,18 @@ void CmdGwSwiftErrorCallback (evutil_socket_t cmdsock)
 	//swift::close_socket(sock);
 }
 
+void CmdGwSwiftAllocatingDiskspaceCallback (int transfer, bin_t bin)
+{
+	fprintf(stderr,"CmdGwSwiftAllocatingDiskspaceCallback: ENTER %d\n", transfer );
+
+	// Called before swift starts reserving diskspace.
+	cmd_gw_t* req = CmdGwFindRequestByTransfer(transfer);
+	if (req == NULL)
+		return;
+
+	CmdGwSendINFO(req,DLSTATUS_ALLOCATING_DISKSPACE);
+}
+
 
 
 void CmdGwUpdateDLStateCallback(cmd_gw_t* req)
@@ -823,6 +836,8 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         {
             swift::AddProgressCallback(transfer,&CmdGwSwiftFirstProgressCallback,CMDGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER);
         }
+
+        ft->GetStorage()->AddOneTimeAllocationCallback(CmdGwSwiftAllocatingDiskspaceCallback);
     }
     else if (!strcmp(method,"REMOVE"))
     {

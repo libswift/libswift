@@ -789,7 +789,7 @@ namespace swift {
 		static std::string os2specpn(std::string ospn);
 
 		/** Create Storage from specified path and destination dir if content turns about to be a multi-file */
-		Storage(std::string ospathname, std::string destdir);
+		Storage(std::string ospathname, std::string destdir,int transferfd);
 		~Storage();
 
 		/** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
@@ -828,6 +828,9 @@ namespace swift {
 		/** Return the list of StorageFiles for this Storage, empty if not multi-file */
 		storage_files_t	GetStorageFiles() { return sfs_; }
 
+		/** Return a one-time callback when swift starts allocating disk space */
+		void AddOneTimeAllocationCallback(ProgressCallback cb) { alloc_cb_ = cb; }
+
 	  protected:
 			storage_state_t	state_;
 
@@ -844,6 +847,9 @@ namespace swift {
 			int64_t reserved_size_;
 			int64_t total_size_from_spec_;
 			StorageFile *last_sf_;
+
+			int transfer_fd_;
+			ProgressCallback alloc_cb_;
 
 			int WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
 			std::pair<int64_t,int64_t> WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);

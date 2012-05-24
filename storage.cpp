@@ -22,9 +22,10 @@ using namespace swift;
 const std::string Storage::MULTIFILE_PATHNAME = "META-INF-multifilespec.txt";
 const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 
-Storage::Storage(std::string ospathname, std::string destdir) : state_(STOR_STATE_INIT),
+Storage::Storage(std::string ospathname, std::string destdir, int transferfd) : state_(STOR_STATE_INIT),
 		os_pathname_(ospathname), destdir_(destdir), ht_(NULL), spec_size_(0),
-		single_fd_(-1), reserved_size_(-1), total_size_from_spec_(-1), last_sf_(NULL)
+		single_fd_(-1), reserved_size_(-1), total_size_from_spec_(-1), last_sf_(NULL),
+		transfer_fd_(transferfd), alloc_cb_(NULL)
 {
 
 	//fprintf(stderr,"Storage: ospathname %s destdir %s\n", ospathname.c_str(), destdir.c_str() );
@@ -518,6 +519,14 @@ int64_t Storage::GetMinimalReservedSize()
 
 int Storage::ResizeReserved(int64_t size)
 {
+	// Arno, 2012-05-24: File allocation slow on Win32 without sparse files,
+	// make this detectable.
+	if (alloc_cb_ != NULL)
+	{
+		alloc_cb_(transfer_fd_,bin_t::NONE);
+		alloc_cb_ = NULL; // One time callback
+	}
+
 	if (state_ == STOR_STATE_SINGLE_FILE)
 	{
 		dprintf("%s %s storage: Resizing single file %d to %lld\n", tintstr(), roothashhex().c_str(), single_fd_, size);
