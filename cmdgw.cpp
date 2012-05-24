@@ -81,6 +81,8 @@ Address cmd_gw_httpaddr;
 
 bool cmd_gw_debug=false;
 
+tint cmd_gw_last_open=0;
+
 
 // Fwd defs
 void CmdGwDataCameInCallback(struct bufferevent *bev, void *ctx);
@@ -560,6 +562,23 @@ void CmdGwUpdateDLStatesCallback()
     	cmd_gw_t* req = &cmd_requests[i];
     	CmdGwUpdateDLStateCallback(req);
     }
+
+    if (cmd_gw_reqs_open == 0)
+    {
+    	if (cmd_gw_last_open > 0)
+    	{
+    		tint diff = NOW - cmd_gw_last_open;
+    		fprintf(stderr,"diff %lld\n", diff );
+    		if (diff > 10*TINT_SEC)
+    		{
+    			fprintf(stderr,"cmd: No CMD connection since X sec, shutting down\n");
+    			event_base_loopexit(Channel::evbase, NULL);
+    		}
+    	}
+    }
+    else
+    	cmd_gw_last_open = NOW;
+
 }
 
 
