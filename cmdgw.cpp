@@ -210,7 +210,7 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 	}
 
 	// MULTIFILE
-	if (ft->GetStorage()->IsReady())
+	if (removecontent && ft->GetStorage()->IsReady())
 	{
 		storage_files_t::iterator iter;
 		storage_files_t sfs = ft->GetStorage()->GetStorageFiles();
