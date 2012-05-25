@@ -535,7 +535,8 @@ void CmdGwSwiftErrorCallback (evutil_socket_t cmdsock)
 
 void CmdGwSwiftAllocatingDiskspaceCallback (int transfer, bin_t bin)
 {
-	fprintf(stderr,"CmdGwSwiftAllocatingDiskspaceCallback: ENTER %d\n", transfer );
+	if (cmd_gw_debug)
+		fprintf(stderr,"cmd: CmdGwSwiftAllocatingDiskspaceCallback: ENTER %d\n", transfer );
 
 	// Called before swift starts reserving diskspace.
 	cmd_gw_t* req = CmdGwFindRequestByTransfer(transfer);
