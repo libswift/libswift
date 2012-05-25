@@ -22,7 +22,7 @@ using namespace swift;
 
 // Local prototypes
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
-int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, double *maxspeed);
+int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, std::string urlfilename, double *maxspeed);
 int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size);
 int OpenSwiftDirectory(std::string dirname, Address tracker, bool check_hashes, uint32_t chunk_size);
 
@@ -83,14 +83,15 @@ int utf8main (int argc, char** argv)
         {"downrate",required_argument, 0, 'y'}, // RATELIMIT
         {"checkpoint",no_argument, 0, 'H'},
         {"chunksize",required_argument, 0, 'z'}, // CHUNKSIZE
-        {"printurl",no_argument, 0, 'm'},
+        {"printurl", no_argument, 0, 'm'},
+        {"urlfile",  required_argument, 0, 'r'},  // should be optional arg to printurl, but win32 getopt don't grok
         {"multifile",required_argument, 0, 'M'}, // MULTIFILE
         {"zerosdir",required_argument, 0, 'e'},  // ZEROSTATE
         {0, 0, 0, 0}
     };
 
     Sha1Hash root_hash;
-    std::string filename = "",destdir = "", trackerargstr= "", zerostatedir="";
+    std::string filename = "",destdir = "", trackerargstr= "", zerostatedir="", urlfilename="";
     bool printurl=false;
     Address bindaddr;
     Address httpaddr;
@@ -103,7 +104,7 @@ int utf8main (int argc, char** argv)
     Channel::evbase = event_base_new();
 
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:", long_options, 0)) ) {
         switch (c) {
             case 'h':
                 if (strlen(optarg)!=40)
@@ -207,6 +208,9 @@ int utf8main (int argc, char** argv)
             	quiet = true;
             	wait_time = 0;
             	break;
+            case 'r':
+           		urlfilename = strdup(optarg);
+           		break;
             case 'M': // MULTIFILE
             	filename = strdup(optarg);
             	generate_multifile = true;
@@ -276,7 +280,7 @@ int utf8main (int argc, char** argv)
 			if (filename != "" || root_hash != Sha1Hash::ZERO) {
 
 				// Single file
-				ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,maxspeed);
+				ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,urlfilename,maxspeed);
 			}
 			else if (scan_dirname != "")
 				ret = OpenSwiftDirectory(scan_dirname,Address(),false,chunk_size);
@@ -292,7 +296,7 @@ int utf8main (int argc, char** argv)
 				quit("Cannot generate multi-file spec")
 			else
 				// Calc roothash
-				ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,maxspeed);
+				ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,urlfilename,maxspeed);
 		}
 
 		// For testing
@@ -372,7 +376,7 @@ int utf8main (int argc, char** argv)
 }
 
 
-int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, double *maxspeed)
+int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, std::string urlfilename, double *maxspeed)
 {
 	if (root_hash!=Sha1Hash::ZERO && filename == "")
 		filename = strdup(root_hash.hex().c_str());
@@ -382,12 +386,19 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
 		quit("cannot open file %s",filename.c_str());
 	if (printurl) {
 
+		FILE *fp = stdout;
+		if (urlfilename != "")
+			fp = fopen(urlfilename.c_str(),"wb");
+
 		if (swift::Complete(single_fd) == 0)
 			quit("cannot open empty file %s",filename.c_str());
 		if (chunk_size == SWIFT_DEFAULT_CHUNK_SIZE)
-			printf("tswift://%s/%s\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str());
+			fprintf(fp,"tswift://%s/%s\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str());
 		else
-			printf("tswift://%s/%s$%i\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str(), chunk_size);
+			fprintf(fp,"tswift://%s/%s$%i\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str(), chunk_size);
+
+		if (urlfilename != "")
+			fclose(fp);
 
 		// Arno, 2012-01-04: LivingLab: Create checkpoint such that content
 		// can be copied to scanned dir and quickly loaded
