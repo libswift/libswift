@@ -543,27 +543,26 @@ int swift::Checkpoint(int transfer) {
 	if (ft->IsZeroState())
 	    return -1;
 
+    MmapHashTree *ht = (MmapHashTree *)ft->hashtree();
+    if (ht == NULL)
+    {
+         fprintf(stderr,"swift: checkpointing: ht is NULL\n");
+	     return -1;
+    }
+
 	std::string binmap_filename = ft->GetStorage()->GetOSPathName();
 	binmap_filename.append(".mbinmap");
 	//fprintf(stderr,"swift: HACK checkpointing %s at %lli\n", binmap_filename.c_str(), Complete(transfer));
 	FILE *fp = fopen_utf8(binmap_filename.c_str(),"wb");
 	if (!fp) {
-             print_error("cannot open mbinmap for writing");
-             return -1;
+        print_error("cannot open mbinmap for writing");
+        return -1;
 	}
-        MmapHashTree *ht = (MmapHashTree *)ft->hashtree();
-        if (ht == NULL)
-        {
-             fprintf(stderr,"swift: checkpointing: ht is NULL\n");
-	     return -1;
-        }
-  	if (ht->serialize(fp) < 0)
-	{
-             print_error("writing to mbinmap");
-             return -1;
-	}
+	int ret = ht->serialize(fp);
+  	if (ret < 0)
+        print_error("writing to mbinmap");
 	fclose(fp);
-	return 0;
+	return ret;
 }
 
 

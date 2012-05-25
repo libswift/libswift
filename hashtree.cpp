@@ -137,6 +137,7 @@ chunk_size_(chunk_size)
     		// Try to rebuild hashtree data
     		Submit();
     	}
+    	fclose(fp);
     } else {
     	// Arno: no data on disk, or mhash on disk, but no binmap. In latter
     	// case recreate binmap by reading content again. Historic optimization

@@ -497,6 +497,8 @@ int CleanSwiftDirectory(std::string dirname)
 
 void ReportCallback(int fd, short event, void *arg) {
 	// Called every second to print/calc some stats
+	// Arno, 2012-05-24: Why-oh-why, update NOW
+	Channel::Time();
 
 	if (single_fd  >= 0)
 	{
