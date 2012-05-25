@@ -456,6 +456,11 @@ bin_t         MmapHashTree::peak_for (bin_t pos) const {
 bool            MmapHashTree::OfferHash (bin_t pos, const Sha1Hash& hash) {
     if (!size_)  // only peak hashes are accepted at this point
         return OfferPeakHash(pos,hash);
+    if (hashes_ == NULL)
+    {
+    	dprintf("%s hashtree never loaded correctly from disk\n",tintstr() );
+    	return false;
+    }
     bin_t peak = peak_for(pos);
     if (peak.is_none())
         return false;

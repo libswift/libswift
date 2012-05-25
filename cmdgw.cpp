@@ -253,7 +253,12 @@ void CmdGwGotMAXSPEED(Sha1Hash &want_hash, data_direction_t ddir, double speed)
 	if (req == NULL)
     	return;
     FileTransfer *ft = FileTransfer::file(req->transfer);
-	ft->SetMaxSpeed(ddir,speed);
+
+    // Arno, 2012-05-25: SetMaxSpeed resets the current speed history, so
+    // be careful here.
+    double curmax = ft->GetMaxSpeed(ddir);
+    if (curmax != speed)
+    	ft->SetMaxSpeed(ddir,speed);
 }
 
 
@@ -284,7 +289,7 @@ void CmdGwSendINFOHashChecking(cmd_gw_t* req, Sha1Hash root_hash)
 	// Send INFO DLSTATUS_HASHCHECKING message.
 
     char cmd[MAX_CMD_MESSAGE];
-	sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",root_hash.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,0.0,0,0);
+	sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",root_hash.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,3.14,0,0);
 
     //fprintf(stderr,"cmd: SendINFO: %s", cmd);
     send(req->cmdsock,cmd,strlen(cmd),0);
@@ -312,9 +317,11 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 
     uint32_t numleech = ft->GetNumLeechers();
     uint32_t numseeds = ft->GetNumSeeders();
-    sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",root_hash.hex().c_str(),dlstatus,complete,size,ft->GetCurrentSpeed(DDIR_DOWNLOAD),ft->GetCurrentSpeed(DDIR_UPLOAD),numleech,numseeds);
 
-    //fprintf(stderr,"cmd: SendINFO: %s", cmd);
+    double dlspeed = ft->GetCurrentSpeed(DDIR_DOWNLOAD);
+    double ulspeed = ft->GetCurrentSpeed(DDIR_UPLOAD);
+    sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",root_hash.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds);
+
     send(req->cmdsock,cmd,strlen(cmd),0);
 
     // MORESTATS
