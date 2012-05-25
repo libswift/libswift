@@ -387,6 +387,7 @@ int Storage::OpenSingleFile()
 	if (single_fd_<0) {
 		single_fd_ = -1;
 		print_error("storage: cannot open single file");
+		return -1;
 	}
 
 	// Perform postponed resize.
@@ -394,7 +395,10 @@ int Storage::OpenSingleFile()
 	{
 		int ret = ResizeReserved(reserved_size_);
 		if (ret < 0)
-			return ret;
+		{
+			close(single_fd_);
+			single_fd_ = -1;
+		}
 	}
 
 	return single_fd_;
