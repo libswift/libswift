@@ -1,7 +1,7 @@
-LIBEVENT_HOME=/Users/tribler/pkgs/libevent-2.0.19-stable
+LIBEVENT_HOME=/Users/tribler/pkgs/libevent-2.0.19-stable-10.5
 
-CPPFLAGS+=-O2 -I. -Wall -Wno-sign-compare -Wno-unused -g -I${LIBEVENT_HOME}/include -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE
-LDFLAGS+=-L${LIBEVENT_HOME}/lib -Wl,-rpath,${LIBEVENT_HOME}/lib -levent -lstdc++
+CPPFLAGS+=-O2 -I. -Wall -Wno-sign-compare -Wno-unused -g -I${LIBEVENT_HOME}/include -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -arch i386 -isysroot /Developer/SDKs/MacOSX10.5.sdk -mmacosx-version-min=10.5 -DMAC_OS_X_VERSION_MIN_REQUIRED=1050
+LDFLAGS+=${LIBEVENT_HOME}/lib/libevent.a -lstdc++ -isysroot /Developer/SDKs/MacOSX10.5.sdk -mmacosx-version-min=10.5 -DMAC_OS_X_VERSION_MIN_REQUIRED=1050 -no_compact_linkedit
 
 all: swift
 
