@@ -258,7 +258,10 @@ void CmdGwGotMAXSPEED(Sha1Hash &want_hash, data_direction_t ddir, double speed)
     // be careful here.
     double curmax = ft->GetMaxSpeed(ddir);
     if (curmax != speed)
+    {
+    	fprintf(stderr,"cmd: CmdGwGotMAXSPEED: %s was %lf want %lf, setting\n", want_hash.hex().c_str(), curmax, speed );
     	ft->SetMaxSpeed(ddir,speed);
+    }
 }
 
 
@@ -394,7 +397,7 @@ void CmdGwSendPLAY(cmd_gw_t *req)
 
 void CmdGwSendERRORBySocket(evutil_socket_t cmdsock, std::string msg)
 {
-	std::string cmd = "ERROR ";
+	std::string cmd = "ERROR 0000000000000000000000000000000000000000 ";
 	cmd += msg;
 	cmd += "\r\n";
 	char *wire = strdup(cmd.c_str());
