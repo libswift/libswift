@@ -804,9 +804,11 @@ void Channel::OnHandshake (struct evbuffer *evb) {
 
     peer_channel_id_ = pcid;
     // self-connection check
+
     if (!SELF_CONN_OK) {
         uint32_t try_id = DecodeID(peer_channel_id_);
-        if (channel(try_id) && !channel(try_id)->peer_channel_id_) {
+        // Arno, 2012-05-29: Fixed duplicate test
+        if (channel(try_id) && channel(try_id)->peer_channel_id_) {
             peer_channel_id_ = 0;
             Close();
             return; // this is a self-connection
