@@ -303,7 +303,7 @@ int mkdir_utf8(std::string dirname)
 	int ret = _wmkdir(utf16c);
 	free(utf16c);
 #else
-	int ret = mkdir(dirname.c_str(),S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP||S_IXGRP|S_IROTH|S_IXOTH); // TODO: UNIX with locale != UTF-8
+	int ret = mkdir(dirname.c_str(),S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IXGRP|S_IROTH|S_IXOTH); // TODO: UNIX with locale != UTF-8
 #endif
 	return ret;
 }
