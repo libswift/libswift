@@ -236,7 +236,8 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 		int ret = remove(filename.c_str());
 		if (ret < 0)
 		{
-			print_error("Could not remove file");
+			if (cmd_gw_debug)
+				print_error("Could not remove file");
 		}
 	}
 
