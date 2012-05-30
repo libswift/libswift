@@ -93,7 +93,7 @@ void ZeroState::SetContentDir(std::string contentdir)
 
 FileTransfer * ZeroState::Find(Sha1Hash &root_hash)
 {
-	fprintf(stderr,"swift: zero: Got request for %s\n",root_hash.hex().c_str() );
+	//fprintf(stderr,"swift: zero: Got request for %s\n",root_hash.hex().c_str() );
 
 	//std::string file_name = "content.avi";
 	std::string file_name = contentdir_+FILE_SEP+root_hash.hex();
@@ -120,32 +120,6 @@ FileTransfer * ZeroState::Find(Sha1Hash &root_hash)
 	}
 	else
   	    return ft;
-}
-
-
-
-void Channel::RecvZeroState(struct evbuffer *evb)
-{
-	while (evbuffer_get_length(evb)) {
-        uint8_t type = evbuffer_remove_8(evb);
-
-		fprintf(stderr,"ZeroStatePeer::Recv GOT %d\n", type);
-
-		int ret = -1;
-        switch (type) {
-            case SWIFT_HANDSHAKE: OnHandshake(evb); break;
-            case SWIFT_DATA:      OnDataZeroState(evb); break;
-            case SWIFT_HAVE:      OnHaveZeroState(evb); break;
-            case SWIFT_ACK:       OnAck(evb); break;
-            case SWIFT_HASH:      OnHashZeroState(evb); break;
-            case SWIFT_HINT:      OnHint(evb); break;
-            case SWIFT_PEX_ADD:   OnPexAddZeroState(evb); break;
-            case SWIFT_PEX_REQ:   OnPexReqZeroState(evb); break;
-            case SWIFT_RANDOMIZE: OnRandomize(evb); break;
-            default:
-                dprintf("%s #%u zero ?msg id unknown %i\n",tintstr(),id_,(int)type);
-        }
-    }
 }
 
 

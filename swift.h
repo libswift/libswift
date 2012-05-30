@@ -590,7 +590,6 @@ namespace swift {
 
 
         //ZEROSTATE
-        void RecvZeroState(struct evbuffer *evb);
         void OnDataZeroState(struct evbuffer *evb);
         void OnHaveZeroState(struct evbuffer *evb);
         void OnHashZeroState(struct evbuffer *evb);

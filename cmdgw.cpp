@@ -177,7 +177,8 @@ void CmdGwGotCHECKPOINT(Sha1Hash &want_hash)
 void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 {
 	// Remove the specified download
-	fprintf(stderr,"cmd: GotREMOVE: %s %d %d\n",want_hash.hex().c_str(),removestate,removecontent);
+	if (cmd_gw_debug)
+		fprintf(stderr,"cmd: GotREMOVE: %s %d %d\n",want_hash.hex().c_str(),removestate,removecontent);
 
 	cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
 	if (req == NULL)
@@ -186,7 +187,6 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
     if (ft == NULL)
     	return;
 
-	fprintf(stderr, "%s @%i remove transfer %i\n",tintstr(),req->id,req->transfer);
 	dprintf("%s @%i remove transfer %i\n",tintstr(),req->id,req->transfer);
 
 	//MULTIFILE
@@ -231,7 +231,8 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 	for (iter=delset.begin(); iter!=delset.end(); iter++)
 	{
 		std::string filename = *iter;
-		fprintf(stderr,"CmdGwREMOVE: removing %s\n", filename.c_str() );
+		if (cmd_gw_debug)
+			fprintf(stderr,"CmdGwREMOVE: removing %s\n", filename.c_str() );
 		int ret = remove(filename.c_str());
 		if (ret < 0)
 		{
@@ -259,7 +260,8 @@ void CmdGwGotMAXSPEED(Sha1Hash &want_hash, data_direction_t ddir, double speed)
     double curmax = ft->GetMaxSpeed(ddir);
     if (curmax != speed)
     {
-    	fprintf(stderr,"cmd: CmdGwGotMAXSPEED: %s was %lf want %lf, setting\n", want_hash.hex().c_str(), curmax, speed );
+    	if (cmd_gw_debug)
+    		fprintf(stderr,"cmd: CmdGwGotMAXSPEED: %s was %lf want %lf, setting\n", want_hash.hex().c_str(), curmax, speed );
     	ft->SetMaxSpeed(ddir,speed);
     }
 }
