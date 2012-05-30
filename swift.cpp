@@ -87,6 +87,7 @@ int utf8main (int argc, char** argv)
         {"urlfile",  required_argument, 0, 'r'},  // should be optional arg to printurl, but win32 getopt don't grok
         {"multifile",required_argument, 0, 'M'}, // MULTIFILE
         {"zerosdir",required_argument, 0, 'e'},  // ZEROSTATE
+        {"dummy",no_argument, 0, 'j'},  // WIN32
         {0, 0, 0, 0}
     };
 
@@ -104,7 +105,7 @@ int utf8main (int argc, char** argv)
     Channel::evbase = event_base_new();
 
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:j", long_options, 0)) ) {
         switch (c) {
             case 'h':
                 if (strlen(optarg)!=40)
@@ -218,8 +219,8 @@ int utf8main (int argc, char** argv)
             case 'e': // ZEROSTATE
                 zerostatedir = strdup(optarg); // UNICODE
                 break;
-
-
+            case 'j': // WIN32
+                break;
         }
 
     }   // arguments parsed
@@ -701,6 +702,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 {
 	int wargc=0;
 	fprintf(stderr,"wWinMain: enter\n");
+	// Arno, 2012-05-30: TODO: add dummy first arg, because getopt eats the first
+	// the argument when it is a non-console app. Currently done with -j dummy arg.
 	LPWSTR* wargv = CommandLineToArgvW(pCmdLine, &wargc );
     return wmain(wargc,wargv,NULL);
 }
