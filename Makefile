@@ -14,7 +14,6 @@ swift-static: swift
 	touch swift-static
 
 swift-dynamic: swift
-	LDFLAGS+=
 	g++ ${CPPFLAGS} -o swift *.o ${LDFLAGS} -L${LIBEVENT_HOME}/lib -Wl,-rpath,${LIBEVENT_HOME}/lib
 	touch swift-dynamic
 
