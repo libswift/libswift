@@ -15,7 +15,7 @@ import os
 import re
 import sys
 
-DEBUG = False
+DEBUG = True
 
 TestDir='tests'
 

@@ -40,6 +40,13 @@ Storage::Storage(std::string ospathname, std::string destdir, int transferfd) : 
 
 	// File exists. Check first bytes to see if a multifile-spec
 	FILE *fp = fopen_utf8(ospathname.c_str(),"rb");
+	if (!fp)
+	{
+		dprintf("%s %s storage: File exists, but error opening\n", tintstr(), roothashhex().c_str() );
+		print_error("Could not open existing storage file");
+		return;
+	}
+
 	char readbuf[1024];
 	int ret = fread(readbuf,sizeof(char),MULTIFILE_PATHNAME.length(),fp);
 	fclose(fp);
