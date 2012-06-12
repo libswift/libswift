@@ -37,6 +37,7 @@ int64_t file_size (int fd) {
     _fstat32i64(fd, &st);
 #else
     struct stat st;
+    st.st_size = 0;
     fstat(fd, &st);
 #endif
     return st.st_size;
@@ -308,6 +309,11 @@ int mkdir_utf8(std::string dirname)
 	return ret;
 }
 
+#if _DIR_ENT_HAVE_D_TYPE
+#define TEST_IS_DIR(unixde, st) ((bool)(unixde->d_type & DT_DIR))
+#else
+#define TEST_IS_DIR(unixde, st) ((bool)(S_ISDIR(st.st_mode)))
+#endif
 
 DirEntry *opendir_utf8(std::string pathname)
 {
@@ -337,8 +343,21 @@ DirEntry *opendir_utf8(std::string pathname)
 		return NULL;
 	else
 	{
-		DirEntry *de = new DirEntry(unixde->d_name,(bool)(unixde->d_type & DT_DIR));
+#if _DIR_ENT_HAVE_D_TYPE
+		if( unixde->d_type == DT_UNKNOWN ) {
+#endif
+			std::string fullpath = pathname + FILE_SEP;
+			struct stat st;
+			st.st_mode = 0;
+			stat(fullpath.append(unixde->d_name).c_str(), &st);
+#if _DIR_ENT_HAVE_D_TYPE
+			if( S_ISDIR(st.st_mode) )
+				unixde->d_type = DT_DIR;
+		}
+#endif
+		DirEntry *de = new DirEntry(unixde->d_name,TEST_IS_DIR(unixde, st));
 		de->dirp_ = dirp;
+		de->basename_ = pathname;
 		return de;
 	}
 #endif
@@ -371,7 +390,19 @@ DirEntry *readdir_utf8(DirEntry *prevde)
 	}
 	else
 	{
-		DirEntry *de = new DirEntry(unixde->d_name,(bool)(unixde->d_type & DT_DIR));
+#if _DIR_ENT_HAVE_D_TYPE
+		if( unixde->d_type == DT_UNKNOWN ) {
+#endif
+			std::string fullpath = prevde->basename_ + FILE_SEP;
+			struct stat st;
+			st.st_mode = 0;
+			stat(fullpath.append(unixde->d_name).c_str(), &st);
+#if _DIR_ENT_HAVE_D_TYPE
+			if( S_ISDIR(st.st_mode) )
+				unixde->d_type = DT_DIR;
+		}
+#endif
+		DirEntry *de = new DirEntry(unixde->d_name,TEST_IS_DIR(unixde, st));
 		de->dirp_ = prevde->dirp_;
 		return de;
 	}
