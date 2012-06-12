@@ -404,6 +404,7 @@ DirEntry *readdir_utf8(DirEntry *prevde)
 #endif
 		DirEntry *de = new DirEntry(unixde->d_name,TEST_IS_DIR(unixde, st));
 		de->dirp_ = prevde->dirp_;
+		de->basename_ = prevde->basename_;
 		return de;
 	}
 #endif
