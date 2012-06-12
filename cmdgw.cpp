@@ -747,11 +747,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
     if (!strcmp(method,"START"))
     {
     	// New START request
-        cmd_gw_t* req = cmd_requests + cmd_gw_reqs_open++;
-        req->id = ++cmd_gw_reqs_count;
-        req->cmdsock = cmdsock;
-
-        //fprintf(stderr,"cmd: START: new request %i\n",req->id);
+        //fprintf(stderr,"cmd: START: new request %i\n",cmd_gw_reqs_count+1);
 
         // Format: START url destdir\r\n
         // Arno, 2012-04-13: See if URL followed by storagepath for seeding
@@ -806,6 +802,17 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
         // initiate transmission
         Sha1Hash root_hash = Sha1Hash(true,hashstr.c_str());
+
+        // Arno, 2012-06-12: Check for duplicate requests
+        cmd_gw_t* req = CmdGwFindRequestByRootHash(root_hash);
+        if (req != NULL)
+        {
+        	dprintf("cmd: START: request for given root hash already exists\n");
+        	return ERROR_BAD_ARG;
+        }
+        req = cmd_requests + cmd_gw_reqs_open++;
+        req->id = ++cmd_gw_reqs_count;
+        req->cmdsock = cmdsock;
 
         // Send INFO DLSTATUS_HASHCHECKING
 		CmdGwSendINFOHashChecking(req,root_hash);
