@@ -194,6 +194,7 @@ class DirEntry
 	HANDLE hFind_;
 #else
 	DIR *dirp_;
+	std::string basename_;
 #endif
 };
 

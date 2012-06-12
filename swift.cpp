@@ -432,6 +432,7 @@ int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, b
 	//	fprintf(stderr,"swift: parsedir: File %s may have hash %s\n", filename, ht->root_hash().hex().c_str() );
 
 	int fd = swift::Find(ht->root_hash());
+	delete ht;
 	if (fd == -1) {
 		if (!quiet)
 			fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
