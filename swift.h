@@ -1064,7 +1064,7 @@ namespace swift {
 
     // LIVE
     /** To create a live stream as source */
-    LiveTransfer *LiveCreate(const char* filename, size_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    LiveTransfer *LiveCreate(const Sha1Hash& swarmid, const char* filename, size_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** To add chunks to a live stream as source */
     int LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte, long offset);
     /** To open a live stream as peer */

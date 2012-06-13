@@ -374,7 +374,10 @@ int utf8main (int argc, char** argv)
 					quit("Could not open source input");
 			}
 
-			livesource_lt = swift::LiveCreate(filename);
+			//LIVETODO
+			const char *swarmidstr = "ArnosFirstSwarm";
+			Sha1Hash swarmid(swarmidstr, strlen(swarmidstr));
+			livesource_lt = swift::LiveCreate(swarmid,filename);
 
 			evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
 			evtimer_add(&evlivesource, tint2tv(TINT_SEC));

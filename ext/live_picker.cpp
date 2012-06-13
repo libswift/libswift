@@ -100,7 +100,7 @@ public:
     /** Arno: Because multiple HAVE messages may be encoded in single datagram,
      * make this a transaction like thing.
      *
-     * FAXME: if latest source pos is not in first datagram, you may hook-in too late.
+     * LIVETODO: if latest source pos is not in first datagram, you may hook-in too late.
      *
      * LIVETODO: what if peer departs?
      */

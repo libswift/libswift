@@ -13,10 +13,6 @@
 
 
 
-//TODOGT: Rewrite prebuffering to work around LAYER bug.
-
-
-
 using namespace swift;
 
 #define HTTPGW_VOD_PROGRESS_STEP_BYTES 		(256*1024)
@@ -124,6 +120,12 @@ void HttpGwCloseConnection (http_gw_t* req) {
 		evhttp_request_free(req->sinkevreq);
 
 	req->sinkevreq = NULL;
+
+	if (req->sinkevwrite != NULL)
+	{
+    	event_free(req->sinkevwrite);
+    	req->sinkevwrite = NULL;
+	}
 
 	// Note: for some reason calling conn_free here prevents the last chunks
 	// to be sent to the requester?
@@ -326,7 +328,7 @@ void HttpGwSubscribeToWrite(http_gw_t * req) {
 	struct bufferevent* evbufev = evhttp_connection_get_bufferevent(evconn);
 
 	if (req->sinkevwrite != NULL)
-		event_free(req->sinkevwrite); // TODOGT: clean in CloseConn
+		event_free(req->sinkevwrite); // does event_del()
 
 	req->sinkevwrite = event_new(evbase,bufferevent_getfd(evbufev),EV_WRITE,HttpGwLibeventMayWriteCallback,req->sinkevreq);
 	struct timeval t;

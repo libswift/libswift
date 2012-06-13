@@ -274,14 +274,9 @@ void swift::RemoveProgressCallback (int fdes, ProgressCallback cb) {
  */
 
 
-LiveTransfer *swift::LiveCreate(std::string filename, size_t chunk_size)
+LiveTransfer *swift::LiveCreate(const Sha1Hash& swarmid, std::string filename, size_t chunk_size)
 {
-	//LIVETODO
-	const char *swarmidstr = "ArnosFirstSwarm";
-	Sha1Hash swarmid(swarmidstr, strlen(swarmidstr));
-
 	fprintf(stderr,"live: swarmid: %s\n",swarmid.hex().c_str() );
-
 	LiveTransfer *lt = new LiveTransfer(filename,swarmid,true,chunk_size);
 	return lt;
 }
@@ -293,7 +288,7 @@ int swift::LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte, long offse
 }
 
 
-int     swift::LiveOpen(const char* filename, const Sha1Hash& hash,Address tracker, bool check_hashes,size_t chunk_size)
+int     swift::LiveOpen(std::string filename, const Sha1Hash& hash,Address tracker, bool check_hashes,size_t chunk_size)
 {
 	LiveTransfer *lt = new LiveTransfer(filename,hash,false,chunk_size);
     if (lt && lt->fd()) {
