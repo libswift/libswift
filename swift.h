@@ -346,7 +346,7 @@ namespace swift {
 		int					fd_;	// Arno: index into ContentTransfer::swarms vector
 
         /** Channels working for this transfer. */
-        binqueue        hs_in_;			// Arno, 2011-10-03: Should really be queue of channel ID (=uint32_t)
+        binqueue        	hs_in_;			// Arno, 2011-10-03: Should really be queue of channel ID (=uint32_t)
 
         std::set<Channel *>	mychannels_;
 
@@ -384,7 +384,7 @@ namespace swift {
         ~FileTransfer();
 
         // LIVE
-        transfer_t ttype() { return FILE_TRANSFER; }
+        transfer_t 		ttype() { return FILE_TRANSFER; }
         const Sha1Hash& swarm_id() const { return hashtree_->root_hash(); }
 
         /** While we need to feed ACKs to every peer, we try (1) avoid
@@ -396,13 +396,13 @@ namespace swift {
         int             RevealChannel (int& i);
 
         /** The binmap pointer for data already retrieved and checked. */
-        binmap_t *           ack_out ()  { return hashtree_->ack_out(); }
+        binmap_t *      ack_out ()  { return hashtree_->ack_out(); }
         /** Piece picking strategy used by this transfer. */
-        PiecePicker *    picker () { return picker_; }
+        PiecePicker *   picker () { return picker_; }
         /** The number of channels working for this transfer. */
         int             channel_count () const { return hs_in_.size(); }
         /** Hash tree checked file; all the hashes and data are kept here. */
-        HashTree *       hashtree() { return hashtree_; }
+        HashTree *      hashtree() { return hashtree_; }
         /** Root SHA1 hash of the transfer (and the data file). */
         const Sha1Hash& root_hash () const { return hashtree_->root_hash(); }
         size_t	  		chunk_size() { return hashtree_->chunk_size(); }
@@ -446,12 +446,12 @@ namespace swift {
         /** Availability in the swarm */
         Availability* 	availability_;
 
-        Address 			tracker_; // Tracker for this transfer
-        tint				tracker_retry_interval_;
-        tint				tracker_retry_time_;
+        Address 		tracker_; // Tracker for this transfer
+        tint			tracker_retry_interval_;
+        tint			tracker_retry_time_;
 
         //ZEROSTATE
-        bool				zerostate_;
+        bool			zerostate_;
 
     public:
         void            OnDataIn (bin_t pos);
@@ -459,77 +459,66 @@ namespace swift {
         friend class Channel;
         // Ric: maybe not really needed
         friend class Availability;
-        friend uint64_t  Size (int fdes);
-        friend bool      IsComplete (int fdes);
-        friend uint64_t  Complete (int fdes);
-        friend uint64_t  SeqComplete (int fdes, int64_t offset);
-        friend int     Open (const char* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size);
-        friend void    Close (int fd) ;
-        friend void AddProgressCallback (int fdes,ProgressCallback cb,uint8_t agg);
-        friend void RemoveProgressCallback (int fdes,ProgressCallback cb);
-        friend void ExternallyRetrieved (int fdes,bin_t piece);
+        friend uint64_t Size (int fdes);
+        friend bool     IsComplete (int fdes);
+        friend uint64_t Complete (int fdes);
+        friend uint64_t SeqComplete (int fdes, int64_t offset);
+        friend int     	Open (const char* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size);
+        friend void    	Close (int fd) ;
+        friend void 	AddProgressCallback (int fdes,ProgressCallback cb,uint8_t agg);
+        friend void 	RemoveProgressCallback (int fdes,ProgressCallback cb);
+        friend void 	ExternallyRetrieved (int fdes,bin_t piece);
     };
 
-#define LIVE
-
-#ifdef LIVE
     /** A class representing live transfer. */
      class    LiveTransfer : public ContentTransfer {
        public:
 
-         /** A constructor. */
-         LiveTransfer(std::string filename, const Sha1Hash& swarm_id=Sha1Hash::ZERO,bool amsource=false,size_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+        /** A constructor. */
+        LiveTransfer(std::string filename, const Sha1Hash& swarm_id=Sha1Hash::ZERO,bool amsource=false,size_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
-         /**    Close everything. */
-         ~LiveTransfer();
+        /**    Close everything. */
+        ~LiveTransfer();
 
-         transfer_t ttype() { return LIVE_TRANSFER; }
-         const Sha1Hash& 	swarm_id() const { return swarm_id_; }
+        transfer_t 		ttype() { return LIVE_TRANSFER; }
+        const Sha1Hash& swarm_id() const { return swarm_id_; }
+        /** The binmap for data already retrieved and checked. */
+        binmap_t *     ack_out ()  { return &ack_out_; }
 
-         /** Returns the number of bytes that are complete sequentially, starting from the
+        /** Returns the number of bytes that are complete sequentially, starting from the
              beginning, till the first not-yet-retrieved packet. */
-         uint64_t  SeqComplete();
-         /** Returns the number of bytes in a chunk for this transmission */
-         size_t	  chunk_size() { return chunk_size_; }
-         bool 	  am_source() { return am_source_; }
+        uint64_t  		SeqComplete();
+        /** Returns the number of bytes in a chunk for this transmission */
+        size_t	  		chunk_size() { return chunk_size_; }
+        bool 	  		am_source() { return am_source_; }
 
 
-         /** */
-         int AddData(const void *buf, size_t nbyte);
+        /** Source: add a chunk to the swarm */
+        int 			AddData(const void *buf, size_t nbyte);
 
-         //
-         // ContentTransfer interface
-         //
-         /** The binmap for data already retrieved and checked. */
-         binmap_t *           ack_out ()  { return &ack_out_; }
-
-
-         uint64_t  GetHookinOffset();
+        /** Returns the byte offset at which we hooked into the live stream */
+        uint64_t  		GetHookinOffset();
 
        protected:
-         /** Swarm Identifier */
-         Sha1Hash swarm_id_;
+        /** Swarm Identifier */
+        Sha1Hash swarm_id_;
+        /**    Binmap of own chunk availability */
+        binmap_t        ack_out_;
 
-         /** Am I a source */
-         bool am_source_;
+        /** Source: Am I a source */
+        bool 			am_source_;
 
-         /** Name of file used for storing live chunks */
-         std::string		filename_;
-     	 // CHUNKSIZE
-     	 /** Arno: configurable fixed chunk size in bytes */
-     	 size_t			chunk_size_;
+        /** Name of file used for storing live chunks */
+        std::string		filename_;
+     	// CHUNKSIZE
+     	/** Arno: configurable fixed chunk size in bytes */
+     	size_t			chunk_size_;
 
-         /** ID of last generated chunk */
-         uint64_t			last_chunkid_;
-         /** Current write position in storage file */
-         size_t			offset_;
-
-         /**    Binmap of own chunk availability */
-         binmap_t        ack_out_;
+        /** Source: ID of last generated chunk */
+        uint64_t		last_chunkid_;
+        /** Source: Current write position in storage file */
+        size_t			offset_;
      };
-#endif
-
-
 
 
     /** PiecePicker implements some strategy of choosing (picking) what
