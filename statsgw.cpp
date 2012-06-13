@@ -124,12 +124,12 @@ void StatsOverviewCallback(struct evhttp_request *evreq)
     strcpy(bodystr,"");
     strcat(bodystr,top_page);
 
-    for (int i=0; i<swift::FileTransfer::files.size(); i++)
+    for (int i=0; i<swift::ContentTransfer::swarms.size(); i++)
     {
-    	FileTransfer *ft = swift::FileTransfer::files[i];
-    	if (ft != NULL)
+    	ContentTransfer *ct = swift::ContentTransfer::swarms[i];
+    	if (ct != NULL)
     	{
-    		int fd = ft->fd();
+    		int fd = ct->fd();
 			uint64_t total = (int)swift::Size(fd);
 			uint64_t down  = (int)swift::Complete(fd);
 			int perc = (int)((down * 100) / total);
@@ -190,15 +190,15 @@ void StatsGetSpeedCallback(struct evhttp_request *evreq)
     // Arno: PDD+ wants content speeds too
     double contentdownspeed = 0.0, contentupspeed = 0.0;
     uint32_t nleech=0,nseed=0;
-    for (int i=0; i<swift::FileTransfer::files.size(); i++)
+    for (int i=0; i<swift::ContentTransfer::swarms.size(); i++)
     {
-    	FileTransfer *ft = swift::FileTransfer::files[i];
-    	if (ft != NULL)
+    	ContentTransfer *ct = swift::ContentTransfer::swarms[i];
+    	if (ct != NULL)
     	{
-    		contentdownspeed += ft->GetCurrentSpeed(DDIR_DOWNLOAD);
-    		contentupspeed += ft->GetCurrentSpeed(DDIR_UPLOAD);
-    		nleech += ft->GetNumLeechers();
-    		nseed += ft->GetNumSeeders();
+    		contentdownspeed += ct->GetCurrentSpeed(DDIR_DOWNLOAD);
+    		contentupspeed += ct->GetCurrentSpeed(DDIR_UPLOAD);
+    		nleech += ct->GetNumLeechers();
+    		nseed += ct->GetNumSeeders();
     	}
     }
     int cdownspeed = (int)(contentdownspeed/1024.0);

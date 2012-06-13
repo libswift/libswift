@@ -119,6 +119,7 @@ tint    Channel::KeepAliveNextSendTime () {
 }
 
 tint    Channel::PingPongNextSendTime () { // FIXME INFINITE LOOP
+	//fprintf(stderr,"PING: dgrams %d ackrec %d dataintime %lli lastrecv %lli lastsend %lli\n", dgrams_sent_, ack_rcvd_recent_, data_in_.time, last_recv_time_, last_send_time_);
     if (dgrams_sent_>=10)
         return SwitchSendControl(KEEP_ALIVE_CONTROL);
     if (ack_rcvd_recent_)

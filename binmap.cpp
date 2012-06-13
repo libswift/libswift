@@ -900,6 +900,8 @@ bin_t binmap_t::find_complement(const binmap_t& destination, const binmap_t& sou
 {
     return find_complement(destination, source, bin_t::ALL, twist);
 
+    // Arno, 2012-01-09: Code unused?
+
     if (destination.is_empty()) {
         const cell_t& cell = source.cell_[ROOT_REF];
         if (!cell.is_left_ref_ && !cell.is_right_ref_ && cell.left_.bitmap_ == BITMAP_FILLED && cell.right_.bitmap_ == BITMAP_FILLED) {

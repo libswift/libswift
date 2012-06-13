@@ -43,7 +43,7 @@ using namespace swift;
 struct cmd_gw_t {
     int      id;
     evutil_socket_t   cmdsock;
-    int		 transfer; 			 // swift FD
+    int		 fdes; // swift FD
     bool	moreinfo;		  // whether to report detailed stats (see SETMOREINFO cmd)
     tint 	startt;			  // ARNOSMPTODO: debug speed measurements, remove
     std::string mfspecname;	  // MULTIFILE
@@ -123,8 +123,8 @@ void CmdGwCloseConnection(evutil_socket_t sock)
 	    	cmd_gw_t* req = &cmd_requests[i];
 	        if (req->cmdsock==sock)
 	        {
-                dprintf("%s @%i stopping-on-close transfer %i\n",tintstr(),req->id,req->transfer);
-                swift::Close(req->transfer);
+                dprintf("%s @%i stopping-on-close transfer %i\n",tintstr(),req->id,req->fdes);
+                swift::Close(req->fdes);
 
                 // Remove from list and reiterate over it
                 CmdGwFreeRequest(req);
@@ -139,10 +139,10 @@ void CmdGwCloseConnection(evutil_socket_t sock)
 }
 
 
-cmd_gw_t* CmdGwFindRequestByTransfer (int transfer)
+cmd_gw_t* CmdGwFindRequestByFD (int fdes)
 {
     for(int i=0; i<cmd_gw_reqs_open; i++)
-        if (cmd_requests[i].transfer==transfer)
+        if (cmd_requests[i].fdes==fdes)
             return cmd_requests+i;
     return NULL;
 }
@@ -152,7 +152,7 @@ cmd_gw_t* CmdGwFindRequestByRootHash(Sha1Hash &want_hash)
 	FileTransfer *ft = NULL;
     for(int i=0; i<cmd_gw_reqs_open; i++) {
     	cmd_gw_t* req = &cmd_requests[i];
-    	ft = FileTransfer::file(req->transfer);
+    	ft = (FileTransfer *)ContentTransfer::transfer(req->fdes); //LIVETODO
     	Sha1Hash got_hash = ft->root_hash();
         if (want_hash == got_hash)
         	return req;
@@ -170,7 +170,7 @@ void CmdGwGotCHECKPOINT(Sha1Hash &want_hash)
     if (req == NULL)
     	return;
 
-    swift::Checkpoint(req->transfer);
+    swift::Checkpoint(req->fdes);
 }
 
 
@@ -183,11 +183,11 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 	cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
 	if (req == NULL)
     	return;
-    FileTransfer *ft = FileTransfer::file(req->transfer);
+    FileTransfer *ft = (FileTransfer *)ContentTransfer::transfer(req->fdes);
     if (ft == NULL)
     	return;
 
-	dprintf("%s @%i remove transfer %i\n",tintstr(),req->id,req->transfer);
+	dprintf("%s @%i remove transfer %i\n",tintstr(),req->id,req->fdes);
 
 	//MULTIFILE
 	// Arno, 2012-05-23: Copy all filename to be deleted to a set. This info is lost after
@@ -254,7 +254,7 @@ void CmdGwGotMAXSPEED(Sha1Hash &want_hash, data_direction_t ddir, double speed)
 	cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
 	if (req == NULL)
     	return;
-    FileTransfer *ft = FileTransfer::file(req->transfer);
+    FileTransfer *ft = (FileTransfer *)ContentTransfer::transfer(req->fdes);
 
     // Arno, 2012-05-25: SetMaxSpeed resets the current speed history, so
     // be careful here.
@@ -306,9 +306,9 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 {
 	// Send INFO message.
 	if (cmd_gw_debug)
-		fprintf(stderr,"cmd: SendINFO: %d %d\n", req->transfer, dlstatus );
+		fprintf(stderr,"cmd: SendINFO: %d %d\n", req->fdes, dlstatus );
 
-	FileTransfer *ft = FileTransfer::file(req->transfer);
+	FileTransfer *ft = (FileTransfer *)ContentTransfer::transfer(req->fdes);
 	if (ft == NULL)
 		// Download was removed or closed somehow.
 		return;
@@ -316,8 +316,8 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
     Sha1Hash root_hash = ft->root_hash();
 
     char cmd[MAX_CMD_MESSAGE];
-    uint64_t size = swift::Size(req->transfer);
-    uint64_t complete = swift::Complete(req->transfer);
+    uint64_t size = swift::Size(req->fdes);
+    uint64_t complete = swift::Complete(req->fdes);
     if (size == complete)
     	dlstatus = DLSTATUS_SEEDING;
 
@@ -381,9 +381,9 @@ void CmdGwSendPLAY(cmd_gw_t *req)
 {
 	// Send PLAY message to user
 	if (cmd_gw_debug)
-		fprintf(stderr,"cmd: SendPLAY: %d\n", req->transfer );
+		fprintf(stderr,"cmd: SendPLAY: %d\n", req->fdes);
 
-    Sha1Hash root_hash = FileTransfer::file(req->transfer)->root_hash();
+    Sha1Hash root_hash = FileTransfer::file(req->fdes)->root_hash();
 
     char cmd[MAX_CMD_MESSAGE];
     // Slightly diff format: roothash as ID after CMD
@@ -463,19 +463,20 @@ void CmdGwSwiftPrebufferProgressCallback (int transfer, bin_t bin)
  * prebuffered (via CmdGwSwiftPrebufferingProcessCallback).
  */
 
-void CmdGwSwiftFirstProgressCallback (int transfer, bin_t bin)
+void CmdGwSwiftFirstProgressCallback (int fdes, bin_t bin)
 {
 	//
 	// First bytes of content downloaded (first in absolute sense)
 	//
 	if (cmd_gw_debug)
-		fprintf(stderr,"cmd: SwiftFirstProgress: %d\n", transfer );
+		fprintf(stderr,"cmd: SwiftFirstProgress: %d\n", fdes );
 
-	cmd_gw_t* req = CmdGwFindRequestByTransfer(transfer);
+	cmd_gw_t* req = CmdGwFindRequestByTransfer(fdes);
 	if (req == NULL)
 		return;
 
-	FileTransfer *ft = FileTransfer::file(req->transfer);
+	// TODOGT
+	FileTransfer *ft = FileTransfer::file(req->fdes);
 	if (ft == NULL) {
 		CmdGwSendERRORBySocket(req->cmdsock,"Unknown transfer?!");
     	return;
@@ -485,14 +486,18 @@ void CmdGwSwiftFirstProgressCallback (int transfer, bin_t bin)
 		return;
 	}
 
-	swift::RemoveProgressCallback(transfer,&CmdGwSwiftFirstProgressCallback);
+	swift::RemoveProgressCallback(fdes,&CmdGwSwiftFirstProgressCallback);
 
 	if (req->mfspecname == "")
 	{
 		// Single file
 		req->startoff = 0;
+
+		// TODOGT
 		req->endoff = swift::Size(req->transfer)-1;
 		CmdGwSwiftPrebufferProgressCallback(req->transfer,bin_t(0,0)); // in case file on disk
+
+		// TODOGT: don't call when on disk, otherwise double PLAY
 		swift::AddProgressCallback(transfer,&CmdGwSwiftPrebufferProgressCallback,CMDGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER);
 	}
 	else
@@ -567,7 +572,7 @@ void CmdGwUpdateDLStateCallback(cmd_gw_t* req)
 	CmdGwSendINFO(req,DLSTATUS_DOWNLOADING);
 
 	// Update speed measurements such that they decrease when DL/UL stops
-	FileTransfer *ft = FileTransfer::file(req->transfer);
+	FileTransfer *ft = (FileTransfer *)ContentTransfer::transfer(req->fdes);
 	ft->OnRecvData(0);
 	ft->OnSendData(0);
 
@@ -580,7 +585,7 @@ void CmdGwUpdateDLStateCallback(cmd_gw_t* req)
 #else
 		double dt = std::max(0.000001,(double)(usec_time() - req->startt)/TINT_SEC);
 #endif
-		double exspeed = (double)(swift::Complete(req->transfer)) / dt;
+		double exspeed = (double)(swift::Complete(req->fdes)) / dt;
 		fprintf(stderr,"cmd: UpdateDLStateCallback: SPEED %lf == %lf\n", dlspeed, exspeed );
 	}
 }
@@ -811,28 +816,30 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 		CmdGwSendINFOHashChecking(req,root_hash);
 
 		// ARNOSMPTODO: disable/interleave hashchecking at startup
-        int transfer = swift::Find(root_hash);
-        if (transfer==-1) {
+        int fdes = swift::Find(root_hash);
+        if (fdes==-1) {
         	std::string filename;
         	if (storagepath != "")
         		filename = storagepath;
         	else
         		filename = hashstr;
-            transfer = swift::Open(filename,root_hash,trackaddr,false,chunksize);
+            fdes = swift::Open(filename,root_hash,trackaddr,false,chunksize);
         }
 
         // RATELIMIT
-        //FileTransfer::file(transfer)->SetMaxSpeed(DDIR_DOWNLOAD,512*1024);
+        //(FileTransfer *)ContentTransfer::transfer(fdes)->SetMaxSpeed(DDIR_DOWNLOAD,512*1024);
 
-        req->transfer = transfer;
+        req->fdes = fdes;
         req->startt = usec_time();
         req->mfspecname = mfstr;
 
         if (cmd_gw_debug)
-        	fprintf(stderr,"cmd: Already on disk is %lli/%lli\n", swift::Complete(transfer), swift::Size(transfer));
+        	fprintf(stderr,"cmd: Already on disk is %lli/%lli\n", swift::Complete(fdes), swift::Size(fdes));
 
         // MULTIFILE
         int64_t minsize=CMDGW_MAX_PREBUF_BYTES;
+
+        // TODOGT: LIVE
         FileTransfer *ft = FileTransfer::file(transfer);
         if (ft == NULL)
         	return ERROR_BAD_ARG;
@@ -841,9 +848,11 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 			minsize = sfs[0]->GetSize();
 
         // Wait for prebuffering and then send PLAY to user
-        if (swift::SeqComplete(transfer) >= minsize)
+		// TODOGT: LIVE
+    	// ARNOSMPTODO: OUTOFORDER: breaks with out-of-order download
+		if (swift::SeqComplete(transfer) >= minsize)
         {
-            CmdGwSwiftFirstProgressCallback(transfer,bin_t(0,0));
+            CmdGwSwiftFirstProgressCallback(fdes,bin_t(0,0));
             CmdGwSendINFO(req, DLSTATUS_DOWNLOADING);
         }
         else

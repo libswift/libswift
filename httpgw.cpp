@@ -11,19 +11,41 @@
 #include <event2/bufferevent.h>
 #include <sstream>
 
+
+
+//TODOGT: Rewrite prebuffering to work around LAYER bug.
+
+
+
 using namespace swift;
 
-#define HTTPGW_PROGRESS_STEP_BYTES 		(256*1024)
+#define HTTPGW_VOD_PROGRESS_STEP_BYTES 		(256*1024)
 // For best performance make bigger than HTTPGW_PROGRESS_STEP_BYTES
-#define HTTPGW_MAX_WRITE_BYTES			(512*1024)
+#define HTTPGW_VOD_MAX_WRITE_BYTES			(512*1024)
+
+
+#define HTTPGW_LIVE_PROGRESS_STEP_BYTES 	(16*1024)
+// For best performance make bigger than HTTPGW_PROGRESS_STEP_BYTES
+#define HTTPGW_LIVE_MAX_WRITE_BYTES			(32*1024)
+
 
 // Report swift download progress every 2^layer * chunksize bytes (so 0 = report every chunk)
-#define HTTPGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER 	0
+// Note: for LIVE this cannot be reliably used to force a prebuffer size,
+// as this gets called with a subtree of size X has been downloaded. If the
+// hook-in point is in the middle of such a subtree, the call won't happen
+// until the next full subtree has been downloaded, i.e. after ~1.5 times the
+// prebuf has been downloaded. See HTTPGW_MIN_PREBUF_BYTES
+//
+#define HTTPGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER 	4  // 16 KB
 
 // Arno: libevent2 has a liberal understanding of socket writability,
 // that may result in tens of megabytes being cached in memory. Limit that
 // amount at app level.
-#define HTTPGW_MAX_PREBUF_BYTES			(2*1024*1024)
+#define HTTPGW_MAX_OUTBUF_BYTES			(2*1024*1024)
+
+// Arno:
+#define HTTPGW_MIN_PREBUF_BYTES			(256*1024)
+
 
 #define HTTPGW_MAX_REQUEST 128
 
@@ -31,7 +53,7 @@ struct http_gw_t {
     int      id;
     uint64_t offset;
     uint64_t tosend;
-    int      transfer;
+    int      fdes;
     uint64_t lastcpoffset; // last offset at which we checkpointed
     struct evhttp_request *sinkevreq;
     struct event 		  *sinkevwrite;
@@ -66,9 +88,9 @@ http_gw_t *HttpGwFindRequestByEV(struct evhttp_request *evreq) {
 	return NULL;
 }
 
-http_gw_t *HttpGwFindRequestByTransfer(int transfer) {
+http_gw_t *HttpGwFindRequestByFD(int fdes) {
 	for (int httpc=0; httpc<http_gw_reqs_open; httpc++) {
-		if (http_requests[httpc].transfer==transfer) {
+		if (http_requests[httpc].fdes==fdes) {
 			return &http_requests[httpc];
 		}
 	}
@@ -110,18 +132,22 @@ void HttpGwCloseConnection (http_gw_t* req) {
 	// Current close policy: checkpoint and DO NOT close transfer, keep on
 	// seeding forever. More sophisticated clients should use CMD GW and issue
 	// REMOVE.
-	swift::Checkpoint(req->transfer);
+	ContentTransfer *ct = ContentTransfer::transfer(req->fdes);
+	if (ct != NULL) {
+		if (ct->ttype() == FILE_TRANSFER)
+		{
+			swift::Checkpoint(req->transfer);
 
-	// Arno, 2012-05-04: MULTIFILE: once the selected file has been downloaded
-	// swift will download all content that comes afterwards too. Poor man's
-	// fix to avoid this: seek to end of content when HTTP done. VOD PiecePicker
-	// will then no download anything. Better would be to seek to end when
-	// swift partial download is done, not the serving via HTTP.
-	//
-	swift::Seek(req->transfer,swift::Size(req->transfer)-1,SEEK_CUR);
+			// Arno, 2012-05-04: MULTIFILE: once the selected file has been downloaded
+			// swift will download all content that comes afterwards too. Poor man's
+			// fix to avoid this: seek to end of content when HTTP done. VOD PiecePicker
+			// will then no download anything. Better would be to seek to end when
+			// swift partial download is done, not the serving via HTTP.
+			//
+			swift::Seek(req->transfer,swift::Size(req->transfer)-1,SEEK_CUR);
+	}
 
-	//swift::Close(req->transfer);
-
+	//swift::Close(req->fdes);
 
 	*req = http_requests[--http_gw_reqs_open];
 }
@@ -139,7 +165,7 @@ void HttpGwLibeventCloseCallback(struct evhttp_connection *evconn, void *evreqvo
 	if (req == NULL)
 		dprintf("%s http conn already closed\n",tintstr() );
 	else {
-		dprintf("%s T%i http close conn\n",tintstr(),req->transfer);
+		dprintf("%s T%i http close conn\n",tintstr(),req->fdes);
 		if (req->closing)
 			dprintf("%s http conn already closing\n",tintstr() );
 		else
@@ -153,10 +179,10 @@ void HttpGwLibeventCloseCallback(struct evhttp_connection *evconn, void *evreqvo
 
 
 
-void HttpGwMayWriteCallback (int transfer) {
+void HttpGwMayWriteCallback (int fdes) {
 	// Write some data to client
 
-	http_gw_t* req = HttpGwFindRequestByTransfer(transfer);
+	http_gw_t* req = HttpGwFindRequestByFD(fdes);
 	if (req == NULL) {
     	print_error("httpgw: MayWrite: can't find req for transfer");
         return;
@@ -176,26 +202,40 @@ void HttpGwMayWriteCallback (int transfer) {
     dprintf("%s @%i http write: avail %lld relcomp %llu offset %llu start %llu end %llu tosend %llu\n",tintstr(),req->id, avail, relcomplete, req->offset, req->startoff, req->endoff,  req->tosend );
     //fprintf(stderr,"offset %lli seqcomp %lli comp %lli\n",req->offset, complete, swift::Complete(req->transfer) );
 
+    //dprintf("%s @%i http write seqcomplete %lli offset %lli\n",tintstr(),req->id, seqcomplete, req->offset);
+    //fprintf(stderr,"offset %lli seqcomp %lli comp %lli\n",req->offset, seqcomplete, swift::Complete(req->fdes) );
+
 	struct evhttp_connection *evconn = evhttp_request_get_connection(req->sinkevreq);
 	struct bufferevent* buffy = evhttp_connection_get_bufferevent(evconn);
 	struct evbuffer *outbuf = bufferevent_get_output(buffy);
 
-	//fprintf(stderr,"httpgw: MayWrite avail %i bufev outbuf %i\n",complete-req->offset, evbuffer_get_length(outbuf) );
+	fprintf(stderr,"httpgw: MayWrite: avail %lli bufev outbuf %i\n",seqcomplete-req->offset, evbuffer_get_length(outbuf) );
 
     if (avail > 0 && evbuffer_get_length(outbuf) < HTTPGW_MAX_PREBUF_BYTES)
     {
+    	ContentTransfer *ct = ContentTransfer::transfer(fdes);
+    	if (ct == NULL)
+    		return;
+
+    	int max_write_bytes = 0;
+    	if (ct->ttype() == FILE_TRANSFER)
+    		max_write_bytes = HTTPGW_VOD_MAX_WRITE_BYTES;
+    	else
+    		max_write_bytes = HTTPGW_LIVE_MAX_WRITE_BYTES;
+
     	// Received more than I pushed to player, send data
-        char buf[HTTPGW_MAX_WRITE_BYTES];
+        char *buf = (char *)malloc(max_write_bytes);
 // Arno, 2010-08-16, TODO
 #ifdef WIN32
-        uint64_t tosend = min(HTTPGW_MAX_WRITE_BYTES,avail);
+        uint64_t tosend = min(max_write_bytes,avail);
 #else
-        uint64_t tosend = std::min((int64_t)HTTPGW_MAX_WRITE_BYTES,avail);
+        uint64_t tosend = std::min((int64_t)max_write_bytes,avail);
 #endif
-        size_t rd = swift::Read(transfer,buf,tosend,req->offset); // hope it is cached
+        size_t rd = swift::Read(req->fdes,buf,tosend,swift::LiveStart(req->fdes)+req->offset);
         if (rd<0) {
         	print_error("httpgw: MayWrite: error pread");
             HttpGwCloseConnection(req);
+            free(buf);
             return;
         }
 
@@ -206,8 +246,10 @@ void HttpGwMayWriteCallback (int transfer) {
         	print_error("httpgw: MayWrite: error evbuffer_add");
         	evbuffer_free(evb);
             HttpGwCloseConnection(req);
+            free(buf);
             return;
         }
+        //free(buf);
 
         if (req->offset == req->startoff) {
         	// Not just for chunked encoding, see libevent2's http.c
@@ -270,31 +312,35 @@ void HttpGwLibeventMayWriteCallback(evutil_socket_t fd, short events, void *evre
 	http_gw_t * req = HttpGwFindRequestByEV((struct evhttp_request *)evreqvoid);
 	if (req != NULL) {
 		//fprintf(stderr,"httpgw: MayWrite: %d events %d httpreq is %p\n", fd, events, req);
-		HttpGwMayWriteCallback(req->transfer);
+		HttpGwMayWriteCallback(req->fdes);
 
 
 		// Arno, 2011-12-20: No autoreschedule, let HttpGwSwiftProgressCallback do that
 		//if (req->sinkevreq != NULL) // Conn closed
 		//	HttpGwSubscribeToWrite(req);
 
-		//fprintf(stderr,"GOTO WRITE %lli >= %lli\n", swift::Complete(req->transfer)+HTTPGW_MAX_WRITE_BYTES, swift::Size(req->transfer) );
+		//fprintf(stderr,"GOTO WRITE %lli >= %lli\n", swift::Complete(req->fdes)+HTTPGW_MAX_WRITE_BYTES, swift::Size(req->fdes) );
 
-		if (swift::Complete(req->transfer)+HTTPGW_MAX_WRITE_BYTES >= swift::Size(req->transfer)) {
+    	ContentTransfer *ct = ContentTransfer::transfer(req->fdes);
+    	if (ct->ttype() == FILE_TRANSFER) {
 
-        	// We don't get progress callback for last chunk < chunk size, nor
-        	// when all data is already on disk. In that case, just keep on
-			// subscribing to HTTP socket writability until all data is sent.
-			if (req->sinkevreq != NULL) // Conn closed
-				HttpGwSubscribeToWrite(req);
+    		if (swift::Complete(req->fdes)+HTTPGW_VOD_MAX_WRITE_BYTES >= swift::Size(req->fdes)) {
+
+    			// We don't get progress callback for last chunk < chunk size, nor
+    			// when all data is already on disk. In that case, just keep on
+    			// subscribing to HTTP socket writability until all data is sent.
+    			if (req->sinkevreq != NULL) // Conn closed
+    				HttpGwSubscribeToWrite(req);
+    		}
 		}
 	}
 }
 
-void HttpGwSwiftProgressCallback (int transfer, bin_t bin) {
+void HttpGwSwiftProgressCallback (int fdes, bin_t bin) {
 	// Subsequent HTTPGW_PROGRESS_STEP_BYTES available
 
-	dprintf("%s T%i http more progress\n",tintstr(),transfer);
-	http_gw_t* req = HttpGwFindRequestByTransfer(transfer);
+	dprintf("%s T%i http more progress\n",tintstr(),fdes);
+	http_gw_t* req = HttpGwFindRequestByFD(fdes);
 	if (req == NULL)
 		return;
 
@@ -421,49 +467,65 @@ bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
 }
 
 
-void HttpGwFirstProgressCallback (int transfer, bin_t bin) {
+void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
 	// First chunk of data available
-	dprintf("%s T%i http first progress\n",tintstr(),transfer);
+	dprintf("%s T%i http first progress\n",tintstr(),fdes);
+
+	fprintf(stderr,"httpgw: FirstProgres: hook-in at %lli\n", swift::LiveStart(fdes) );
+
 
 	// Need the first chunk
-	if (swift::SeqComplete(transfer) == 0)
+	if (swift::SeqComplete(fdes) == 0)
 	{
-		dprintf("%s T%i first: not enough seqcomp\n",tintstr(),transfer );
+		dprintf("%s T%i first: not enough seqcomp\n",tintstr(),fdes );
         return;
 	}
 
-	http_gw_t* req = HttpGwFindRequestByTransfer(transfer);
+	http_gw_t* req = HttpGwFindRequestByTransfer(fdes);
 	if (req == NULL)
 	{
-		dprintf("%s T%i first: req not found\n",tintstr(),transfer );
+		dprintf("%s T%i first: req not found\n",tintstr(),fdes);
 		return;
-	}
-
-	// MULTIFILE
-	// Is storage ready?
-	FileTransfer *ft = FileTransfer::file(req->transfer);
-	if (ft == NULL) {
-		dprintf("%s T%i first: FileTransfer not found\n",tintstr(),transfer );
-    	evhttp_send_error(req->sinkevreq,500,"Internal error: Content not found although downloading it.");
-    	return;
-	}
-	if (!ft->GetStorage()->IsReady())
-	{
-		dprintf("%s T%i first: Storage not ready\n",tintstr(),transfer );
-		return; // wait for some more data
 	}
 
 	// Protection against spurious callback
 	if (req->tosend > 0)
 	{
-		dprintf("%s T%i first: already set tosend\n",tintstr(),transfer );
+		dprintf("%s T%i first: already set tosend\n",tintstr(),fdes );
 		return;
 	}
 
+	//TODORT: FileTransfer -> ContenTransfer
+
+	// MULTIFILE
+	// Is storage ready?
+	ContentTransfer *ct = ContentTransfer::transfer(fdes);
+	if (ct == NULL) {
+		dprintf("%s T%i first: ContentTransfer not found\n",tintstr(),fdes );
+    	evhttp_send_error(req->sinkevreq,500,"Internal error: Content not found although downloading it.");
+    	return;
+	}
+	else if (ct->ttype) == FILE_TRANSFER)
+	{
+		FileTransfer *ft = ct;
+		if (!ft->GetStorage()->IsReady())
+		{
+			dprintf("%s T%i first: Storage not ready\n",tintstr(),fdes );
+			return; // wait for some more data
+		}
+	}
+
+
 	// Good to go. Reconfigure callbacks
-	swift::RemoveProgressCallback(transfer,&HttpGwFirstProgressCallback);
-    int progresslayer = bytes2layer(HTTPGW_PROGRESS_STEP_BYTES,swift::ChunkSize(transfer));
-    swift::AddProgressCallback(transfer,&HttpGwSwiftProgressCallback,progresslayer);
+	swift::RemoveProgressCallback(fdes,&HttpGwFirstProgressCallback);
+
+	int stepbytes = 0;
+	if (ct->ttype() == FILE_TRANSFER)
+		stepbytes = HTTPGW_VOD_PROGRESS_STEP_BYTES;
+	else
+		stepbytes = HTTPGW_LIVE_PROGRESS_STEP_BYTES;
+    int progresslayer = bytes2layer(stepbytes,swift::ChunkSize(fdes));
+    swift::AddProgressCallback(fdes,&HttpGwSwiftProgressCallback,progresslayer);
 
     // Send header of HTTP reply
 	uint64_t filesize = 0;
@@ -478,7 +540,7 @@ void HttpGwFirstProgressCallback (int transfer, bin_t bin) {
 		{
 			StorageFile *sf = *iter;
 
-			dprintf("%s T%i first: mf: comp <%s> <%s>\n",tintstr(),transfer, sf->GetSpecPathName().c_str(), req->mfspecname.c_str() );
+			dprintf("%s T%i first: mf: comp <%s> <%s>\n",tintstr(),fdes, sf->GetSpecPathName().c_str(), req->mfspecname.c_str() );
 
 			if (sf->GetSpecPathName() == req->mfspecname)
 			{
@@ -498,8 +560,8 @@ void HttpGwFirstProgressCallback (int transfer, bin_t bin) {
 	{
 		// Single file
 		req->startoff = 0;
-		req->endoff = swift::Size(req->transfer)-1;
-		filesize = swift::Size(transfer);
+		req->endoff = swift::Size(fdes)-1;
+		filesize = swift::Size(fdes);
 	}
 
 	// Handle HTTP GET Range request, i.e. additional offset within content or file
@@ -523,36 +585,46 @@ void HttpGwFirstProgressCallback (int transfer, bin_t bin) {
 	if (req->startoff != 0)
 	{
 		// Seek to multifile/range start
-		int ret = swift::Seek(req->transfer,req->startoff,SEEK_SET);
+		int ret = swift::Seek(req->fdes,req->startoff,SEEK_SET);
 		if (ret < 0) {
 			evhttp_send_error(req->sinkevreq,500,"Internal error: Cannot seek to file start in range request or multi-file content.");
 			return;
 		}
 	}
 
-	// Convert size to string
-	std::ostringstream closs;
-	closs << req->tosend;
-
 	struct evkeyvalq *reqheaders = evhttp_request_get_output_headers(req->sinkevreq);
 	//evhttp_add_header(reqheaders, "Connection", "keep-alive" );
 	evhttp_add_header(reqheaders, "Connection", "close" );
-	evhttp_add_header(reqheaders, "Content-Type", "video/ogg" );
-	if (req->xcontentdur.length() > 0)
-		evhttp_add_header(reqheaders, "X-Content-Duration", req->xcontentdur.c_str() );
-	evhttp_add_header(reqheaders, "Content-Length", closs.str().c_str() );
-	//evhttp_add_header(reqheaders, "Accept-Ranges", "none" );
+	if (req->xcontentdur != "-1")
+	{
+		evhttp_add_header(reqheaders, "Content-Type", "video/ogg" );
+		if (req->xcontentdur.length() > 0)
+			evhttp_add_header(reqheaders, "X-Content-Duration", req->xcontentdur.c_str() );
+
+		// Convert size to string
+		std::ostringstream closs;
+		closs << req->tosend;
+		evhttp_add_header(reqheaders, "Content-Length", closs.str().c_str() );
+	}
+	else
+	{
+		evhttp_add_header(reqheaders, "Content-Type", "video/mp2t" );
+		evhttp_add_header(reqheaders, "Accept-Ranges", "none" );
+	}
 
 	dprintf("%s @%i headers sent, size %lli\n",tintstr(),req->id,req->tosend);
 
-	/*
-	 * Arno, 2011-10-17: Swift ProgressCallbacks are only called when
-	 * the data is downloaded, not when it is already on disk. So we need
-	 * to handle the situation where all or part of the data is already
-	 * on disk. Subscribing to writability of the socket works,
-	 * but requires libevent2 >= 2.1 (or our backported version)
-	 */
-	HttpGwSubscribeToWrite(req);
+	if (req->xcontentdur != "-1")
+	{
+		/*
+		 * Arno, 2011-10-17: Swift ProgressCallbacks are only called when
+		 * the data is downloaded, not when it is already on disk. So we need
+		 * to handle the situation where all or part of the data is already
+		 * on disk. Subscribing to writability of the socket works,
+		 * but requires libevent2 >= 2.1 (or our backported version)
+		 */
+		HttpGwSubscribeToWrite(req);
+	}
 }
 
 
@@ -676,7 +748,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     // 2. Parse URI
     std::string hashstr = "", mfstr="", durstr="";
 
-    if (uri.length() == 1)     {
+    if (uri.length() <= 1)     {
     	evhttp_send_error(evreq,400,"Path must be root hash in hex, 40 bytes.");
     	return;
     }
@@ -704,16 +776,22 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     }
 
     // 4. Initiate transfer
-    int transfer = swift::Find(root_hash);
-    if (transfer==-1) {
-        transfer = swift::Open(hashstr,root_hash,Address(),false,httpgw_chunk_size);
+    int fdes = swift::Find(root_hash);
+    if (fdes==-1) {
+    	// LIVE
+        if (durstr == "-1")) {
+        	fdes = swift::Open(hashstr,root_hash,Address(),false,httpgw_chunk_size);
+        }
+        else {
+        	fdes = swift::LiveOpen(hashstr,root_hash,Address(),false,httpgw_chunk_size);
+        }
         dprintf("%s @%i trying to HTTP GET swarm %s that has not been STARTed\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str());
 
         // Arno, 2011-12-20: Only on new transfers, otherwise assume that CMD GW
         // controls speed
-        FileTransfer *ft = FileTransfer::file(transfer);
-        ft->SetMaxSpeed(DDIR_DOWNLOAD,httpgw_maxspeed[DDIR_DOWNLOAD]);
-        ft->SetMaxSpeed(DDIR_UPLOAD,httpgw_maxspeed[DDIR_UPLOAD]);
+        ContentTransfer *ct = ContentTransfer::transfer(fdes);
+        ct->SetMaxSpeed(DDIR_DOWNLOAD,httpgw_maxspeed[DDIR_DOWNLOAD]);
+        ct->SetMaxSpeed(DDIR_UPLOAD,httpgw_maxspeed[DDIR_UPLOAD]);
     }
 
     // 5. Record request
@@ -728,14 +806,14 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 	req->xcontentdur = durstr;
 	req->offset = 0;
     req->tosend = 0;
-    req->transfer = transfer;
+    req->fdes = fdes;
     req->lastcpoffset = 0;
     req->sinkevwrite = NULL;
     req->closing = false;
     req->startoff = 0;
     req->endoff = 0;
 
-    fprintf(stderr,"httpgw: Opened %s\n",hashstr.c_str());
+    fprintf(stderr,"httpgw: Opened %s dur %s\n",hashstr.c_str(), durstr.c_str() );
 
     // We need delayed replying, so take ownership.
     // See http://code.google.com/p/libevent-longpolling/source/browse/trunk/main.c
@@ -748,10 +826,13 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     struct evhttp_connection *evconn = evhttp_request_get_connection(req->sinkevreq);
     evhttp_connection_set_closecb(evconn,HttpGwLibeventCloseCallback,req->sinkevreq);
 
-    if (swift::Size(transfer)) {
-        HttpGwFirstProgressCallback(transfer,bin_t(0,0));
+
+    fprintf(stderr,"httpgw: Size is %lli\n", swift::Size(fdes) );
+
+    if (swift::Size(fdes) > 0) {
+        HttpGwFirstProgressCallback(fdes,bin_t(0,0));
     } else {
-        swift::AddProgressCallback(transfer,&HttpGwFirstProgressCallback,HTTPGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER);
+        swift::AddProgressCallback(fdes,&HttpGwFirstProgressCallback,HTTPGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER);
     }
 }
 
@@ -791,9 +872,13 @@ tint test_time = 0;
  */
 bool HTTPIsSending()
 {
+	return true;
+
+	//LIVETODO
+
 	if (http_gw_reqs_open > 0)
 	{
-		FileTransfer *ft = FileTransfer::file(http_requests[http_gw_reqs_open-1].transfer);
+		FileTransfer *ft = (FileTransfer *)ContentTransfer::transfer(http_requests[http_gw_reqs_open-1].fdes);
 		if (ft != NULL) {
 			fprintf(stderr,"httpgw: upload %lf\n",ft->GetCurrentSpeed(DDIR_UPLOAD)/1024.0);
 			fprintf(stderr,"httpgw: dwload %lf\n",ft->GetCurrentSpeed(DDIR_DOWNLOAD)/1024.0);
@@ -843,11 +928,11 @@ bool HTTPIsSending()
 			// b. not sending to HTTP client and not at end, and
 			//    not downloading from P2P and not at end
 			// then stop.
-			if ( swift::Size(http_requests[httpc].transfer) == 0 || \
+			if ( swift::Size(http_requests[httpc].fdes) == 0 || \
 				 (http_requests[httpc].offset == lastoffset &&
-				 http_requests[httpc].offset != swift::Size(http_requests[httpc].transfer) && \
-			     swift::Complete(http_requests[httpc].transfer) == lastcomplete && \
-			     swift::Complete(http_requests[httpc].transfer) != swift::Size(http_requests[httpc].transfer)))
+				 http_requests[httpc].offset != swift::Size(http_requests[httpc].fdes) && \
+			     swift::Complete(http_requests[httpc].fdes) == lastcomplete && \
+			     swift::Complete(http_requests[httpc].fdes) != swift::Size(http_requests[httpc].fdes)))
 			{
 				fprintf(stderr,"http alive: no progress, quiting\n");
 				//getchar();
@@ -855,7 +940,7 @@ bool HTTPIsSending()
 			}
 
 			/*
-			if (http_requests[httpc].offset == swift::Size(http_requests[httpc].transfer))
+			if (http_requests[httpc].offset == swift::Size(http_requests[httpc].fdes))
 			{
 				// TODO: seed for a while.
 				fprintf(stderr,"http alive: data delivered to client, quiting\n");
@@ -864,7 +949,7 @@ bool HTTPIsSending()
 			*/
 
 			lastoffset = http_requests[httpc].offset;
-			lastcomplete = swift::Complete(http_requests[httpc].transfer);
+			lastcomplete = swift::Complete(http_requests[httpc].fdes);
 	    }
 		test_time = NOW;
 

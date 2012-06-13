@@ -46,7 +46,7 @@ tint Channel::MIN_PEX_REQUEST_INTERVAL = TINT_SEC;
  * Instance methods
  */
 
-Channel::Channel    (FileTransfer* transfer, int socket, Address peer_addr) :
+Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool peerissource) :
 	// Arno, 2011-10-03: Reordered to avoid g++ Wall warning
 	peer_(peer_addr), socket_(socket==INVALID_SOCKET?default_socket():socket), // FIXME
     transfer_(transfer), peer_channel_id_(0), own_id_mentioned_(false),
@@ -68,13 +68,14 @@ Channel::Channel    (FileTransfer* transfer, int socket, Address peer_addr) :
     owd_cur_bin_(0), dgrams_sent_(0), dgrams_rcvd_(0),
     raw_bytes_up_(0), raw_bytes_down_(0), bytes_up_(0), bytes_down_(0),
     scheduled4close_(false),
-	direct_sending_(false)
+    peer_is_source_(peerissource),
+    direct_sending_(false)
 {
     if (peer_==Address())
         peer_ = tracker;
     this->id_ = channels.size();
     channels.push_back(this);
-    transfer_->hs_in_.push_back(bin_t(id_));
+    transfer_->hs_in().push_back(bin_t(id_));
     for(int i=0; i<4; i++) {
         owd_min_bins_[i] = TINT_NEVER;
         owd_current_[i] = TINT_NEVER;
@@ -83,8 +84,11 @@ Channel::Channel    (FileTransfer* transfer, int socket, Address peer_addr) :
     evtimer_assign(evsend_ptr_,evbase,&Channel::LibeventSendCallback,this);
     evtimer_add(evsend_ptr_,tint2tv(next_send_time_));
 
+    //LIVE
+    evsendlive_ptr_ = NULL;
+
     // RATELIMIT
-	transfer->mychannels_.insert(this);
+	transfer->GetChannels().insert(this);
 
 	dprintf("%s #%u init channel %s\n",tintstr(),id_,peer_.str());
 	//fprintf(stderr,"new Channel %d %s\n", id_, peer_.str() );
@@ -98,7 +102,7 @@ Channel::~Channel () {
 
     // RATELIMIT
     if (transfer_ != NULL)
-    	transfer_->mychannels_.erase(this);
+    	transfer_->GetChannels().erase(this);
 }
 
 
@@ -110,10 +114,21 @@ void Channel::ClearEvents()
     	delete evsend_ptr_;
     	evsend_ptr_ = NULL;
     }
+    if (evsendlive_ptr_ != NULL) {
+    	if (evtimer_pending(evsendlive_ptr_,NULL))
+    		evtimer_del(evsendlive_ptr_);
+    	delete evsendlive_ptr_;
+    	evsendlive_ptr_ = NULL;
+    }
 }
 
-
-
+HashTree * Channel::hashtree()
+{
+	if (transfer()->ttype() == LIVE_TRANSFER)
+		return NULL;
+	else
+		return ((FileTransfer *)transfer_)->hashtree();
+}
 
 bool Channel::IsComplete() {
  	// Check if peak hash bins are filled.
@@ -419,179 +434,6 @@ std::string swift::sock2str (struct sockaddr_in addr) {
 }
 
 
-/*
- * Swift top-level API implementation
- */
-
-int     swift::Listen (Address addr) {
-    sckrwecb_t cb;
-    cb.may_read = &Channel::LibeventReceiveCallback;
-    cb.sock = Channel::Bind(addr,cb);
-    // swift UDP receive
-    event_assign(&Channel::evrecv, Channel::evbase, cb.sock, EV_READ,
-		 cb.may_read, NULL);
-    event_add(&Channel::evrecv, NULL);
-    return cb.sock;
-}
-
-void    swift::Shutdown (int sock_des) {
-    Channel::Shutdown();
-}
-
-int      swift::Open (std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size) {
-    FileTransfer* ft = new FileTransfer(filename, hash, check_hashes, chunk_size);
-    if (ft && ft->fd()) {
-
-        // initiate tracker connections
-    	// SWIFTPROC
-    	ft->SetTracker(tracker);
-    	ft->ConnectToTracker();
-
-    	return ft->fd();
-    } else {
-        if (ft)
-            delete ft;
-        return -1;
-    }
-}
-
-
-void    swift::Close (int fd) {
-    if (fd<FileTransfer::files.size() && FileTransfer::files[fd])
-        delete FileTransfer::files[fd];
-}
-
-
-void    swift::AddPeer (Address address, const Sha1Hash& root) {
-    Channel::peer_selector->AddPeer(address,root);
-}
-
-
-ssize_t  swift::Read(int fdes, void *buf, size_t nbyte, int64_t offset)
-{
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->GetStorage()->Read(buf,nbyte,offset);
-    else
-        return -1;
-}
-
-ssize_t  swift::Write(int fdes, const void *buf, size_t nbyte, int64_t offset)
-{
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->GetStorage()->Write(buf,nbyte,offset);
-    else
-        return -1;
-}
-
-
-uint64_t  swift::Size (int fdes) {
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->hashtree()->size();
-    else
-        return 0;
-}
-
-
-bool  swift::IsComplete (int fdes) {
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->hashtree()->is_complete();
-    else
-        return 0;
-}
-
-
-uint64_t  swift::Complete (int fdes) {
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->hashtree()->complete();
-    else
-        return 0;
-}
-
-
-uint64_t  swift::SeqComplete (int fdes, int64_t offset) {
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->hashtree()->seq_complete(offset);
-    else
-        return 0;
-}
-
-
-const Sha1Hash& swift::RootMerkleHash (int file) {
-    FileTransfer* trans = FileTransfer::file(file);
-    if (!trans)
-        return Sha1Hash::ZERO;
-    return trans->hashtree()->root_hash();
-}
-
-
-/** Returns the number of bytes in a chunk for this transmission */
-uint32_t	  swift::ChunkSize(int fdes)
-{
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->hashtree()->chunk_size();
-    else
-        return 0;
-}
-
-
-// CHECKPOINT
-int swift::Checkpoint(int transfer) {
-	// Save transfer's binmap for zero-hashcheck restart
-	FileTransfer *ft = FileTransfer::file(transfer);
-	if (ft == NULL)
-            return -1;
-	if (ft->IsZeroState())
-	    return -1;
-
-    MmapHashTree *ht = (MmapHashTree *)ft->hashtree();
-    if (ht == NULL)
-    {
-         fprintf(stderr,"swift: checkpointing: ht is NULL\n");
-	     return -1;
-    }
-
-	std::string binmap_filename = ft->GetStorage()->GetOSPathName();
-	binmap_filename.append(".mbinmap");
-	//fprintf(stderr,"swift: HACK checkpointing %s at %lli\n", binmap_filename.c_str(), Complete(transfer));
-	FILE *fp = fopen_utf8(binmap_filename.c_str(),"wb");
-	if (!fp) {
-        print_error("cannot open mbinmap for writing");
-        return -1;
-	}
-	int ret = ht->serialize(fp);
-  	if (ret < 0)
-        print_error("writing to mbinmap");
-	fclose(fp);
-	return ret;
-}
-
-
-// SEEK
-int swift::Seek(int fd, int64_t offset, int whence)
-{
-	dprintf("%s F%i Seek: to %lld\n",tintstr(), fd, offset );
-
-	FileTransfer *ft = FileTransfer::file(fd);
-	if (ft == NULL)
-		return -1;
-
-	if (whence == SEEK_SET)
-	{
-		if (offset >= swift::Size(fd))
-			return -1; // seek beyond end of content
-
-		// Which bin to seek to?
-		int64_t coff = offset - (offset % ft->hashtree()->chunk_size()); // ceil to chunk
-		bin_t offbin = bin_t(0,coff/ft->hashtree()->chunk_size());
-
-		char binstr[32];
-		dprintf("%s F%i Seek: to bin %s\n",tintstr(), fd, offbin.str(binstr) );
-
-		return ft->picker().Seek(offbin,whence);
-	}
-	else
-		return -1; // TODO
-}
 
 
 /*

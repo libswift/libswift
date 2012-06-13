@@ -20,7 +20,6 @@
 
 #include <iostream>
 
-
 using namespace swift;
 
 const Sha1Hash Sha1Hash::ZERO = Sha1Hash();

@@ -82,8 +82,7 @@ bin_t           Channel::ImposeHint () {
 
     twist &= hashtree()->peak(0).toUInt(); // FIXME may make it semi-seq here
 
-    bin_t my_pick = binmap_t::find_complement(ack_in_, *(hashtree()->ack_out()), twist);
-
+    bin_t my_pick = binmap_t::find_complement(ack_in_, transfer()->ack_out(), twist);
     my_pick.to_twisted(twist);
     while (my_pick.base_length()>max(1,(int)cwnd_))
         my_pick = my_pick.left();
@@ -149,9 +148,9 @@ void    Channel::AddHandshake (struct evbuffer *evb) {
     if (!peer_channel_id_) { // initiating
         evbuffer_add_8(evb, SWIFT_HASH);
         evbuffer_add_32be(evb, bin_toUInt32(bin_t::ALL));
-        evbuffer_add_hash(evb, hashtree()->root_hash());
+        evbuffer_add_hash(evb, transfer()->root_hash());
         dprintf("%s #%u +hash ALL %s\n",
-                tintstr(),id_,hashtree()->root_hash().hex().c_str());
+                tintstr(),id_,transfer()->root_hash().hex().c_str());
     }
     evbuffer_add_8(evb, SWIFT_HANDSHAKE);
     int encoded = -1;
@@ -179,7 +178,8 @@ void    Channel::Send () {
 			// FIXME: seeder check
 			AddHave(evb);
 			AddAck(evb);
-			if (!hashtree()->is_complete()) {
+			//LIVE
+			if (hashtree() == NULL || !hashtree()->is_complete()) {
 				AddHint(evb);
 				/* Gertjan fix: 7aeea65f3efbb9013f601b22a57ee4a423f1a94d
 				"Only call Reschedule for 'reverse PEX' if the channel is in keep-alive mode"
@@ -224,9 +224,9 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
 	// RATELIMIT
 	// Policy is to not send hints when we are above speed limit
-	//fprintf(stderr,"AddHint: cur %f max %f\n", transfer().GetCurrentSpeed(DDIR_DOWNLOAD), transfer().GetMaxSpeed(DDIR_DOWNLOAD));
+	//fprintf(stderr,"AddHint: cur %f max %f\n", transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), transfer()->GetMaxSpeed(DDIR_DOWNLOAD));
 
-	if (transfer().GetCurrentSpeed(DDIR_DOWNLOAD) > transfer().GetMaxSpeed(DDIR_DOWNLOAD)) {
+	if (transfer()->GetCurrentSpeed(DDIR_DOWNLOAD) > transfer()->GetMaxSpeed(DDIR_DOWNLOAD)) {
 		if (DEBUGTRAFFIC)
 			fprintf(stderr,"hint: forbidden#");
 		return;
@@ -245,7 +245,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
     // RATELIMIT
     uint64_t rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
     std::set<Channel *>::iterator iter;
-    for (iter=transfer().mychannels_.begin(); iter!=transfer().mychannels_.end(); iter++)
+    for (iter=transfer()->GetChannels().begin(); iter!=transfer()->GetChannels().end(); iter++)
     {
 		Channel *c = *iter;
 		if (c != NULL)
@@ -254,7 +254,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
     // Policy: this channel is allowed to hint at the limit - global_hinted_at
     // Handle MaxSpeed = unlimited
-    double hints_limit_float = transfer().GetMaxSpeed(DDIR_DOWNLOAD)/((double)hashtree()->chunk_size());
+    double hints_limit_float = transfer()->GetMaxSpeed(DDIR_DOWNLOAD)/((double)transfer()->chunk_size());
 
     int hints_limit = (int)min((double)LONG_MAX,hints_limit_float);
     int allowed_hints = max(0,hints_limit-(int)rough_global_hint_out_size);
@@ -264,7 +264,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
     // Take into account network limit
     uint64_t plan_pck = (uint64_t)min(allowed_hints,first_plan_pck);
-    //fprintf(stderr,"send c%d: %f fp %d p %d count %d ghs %d allow %d\n", id(), transfer().GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, plan_pck, count, rough_global_hint_out_size, allowed_hints );
+    //fprintf(stderr,"send c%d: %f fp %d p %d count %d ghs %d allow %d\n", id(), transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, plan_pck, count, rough_global_hint_out_size, allowed_hints );
 
     if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY) {
 
@@ -294,12 +294,12 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
 bin_t        Channel::AddData (struct evbuffer *evb) {
 	// RATELIMIT
-	if (transfer().GetCurrentSpeed(DDIR_UPLOAD) > transfer().GetMaxSpeed(DDIR_UPLOAD)) {
-		transfer().OnSendNoData();
+	if (transfer()->GetCurrentSpeed(DDIR_UPLOAD) > transfer()->GetMaxSpeed(DDIR_UPLOAD)) {
+		transfer()->OnSendNoData();
 		return bin_t::NONE;
 	}
-
-    if (!hashtree()->size()) // know nothing
+	//LIVE
+    if (transfer()->ttype() == FILE_TRANSFER && !hashtree()->size()) // know nothing
         return bin_t::NONE;
 
     bin_t tosend = bin_t::NONE;
@@ -320,9 +320,12 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     if (tosend.is_none())// && (last_data_out_time_>NOW-TINT_SEC || data_out_.empty()))
         return bin_t::NONE; // once in a while, empty data is sent just to check rtt FIXED
 
-    if (ack_in_.is_empty() && hashtree()->size())
-        AddPeakHashes(evb);
-    AddUncleHashes(evb,tosend);
+    //LIVE
+    if (transfer()->ttype() == FILE_TRANSFER) {
+    	if (ack_in_.is_empty() && hashtree()->size())
+    		AddPeakHashes(evb);
+    	AddUncleHashes(evb,tosend);
+    }
     if (!ack_in_.is_empty()) // TODO: cwnd_>1
         data_out_cap_ = tosend;
 
@@ -331,7 +334,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     // frame with DATA. Send 2 datagrams then, one with peaks so they have
     // a better chance of arriving. Optimistic violation of atomic datagram
     // principle.
-    if (hashtree()->chunk_size() == SWIFT_DEFAULT_CHUNK_SIZE && evbuffer_get_length(evb) > SWIFT_MAX_NONDATA_DGRAM_SIZE) {
+    if (transfer()->chunk_size() == SWIFT_DEFAULT_CHUNK_SIZE && evbuffer_get_length(evb) > SWIFT_MAX_NONDATA_DGRAM_SIZE) {
         dprintf("%s #%u fsent %ib %s:%x\n",
                 tintstr(),id_,(int)evbuffer_get_length(evb),peer().str(),
                 peer_channel_id_);
@@ -363,12 +366,21 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     evbuffer_add_32be(evb, bin_toUInt32(tosend));
 
     struct evbuffer_iovec vec;
-    if (evbuffer_reserve_space(evb, hashtree()->chunk_size(), &vec, 1) < 0) {
-	print_error("error on evbuffer_reserve_space");
-	return bin_t::NONE;
+    if (evbuffer_reserve_space(evb, transfer()->chunk_size(), &vec, 1) < 0) {
+    	print_error("error on evbuffer_reserve_space");
+    	return bin_t::NONE;
     }
+
+    // TODOGT: STORAGE
+#ifndef LIVE
     size_t r = transfer().GetStorage()->Read((char *)vec.iov_base,
 		     hashtree()->chunk_size(),tosend.base_offset()*hashtree()->chunk_size());
+#else
+    //LIVETODO: use swift::Read
+    size_t r = pread(transfer()->fd(),(char *)vec.iov_base,
+		     transfer()->chunk_size(),tosend.base_offset()*transfer()->chunk_size());
+#endif
+
     // TODO: corrupted data, retries, caching
     if (r<0) {
         print_error("error on reading");
@@ -393,7 +405,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
 
     // RATELIMIT
     // ARNOSMPTODO: count overhead bytes too? Move to Send() then.
-	transfer_->OnSendData(hashtree()->chunk_size());
+	transfer_->OnSendData(transfer()->chunk_size());
 
     return tosend;
 }
@@ -453,10 +465,10 @@ void    Channel::AddHave (struct evbuffer *evb) {
 	}
 
     for(int count=0; count<4; count++) {
-        bin_t ack = binmap_t::find_complement(have_out_, *(hashtree()->ack_out()), 0); // FIXME: do rotating queue
+        bin_t ack = binmap_t::find_complement(have_out_, *(transfer()->ack_out()), 0); // FIXME: do rotating queue
         if (ack.is_none())
             break;
-        ack = hashtree()->ack_out()->cover(ack);
+        ack = transfer()->ack_out()->cover(ack);
         have_out_.set(ack);
         evbuffer_add_8(evb, SWIFT_HAVE);
         evbuffer_add_32be(evb, bin_toUInt32(ack));
@@ -480,7 +492,7 @@ void    Channel::Recv (struct evbuffer *evb) {
     lastrecvwaskeepalive_ = (evbuffer_get_length(evb) == 0);
     if (lastrecvwaskeepalive_)
     	// Update speed measurements such that they decrease when DL stops
-    	transfer().OnRecvData(0);
+    	transfer()->OnRecvData(0);
 
     if (last_send_time_ && rtt_avg_==TINT_SEC && dev_avg_==0) {
         rtt_avg_ = NOW - last_send_time_;
@@ -554,6 +566,13 @@ void    Channel::Recv (struct evbuffer *evb) {
     }
 
 
+    // Arno, 2012-01-09: Provide PP with info needed for hook-in.
+    if (transfer()->ttype() == LIVE_TRANSFER) {
+    	LiveTransfer *lt = (LiveTransfer *)transfer();
+    	if (!lt->am_source())
+    		lt->picker()->endAddPeerPos(id() );
+    }
+
     last_recv_time_ = NOW;
     sent_since_recv_ = 0;
     Reschedule();
@@ -609,43 +628,61 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 	bin_t pos = bin_fromUInt32(evbuffer_remove_32be(evb));
 
     // Arno: Assuming DATA last message in datagram
-    if (evbuffer_get_length(evb) > hashtree()->chunk_size()) {
+    if (evbuffer_get_length(evb) > transfer()->chunk_size()) {
     	dprintf("%s #%u !data chunk size mismatch %s: exp %lu got " PRISIZET "\n",tintstr(),id_,pos.str(bin_name_buf), hashtree()->chunk_size(), evbuffer_get_length(evb));
     	fprintf(stderr,"WARNING: chunk size mismatch: exp %lu got " PRISIZET "\n",hashtree()->chunk_size(), evbuffer_get_length(evb));
     }
 
-    int length = (evbuffer_get_length(evb) < hashtree()->chunk_size()) ? evbuffer_get_length(evb) : hashtree()->chunk_size();
+    int length = (evbuffer_get_length(evb) < transfer()->chunk_size()) ? evbuffer_get_length(evb) : transfer()->chunk_size();
     if (!hashtree()->ack_out()->is_empty(pos)) {
         // Arno, 2012-01-24: print message for duplicate
         dprintf("%s #%u Ddata %s\n",tintstr(),id_,pos.str(bin_name_buf));
         evbuffer_drain(evb, length);
-        data_in_ = tintbin(TINT_NEVER,transfer().ack_out()->cover(pos));
+        data_in_ = tintbin(TINT_NEVER,transfer()->ack_out()->cover(pos));
 
         // Arno, 2012-01-24: Make sure data interarrival periods don't get
         // screwed up because of these (ignored) duplicates.
         UpdateDIP(pos);
         return bin_t::NONE;
     }
+
     uint8_t *data = evbuffer_pullup(evb, length);
     data_in_ = tintbin(NOW,bin_t::NONE);
-    if (!hashtree()->OfferData(pos, (char*)data, length)) {
-    	evbuffer_drain(evb, length);
-        char bin_name_buf[32];
-        dprintf("%s #%u !data %s\n",tintstr(),id_,pos.str(bin_name_buf));
-        return bin_t::NONE;
+
+    //fprintf(stderr,"OnData: Got chunk %d / %lli\n", length, swift::SeqComplete(transfer()->fd()) );
+
+    //LIVE
+    if (transfer()->ttype() == FILE_TRANSFER) {
+    	if (!hashtree()->OfferData(pos, (char*)data, length)) {
+    		evbuffer_drain(evb, length);
+    		char bin_name_buf[32];
+    		dprintf("%s #%u !data %s\n",tintstr(),id_,pos.str(bin_name_buf));
+    		return bin_t::NONE;
+    	}
     }
+    else
+    {
+    	// TODOGT: STORAGE
+        //LIVE: actually write data to storage
+        int ret = pwrite(transfer()->fd(),data,length,pos.base_offset()*transfer()->chunk_size());
+        if (ret < 0)
+        	print_error("pwrite failed");
+        else
+        	transfer()->ack_out().set(pos);
+    }
+
     evbuffer_drain(evb, length);
     dprintf("%s #%u -data %s\n",tintstr(),id_,pos.str(bin_name_buf));
 
     if (DEBUGTRAFFIC)
     	fprintf(stderr,"$ ");
 
-    bin_t cover = transfer().ack_out()->cover(pos);
+    bin_t cover = transfer()->ack_out()->cover(pos);
     for(int i=0; i<transfer().cb_installed; i++)
         if (cover.layer()>=transfer().cb_agg[i])
             transfer().callbacks[i](transfer().fd(),cover);  // FIXME
     if (cover.layer() >= 5) // Arno: tested with 32K, presently = 2 ** 5 * chunk_size CHUNKSIZE
-    	transfer().OnRecvData( pow((double)2,(double)5)*((double)hashtree()->chunk_size()) );
+    	transfer()->OnRecvData( pow((double)2,(double)5)*((double)hashtree()->chunk_size()) );
     data_in_.bin = pos;
 
     UpdateDIP(pos);
@@ -674,14 +711,15 @@ void    Channel::OnAck (struct evbuffer *evb) {
     // FIXME FIXME: wrap around here
     if (ackd_pos.is_none())
         return; // likely, broken chunk/ insufficient hashes
-    if (hashtree()->size() && ackd_pos.base_offset()>=hashtree()->size_in_chunks()) {
+    //LIVE
+    if (transfer()->ttype() == FILE_TRANSFER && hashtree()->size() && ackd_pos.base_offset()>=hashtree()->size_in_chunks()) {
         char bin_name_buf[32];
         eprintf("invalid ack: %s\n",ackd_pos.str(bin_name_buf));
         return;
     }
     ack_in_.set(ackd_pos);
 
-    //fprintf(stderr,"OnAck: got bin %s is_complete %d\n", ackd_pos.str(), (int)ack_in_.is_complete_arno( hashtree()->ack_out()->get_height() ));
+    //fprintf(stderr,"OnAck: got bin %s is_complete %d\n", ackd_pos.str(), (int)ack_in_.is_complete_arno( transfer()->ack_out()->get_height() ));
 
     int di = 0, ri = 0;
     // find an entry for the send (data out) event
@@ -762,15 +800,16 @@ void Channel::OnHave (struct evbuffer *evb) {
         return; // wow, peer has hashes
 
     // PPPLUG
-    if (ENABLE_VOD_PIECEPICKER) {
+    if (ENABLE_VOD_PIECEPICKER && transfer()->ttype() == FILE_TRANSFER) {
+		FileTransfer *ft = (FileTransfer *)transfer();
 		// Ric: check if we should set the size in the file transfer
-		if (transfer().availability().size() <= 0 && hashtree()->size() > 0)
+		if (ft->availability().size() <= 0 && ft->hashtree()->size() > 0)
 		{
-			transfer().availability().setSize(hashtree()->size_in_chunks());
+			ft->availability().setSize(hashtree()->size_in_chunks());
 		}
 		// Ric: update the availability if needed
-		transfer().availability().set(id_, ack_in_, ackd_pos);
-    }
+		ft->availability().set(id_, ack_in_, ackd_pos);
+	}
 
     ack_in_.set(ackd_pos);
     char bin_name_buf[32];
@@ -778,6 +817,12 @@ void Channel::OnHave (struct evbuffer *evb) {
 
     //fprintf(stderr,"OnHave: got bin %s is_complete %d\n", ackd_pos.str(), IsComplete() );
 
+    // Arno, 2012-01-09: Provide PP with info needed for hook-in.
+    if (transfer()->ttype() == LIVE_TRANSFER) {
+    	LiveTransfer *lt = (LiveTransfer *)transfer();
+    	if (!lt->am_source())
+    		lt->picker()->startAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_);
+    }
 }
 
 
@@ -826,7 +871,7 @@ void Channel::OnPexAdd (struct evbuffer *evb) {
     uint16_t port = evbuffer_remove_16be(evb);
     Address addr(ipv4,port);
     dprintf("%s #%u -pex %s\n",tintstr(),id_,addr.str());
-    if (transfer().OnPexAddIn(addr))
+    if (transfer()->OnPexIn(addr))
         useless_pex_count_ = 0;
     else
     {
@@ -931,7 +976,7 @@ void Channel::AddPexReq(struct evbuffer *evb) {
     pex_request_outstanding_ = false;
 
     // Initiate at most SWIFT_MAX_CONNECTIONS connections
-    if (transfer().hs_in_.size() >= SWIFT_MAX_CONNECTIONS ||
+    if (transfer()->hs_in().size() >= SWIFT_MAX_CONNECTIONS ||
             // Check whether this channel has been providing useful peer information
             useless_pex_count_ > 2)
     {
@@ -990,22 +1035,24 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         if (!pos.is_all())
             return_log ("%s #0 that is not the root hash %s\n",tintstr(),addr.str());
         hash = evbuffer_remove_hash(evb);
-        FileTransfer* ft = FileTransfer::Find(hash);
-        if (!ft)
+        ContentTransfer* transfer = ContentTransfer::Find(hash);
+        if (!transfer)
         {
         	ZeroState *zs = ZeroState::GetInstance();
-        	ft = zs->Find(hash);
-        	if (!ft)
+        	transfer = zs->Find(hash);
+        	if (!transfer)
             	return_log ("%s #0 hash %s unknown, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
         }
-		else if (ft->IsZeroState() && !ft->hashtree()->is_complete())
+		else if (transfer->ttype() == FILE_TRANSFER)
 		{
-			return_log ("%s #0 zero hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
+			FileTransfer *ft = transfer;
+			if (ft->IsZeroState() && !ft->hashtree()->is_complete())
+				return_log ("%s #0 zero hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
 		}
         dprintf("%s #0 -hash ALL %s\n",tintstr(),hash.hex().c_str());
 
         // Arno, 2012-02-27: Check for duplicate channel
-        Channel* existchannel = ft->FindChannel(addr,NULL);
+        Channel* existchannel = transfer->FindChannel(addr,NULL);
         if (existchannel)
         {
 			// Arno: 2011-10-13: Ignore if established, otherwise consider
@@ -1023,7 +1070,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         }
         if (channel == NULL) {
         	//fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: create new channel %s\n", addr.str() );
-        	channel = new Channel(ft, socket, addr);
+        	channel = new Channel(transfer, socket, addr);
         }
         //fprintf(stderr,"CHANNEL INCOMING DEF hass %s is id %d\n",hash.hex().c_str(),channel->id());
 
@@ -1070,6 +1117,8 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
 void Channel::CloseChannelByAddress(const Address &addr)
 {
 	// fprintf(stderr,"CloseChannelByAddress: address is %s\n", addr.str() );
+
+	dprintf("%s #-1 close channel by address %s\n",tintstr(), addr.str() );
     std::vector<Channel *>::iterator iter;
     for (iter = channels.begin(); iter != channels.end(); iter++)
     {
@@ -1088,20 +1137,28 @@ void Channel::CloseChannelByAddress(const Address &addr)
 
 void Channel::Close () {
 
+	dprintf("%s #%u closing channel\n",tintstr(),id_ );
+
 	this->SwitchSendControl(CLOSE_CONTROL);
 
     if (is_established())
     	this->Send(); // Arno: send explicit close
 
-	if (!transfer().IsZeroState() && ENABLE_VOD_PIECEPICKER) {
-		// Ric: remove its binmap from the availability
-		transfer().availability().remove(id_, ack_in_);
+	//LIVE
+    if (ENABLE_VOD_PIECEPICKER && transfer()->ttype() == FILE_TRANSFER) {
+    	FileTransfer *ft = (FileTransfer *)transfer();
+    	if (!ft->IsZeroState())
+    	{
+    		// Ric: remove its binmap from the availability
+    		ft->availability().remove(id_, ack_in_);
+    	}
     }
 
     // SAFECLOSE
     // Arno: ensure LibeventSendCallback is no longer called with ptr to this Channel
     ClearEvents();
 }
+
 
 
 void Channel::Reschedule () {

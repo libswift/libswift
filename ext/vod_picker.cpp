@@ -7,8 +7,12 @@
  *
  */
 
+#ifndef VOD_PICKER_H
+#define VOD_PICKER_H
+
 #include "swift.h"
 #include <cassert>
+
 
 using namespace swift;
 
@@ -37,7 +41,7 @@ public:
            transfer_(file_to_pick_from), twist_(0), range_(bin_t::ALL), initseq_(0,0)
     {
     	avail_ = &(transfer_->availability());
-        binmap_t::copy(ack_hint_out_, *(hashtree()->ack_out()));
+        binmap_t::copy(ack_hint_out_, *(transfer_->ack_out()));
         playback_pos_ = -1;
         high_pri_window_ = HIGHPRIORITYWINDOW;
     }
@@ -166,13 +170,12 @@ public:
 
     	// TODO check... the seconds should depend on previous speed of the peer
         while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*3/2) { // FIXME sec
-            binmap_t::copy(ack_hint_out_, *(hashtree()->ack_out()), hint_out_.front().bin);
+            binmap_t::copy(ack_hint_out_, *(transfer_->ack_out()), hint_out_.front().bin);
             hint_out_.pop_front();
         }
 
         // get the first piece to estimate the size, whoever sends it first
         if (!hashtree()->size()) {
-
             return bin_t(0,0);
         }
         else if (hashtree()->ack_out()->is_empty(bin_t(0,0)))
@@ -217,8 +220,8 @@ public:
 				set = 'H';
 
 			// unhinted/late data
-			if (!hashtree()->ack_out()->is_empty(hint)) {
-				binmap_t::copy(ack_hint_out_, *(hashtree()->ack_out()), hint);
+			if (!transfer_->ack_out()->is_empty(hint)) {
+				binmap_t::copy(ack_hint_out_, *(transfer_->ack_out()), hint);
 				retry = true;
 			}
 			else
@@ -275,6 +278,30 @@ public:
     	return 0;
     }
 
+
+    // TODOGT: Remove for non live PP.
+
+    void startAddPeerPos(uint32_t channelid, bin_t peerpos, bool peerissource)
+    {
+    }
+
+    void endAddPeerPos(uint32_t channelid)
+    {
+    }
+
+
+    bin_t getHookinPos()
+    {
+    	return bin_t(0,0);
+    }
+
+
+    bin_t getCurrentPos()
+    {
+    	// LIVETODO?
+    	return bin_t::NONE;
+    }
+
     void status()
 	{
 		int t = 0;
@@ -288,7 +315,7 @@ public:
 
 		while (i<=end_high)
 		{
-			if (!hashtree()->ack_out()->is_empty(bin_t(i)))
+			if (!transfer_->ack_out()->is_empty(bin_t(i)))
 				t++;
 			i++;
 		}
@@ -298,7 +325,7 @@ public:
 		t = 0;
 		while (i<=end_mid)
 		{
-			if (!hashtree()->ack_out()->is_empty(bin_t(i)))
+			if (!transfer_->ack_out()->is_empty(bin_t(i)))
 				t++;
 			i++;
 		}
@@ -308,7 +335,7 @@ public:
 		t = 0;
 		while (i<=hashtree()->size_in_chunks()<<1)
 		{
-			if (!hashtree()->ack_out()->is_empty(bin_t(i)))
+			if (!transfer_->ack_out()->is_empty(bin_t(i)))
 				t++;
 			i++;
 		}
@@ -318,3 +345,5 @@ public:
 	}
 
 };
+
+#endif

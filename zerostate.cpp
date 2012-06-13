@@ -1,3 +1,11 @@
+/*
+ *  zerostate.cpp
+ *  Class to seed content directly from disk, both hashes and data.
+ *
+ *  Created by Arno Bakker.
+ *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
+ */
+
 #include "swift.h"
 #include "compat.h"
 
