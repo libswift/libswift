@@ -337,6 +337,9 @@ namespace swift {
 		// MULTIFILE
 		Storage * GetStorage() { return storage_; }
 
+		/** Add a peer to the set of addresses to connect to */
+		void AddPeer(Address &peer);
+
 		static void LibeventCleanCallback(int fd, short event, void *arg);
 
       protected:
@@ -399,10 +402,10 @@ namespace swift {
         /** The number of channels working for this transfer. */
         int             channel_count () const { return hs_in_.size(); }
         /** Hash tree checked file; all the hashes and data are kept here. */
-        HashTree *       hashtree() { return &hashtree_; }
+        HashTree *       hashtree() { return hashtree_; }
         /** Root SHA1 hash of the transfer (and the data file). */
         const Sha1Hash& root_hash () const { return hashtree_->root_hash(); }
-        size_t	  		chunk_size() { return hashtree_.chunk_size(); }
+        size_t	  		chunk_size() { return hashtree_->chunk_size(); }
         /** Ric: the availability in the swarm */
         Availability&	availability() { return *availability_; }
 
@@ -429,9 +432,6 @@ namespace swift {
 		 * directly from disk, and other memory saving measures.
 		 */
 		bool IsZeroState() { return zerostate_; }
-
-		/** Add a peer to the set of addresses to connect to */
-		void AddPeer(Address &peer);
 
     protected:
 
@@ -478,7 +478,7 @@ namespace swift {
        public:
 
          /** A constructor. */
-         LiveTransfer(const char *file_name, const Sha1Hash& swarm_id=Sha1Hash::ZERO,bool amsource=false,size_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+         LiveTransfer(std::string filename, const Sha1Hash& swarm_id=Sha1Hash::ZERO,bool amsource=false,size_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
          /**    Close everything. */
          ~LiveTransfer();
@@ -501,7 +501,7 @@ namespace swift {
          // ContentTransfer interface
          //
          /** The binmap for data already retrieved and checked. */
-         binmap_t&           ack_out ()  { return ack_out_; }
+         binmap_t *           ack_out ()  { return &ack_out_; }
 
 
          uint64_t  GetHookinOffset();
@@ -546,7 +546,6 @@ namespace swift {
          *  @return             the bin number to request */
         virtual bin_t Pick (binmap_t& offered, uint64_t max_width, tint expires) = 0;
         virtual void LimitRange (bin_t range) = 0;
-        virtual ~PiecePicker() {}
         /** updates the playback position for streaming piece picking.
          *  @param  offbin		bin number of new playback pos
          *  @param  whence      only SEEK_CUR supported */
@@ -836,7 +835,7 @@ namespace swift {
         friend int      Open (const char*, const Sha1Hash&, Address tracker, bool check_hashes, uint32_t chunk_size) ; // FIXME
         // SOCKTUNNEL
         friend void 	CmdGwTunnelSendUDP(struct evbuffer *evb);
-        friend int      LiveOpen(const char* filename, const Sha1Hash&,Address, bool,size_t); //LIVETODO
+        friend int      LiveOpen(std::string filename, const Sha1Hash&,Address, bool,size_t); //LIVETODO
     };
 
 
@@ -1064,7 +1063,7 @@ namespace swift {
 
     // LIVE
     /** To create a live stream as source */
-    LiveTransfer *LiveCreate(const Sha1Hash& swarmid, const char* filename, size_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    LiveTransfer *LiveCreate(std::string filename, const Sha1Hash& swarmid, size_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** To add chunks to a live stream as source */
     int LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte, long offset);
     /** To open a live stream as peer */

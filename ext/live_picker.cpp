@@ -47,7 +47,7 @@ public:
 
     SimpleLivePiecePicker (LiveTransfer* trans_to_pick_from) :
            ack_hint_out_(), transfer_(trans_to_pick_from), twist_(0), hooking_in_(true), source_seen_(false), source_channel_id_(0), hookin_bin_(0,0), current_bin_(bin_t::ALL) {
-        binmap_t::copy(ack_hint_out_, transfer_->ack_out());
+        binmap_t::copy(ack_hint_out_, *(transfer_->ack_out()));
     }
     virtual ~SimpleLivePiecePicker() {}
 
@@ -67,12 +67,12 @@ public:
     		return bin_t::NONE;
 
         while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*3/2) { // FIXME sec
-            binmap_t::copy(ack_hint_out_, transfer_->ack_out(), hint_out_.front().bin);
+            binmap_t::copy(ack_hint_out_, *(transfer_->ack_out()), hint_out_.front().bin);
             hint_out_.pop_front();
         }
 
         // Advance ptr
-        if (transfer_->ack_out().is_filled(current_bin_))
+        if (transfer_->ack_out()->is_filled(current_bin_))
 			current_bin_ = bin_t(0,current_bin_.layer_offset()+1);
 
         // Request next from this peer, if not already requested

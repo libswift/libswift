@@ -82,7 +82,7 @@ bin_t           Channel::ImposeHint () {
 
     twist &= hashtree()->peak(0).toUInt(); // FIXME may make it semi-seq here
 
-    bin_t my_pick = binmap_t::find_complement(ack_in_, transfer()->ack_out(), twist);
+    bin_t my_pick = binmap_t::find_complement(ack_in_, *(transfer()->ack_out()), twist);
     my_pick.to_twisted(twist);
     while (my_pick.base_length()>max(1,(int)cwnd_))
         my_pick = my_pick.left();
@@ -148,9 +148,9 @@ void    Channel::AddHandshake (struct evbuffer *evb) {
     if (!peer_channel_id_) { // initiating
         evbuffer_add_8(evb, SWIFT_HASH);
         evbuffer_add_32be(evb, bin_toUInt32(bin_t::ALL));
-        evbuffer_add_hash(evb, transfer()->root_hash());
+        evbuffer_add_hash(evb, transfer()->swarm_id());
         dprintf("%s #%u +hash ALL %s\n",
-                tintstr(),id_,transfer()->root_hash().hex().c_str());
+                tintstr(),id_,transfer()->swarm_id().hex().c_str());
     }
     evbuffer_add_8(evb, SWIFT_HANDSHAKE);
     int encoded = -1;
@@ -260,7 +260,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
     int allowed_hints = max(0,hints_limit-(int)rough_global_hint_out_size);
 
     if (DEBUGTRAFFIC)
-    	fprintf(stderr,"hint c%d: %f want %d allow %d chanout %llu globout %llu\n", id(), transfer().GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, allowed_hints, hint_out_size_, rough_global_hint_out_size );
+    	fprintf(stderr,"hint c%d: %f want %d allow %d chanout %llu globout %llu\n", id(), transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, allowed_hints, hint_out_size_, rough_global_hint_out_size );
 
     // Take into account network limit
     uint64_t plan_pck = (uint64_t)min(allowed_hints,first_plan_pck);
@@ -269,7 +269,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
     if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY) {
 
     //if (hint_out_size_ == 0 || hint_out_size_+HINT_GRANULARITY < plan_pck ) {
-        bin_t hint = transfer().picker().Pick(ack_in_,plan_pck,NOW+plan_for*2);
+        bin_t hint = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2);
         if (!hint.is_none()) {
         	if (DEBUGTRAFFIC)
         	{
@@ -440,7 +440,7 @@ void    Channel::AddHave (struct evbuffer *evb) {
 		fprintf(stderr,"send c%d: HAVE ",id() );
 
 	// ZEROSTATE
-	if (transfer().IsZeroState())
+	if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
 	{
 		if (is_established())
 			return;
@@ -509,40 +509,40 @@ void    Channel::Recv (struct evbuffer *evb) {
             	OnHandshake(evb);
             	break;
             case SWIFT_DATA:
-            	if (!transfer().IsZeroState())
-            		data=OnData(evb);
-            	else
+            	if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
             		OnDataZeroState(evb);
+            	else
+            		data=OnData(evb);
             	break;
             case SWIFT_HAVE:
-            	if (!transfer().IsZeroState())
-            		OnHave(evb);
+				if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
+					OnHaveZeroState(evb);
             	else
-            		OnHaveZeroState(evb);
+            		OnHave(evb);
             	break;
             case SWIFT_ACK:
             	OnAck(evb);
             	break;
             case SWIFT_HASH:
-            	if (!transfer().IsZeroState())
-            		OnHash(evb);
+				if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
+					OnHashZeroState(evb);
             	else
-            		OnHashZeroState(evb);
+            		OnHash(evb);
             	break;
             case SWIFT_HINT:
             	OnHint(evb);
             	break;
             case SWIFT_PEX_ADD:
-            	if (!transfer().IsZeroState())
-            		OnPexAdd(evb);
-            	else
+            	if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
             		OnPexAddZeroState(evb);
+            	else
+            		OnPexAdd(evb);
             	break;
             case SWIFT_PEX_REQ:
-            	if (!transfer().IsZeroState())
-            		OnPexReq();
-            	else
+				if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
             		OnPexReqZeroState(evb);
+            	else
+            		OnPexReq();
             	break;
             case SWIFT_RANDOMIZE:
             	OnRandomize(evb);
@@ -562,7 +562,7 @@ void    Channel::Recv (struct evbuffer *evb) {
     if (transfer()->ttype() == LIVE_TRANSFER) {
     	LiveTransfer *lt = (LiveTransfer *)transfer();
     	if (!lt->am_source())
-    		lt->picker()->EndAddPeerPos(id() );
+    		((LivePiecePicker *)lt->picker())->EndAddPeerPos(id() );
     }
 
     last_recv_time_ = NOW;
@@ -660,7 +660,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
         if (ret < 0)
         	print_error("pwrite failed");
         else
-        	transfer()->ack_out().set(pos);
+        	transfer()->ack_out()->set(pos);
     }
 
     evbuffer_drain(evb, length);
@@ -670,9 +670,9 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     	fprintf(stderr,"$ ");
 
     bin_t cover = transfer()->ack_out()->cover(pos);
-    for(int i=0; i<transfer().cb_installed; i++)
-        if (cover.layer()>=transfer().cb_agg[i])
-            transfer().callbacks[i](transfer().fd(),cover);  // FIXME
+    for(int i=0; i<transfer()->cb_installed; i++)
+        if (cover.layer()>=transfer()->cb_agg[i])
+            transfer()->callbacks[i](transfer()->fd(),cover);  // FIXME
     if (cover.layer() >= 5) // Arno: tested with 32K, presently = 2 ** 5 * chunk_size CHUNKSIZE
     	transfer()->OnRecvData( pow((double)2,(double)5)*((double)hashtree()->chunk_size()) );
     data_in_.bin = pos;
@@ -813,7 +813,7 @@ void Channel::OnHave (struct evbuffer *evb) {
     if (transfer()->ttype() == LIVE_TRANSFER) {
     	LiveTransfer *lt = (LiveTransfer *)transfer();
     	if (!lt->am_source())
-    		lt->picker()->StartAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_);
+    		((LivePiecePicker *)lt->picker())->StartAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_);
     }
 }
 
@@ -917,7 +917,7 @@ void    Channel::AddPex (struct evbuffer *evb) {
     while (true)
     {
     	// Arno, 2011-10-03: Choosing Gertjan's RandomChannel over RevealChannel here.
-    	chid = transfer().RandomChannel(id_);
+    	chid = transfer()->RandomChannel(id_);
     	if (chid==-1 || chid==id_ || tries > 5) {
     		pex_requested_ = false;
     		return;
@@ -1027,25 +1027,25 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         if (!pos.is_all())
             return_log ("%s #0 that is not the root hash %s\n",tintstr(),addr.str());
         hash = evbuffer_remove_hash(evb);
-        ContentTransfer* transfer = ContentTransfer::Find(hash);
-        if (!transfer)
+        ContentTransfer* ct = ContentTransfer::Find(hash);
+        if (!ct)
         {
         	ZeroState *zs = ZeroState::GetInstance();
-        	transfer = zs->Find(hash);
-        	if (!transfer)
+        	ct = zs->Find(hash);
+        	if (!ct)
             	return_log ("%s #0 hash %s unknown, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
         }
-		else if (transfer->ttype() == FILE_TRANSFER)
+		else if (ct->ttype() == FILE_TRANSFER)
 		{
-			FileTransfer *ft = transfer;
+			FileTransfer *ft = (FileTransfer *)ct;
 			if (ft->IsZeroState() && !ft->hashtree()->is_complete())
 				return_log ("%s #0 zero hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
 		}
         dprintf("%s #0 -hash ALL %s\n",tintstr(),hash.hex().c_str());
 
         // Arno, 2012-02-27: Check for duplicate channel
-        Channel* existchannel = transfer->FindChannel(addr,NULL);
-        if (existchannel)
+        Channel* existchannel = ct->FindChannel(addr,NULL);
+        if (existchannel != NULL)
         {
 			// Arno: 2011-10-13: Ignore if established, otherwise consider
 			// it a concurrent connection attempt.
@@ -1062,7 +1062,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         }
         if (channel == NULL) {
         	//fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: create new channel %s\n", addr.str() );
-        	channel = new Channel(transfer, socket, addr);
+        	channel = new Channel(ct, socket, addr);
         }
         //fprintf(stderr,"CHANNEL INCOMING DEF hass %s is id %d\n",hash.hex().c_str(),channel->id());
 

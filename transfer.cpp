@@ -157,22 +157,6 @@ void FileTransfer::ConnectToTracker()
 }
 
 
-Channel * FileTransfer::FindChannel(const Address &addr, Channel *notc)
-{
-	std::set<Channel *>::iterator iter;
-	for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
-	{
-		Channel *c = *iter;
-		if (c != NULL) {
-			if (c != notc && (c->peer() == addr || c->recv_peer() == addr)) {
-				return c;
-			}
-		}
-	}
-	return NULL;
-}
-
-
 
 
 void    Channel::CloseTransfer (ContentTransfer* trans) {

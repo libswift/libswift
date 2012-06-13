@@ -135,10 +135,11 @@ void HttpGwCloseConnection (http_gw_t* req) {
 	// seeding forever. More sophisticated clients should use CMD GW and issue
 	// REMOVE.
 	ContentTransfer *ct = ContentTransfer::transfer(req->fdes);
-	if (ct != NULL) {
+	if (ct != NULL)
+	{
 		if (ct->ttype() == FILE_TRANSFER)
 		{
-			swift::Checkpoint(req->transfer);
+			swift::Checkpoint(req->fdes);
 
 			// Arno, 2012-05-04: MULTIFILE: once the selected file has been downloaded
 			// swift will download all content that comes afterwards too. Poor man's
@@ -146,7 +147,8 @@ void HttpGwCloseConnection (http_gw_t* req) {
 			// will then no download anything. Better would be to seek to end when
 			// swift partial download is done, not the serving via HTTP.
 			//
-			swift::Seek(req->transfer,swift::Size(req->transfer)-1,SEEK_CUR);
+			swift::Seek(req->fdes,swift::Size(req->fdes)-1,SEEK_CUR);
+		}
 	}
 
 	//swift::Close(req->fdes);
@@ -199,11 +201,11 @@ void HttpGwWrite(int fdes) {
 	// SEEKTODO: stop downloading when file complete
 
 	// Update endoff as size becomes less fuzzy
-	if (swift::Size(req->transfer) < req->endoff)
-		req->endoff = swift::Size(req->transfer)-1;
+	if (swift::Size(req->fdes) < req->endoff)
+		req->endoff = swift::Size(req->fdes)-1;
 
 	// How much can we write?
-    uint64_t relcomplete = swift::SeqComplete(req->transfer,req->startoff);
+    uint64_t relcomplete = swift::SeqComplete(req->fdes,req->startoff);
     if (relcomplete > req->endoff)
     	relcomplete = req->endoff+1-req->startoff;
     int64_t avail = relcomplete-(req->offset-req->startoff);
@@ -219,7 +221,7 @@ void HttpGwWrite(int fdes) {
 	// that may result in tens of megabytes being cached in memory. Limit that
 	// amount at app level.
 	//
-    if (avail > 0 && evbuffer_get_length(outbuf) < HTTPGW_MAX_PREBUF_BYTES)
+    if (avail > 0 && evbuffer_get_length(outbuf) < HTTPGW_MAX_OUTBUF_BYTES)
     {
     	ContentTransfer *ct = ContentTransfer::transfer(fdes);
     	if (ct == NULL)
@@ -270,7 +272,7 @@ void HttpGwWrite(int fdes) {
         req->tosend -= wn;
 
         // PPPLUG
-        swift::Seek(req->transfer,req->offset,SEEK_CUR);
+        swift::Seek(req->fdes,req->offset,SEEK_CUR);
     }
 
     // Arno, 2010-11-30: tosend is set to fuzzy len, so need extra/other test.
@@ -389,8 +391,9 @@ void HttpGwSwiftPrebufferProgressCallback (int fdes, bin_t bin) {
 	}
 
 	// First HTTPGW_MIN_PREBUF_BYTES bytes of request received.
-	swift::RemoveProgressCallback(fdes,&CmdGwSwiftPrebufferProgressCallback);
+	swift::RemoveProgressCallback(fdes,&HttpGwSwiftPrebufferProgressCallback);
 
+	ContentTransfer *ct = ContentTransfer::transfer(fdes);
 	int stepbytes = 0;
 	if (ct->ttype() == FILE_TRANSFER)
 		stepbytes = HTTPGW_VOD_PROGRESS_STEP_BYTES;
@@ -567,9 +570,10 @@ void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
     	evhttp_send_error(req->sinkevreq,500,"Internal error: Content not found although downloading it.");
     	return;
 	}
-	else if (ct->ttype) == FILE_TRANSFER)
+
+	if (ct->ttype() == FILE_TRANSFER)
 	{
-		FileTransfer *ft = ct;
+		FileTransfer *ft = (FileTransfer *)ct;
 		if (!ft->GetStorage()->IsReady())
 		{
 			dprintf("%s 2%i http first: Storage not ready, wait\n",tintstr(),req->id);
@@ -585,6 +589,7 @@ void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
 	if (req->mfspecname != "")
 	{
 		// MULTIFILE
+		FileTransfer *ft = (FileTransfer *)ct;
 		// Find out size of selected file
 		storage_files_t sfs = ft->GetStorage()->GetStorageFiles();
 		storage_files_t::iterator iter;
@@ -838,7 +843,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     int fdes = swift::Find(swarm_id);
     if (fdes==-1) {
     	// LIVE
-        if (durstr == "-1")) {
+        if (durstr == "-1") {
         	fdes = swift::Open(hashstr,swarm_id,Address(),false,httpgw_chunk_size);
         }
         else {

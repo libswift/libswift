@@ -144,7 +144,7 @@ void CmdGwCloseConnection(evutil_socket_t sock)
 }
 
 
-cmd_gw_t* CmdGwFindRequestByFD (int fdes)
+cmd_gw_t* CmdGwFindRequestByFD(int fdes)
 {
     for(int i=0; i<cmd_gw_reqs_open; i++)
         if (cmd_requests[i].fdes==fdes)
@@ -208,7 +208,7 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 	if (ct->ttype() == FILE_TRANSFER)
 	{
 		//MULTIFILE
-		FileTransfer *ft = ct;
+		FileTransfer *ft = (FileTransfer *)ct;
 
 		// TODO: remove the dirs we created, if now empty.
 		if (removestate)
@@ -426,9 +426,9 @@ void CmdGwSendERRORBySocket(evutil_socket_t cmdsock, std::string msg)
 	free(wire);
 }
 
-void CmdGwSendERRORByTransfer(int fdes, std::string msg)
+void CmdGwSendERRORByFD(int fdes, std::string msg)
 {
-	cmd_gw_t* req = CmdGwFindRequestByTransfer(fdes);
+	cmd_gw_t* req = CmdGwFindRequestByFD(fdes);
 	if (req == NULL)
 		return;
 	CmdGwSendERRORBySocket(req->cmdsock,msg);
@@ -443,7 +443,7 @@ void CmdGwSwiftPrebufferProgressCallback (int fdes, bin_t bin)
 	if (cmd_gw_debug)
 		fprintf(stderr,"cmd: SwiftPrebuffProgress: %d\n", fdes );
 
-	cmd_gw_t* req = CmdGwFindRequestByTransfer(fdes);
+	cmd_gw_t* req = CmdGwFindRequestByFD(fdes);
 	if (req == NULL)
 		return;
 
@@ -489,7 +489,7 @@ void CmdGwSwiftVODFirstProgressCallback (int fdes, bin_t bin)
 	if (cmd_gw_debug)
 		fprintf(stderr,"cmd: SwiftFirstProgress: %d\n", fdes );
 
-	cmd_gw_t* req = CmdGwFindRequestByTransfer(fdes);
+	cmd_gw_t* req = CmdGwFindRequestByFD(fdes);
 	if (req == NULL)
 		return;
 
@@ -505,7 +505,7 @@ void CmdGwSwiftVODFirstProgressCallback (int fdes, bin_t bin)
 		return;
 	}
 
-	FileTransfer *ft = ct;
+	FileTransfer *ft = (FileTransfer *)ct;
 	if (!ft->GetStorage()->IsReady()) {
 		// Wait until (multi-file) storage is ready
 		return;
@@ -581,7 +581,7 @@ void CmdGwSwiftAllocatingDiskspaceCallback (int fdes, bin_t bin)
 		fprintf(stderr,"cmd: CmdGwSwiftAllocatingDiskspaceCallback: ENTER %d\n", fdes );
 
 	// Called before swift starts reserving diskspace.
-	cmd_gw_t* req = CmdGwFindRequestByTransfer(fdes);
+	cmd_gw_t* req = CmdGwFindRequestByFD(fdes);
 	if (req == NULL)
 		return;
 
@@ -875,7 +875,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
         if (ct->ttype() == FILE_TRANSFER)
         {
-        	FileTransfer *ft = ct;
+        	FileTransfer *ft = (FileTransfer *)ct;
 			storage_files_t sfs = ft->GetStorage()->GetStorageFiles();
 			if (sfs.size() > 0)
 				minsize = sfs[0]->GetSize();

@@ -51,11 +51,12 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 
 	// See which zero state FileTransfers have no clients
 	std::set<FileTransfer *>	delset;
-    for(int i=0; i<FileTransfer::files.size(); i++)
+    for(int i=0; i<ContentTransfer::swarms.size(); i++)
     {
-        if (FileTransfer::files[i] && FileTransfer::files[i]->IsZeroState())
+    	FileTransfer *ft = (FileTransfer *)ContentTransfer::swarms[i];
+        if (ft && ft->IsZeroState())
         {
-        	FileTransfer *ft = FileTransfer::files[i];
+
         	if (ft->GetChannels().size() == 0)
         	{
         		// Ain't go no clients, cleanup.

@@ -180,7 +180,7 @@ bool Channel::IsDiffSenderOrDuplicate(Address addr, uint32_t chid)
 			//
 			recv_peer_ = addr;
 
-			Channel *c = transfer().FindChannel(addr,this);
+			Channel *c = transfer()->FindChannel(addr,this);
 			if (c != NULL) {
 				// I already initiated a connection to this peer,
 				// this new incoming message would establish a duplicate.

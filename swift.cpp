@@ -48,7 +48,6 @@ void usage(void)
 	fprintf(stderr,"  -M, --multifile\tcreate multi-file spec with given files\n");
     fprintf(stderr,"  -i, --source\tlive source input (URL or filename or - for stdin)\n");
     fprintf(stderr,"  -e, --live\tperform live download, use with -t and -h\n");
-	return 1;
 }
 #define quit(...) {usage(); fprintf(stderr,__VA_ARGS__); exit(1); }
 
@@ -363,10 +362,11 @@ int utf8main (int argc, char** argv)
     	// Server mode: read from http source or pipe or file
 		livesource_evb = evbuffer_new();
 
-		if (livesource_input.substr(0,"http:".length()) != "http:")
+		std::string httpscheme = "http:";
+		if (livesource_input.substr(0,httpscheme.length()) != httpscheme)
 		{
 			// Source is file or pipe
-			if (livesource_input == "-"))
+			if (livesource_input == "-")
 				livesource_fd = 0; // stdin, aka read from pipe
 			else {
 				livesource_fd = open(livesource_input.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
@@ -377,7 +377,7 @@ int utf8main (int argc, char** argv)
 			//LIVETODO
 			const char *swarmidstr = "ArnosFirstSwarm";
 			Sha1Hash swarmid(swarmidstr, strlen(swarmidstr));
-			livesource_lt = swift::LiveCreate(swarmid,filename);
+			livesource_lt = swift::LiveCreate(filename,swarmid);
 
 			evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
 			evtimer_add(&evlivesource, tint2tv(TINT_SEC));
@@ -387,7 +387,8 @@ int utf8main (int argc, char** argv)
 			std::string httpservname,httppath;
 			int httpport=80;
 
-			std::string schemeless = livesource_input.substr("http://".length());
+			std::string httpprefix= "http://";
+			std::string schemeless = livesource_input.substr(httpprefix.length());
 			int sidx = schemeless.find("/");
 			if (sidx == -1)
 				quit("No path in live source input URL");
@@ -402,12 +403,14 @@ int utf8main (int argc, char** argv)
 
 			fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str() );
 
-			livesource_lt = swift::LiveCreate(filename);
+			const char *swarmidstr = "ArnosFirstSwarm";
+			Sha1Hash swarmid(swarmidstr, strlen(swarmidstr));
+			livesource_lt = swift::LiveCreate(filename,swarmid);
 
 			struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, httpservname.c_str(), httpport);
 			struct evhttp_request *req = evhttp_request_new(LiveSourceHTTPResponseCallback, NULL);
 			evhttp_request_set_chunked_cb(req,LiveSourceHTTPDownloadChunkCallback);
-			evhttp_make_request(cn, req, EVHTTP_REQ_GET,httppath);
+			evhttp_make_request(cn, req, EVHTTP_REQ_GET,httppath.c_str());
 			evhttp_add_header(req->output_headers, "Host", httpservname.c_str());
 		}
 	}
@@ -448,9 +451,9 @@ int utf8main (int argc, char** argv)
     }
 
     // Arno, 2012-01-03: Close all transfers
-	for (int i=0; i<FileTransfer::files.size(); i++) {
-		if (FileTransfer::files[i] != NULL)
-            Close(FileTransfer::files[i]->fd());
+	for (int i=0; i<ContentTransfer::swarms.size(); i++) {
+		if (ContentTransfer::swarms[i] != NULL)
+            Close(FileTransfer::swarms[i]->fd());
     }
 
     if (Channel::debug_file)
@@ -524,9 +527,9 @@ int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, b
 
 		// Client mode: regular or live download
 		if (!livestream)
-			fd = Open(filename,root_hash,Address(),false,chunk_size);
+			fd = Open(filename,hash,Address(),false,chunk_size);
 		else
-			fd = LiveOpen(filename,root_hash,Address(),false,chunk_size);
+			fd = LiveOpen(filename,hash,Address(),false,chunk_size);
 	}
 	else if (!quiet)
 		fprintf(stderr,"swift: parsedir: Ignoring loaded %s\n", filename.c_str() );
@@ -567,17 +570,17 @@ int OpenSwiftDirectory(std::string dirname, Address tracker, bool check_hashes, 
 int CleanSwiftDirectory(std::string dirname)
 {
 	std::set<int>	delset;
-	std::vector<FileTransfer*>::iterator iter;
-	for (iter=FileTransfer::files.begin(); iter!=FileTransfer::files.end(); iter++)
+	std::vector<ContentTransfer*>::iterator iter;
+	for (iter=ContentTransfer::swarms.begin(); iter!=ContentTransfer::swarms.end(); iter++)
 	{
-		FileTransfer *ft = *iter;
-		if (ft != NULL) {
-			std::string filename = ft->GetStorage()->GetOSPathName();
+		ContentTransfer *ct = *iter;
+		if (ct != NULL) {
+			std::string filename = ct->GetStorage()->GetOSPathName();
 			fprintf(stderr,"swift: clean: Checking %s\n", filename.c_str() );
 			int res = file_exists_utf8( filename );
 			if (res == 0) {
 				fprintf(stderr,"swift: clean: Missing %s\n", filename.c_str() );
-				delset.insert(ft->fd());
+				delset.insert(ct->fd());
 			}
 		}
 	}
@@ -627,7 +630,7 @@ void ReportCallback(int fd, short event, void *arg) {
     	// CHECKPOINT
     	if (ct->ttype() == FILE_TRANSFER && file_enable_checkpoint && !file_checkpointed && IsComplete(single_fd))
     	{
-    		std::string binmap_filename = ft->GetStorage()->GetOSPathName();
+    		std::string binmap_filename = ct->GetStorage()->GetOSPathName();
     		binmap_filename.append(".mbinmap");
     		fprintf(stderr,"swift: Complete, checkpointing %s\n", binmap_filename.c_str() );
 

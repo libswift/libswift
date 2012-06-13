@@ -89,7 +89,7 @@ void ContentTransfer::GlobalDel() {
 
 ContentTransfer* ContentTransfer::Find (const Sha1Hash& swarmid) {
     for(int i=0; i<swarms.size(); i++)
-        if (swarms[i] && swarms[i]->root_hash()==swarmid)
+        if (swarms[i] && swarms[i]->swarm_id()==swarmid)
             return swarms[i];
     return NULL;
 }
@@ -141,6 +141,8 @@ int ContentTransfer::RandomChannel (int own_id) {
 
     return choose_from[rand() % choose_from.size()].toUInt();
 }
+
+
 
 
 
@@ -218,4 +220,25 @@ uint32_t	ContentTransfer::GetNumSeeders()
 			    count++;
     }
     return count;
+}
+
+void ContentTransfer::AddPeer(Address &peer)
+{
+	Channel *c = new Channel(this,INVALID_SOCKET,peer);
+}
+
+
+Channel * ContentTransfer::FindChannel(const Address &addr, Channel *notc)
+{
+	std::set<Channel *>::iterator iter;
+	for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
+	{
+		Channel *c = *iter;
+		if (c != NULL) {
+			if (c != notc && (c->peer() == addr || c->recv_peer() == addr)) {
+				return c;
+			}
+		}
+	}
+	return NULL;
 }
