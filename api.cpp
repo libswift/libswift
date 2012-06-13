@@ -128,14 +128,14 @@ uint64_t  swift::SeqComplete (int fdes, int64_t offset) {
     	if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
     		return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->seq_complete(offset);
     	else
-    		return ((LiveTransfer *)ContentTransfer::swarms[fdes])->SeqComplete(offset); //TODOGT
+    		return ((LiveTransfer *)ContentTransfer::swarms[fdes])->SeqComplete(); // No range support for live
     }
     else
         return 0;
 }
 
 
-const Sha1Hash& swift::RootMerkleHash (int fd) {
+const Sha1Hash& swift::SwarmID (int fd) {
     ContentTransfer* trans = ContentTransfer::transfer(fd);
     if (!trans)
         return Sha1Hash::ZERO;
@@ -197,7 +197,7 @@ int swift::Seek(int fd, int64_t offset, int whence)
 	dprintf("%s F%i Seek: to %lld\n",tintstr(), fd, offset );
 
     ContentTransfer* trans = ContentTransfer::transfer(fd);
-    if (!trans || trans->ttype() == LIVE_TRANSFER) // TODOGT: LIVE SEEK
+    if (!trans || trans->ttype() == LIVE_TRANSFER)
             return -1;
     FileTransfer *ft = trans;
 
@@ -213,24 +213,10 @@ int swift::Seek(int fd, int64_t offset, int whence)
 		char binstr[32];
 		dprintf("%s F%i Seek: to bin %s\n",tintstr(), fd, offbin.str(binstr) );
 
-		return ft->picker().Seek(offbin,whence);
+		return ft->picker()->Seek(offbin,whence);
 	}
 	else
 		return -1; // TODO
-}
-
-
-// LIVE
-uint64_t  swift::LiveStart(int fdes)
-{
-	if (ContentTransfer::swarms.size()>fdes && ContentTransfer::swarms[fdes]) {
-	   	if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
-	   		return 0;
-	   	else
-	   		return ((LiveTransfer *)ContentTransfer::swarms[fdes])->LiveStart();
-    }
-    else
-	    return 0;
 }
 
 
@@ -287,8 +273,10 @@ void swift::RemoveProgressCallback (int fdes, ProgressCallback cb) {
  * LIVE
  */
 
-LiveTransfer *swift::Create(const char* filename, size_t chunk_size)
+
+LiveTransfer *swift::LiveCreate(std::string filename, size_t chunk_size)
 {
+	//LIVETODO
 	const char *swarmidstr = "ArnosFirstSwarm";
 	Sha1Hash swarmid(swarmidstr, strlen(swarmidstr));
 
@@ -323,5 +311,15 @@ int     swift::LiveOpen(const char* filename, const Sha1Hash& hash,Address track
 }
 
 
-
+uint64_t  swift::GetHookinOffset(int fdes)
+{
+	if (ContentTransfer::swarms.size()>fdes && ContentTransfer::swarms[fdes]) {
+	   	if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
+	   		return 0;
+	   	else
+	   		return ((LiveTransfer *)ContentTransfer::swarms[fdes])->GetHookinOffset();
+    }
+    else
+	    return 0;
+}
 

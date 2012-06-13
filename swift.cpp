@@ -93,7 +93,7 @@ uint32_t chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;
 Address tracker;
 
 // LIVE
-char* livesource_input = 0;
+std::string livesource_input = "";
 LiveTransfer *livesource_lt = NULL;
 int livesource_fd=-1;
 struct evbuffer *livesource_evb = NULL;
@@ -320,7 +320,7 @@ int utf8main (int argc, char** argv)
     ZeroState *zs = ZeroState::GetInstance();
     zs->SetContentDir(zerostatedir);
 
-    if (!cmdgw_enabled && !livesource_input)
+    if (!cmdgw_enabled && livesource_input == "")
     {
 		int ret = -1;
 		if (!generate_multifile)
@@ -357,89 +357,55 @@ int utf8main (int argc, char** argv)
 			quit("Don't understand command line parameters.")
 		}
     }
-    else if (livesource_input)
+    else if (livesource_input != "")
 	{
 		// LIVE
     	// Server mode: read from http source or pipe or file
 		livesource_evb = evbuffer_new();
 
-		if (strncmp(livesource_input,"http:",strlen("http:")))
+		if (livesource_input.substr(0,"http:".length()) != "http:")
 		{
 			// Source is file or pipe
-			if (!strcmp(livesource_input,"-"))
+			if (livesource_input == "-"))
 				livesource_fd = 0; // stdin, aka read from pipe
 			else {
-				livesource_fd = open(livesource_input,OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+				livesource_fd = open(livesource_input.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
 				if (livesource_fd < 0)
 					quit("Could not open source input");
 			}
 
-			livesource_lt = swift::Create(filename);
+			livesource_lt = swift::LiveCreate(filename);
 
 			evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
 			evtimer_add(&evlivesource, tint2tv(TINT_SEC));
 		}
 		else
 		{
-			// TODOGT: use URL parser for std::string
+			std::string httpservname,httppath;
+			int httpport=80;
 
-
-			// Source is HTTP server
-		    char *token = NULL, *savetok = NULL;
-			char *url = livesource_input;
-			bool hasport = (bool)(strchr(&livesource_input[strlen("http:")],':') != NULL);
-
-			// Parse URL
-		    char *httpservstr=NULL,*httpportstr,*pathstr=NULL;
-
-		    token = strtok_r(url,"/",&savetok); // tswift://
-			if (token == NULL)
-		        quit("Live source URL incorrect, no //");
-			if (hasport)
+			std::string schemeless = livesource_input.substr("http://".length());
+			int sidx = schemeless.find("/");
+			if (sidx == -1)
+				quit("No path in live source input URL");
+			httppath = schemeless.substr(sidx);
+			std::string server = schemeless.substr(0,sidx);
+			sidx = server.find(":");
+			if (sidx != -1)
 			{
-				token = strtok_r(NULL,":",&savetok);
-				if (token == NULL)
-					quit("Live source URL incorrect, no port");
-				httpservstr = token+1;
-				token = strtok_r(NULL,"/",&savetok);
-				if (token == NULL)
-					quit("Live source URL incorrect, no path");
-				httpportstr = token;
-				token = strtok_r(NULL,"",&savetok);
-				if (token == NULL)
-					quit("Live source URL incorrect, no end");
-				pathstr = token;
-			}
-			else
-			{
-				token = strtok_r(NULL,"/",&savetok);
-				if (token == NULL)
-					quit("Live source URL incorrect, no path2");
-				httpservstr = token;
-				httpportstr = "80";
-				token = strtok_r(NULL,"",&savetok);
-				if (token == NULL)
-					quit("Live source URL incorrect, no end2");
-				pathstr = token;
+				std::string portstr = server.substr(sidx);
+		        std::istringstream(portstr) >> httpport;
 			}
 
-			int port=-1;
-			int n = sscanf(httpportstr,"%u",&port);
-			if (n != 1)
-				quit("Live source URL incorrect, port no number");
-			char *slashpath = (char *)malloc(strlen(pathstr)+1+1);
-			strcpy(slashpath,"/");
-			strcat(slashpath,pathstr);
+			fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str() );
 
-			fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservstr, port, slashpath );
+			livesource_lt = swift::LiveCreate(filename);
 
-			livesource_lt = swift::Create(filename);
-
-			struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, httpservstr, port);
+			struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, httpservname.c_str(), httpport);
 			struct evhttp_request *req = evhttp_request_new(LiveSourceHTTPResponseCallback, NULL);
 			evhttp_request_set_chunked_cb(req,LiveSourceHTTPDownloadChunkCallback);
-			evhttp_make_request(cn, req, EVHTTP_REQ_GET,slashpath);
-			evhttp_add_header(req->output_headers, "Host", httpservstr);
+			evhttp_make_request(cn, req, EVHTTP_REQ_GET,httppath);
+			evhttp_add_header(req->output_headers, "Host", httpservname.c_str());
 		}
 	}
     else if (!cmdgw_enabled && !httpgw_enabled)
@@ -510,9 +476,9 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
 		if (swift::Complete(single_fd) == 0)
 			quit("cannot open empty file %s",filename.c_str());
 		if (chunk_size == SWIFT_DEFAULT_CHUNK_SIZE)
-			fprintf(fp,"tswift://%s/%s\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str());
+			fprintf(fp,"tswift://%s/%s\n", trackerargstr.c_str(), SwarmID(single_fd).hex().c_str());
 		else
-			fprintf(fp,"tswift://%s/%s$%i\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str(), chunk_size);
+			fprintf(fp,"tswift://%s/%s$%i\n", trackerargstr.c_str(), SwarmID(single_fd).hex().c_str(), chunk_size);
 
 		if (urlfilename != "")
 			fclose(fp);
@@ -523,7 +489,7 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
 	}
 	else
 	{
-		printf("Root hash: %s\n", RootMerkleHash(single_fd).hex().c_str());
+		printf("Root hash: %s\n", SwarmID(single_fd).hex().c_str());
 		fflush(stdout); // For testing
 	}
 

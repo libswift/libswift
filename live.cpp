@@ -14,38 +14,47 @@
 using namespace swift;
 
 
-LiveTransfer::LiveTransfer(const char *filename, const Sha1Hash& swarm_id,bool amsource,size_t chunk_size) :
+LiveTransfer::LiveTransfer(std::string filename, const Sha1Hash& swarm_id,bool amsource,size_t chunk_size) :
 		ContentTransfer(), swarm_id_(swarm_id), am_source_(amsource), filename_(filename), storagefd_(-1), chunk_size_(chunk_size), last_chunkid_(0), offset_(0)
 {
 	picker_ = new SimpleLivePiecePicker(this);
 	picker_->Randomize(rand()&63);
 
-	storagefd_ = open(filename,OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-	if (storagefd_ < 0) {
-		print_error("live: create: error opening storage");
+    std::string destdir;
+	int ret = file_exists_utf8(filename);
+	if (ret == 2 && root_hash != Sha1Hash::ZERO) {
+		// Filename is a directory, download root_hash there
+		destdir = filename;
+		filename = destdir+FILE_SEP+swarm_id.hex();
+	} else {
+		destdir = dirname_utf8(filename);
+		if (destdir == "")
+			destdir = ".";
 	}
 
-	GlobalAdd();
+	// MULTIFILE
+    storage_ = new Storage(filename,destdir,fd());
 }
 
 
 LiveTransfer::~LiveTransfer()
 {
+	delete picker_;
 }
 
 
 uint64_t      LiveTransfer::SeqComplete() {
 
-	bin_t hpos = picker()->getHookinPos();
-	bin_t cpos = picker()->getCurrentPos();
+	bin_t hpos = picker()->GetHookinPos();
+	bin_t cpos = picker()->GetCurrentPos();
     uint64_t seqc = cpos.layer_offset() - hpos.layer_offset();
 	return seqc*chunk_size_;
 }
 
 
-uint64_t      LiveTransfer::LiveStart() {
+uint64_t      LiveTransfer::GetHookinOffset() {
 
-	bin_t hpos = picker()->getHookinPos();
+	bin_t hpos = picker()->GetHookinPos();
     uint64_t seqc = hpos.layer_offset();
 	return seqc*chunk_size_;
 }

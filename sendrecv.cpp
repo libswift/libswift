@@ -371,16 +371,8 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     	return bin_t::NONE;
     }
 
-    // TODOGT: STORAGE
-#ifndef LIVE
-    size_t r = transfer().GetStorage()->Read((char *)vec.iov_base,
-		     hashtree()->chunk_size(),tosend.base_offset()*hashtree()->chunk_size());
-#else
-    //LIVETODO: use swift::Read
-    size_t r = pread(transfer()->fd(),(char *)vec.iov_base,
+    size_t r = transfer()->GetStorage()->Read((char *)vec.iov_base,
 		     transfer()->chunk_size(),tosend.base_offset()*transfer()->chunk_size());
-#endif
-
     // TODO: corrupted data, retries, caching
     if (r<0) {
         print_error("error on reading");
@@ -570,7 +562,7 @@ void    Channel::Recv (struct evbuffer *evb) {
     if (transfer()->ttype() == LIVE_TRANSFER) {
     	LiveTransfer *lt = (LiveTransfer *)transfer();
     	if (!lt->am_source())
-    		lt->picker()->endAddPeerPos(id() );
+    		lt->picker()->EndAddPeerPos(id() );
     }
 
     last_recv_time_ = NOW;
@@ -662,9 +654,9 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     }
     else
     {
-    	// TODOGT: STORAGE
         //LIVE: actually write data to storage
-        int ret = pwrite(transfer()->fd(),data,length,pos.base_offset()*transfer()->chunk_size());
+    	// LIVETODO: content integrity checking
+        int ret = transfer()->GetStorage()->Write(data,length,pos.base_offset()*transfer()->chunk_size());
         if (ret < 0)
         	print_error("pwrite failed");
         else
@@ -821,7 +813,7 @@ void Channel::OnHave (struct evbuffer *evb) {
     if (transfer()->ttype() == LIVE_TRANSFER) {
     	LiveTransfer *lt = (LiveTransfer *)transfer();
     	if (!lt->am_source())
-    		lt->picker()->startAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_);
+    		lt->picker()->StartAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_);
     }
 }
 

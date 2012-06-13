@@ -97,15 +97,15 @@ http_gw_t *HttpGwFindRequestByFD(int fdes) {
 	return NULL;
 }
 
-http_gw_t *HttpGwFindRequestByRoothash(Sha1Hash &wanthash) {
+http_gw_t *HttpGwFindRequestBySwarmID(Sha1Hash &wanthash) {
 	for (int httpc=0; httpc<http_gw_reqs_open; httpc++) {
 		http_gw_t *req = &http_requests[httpc];
 		if (req == NULL)
 			continue;
-		FileTransfer *ft = FileTransfer::file(req->transfer);
-		if (ft == NULL)
+		ContentTransfer *ct = ContentTransfer::transfer(req->fdes);
+		if (ct == NULL)
 			continue;
-		if (ft->root_hash() == wanthash)
+		if (ct->swarm_id() == wanthash)
 			return req;
 	}
 	return NULL;
@@ -231,7 +231,7 @@ void HttpGwMayWriteCallback (int fdes) {
 #else
         uint64_t tosend = std::min((int64_t)max_write_bytes,avail);
 #endif
-        size_t rd = swift::Read(req->fdes,buf,tosend,swift::LiveStart(req->fdes)+req->offset);
+        size_t rd = swift::Read(req->fdes,buf,tosend,swift::GetHookinOffset(req->fdes)+req->offset);
         if (rd<0) {
         	print_error("httpgw: MayWrite: error pread");
             HttpGwCloseConnection(req);
@@ -471,7 +471,7 @@ void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
 	// First chunk of data available
 	dprintf("%s T%i http first progress\n",tintstr(),fdes);
 
-	fprintf(stderr,"httpgw: FirstProgres: hook-in at %lli\n", swift::LiveStart(fdes) );
+	fprintf(stderr,"httpgw: FirstProgres: hook-in at %lli\n", swift::GetHookinOffset(fdes) );
 
 
 	// Need the first chunk
@@ -494,8 +494,6 @@ void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
 		dprintf("%s T%i first: already set tosend\n",tintstr(),fdes );
 		return;
 	}
-
-	//TODORT: FileTransfer -> ContenTransfer
 
 	// MULTIFILE
 	// Is storage ready?
@@ -767,8 +765,8 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 
 
     // 3. Check for concurrent requests, currently not supported.
-    Sha1Hash root_hash = Sha1Hash(true,hashstr.c_str());
-    http_gw_t *existreq = HttpGwFindRequestByRoothash(root_hash);
+    Sha1Hash swarm_id = Sha1Hash(true,hashstr.c_str());
+    http_gw_t *existreq = HttpGwFindRequestBySwarmID(swarm_id);
     if (existreq != NULL)
     {
     	evhttp_send_error(evreq,409,"Conflict: server does not support concurrent requests to same swarm.");
@@ -776,14 +774,14 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     }
 
     // 4. Initiate transfer
-    int fdes = swift::Find(root_hash);
+    int fdes = swift::Find(swarm_id);
     if (fdes==-1) {
     	// LIVE
         if (durstr == "-1")) {
-        	fdes = swift::Open(hashstr,root_hash,Address(),false,httpgw_chunk_size);
+        	fdes = swift::Open(hashstr,swarm_id,Address(),false,httpgw_chunk_size);
         }
         else {
-        	fdes = swift::LiveOpen(hashstr,root_hash,Address(),false,httpgw_chunk_size);
+        	fdes = swift::LiveOpen(hashstr,swarm_id,Address(),false,httpgw_chunk_size);
         }
         dprintf("%s @%i trying to HTTP GET swarm %s that has not been STARTed\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str());
 
@@ -878,10 +876,10 @@ bool HTTPIsSending()
 
 	if (http_gw_reqs_open > 0)
 	{
-		FileTransfer *ft = (FileTransfer *)ContentTransfer::transfer(http_requests[http_gw_reqs_open-1].fdes);
-		if (ft != NULL) {
-			fprintf(stderr,"httpgw: upload %lf\n",ft->GetCurrentSpeed(DDIR_UPLOAD)/1024.0);
-			fprintf(stderr,"httpgw: dwload %lf\n",ft->GetCurrentSpeed(DDIR_DOWNLOAD)/1024.0);
+		ContentTransfer *ct = ContentTransfer::transfer(http_requests[http_gw_reqs_open-1].fdes);
+		if (ct != NULL) {
+			fprintf(stderr,"httpgw: upload %lf\n",ct->GetCurrentSpeed(DDIR_UPLOAD)/1024.0);
+			fprintf(stderr,"httpgw: dwload %lf\n",ct->GetCurrentSpeed(DDIR_DOWNLOAD)/1024.0);
 			//fprintf(stderr,"httpgw: seqcmp %llu\n", swift::SeqComplete(http_requests[http_gw_reqs_open-1].transfer));
 		}
 	}

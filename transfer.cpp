@@ -28,8 +28,6 @@ using namespace swift;
 FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool check_hashes, uint32_t chunk_size, bool zerostate) :
     ContentTransfer(), tracker_(), tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START), tracker_retry_time_(NOW), zerostate_(zerostate)
 {
-	GlobalAdd();
-
     std::string destdir;
 	int ret = file_exists_utf8(filename);
 	if (ret == 2 && root_hash != Sha1Hash::ZERO) {
@@ -191,16 +189,11 @@ FileTransfer::~FileTransfer ()
 {
     Channel::CloseTransfer(this);
 	delete hashtree_;
-	delete storage_;
-    ContentTransfer::swarms[fd()] = NULL;
 	if (!IsZeroState())
 	{
 		delete picker_;
 		delete availability_;
 	}
-  
-    // Arno, 2012-02-06: Cancel cleanup timer, otherwise chaos!
-    evtimer_del(&evclean_);
 }
 
 

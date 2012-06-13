@@ -135,7 +135,7 @@ void StatsOverviewCallback(struct evhttp_request *evreq)
 			int perc = (int)((down * 100) / total);
 
 			char roothashhexstr[256];
-			sprintf(roothashhexstr,"%s", RootMerkleHash(fd).hex().c_str() );
+			sprintf(roothashhexstr,"%s", SwarmID(fd).hex().c_str() );
 
 			char templ[1024];
 			sprintf(templ,swarm_page_templ,roothashhexstr, perc, '%', dspeed, uspeed );
