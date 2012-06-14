@@ -999,6 +999,8 @@ void Channel::AddPexReq(struct evbuffer *evb) {
 void Channel::LibeventReceiveCallback(evutil_socket_t fd, short event, void *arg) {
 	// Called by libevent when a datagram is received on the socket
     Time();
+    dprintf("%s recv callback\n",tintstr() );
+
     RecvDatagram(fd);
     event_add(&evrecv, NULL);
 }
@@ -1009,6 +1011,8 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
 
     RecvFrom(socket, addr, evb);
     size_t evboriglen = evbuffer_get_length(evb);
+
+	dprintf("%s recvdgram %d\n",tintstr(),evboriglen );
 
 //#define return_log(...) { fprintf(stderr,__VA_ARGS__); evbuffer_free(evb); return; }
 #define return_log(...) { dprintf(__VA_ARGS__); evbuffer_free(evb); return; }
@@ -1160,6 +1164,8 @@ void Channel::Reschedule () {
 	// Arno: CAREFUL: direct send depends on diff between next_send_time_ and
 	// NOW to be 0, so any calls to Time in between may put things off. Sigh.
 	Time();
+    dprintf("%s schedule\n",tintstr() );
+
     next_send_time_ = NextSendTime();
     if (next_send_time_!=TINT_NEVER) {
 
@@ -1199,6 +1205,8 @@ void Channel::LibeventSendCallback(int fd, short event, void *arg) {
 
 	// Called by libevent when it is the requested send time.
     Time();
+    dprintf("%s send callback\n",tintstr() );
+
     Channel * sender = (Channel*) arg;
     if (NOW<sender->next_send_time_-TINT_MSEC)
         dprintf("%s #%u suspicious send %s<%s\n",tintstr(),

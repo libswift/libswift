@@ -11,10 +11,24 @@
 
 using namespace swift;
 
+/*
+ * Global Variables
+ */
 std::vector<ContentTransfer*> ContentTransfer::swarms(20);
 
+/*
+ * Local Constants
+ */
+#define TRACKER_RETRY_INTERVAL_START	(5*TINT_SEC)
+#define TRACKER_RETRY_INTERVAL_EXP		1.1				// exponent used to increase INTERVAL_START
+#define TRACKER_RETRY_INTERVAL_MAX		(1800*TINT_SEC) // 30 minutes
 
-ContentTransfer::ContentTransfer() :  mychannels_(), cb_installed(0), speedzerocount_(0)
+
+
+ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), mychannels_(), cb_installed(0),
+		speedzerocount_(0), tracker_(),
+		tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START),
+		tracker_retry_time_(NOW)
 {
 	GlobalAdd();
 
@@ -23,6 +37,7 @@ ContentTransfer::ContentTransfer() :  mychannels_(), cb_installed(0), speedzeroc
     max_speed_[DDIR_UPLOAD] = DBL_MAX;
     max_speed_[DDIR_DOWNLOAD] = DBL_MAX;
 
+	fprintf(stderr,"ContentTransfer::ContentTransfer: Add timer\n" );
     evtimer_assign(&evclean_,Channel::evbase,&ContentTransfer::LibeventCleanCallback,this);
     evtimer_add(&evclean_,tint2tv(5*TINT_SEC));
 }
@@ -30,6 +45,8 @@ ContentTransfer::ContentTransfer() :  mychannels_(), cb_installed(0), speedzeroc
 
 ContentTransfer::~ContentTransfer()
 {
+	fprintf(stderr,"ContentTransfer::~ContentTransfer\n" );
+
 	CloseChannels(mychannels_);
 	if (storage_ != NULL)
 		delete storage_;
@@ -54,25 +71,38 @@ void ContentTransfer::CloseChannels(std::set<Channel *>	delset)
 	}
 }
 
+// SAFECLOSE
 void ContentTransfer::GarbageCollectChannels()
 {
 	// STL and MS and conditional delete from set not a happy place :-(
 	std::set<Channel *>	delset;
 	std::set<Channel *>::iterator iter;
+	bool hasestablishedpeers=false;
 	for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
 	{
 		Channel *c = *iter;
 		if (c != NULL) {
 			if (c->IsScheduled4Close())
 				delset.insert(c);
+
+			if (c->is_established ())
+				hasestablishedpeers = true;
+
 		}
 	}
 	CloseChannels(delset);
+
+	// Arno, 2012-02-24: Check for liveliness.
+	ReConnectToTrackerIfAllowed(hasestablishedpeers);
 }
+
 
 void ContentTransfer::LibeventCleanCallback(int fd, short event, void *arg)
 {
-	fprintf(stderr,"CleanCallback: **************\n");
+	fprintf(stderr,"ContentTransfer: CleanCallback: **************\n");
+
+	// Arno, 2012-02-24: Why-oh-why, update NOW
+	Channel::Time();
 
 	ContentTransfer *ct = (ContentTransfer *)arg;
 	if (ct == NULL)
@@ -84,6 +114,44 @@ void ContentTransfer::LibeventCleanCallback(int fd, short event, void *arg)
     evtimer_assign(&(ct->evclean_),Channel::evbase,&ContentTransfer::LibeventCleanCallback,ct);
     evtimer_add(&(ct->evclean_),tint2tv(5*TINT_SEC));
 }
+
+
+
+void ContentTransfer::ReConnectToTrackerIfAllowed(bool hasestablishedpeers)
+{
+	// If I'm not connected to any
+	// peers, try to contact the tracker again.
+	if (!hasestablishedpeers)
+	{
+		if (NOW > tracker_retry_time_)
+		{
+			ConnectToTracker();
+
+			tracker_retry_interval_ *= TRACKER_RETRY_INTERVAL_EXP;
+			if (tracker_retry_interval_ > TRACKER_RETRY_INTERVAL_MAX)
+				tracker_retry_interval_ = TRACKER_RETRY_INTERVAL_MAX;
+			tracker_retry_time_ = NOW + tracker_retry_interval_;
+		}
+	}
+	else
+	{
+		tracker_retry_interval_ = TRACKER_RETRY_INTERVAL_START;
+		tracker_retry_time_ = NOW + tracker_retry_interval_;
+	}
+}
+
+
+void ContentTransfer::ConnectToTracker()
+{
+	// SWIFTPROC
+	Channel *c = NULL;
+	// Arno, 2012-01-09: LIVE Old hack: the tracker is assumed to be the live source
+    if (tracker_ != Address())
+    	c = new Channel(this,INVALID_SOCKET,tracker_,true);
+    else if (Channel::tracker!=Address())
+    	c = new Channel(this,INVALID_SOCKET,Channel::tracker,true);
+}
+
 
 
 

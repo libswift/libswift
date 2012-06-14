@@ -270,7 +270,7 @@ namespace swift {
     class ContentTransfer {
 
       public:
-    	ContentTransfer();
+    	ContentTransfer(transfer_t ttype);
     	~ContentTransfer();
 
         // Global var
@@ -283,7 +283,7 @@ namespace swift {
         void GlobalDel();
 
         /** Returns the type of transfer, FILE_TRANSFER or LIVE_TRANSFER */
-    	virtual transfer_t	ttype() = 0;
+		transfer_t	ttype() { return ttype_; }
     	/** Returns the global ID for this transfer */
         virtual const Sha1Hash& 	swarm_id() const = 0;
         /** The binmap pointer for data already retrieved and checked. */
@@ -333,14 +333,26 @@ namespace swift {
 		uint32_t		GetNumSeeders();
 
 		// MULTIFILE
-		Storage * GetStorage() { return storage_; }
+		Storage * 		GetStorage() { return storage_; }
 
 		/** Add a peer to the set of addresses to connect to */
-		void AddPeer(Address &peer);
+		void 			AddPeer(Address &peer);
 
-		static void LibeventCleanCallback(int fd, short event, void *arg);
+
+		/** Arno: set the tracker for this transfer. Reseting it won't kill
+		 * any existing connections. */
+		void 			SetTracker(Address tracker) { tracker_ = tracker; }
+		/** Arno: (Re)Connect to tracker for this transfer, or global Channel::tracker if not set */
+		void 			ConnectToTracker();
+		/** Arno: Reconnect to the tracker if no established peers and
+		 * exp backoff allows it. */
+		void 			ReConnectToTrackerIfAllowed(bool hasestablishedpeers);
+
+		/** Arno: Callback to do maintenance for a transfer */
+		static void 	LibeventCleanCallback(int fd, short event, void *arg);
 
       protected:
+	    transfer_t			ttype_;
 		int					fd_;	// Arno: index into ContentTransfer::swarms vector
 
         /** Channels working for this transfer. */
@@ -360,6 +372,11 @@ namespace swift {
 
         // MULTIFILE
         Storage				*storage_;
+
+        Address 		tracker_; // Tracker for this transfer
+        tint			tracker_retry_interval_;
+        tint			tracker_retry_time_;
+
 
         friend void LibeventCleanCallback(int fd, short event, void *arg);
     };
@@ -382,7 +399,6 @@ namespace swift {
         ~FileTransfer();
 
         // LIVE
-        transfer_t 		ttype() { return FILE_TRANSFER; }
         const Sha1Hash& swarm_id() const { return hashtree_->root_hash(); }
 
         /** While we need to feed ACKs to every peer, we try (1) avoid
@@ -406,22 +422,6 @@ namespace swift {
         Availability&	availability() { return *availability_; }
 
 
-		/** Arno: set the tracker for this transfer. Reseting it won't kill
-		 * any existing connections.
-		 */
-		void SetTracker(Address tracker) { tracker_ = tracker; }
-
-		/** Arno: (Re)Connect to tracker for this transfer, or global Channel::tracker if not set */
-		void ConnectToTracker();
-
-		/** Arno: Reconnect to the tracker if no established peers and
-		 * exp backoff allows it.
-		 */
-		void ReConnectToTrackerIfAllowed(bool hasestablishedpeers);
-
-		// SAFECLOSE
-		static void LibeventCleanCallback(int fd, short event, void *arg);
-
 		//ZEROSTATE
 		/** Returns whether this FileTransfer is running in zero-state mode,
 		 * meaning that the hash tree is not mmapped into memory but read
@@ -441,10 +441,6 @@ namespace swift {
         // Ric: PPPLUG
         /** Availability in the swarm */
         Availability* 	availability_;
-
-        Address 		tracker_; // Tracker for this transfer
-        tint			tracker_retry_interval_;
-        tint			tracker_retry_time_;
 
         //ZEROSTATE
         bool			zerostate_;
@@ -476,7 +472,6 @@ namespace swift {
         /**    Close everything. */
         ~LiveTransfer();
 
-        transfer_t 		ttype() { return LIVE_TRANSFER; }
         const Sha1Hash& swarm_id() const { return swarm_id_; }
         /** The binmap for data already retrieved and checked. */
         binmap_t *     ack_out ()  { return &ack_out_; }

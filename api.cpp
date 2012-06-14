@@ -293,13 +293,11 @@ int     swift::LiveOpen(std::string filename, const Sha1Hash& hash,Address track
 	LiveTransfer *lt = new LiveTransfer(filename,hash,false,chunk_size);
     if (lt && lt->fd()) {
         // initiate tracker connections
+
+        // initiate tracker connections
     	// SWIFTPROC
-    	Channel *c = NULL;
-    	// Arno, 2012-01-09: Old hack: the tracker is assumed to be the live source
-        if (tracker != Address())
-        	c = new Channel(lt,INVALID_SOCKET,tracker,true);
-        else if (Channel::tracker!=Address())
-        	c = new Channel(lt,INVALID_SOCKET,Channel::tracker,true);
+    	lt->SetTracker(tracker);
+    	lt->ConnectToTracker();
         return lt->fd();
     }
 	return -1;

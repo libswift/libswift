@@ -15,7 +15,7 @@ using namespace swift;
 
 
 LiveTransfer::LiveTransfer(std::string filename, const Sha1Hash& swarm_id,bool amsource,size_t chunk_size) :
-		ContentTransfer(), swarm_id_(swarm_id), am_source_(amsource), filename_(filename),
+		ContentTransfer(LIVE_TRANSFER), swarm_id_(swarm_id), am_source_(amsource), filename_(filename),
 		chunk_size_(chunk_size), last_chunkid_(0), offset_(0)
 {
 	picker_ = new SimpleLivePiecePicker(this);
@@ -40,7 +40,6 @@ LiveTransfer::LiveTransfer(std::string filename, const Sha1Hash& swarm_id,bool a
 
 LiveTransfer::~LiveTransfer()
 {
-	Channel::CloseTransfer(this);
 	delete picker_;
 }
 
