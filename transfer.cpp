@@ -157,21 +157,8 @@ void FileTransfer::ConnectToTracker()
 }
 
 
-
-
-void    Channel::CloseTransfer (ContentTransfer* trans) {
-    for(int i=0; i<Channel::channels.size(); i++)
-        if (Channel::channels[i] && Channel::channels[i]->transfer_==trans)
-        {
-        	//fprintf(stderr,"Channel::CloseTransfer: delete #%i\n", Channel::channels[i]->id());
-        	Channel::channels[i]->Close(); // ARNO
-            delete Channel::channels[i];
-        }
-}
-
 FileTransfer::~FileTransfer ()
 {
-    Channel::CloseTransfer(this);
 	delete hashtree_;
 	if (!IsZeroState())
 	{

@@ -75,7 +75,6 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
         peer_ = tracker;
     this->id_ = channels.size();
     channels.push_back(this);
-    transfer_->hs_in().push_back(bin_t(id_));
     for(int i=0; i<4; i++) {
         owd_min_bins_[i] = TINT_NEVER;
         owd_current_[i] = TINT_NEVER;
@@ -347,6 +346,18 @@ int Channel::DecodeID(int scrambled) {
 int Channel::EncodeID(int unscrambled) {
     return unscrambled ^ (int)start;
 }
+
+
+void    Channel::CloseTransfer (ContentTransfer* trans) {
+    for(int i=0; i<Channel::channels.size(); i++)
+        if (Channel::channels[i] && Channel::channels[i]->transfer_==trans)
+        {
+        	//fprintf(stderr,"Channel::CloseTransfer: delete #%i\n", Channel::channels[i]->id());
+        	Channel::channels[i]->Close(); // ARNO
+            delete Channel::channels[i];
+        }
+}
+
 
 /*
  * class Address implementation

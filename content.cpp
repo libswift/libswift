@@ -30,13 +30,46 @@ ContentTransfer::ContentTransfer() :  mychannels_(), cb_installed(0), speedzeroc
 
 ContentTransfer::~ContentTransfer()
 {
-	GlobalDel();
-	delete storage_;
+	Channel::CloseTransfer(this);
+
+	CloseChannels(mychannels_);
+	if (storage_ != NULL)
+		delete storage_;
 
 	// Arno, 2012-02-06: Cancel cleanup timer, otherwise chaos!
 	evtimer_del(&evclean_);
+
+	GlobalDel();
 }
 
+
+void ContentTransfer::CloseChannels(std::set<Channel *>	delset)
+{
+	std::set<Channel *>::iterator iter;
+	for (iter=delset.begin(); iter!=delset.end(); iter++)
+	{
+		Channel *c = *iter;
+		c->Close();
+		mychannels_.erase(c);
+		delete c;
+	}
+}
+
+void ContentTransfer::GarbageCollectChannels()
+{
+	// STL and MS and conditional delete from set not a happy place :-(
+	std::set<Channel *>	delset;
+	std::set<Channel *>::iterator iter;
+	for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
+	{
+		Channel *c = *iter;
+		if (c != NULL) {
+			if (c->IsScheduled4Close())
+				delset.insert(c);
+		}
+	}
+	CloseChannels(delset);
+}
 
 void ContentTransfer::LibeventCleanCallback(int fd, short event, void *arg)
 {
@@ -46,24 +79,7 @@ void ContentTransfer::LibeventCleanCallback(int fd, short event, void *arg)
 	if (ct == NULL)
 		return;
 
-	// STL and MS and conditional delete from set not a happy place :-(
-	std::set<Channel *>	delset;
-	std::set<Channel *>::iterator iter;
-	for (iter=ct->mychannels_.begin(); iter!=ct->mychannels_.end(); iter++)
-	{
-		Channel *c = *iter;
-		if (c != NULL) {
-			if (c->IsScheduled4Close())
-				delset.insert(c);
-		}
-	}
-	for (iter=delset.begin(); iter!=delset.end(); iter++)
-	{
-		Channel *c = *iter;
-		c->Close();
-		ct->mychannels_.erase(c);
-		delete c;
-	}
+	ct->GarbageCollectChannels();
 
 	// Reschedule cleanup
     evtimer_assign(&(ct->evclean_),Channel::evbase,&ContentTransfer::LibeventCleanCallback,ct);
@@ -104,42 +120,33 @@ bool ContentTransfer::OnPexIn (const Address& addr) {
 	//if (addr.is_private())
 	//	return false;
 
-    for(int i=0; i<hs_in_.size(); i++) {
-        Channel* c = Channel::channel(hs_in_[i].toUInt());
-        if (c && c->transfer()->fd()==this->fd() && c->peer()==addr) {
+	std::set<Channel *>::iterator iter;
+    for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
+    {
+	    Channel *c = *iter;
+	    if (c != NULL && c->peer()==addr)
             return false; // already connected or connecting, Gertjan fix = return false
-        }
     }
     // Gertjan fix: PEX redo
-    if (hs_in_.size()<SWIFT_MAX_CONNECTIONS)
+    if (mychannels_.size()<SWIFT_MAX_CONNECTIONS)
         new Channel(this,Channel::default_socket(),addr);
     return true;
 }
 
 //Gertjan
-int ContentTransfer::RandomChannel (int own_id) {
-    binqueue choose_from;
-    int i;
-
-    for (i = 0; i < (int) hs_in_.size(); i++) {
-        if (hs_in_[i].toUInt() == own_id)
-            continue;
-        Channel *c = Channel::channel(hs_in_[i].toUInt());
-        if (c == NULL || c->transfer()->fd() != this->fd()) {
-            /* Channel was closed or is not associated with this ContentTransfer (anymore). */
-            hs_in_[i] = hs_in_[0];
-            hs_in_.pop_front();
-            i--;
-            continue;
-        }
-        if (!c->is_established())
-            continue;
-        choose_from.push_back(hs_in_[i]);
+Channel *ContentTransfer::RandomChannel(Channel *notc) {
+    std::vector<Channel *>	choose_from;
+	std::set<Channel *>::iterator iter;
+    for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
+    {
+	    Channel *c = *iter;
+	    if (c != NULL && c != notc && c->is_established())
+			choose_from.push_back(c);
     }
     if (choose_from.size() == 0)
-        return -1;
+        return NULL;
 
-    return choose_from[rand() % choose_from.size()].toUInt();
+    return choose_from[rand() % choose_from.size()];
 }
 
 

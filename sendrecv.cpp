@@ -912,17 +912,18 @@ void    Channel::AddPex (struct evbuffer *evb) {
         return;
 
     // Arno, 2012-02-28: Don't send private addresses to non-private peers.
-    int chid = 0, tries=0;
+    int tries=0;
+    Channel *c=NULL;
     Address a;
     while (true)
     {
     	// Arno, 2011-10-03: Choosing Gertjan's RandomChannel over RevealChannel here.
-    	chid = transfer()->RandomChannel(id_);
-    	if (chid==-1 || chid==id_ || tries > 5) {
+    	c = transfer()->RandomChannel(this);
+    	if (tries > 5) {
     		pex_requested_ = false;
     		return;
     	}
-    	a = channels[chid]->peer();
+    	a = c->peer();
     	if (!a.is_private() || (a.is_private() && peer().is_private()))
     		break;
     	tries++;
@@ -936,6 +937,7 @@ void    Channel::AddPex (struct evbuffer *evb) {
     pex_requested_ = false;
     /* Ensure that we don't add the same id to the reverse_pex_out_ queue
        more than once. */
+    int chid = c->id();
     for (tbqueue::iterator i = channels[chid]->reverse_pex_out_.begin();
             i != channels[chid]->reverse_pex_out_.end(); i++)
         if ((int) (i->bin.toUInt()) == id_)
@@ -968,7 +970,7 @@ void Channel::AddPexReq(struct evbuffer *evb) {
     pex_request_outstanding_ = false;
 
     // Initiate at most SWIFT_MAX_CONNECTIONS connections
-    if (transfer()->hs_in().size() >= SWIFT_MAX_CONNECTIONS ||
+    if (transfer()->GetChannels().size() >= SWIFT_MAX_CONNECTIONS ||
             // Check whether this channel has been providing useful peer information
             useless_pex_count_ > 2)
     {

@@ -22,8 +22,7 @@
 
   ACK        02, bin_32, timestamp_32
   HAVE       03, bin_32
-  Confirms successfull delivery of data. Used for
-congestion control, as well.
+  Confirms successfull delivery of data. Used for congestion control, as well.
 
   HINT        08, bin_32
   Practical value of "hints" is to avoid overlap, mostly.
@@ -284,16 +283,14 @@ namespace swift {
         void GlobalDel();
 
         /** Returns the type of transfer, FILE_TRANSFER or LIVE_TRANSFER */
-    	virtual transfer_t			ttype() = 0;
+    	virtual transfer_t	ttype() = 0;
     	/** Returns the global ID for this transfer */
         virtual const Sha1Hash& 	swarm_id() const = 0;
         /** The binmap pointer for data already retrieved and checked. */
-    	virtual binmap_t *          ack_out() = 0;
+    	virtual binmap_t *  ack_out() = 0;
     	/** Returns the number of bytes in a chunk for this transfer */
-        virtual size_t	  			chunk_size() = 0;
+        virtual size_t	  	chunk_size() = 0;
 
-        // ARNOTODO: this is duplicate of mychannels_
-        binqueue&        	hs_in() { return hs_in_; }
 		std::set<Channel *>& GetChannels() { return mychannels_; }
 		/** Piece picking strategy used by this transfer. */
         PiecePicker *    picker () { return picker_; }
@@ -311,7 +308,11 @@ namespace swift {
         // Gertjan fix: return bool
         bool            OnPexIn (const Address& addr);
         // Gertjan
-        int             RandomChannel (int own_id);
+        Channel *		RandomChannel(Channel *notc);
+		/** Arno: Return the Channel to peer "addr" that is not equal to "notc". */
+		Channel * 		FindChannel(const Address &addr, Channel *notc);
+		void			CloseChannels(std::set<Channel *>	delset);
+		void			GarbageCollectChannels();
 
 		// RATELIMIT
         /** Arno: Call when n bytes are received. */
@@ -330,9 +331,6 @@ namespace swift {
 		uint32_t		GetNumLeechers();
 		/** Arno: Return the number of seeders current channeled with. */
 		uint32_t		GetNumSeeders();
-
-		/** Arno: Return the Channel to peer "addr" that is not equal to "notc". */
-		Channel * FindChannel(const Address &addr, Channel *notc);
 
 		// MULTIFILE
 		Storage * GetStorage() { return storage_; }
@@ -399,8 +397,6 @@ namespace swift {
         binmap_t *      ack_out ()  { return hashtree_->ack_out(); }
         /** Piece picking strategy used by this transfer. */
         PiecePicker *   picker () { return picker_; }
-        /** The number of channels working for this transfer. */
-        int             channel_count () const { return hs_in_.size(); }
         /** Hash tree checked file; all the hashes and data are kept here. */
         HashTree *      hashtree() { return hashtree_; }
         /** Root SHA1 hash of the transfer (and the data file). */

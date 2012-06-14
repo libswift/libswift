@@ -40,6 +40,7 @@ LiveTransfer::LiveTransfer(std::string filename, const Sha1Hash& swarm_id,bool a
 
 LiveTransfer::~LiveTransfer()
 {
+	Channel::CloseTransfer(this);
 	delete picker_;
 }
 
