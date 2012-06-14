@@ -30,8 +30,6 @@ ContentTransfer::ContentTransfer() :  mychannels_(), cb_installed(0), speedzeroc
 
 ContentTransfer::~ContentTransfer()
 {
-	Channel::CloseTransfer(this);
-
 	CloseChannels(mychannels_);
 	if (storage_ != NULL)
 		delete storage_;
@@ -52,6 +50,7 @@ void ContentTransfer::CloseChannels(std::set<Channel *>	delset)
 		c->Close();
 		mychannels_.erase(c);
 		delete c;
+		// ~Channel removes it from Channel::channels
 	}
 }
 

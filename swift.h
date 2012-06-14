@@ -681,7 +681,6 @@ namespace swift {
         static Channel* channel(int i) {
             return i<channels.size()?channels[i]:NULL;
         }
-        static void CloseTransfer (ContentTransfer* trans);
 
         // SAFECLOSE
         void		ClearEvents();
@@ -811,6 +810,10 @@ namespace swift {
         static tint     last_tick;
         //static tbheap   send_queue;
 
+        // Arno, 2012-06-14: Replace with hashtable (unsorted_map). This
+        // currently grows for ever, filling with NULLs for old channels
+        // and results in channel IDs with are not really random.
+        //
         static std::vector<Channel*> channels;
 
         friend int      Listen (Address addr);
