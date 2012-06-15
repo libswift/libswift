@@ -46,7 +46,7 @@ class SimpleLivePiecePicker : public LivePiecePicker {
 public:
 
     SimpleLivePiecePicker (LiveTransfer* trans_to_pick_from) :
-           ack_hint_out_(), transfer_(trans_to_pick_from), twist_(0), hooking_in_(true), source_seen_(false), source_channel_id_(0), hookin_bin_(0,0), current_bin_(bin_t::ALL) {
+           ack_hint_out_(), transfer_(trans_to_pick_from), twist_(0), hooking_in_(true), source_seen_(false), source_channel_id_(0), hookin_bin_(bin_t::NONE), current_bin_(bin_t::NONE) {
         binmap_t::copy(ack_hint_out_, *(transfer_->ack_out()));
     }
     virtual ~SimpleLivePiecePicker() {}
