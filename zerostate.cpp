@@ -40,7 +40,7 @@ ZeroState::~ZeroState()
 
 void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 {
-	//fprintf(stderr,"zero clean: enter\n");
+	fprintf(stderr,"zero clean: enter\n");
 
 	// Arno, 2012-02-24: Why-oh-why, update NOW
 	Channel::Time();
@@ -53,9 +53,12 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 	std::set<FileTransfer *>	delset;
     for(int i=0; i<ContentTransfer::swarms.size(); i++)
     {
-    	FileTransfer *ft = (FileTransfer *)ContentTransfer::swarms[i];
-        if (ft && ft->IsZeroState())
+    	ContentTransfer *ct = ContentTransfer::swarms[i];
+        if (ct->ttype() == FILE_TRANSFER)
         {
+            FileTransfer *ft = (FileTransfer *)ct;
+            if (ft && ft->IsZeroState())
+            {
 
         	if (ft->GetChannels().size() == 0)
         	{
@@ -64,7 +67,8 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
         	}
         	else
         		dprintf("%s zero clean %s has %d peers\n",tintstr(),ft->root_hash().hex().c_str(), ft->GetChannels().size() );
-        }
+            }
+         }
     }
 
     // Delete 0-state FileTransfers sans peers

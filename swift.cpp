@@ -394,15 +394,18 @@ int utf8main (int argc, char** argv)
 			std::string schemeless = livesource_input.substr(httpprefix.length());
 			int sidx = schemeless.find("/");
 			if (sidx == -1)
-				quit("No path in live source input URL");
+			    quit("No path in live source input URL");
 			httppath = schemeless.substr(sidx);
 			std::string server = schemeless.substr(0,sidx);
 			sidx = server.find(":");
 			if (sidx != -1)
 			{
-				std::string portstr = server.substr(sidx);
-		        std::istringstream(portstr) >> httpport;
+			    httpservname = server.substr(0,sidx);
+			    std::string portstr = server.substr(sidx+1);
+		            std::istringstream(portstr) >> httpport;
 			}
+                        else
+                            httpservname = server;
 
 			fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str() );
 
