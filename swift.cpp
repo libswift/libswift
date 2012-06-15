@@ -30,6 +30,7 @@ void usage(void)
     fprintf(stderr,"Usage:\n");
     fprintf(stderr,"  -h, --hash\troot Merkle hash for the transmission\n");
     fprintf(stderr,"  -f, --file\tname of file to use (root hash by default)\n");
+    fprintf(stderr,"  -d, --dir\tname of directory to scan and seed\n");
     fprintf(stderr,"  -l, --listen\t[ip:|host:]port to listen to (default: random)\n");
     fprintf(stderr,"  -t, --tracker\t[ip:|host:]port of the tracker (default: none)\n");
     fprintf(stderr,"  -D, --debug\tfile name for debugging logs (default: stdout)\n");
@@ -46,10 +47,11 @@ void usage(void)
     fprintf(stderr,"  -z, --chunksize\tchunk size in bytes (default: %d)\n", SWIFT_DEFAULT_CHUNK_SIZE);
 	fprintf(stderr,"  -m, --printurl\tcompose URL from tracker, file and chunksize\n");
 	fprintf(stderr,"  -M, --multifile\tcreate multi-file spec with given files\n");
+	fprintf(stderr,"  -e, --zerosdir\tdirectory with checkpointed content to serve from with zero state\n");
     fprintf(stderr,"  -i, --source\tlive source input (URL or filename or - for stdin)\n");
-    fprintf(stderr,"  -e, --live\tperform live download, use with -t and -h\n");
+    fprintf(stderr,"  -k, --live\tperform live download, use with -t and -h\n");
 }
-#define quit(...) {usage(); fprintf(stderr,__VA_ARGS__); exit(1); }
+#define quit(...) {usage(); fprintf(stderr,__VA_ARGS__); print_error("fatal"); exit(1); }
 
 int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
 int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size, bool livestream);
@@ -258,6 +260,7 @@ int utf8main (int argc, char** argv)
             	break;
             case 'e': // ZEROSTATE
                 zerostatedir = strdup(optarg); // UNICODE
+                wait_time = TINT_NEVER;
                 break;
             case 'j': // WIN32
                 break;
@@ -319,7 +322,7 @@ int utf8main (int argc, char** argv)
     ZeroState *zs = ZeroState::GetInstance();
     zs->SetContentDir(zerostatedir);
 
-    if (!cmdgw_enabled && livesource_input == "")
+    if (!cmdgw_enabled && livesource_input == "" && zerostatedir == "")
     {
 		int ret = -1;
 		if (!generate_multifile)
@@ -414,8 +417,8 @@ int utf8main (int argc, char** argv)
 			evhttp_add_header(req->output_headers, "Host", httpservname.c_str());
 		}
 	}
-    else if (!cmdgw_enabled && !httpgw_enabled)
-    	quit("Not client, not live server, not a gateway?");
+    else if (!cmdgw_enabled && !httpgw_enabled && zerostatedir == "")
+    	quit("Not client, not live server, not a gateway, not zero state seeder?");
 
 	// Arno, 2012-01-04: Allow download and quit mode
 	if (single_fd != -1 && root_hash != Sha1Hash::ZERO && wait_time == 0) {

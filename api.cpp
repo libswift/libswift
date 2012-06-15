@@ -46,21 +46,15 @@ int swift::Find (Sha1Hash hash) {
  */
 
 
-int  swift::Open (std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size) {
+int  swift::Open (std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size)
+{
     FileTransfer* ft = new FileTransfer(filename, hash, check_hashes, chunk_size);
-    if (ft && ft->fd()) {
+	// initiate tracker connections
+	// SWIFTPROC
+	ft->SetTracker(tracker);
+	ft->ConnectToTracker();
 
-        // initiate tracker connections
-    	// SWIFTPROC
-    	ft->SetTracker(tracker);
-    	ft->ConnectToTracker();
-
-    	return ft->fd();
-    } else {
-        if (ft)
-            delete ft;
-        return -1;
-    }
+	return ft->fd();
 }
 
 
@@ -291,16 +285,12 @@ int swift::LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte, long offse
 int     swift::LiveOpen(std::string filename, const Sha1Hash& hash,Address tracker, bool check_hashes,size_t chunk_size)
 {
 	LiveTransfer *lt = new LiveTransfer(filename,hash,false,chunk_size);
-    if (lt && lt->fd()) {
-        // initiate tracker connections
 
-        // initiate tracker connections
-    	// SWIFTPROC
-    	lt->SetTracker(tracker);
-    	lt->ConnectToTracker();
-        return lt->fd();
-    }
-	return -1;
+	// initiate tracker connections
+	// SWIFTPROC
+	lt->SetTracker(tracker);
+	lt->ConnectToTracker();
+	return lt->fd();
 }
 
 

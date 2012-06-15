@@ -14,7 +14,7 @@ using namespace swift;
 /*
  * Global Variables
  */
-std::vector<ContentTransfer*> ContentTransfer::swarms(20);
+std::vector<ContentTransfer*> ContentTransfer::swarms;
 
 /*
  * Local Constants
