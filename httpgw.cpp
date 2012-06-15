@@ -281,7 +281,7 @@ void HttpGwWrite(int fdes) {
     	// Done; wait for outbuffer to empty
         dprintf("%s @%i http write: done, wait for buffer empty\n",tintstr(),req->id);
         if (evbuffer_get_length(outbuf) == 0) {
-        	dprintf("%s @i http write: final done\n",tintstr(),req->id );
+        	dprintf("%s @%i http write: final done\n",tintstr(),req->id );
         	HttpGwCloseConnection(req);
         }
     }
