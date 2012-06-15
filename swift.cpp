@@ -782,9 +782,11 @@ int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int ar
 
 #ifdef WIN32
 FILE *livesource_pfile = NULL;
-#define LIVESOURCE_BUFSIZE	10240
+#define LIVESOURCE_BUFSIZE	102400
+#define LIVESOURCE_INTERVAL	TINT_SEC
 #else
 #define LIVESOURCE_BUFSIZE	102400
+#define LIVESOURCE_INTERVAL	TINT_SEC/10
 #endif
 
 void LiveSourceFileTimerCallback(int fd, short event, void *arg) {
@@ -794,17 +796,17 @@ void LiveSourceFileTimerCallback(int fd, short event, void *arg) {
 	fprintf(stderr,"live: file: timer\n");
 
 #ifdef WIN32
-	if (pfile == NULL)
+	if (livesource_pfile == NULL)
 	{
-			pfile = _popen( "transcode15.bat", "rb" );
-			if (pfile == NULL)
+		livesource_pfile = _popen( "transcode15.bat", "rb" );
+			if (livesource_pfile == NULL)
 			{
 				print_error("live: file: popen failed" );
 				return;
 			}
 	}
 
-	int nread = fread(buf,sizeof(char),sizeof(buf),pfile);
+	int nread = fread(buf,sizeof(char),sizeof(buf),livesource_pfile);
 #else
 	int nread = read(livesource_fd,buf,sizeof(buf));
 #endif
@@ -823,7 +825,7 @@ void LiveSourceFileTimerCallback(int fd, short event, void *arg) {
 
 	// Reschedule
 	evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
-	evtimer_add(&evlivesource, tint2tv(TINT_SEC/10));
+	evtimer_add(&evlivesource, tint2tv(LIVESOURCE_INTERVAL));
 }
 
 
