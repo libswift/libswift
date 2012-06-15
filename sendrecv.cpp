@@ -344,7 +344,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         evbuffer_add_32be(evb, peer_channel_id_);
     }
 
-    if (hashtree()->chunk_size() != SWIFT_DEFAULT_CHUNK_SIZE && isretransmit) {
+    if (transfer()->chunk_size() != SWIFT_DEFAULT_CHUNK_SIZE && isretransmit) {
     	/* FRAGRAND
     	 * Arno, 2012-01-17: We observe strange behaviour when using
     	 * fragmented UDP packets. When ULANC sends a specific datagram ("995"),
@@ -621,12 +621,12 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 
     // Arno: Assuming DATA last message in datagram
     if (evbuffer_get_length(evb) > transfer()->chunk_size()) {
-    	dprintf("%s #%u !data chunk size mismatch %s: exp %lu got " PRISIZET "\n",tintstr(),id_,pos.str(bin_name_buf), hashtree()->chunk_size(), evbuffer_get_length(evb));
-    	fprintf(stderr,"WARNING: chunk size mismatch: exp %lu got " PRISIZET "\n",hashtree()->chunk_size(), evbuffer_get_length(evb));
+    	dprintf("%s #%u !data chunk size mismatch %s: exp %lu got " PRISIZET "\n",tintstr(),id_,pos.str(bin_name_buf), transfer()->chunk_size(), evbuffer_get_length(evb));
+    	fprintf(stderr,"WARNING: chunk size mismatch: exp %lu got " PRISIZET "\n",transfer()->chunk_size(), evbuffer_get_length(evb));
     }
 
     int length = (evbuffer_get_length(evb) < transfer()->chunk_size()) ? evbuffer_get_length(evb) : transfer()->chunk_size();
-    if (!hashtree()->ack_out()->is_empty(pos)) {
+    if (!transfer()->ack_out()->is_empty(pos)) {
         // Arno, 2012-01-24: print message for duplicate
         dprintf("%s #%u Ddata %s\n",tintstr(),id_,pos.str(bin_name_buf));
         evbuffer_drain(evb, length);
@@ -658,7 +658,10 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     	// LIVETODO: content integrity checking
         int ret = transfer()->GetStorage()->Write(data,length,pos.base_offset()*transfer()->chunk_size());
         if (ret < 0)
-        	print_error("pwrite failed");
+        {
+        	print_error("storage Write failed");
+                exit(-1);
+        }
         else
         	transfer()->ack_out()->set(pos);
     }
@@ -674,7 +677,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
         if (cover.layer()>=transfer()->cb_agg[i])
             transfer()->callbacks[i](transfer()->fd(),cover);  // FIXME
     if (cover.layer() >= 5) // Arno: tested with 32K, presently = 2 ** 5 * chunk_size CHUNKSIZE
-    	transfer()->OnRecvData( pow((double)2,(double)5)*((double)hashtree()->chunk_size()) );
+    	transfer()->OnRecvData( pow((double)2,(double)5)*((double)transfer()->chunk_size()) );
     data_in_.bin = pos;
 
     UpdateDIP(pos);
@@ -919,7 +922,7 @@ void    Channel::AddPex (struct evbuffer *evb) {
     {
     	// Arno, 2011-10-03: Choosing Gertjan's RandomChannel over RevealChannel here.
     	c = transfer()->RandomChannel(this);
-    	if (tries > 5) {
+    	if (c == NULL || tries > 5) {
     		pex_requested_ = false;
     		return;
     	}

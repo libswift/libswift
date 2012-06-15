@@ -92,7 +92,7 @@ Storage::~Storage()
 
 ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 {
-	//dprintf("%s %s storage: Write: nbyte %d off %lld\n", tintstr(), roothashhex().c_str(), nbyte,offset);
+	dprintf("%s %s storage: Write: fd %d nbyte %d off %lld state %d\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
 
 	if (state_ == STOR_STATE_SINGLE_FILE)
 	{
@@ -103,11 +103,12 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 	{
 		if (offset != 0)
 		{
-			errno = EINVAL;
-			return -1;
+                        dprintf("%s %s storage: Write: First write to offset >0, assume live\n", tintstr(), roothashhex().c_str() );
+			//errno = EINVAL;
+			//return -1;
 		}
 
-		//dprintf("%s %s storage: Write: chunk 0\n");
+		dprintf("%s %s storage: Write: chunk 0\n", tintstr(), roothashhex().c_str() );
 
 		// Check for multifile spec. If present, multifile, otherwise single
 		if (!strncmp((const char *)buf,MULTIFILE_PATHNAME.c_str(),strlen(MULTIFILE_PATHNAME.c_str())))
@@ -390,6 +391,7 @@ int Storage::OpenSingleFile()
 {
 	state_ = STOR_STATE_SINGLE_FILE;
 
+        dprintf("%s %s storage: Opening single file %s\n", tintstr(), roothashhex().c_str(), os_pathname_.c_str() );
 	single_fd_ = open_utf8(os_pathname_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
 	if (single_fd_<0) {
 		single_fd_ = -1;

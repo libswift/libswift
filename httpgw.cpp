@@ -55,12 +55,14 @@ struct http_gw_t {
     struct event 		  *sinkevwrite;
     std::string	mfspecname; // (optional) name from multi-file spec
     std::string xcontentdur;
+    bool   replied;
     bool   closing;
     uint64_t startoff;   // MULTIFILE: starting offset in content range of desired file
     uint64_t endoff;     // MULTIFILE: ending offset (careful, for an e.g. 100 byte interval this is 99)
     int replycode;	     // HTTP status code
     int64_t  rangefirst; // First byte wanted in HTTP GET Range request or -1
     int64_t  rangelast;  // Last byte wanted in HTTP GET Range request (also 99 for 100 byte interval) or -1
+     
 
 } http_requests[HTTPGW_MAX_REQUEST];
 
@@ -109,22 +111,22 @@ http_gw_t *HttpGwFindRequestBySwarmID(Sha1Hash &wanthash) {
 
 
 void HttpGwCloseConnection (http_gw_t* req) {
-	dprintf("%s @%i cleanup http request evreq %p\n",tintstr(),req->id, req->sinkevreq);
+	dprintf("%s @%i http get: cleanup evreq %p\n",tintstr(),req->id, req->sinkevreq);
 
 	struct evhttp_connection *evconn = evhttp_request_get_connection(req->sinkevreq);
 
 	req->closing = true;
-	if (req->offset > req->startoff)
-		evhttp_send_reply_end(req->sinkevreq); //WARNING: calls HttpGwLibeventCloseCallback
-	else
-		evhttp_request_free(req->sinkevreq);
 
+        if (!req->replied)
+             evhttp_request_free(req->sinkevreq);
+	else if (req->offset > req->startoff)
+	    evhttp_send_reply_end(req->sinkevreq); //WARNING: calls HttpGwLibeventCloseCallback
 	req->sinkevreq = NULL;
 
 	if (req->sinkevwrite != NULL)
 	{
-    	event_free(req->sinkevwrite);
-    	req->sinkevwrite = NULL;
+    	    event_free(req->sinkevwrite);
+    	    req->sinkevwrite = NULL;
 	}
 
 	// Note: for some reason calling conn_free here prevents the last chunks
@@ -182,12 +184,12 @@ void HttpGwLibeventCloseCallback(struct evhttp_connection *evconn, void *evreqvo
 
 void HttpGwWrite(int fdes) {
 
-	//
-	// Write to HTTP socket.
-	//
+    //
+    // Write to HTTP socket.
+    //
 
-	http_gw_t* req = HttpGwFindRequestByFD(fdes);
-	if (req == NULL) {
+    http_gw_t* req = HttpGwFindRequestByFD(fdes);
+    if (req == NULL) {
     	print_error("httpgw: MayWrite: can't find req for transfer");
         return;
     }
@@ -196,15 +198,16 @@ void HttpGwWrite(int fdes) {
     if (req->offset == req->startoff) {
     	// Not just for chunked encoding, see libevent2's http.c
     	evhttp_send_reply_start(req->sinkevreq, req->replycode, "OK");
+        req->replied = true;
     }
 
-	// SEEKTODO: stop downloading when file complete
+    // SEEKTODO: stop downloading when file complete
 
-	// Update endoff as size becomes less fuzzy
-	if (swift::Size(req->fdes) < req->endoff)
-		req->endoff = swift::Size(req->fdes)-1;
+    // Update endoff as size becomes less fuzzy
+    if (swift::Size(req->fdes) < req->endoff)
+        req->endoff = swift::Size(req->fdes)-1;
 
-	// How much can we write?
+    // How much can we write?
     uint64_t relcomplete = swift::SeqComplete(req->fdes,req->startoff);
     if (relcomplete > req->endoff)
     	relcomplete = req->endoff+1-req->startoff;
@@ -498,6 +501,7 @@ bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
 		evhttp_add_header(repheaders, "Content-Range", cross.str().c_str() );
 
 		evhttp_send_error(req->sinkevreq,416,"Malformed range specification");
+                req->replied = true;
 
 		dprintf("%s @%i http get: invalid range %lld-%lld\n",tintstr(),req->id,req->rangefirst,req->rangelast );
 		return false;
@@ -566,9 +570,10 @@ void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
 	// Is storage ready?
 	ContentTransfer *ct = ContentTransfer::transfer(fdes);
 	if (ct == NULL) {
-		dprintf("%s @%i http first: ContentTransfer not found\n",tintstr(),req->id);
-    	evhttp_send_error(req->sinkevreq,500,"Internal error: Content not found although downloading it.");
-    	return;
+	    dprintf("%s @%i http first: ContentTransfer not found\n",tintstr(),req->id);
+            evhttp_send_error(req->sinkevreq,500,"Internal error: Content not found although downloading it.");
+            req->replied = true;
+            return;
 	}
 
 	if (ct->ttype() == FILE_TRANSFER)
@@ -608,6 +613,7 @@ void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
 		}
 		if (!found) {
 			evhttp_send_error(req->sinkevreq,404,"Individual file not found in multi-file content.");
+                        req->replied = true;
 			return;
 		}
 	}
@@ -621,7 +627,9 @@ void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
 
 	// Handle HTTP GET Range request, i.e. additional offset within content
 	// or file. Sets some headers or sends HTTP error.
-	if (!HttpGwParseContentRangeHeader(req,filesize))
+        if (req->xcontentdur == "-1") //LIVE
+	    req->rangefirst = -1; 
+	else if (!HttpGwParseContentRangeHeader(req,filesize))
 		return;
 
 	if (req->rangefirst != -1)
@@ -644,6 +652,7 @@ void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
 		int ret = swift::Seek(req->fdes,req->startoff,SEEK_SET);
 		if (ret < 0) {
 			evhttp_send_error(req->sinkevreq,500,"Internal error: Cannot seek to file start in range request or multi-file content.");
+                        req->replied = true;
 			return;
 		}
 	}
@@ -827,7 +836,14 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     mfstr = puri["filename"];
     durstr = puri["durationstr"];
 
-    dprintf("%s @%i http get: demands %s %s %s\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str(),mfstr.c_str(),durstr.c_str() );
+    // Arno, 2012-06-15: LIVE: VLC can't take @-1 as in URL, so workaround
+    if (hashstr.length() > 40 && hashstr.substr(hashstr.length()-2) == "-1")
+    {
+        hashstr = hashstr.substr(0,40);
+        durstr = "-1";
+    }
+
+    dprintf("%s @%i http get: demands %s mf %s dur %s\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str(),mfstr.c_str(),durstr.c_str() );
 
 
     // 3. Check for concurrent requests, currently not supported.
@@ -843,7 +859,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     int fdes = swift::Find(swarm_id);
     if (fdes==-1) {
     	// LIVE
-        if (durstr == "-1") {
+        if (durstr != "-1") {
         	fdes = swift::Open(hashstr,swarm_id,Address(),false,httpgw_chunk_size);
         }
         else {
@@ -874,6 +890,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     req->lastcpoffset = 0;
     req->sinkevwrite = NULL;
     req->closing = false;
+    req->replied = false;
     req->startoff = 0;
     req->endoff = 0;
 
