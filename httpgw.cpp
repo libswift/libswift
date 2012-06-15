@@ -548,8 +548,6 @@ void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
     //
     dprintf("%s T%i http first progress\n",tintstr(),fdes);
 
-    fprintf(stderr,"httpgw: FirstProgres: hook-in at %lli\n", swift::GetHookinOffset(fdes) );
-
     // Need the first chunk
     if (swift::SeqComplete(fdes) == 0)
     {
@@ -570,6 +568,10 @@ void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
         dprintf("%s @%i http first: already set tosend\n",tintstr(),req->id);
         return;
     }
+
+    if (req->xcontentdur == "-1")
+    	fprintf(stderr,"httpgw: Live: hook-in at %llu\n", swift::GetHookinOffset(fdes) );
+
 
     // MULTIFILE
     // Is storage ready?
@@ -912,9 +914,6 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     // Register callback for connection close
     struct evhttp_connection *evconn = evhttp_request_get_connection(req->sinkevreq);
     evhttp_connection_set_closecb(evconn,HttpGwLibeventCloseCallback,req->sinkevreq);
-
-
-    fprintf(stderr,"httpgw: Size is %lli\n", swift::Size(fdes) );
 
     if (swift::SeqComplete(fdes) > 0) {
         /*

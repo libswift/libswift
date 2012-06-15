@@ -40,7 +40,7 @@ ZeroState::~ZeroState()
 
 void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 {
-	fprintf(stderr,"zero clean: enter\n");
+	//fprintf(stderr,"zero clean: enter\n");
 
 	// Arno, 2012-02-24: Why-oh-why, update NOW
 	Channel::Time();
@@ -54,19 +54,18 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
     for(int i=0; i<ContentTransfer::swarms.size(); i++)
     {
     	ContentTransfer *ct = ContentTransfer::swarms[i];
-        if (ct->ttype() == FILE_TRANSFER)
+        if (ct && ct->ttype() == FILE_TRANSFER)
         {
             FileTransfer *ft = (FileTransfer *)ct;
-            if (ft && ft->IsZeroState())
+            if (ft->IsZeroState())
             {
-
-        	if (ft->GetChannels().size() == 0)
-        	{
-        		// Ain't go no clients, cleanup.
-        		delset.insert(ft);
-        	}
-        	else
-        		dprintf("%s zero clean %s has %d peers\n",tintstr(),ft->root_hash().hex().c_str(), ft->GetChannels().size() );
+				if (ft->GetChannels().size() == 0)
+				{
+					// Ain't go no clients, cleanup.
+					delset.insert(ft);
+				}
+				else
+					dprintf("%s zero clean %s has %d peers\n",tintstr(),ft->root_hash().hex().c_str(), ft->GetChannels().size() );
             }
          }
     }

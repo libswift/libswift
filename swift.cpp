@@ -402,10 +402,10 @@ int utf8main (int argc, char** argv)
 			{
 			    httpservname = server.substr(0,sidx);
 			    std::string portstr = server.substr(sidx+1);
-		            std::istringstream(portstr) >> httpport;
+                std::istringstream(portstr) >> httpport;
 			}
-                        else
-                            httpservname = server;
+            else
+                httpservname = server;
 
 			fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str() );
 
@@ -780,14 +780,34 @@ int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int ar
 }
 
 
+#ifdef WIN32
+FILE *livesource_pfile = NULL;
+#define LIVESOURCE_BUFSIZE	10240
+#else
+#define LIVESOURCE_BUFSIZE	102400
+#endif
+
 void LiveSourceFileTimerCallback(int fd, short event, void *arg) {
 
-	char buf[102400];
+	char buf[LIVESOURCE_BUFSIZE];
 
 	fprintf(stderr,"live: file: timer\n");
 
-	int nread = read(livesource_fd,buf,sizeof(buf));
+#ifdef WIN32
+	if (pfile == NULL)
+	{
+			pfile = _popen( "transcode15.bat", "rb" );
+			if (pfile == NULL)
+			{
+				print_error("live: file: popen failed" );
+				return;
+			}
+	}
 
+	int nread = fread(buf,sizeof(char),sizeof(buf),pfile);
+#else
+	int nread = read(livesource_fd,buf,sizeof(buf));
+#endif
 	fprintf(stderr,"live: file: read returned %d\n", nread );
 
 	if (nread < -1)

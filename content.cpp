@@ -99,7 +99,7 @@ void ContentTransfer::GarbageCollectChannels()
 
 void ContentTransfer::LibeventCleanCallback(int fd, short event, void *arg)
 {
-	fprintf(stderr,"ContentTransfer: CleanCallback: **************\n");
+	fprintf(stderr,"ContentTransfer::CleanCallback\n");
 
 	// Arno, 2012-02-24: Why-oh-why, update NOW
 	Channel::Time();
