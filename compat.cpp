@@ -84,7 +84,6 @@ void*   memory_map (int fd, size_t size) {
     return mapping;
 #else
     HANDLE fhandle = (HANDLE)_get_osfhandle(fd);
-    assert(fd<1024);
     HANDLE maphandle = CreateFileMapping(     fhandle,
                                        NULL,
                                        PAGE_READWRITE,
