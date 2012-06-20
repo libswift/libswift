@@ -1,2 +1,2 @@
-CALL c:\python271\Scripts\scons
+CALL c:\python273\Scripts\scons
 copy swift.exe ..\..
