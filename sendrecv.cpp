@@ -210,7 +210,7 @@ void    Channel::Send () {
             peer_channel_id_);
     int r = SendTo(socket_,peer(),evb);
     if (r==-1)
-        print_error("can't send datagram");
+        print_error("swift can't send datagram");
     else
     	raw_bytes_up_ += r;
     last_send_time_ = NOW;
