@@ -57,8 +57,8 @@ std::string scan_dirname="";
 uint32_t chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;
 Address tracker;
 
-
-
+long long int cmdgw_report_counter=0;
+long long int cmdgw_report_interval=1; // seconds
 
 // UNICODE: TODO, convert to std::string carrying UTF-8 arguments. Problem is
 // a string based getopt_long type parser.
@@ -88,6 +88,7 @@ int utf8main (int argc, char** argv)
         {"multifile",required_argument, 0, 'M'}, // MULTIFILE
         {"zerosdir",required_argument, 0, 'e'},  // ZEROSTATE
         {"dummy",no_argument, 0, 'j'},  // WIN32
+        {"cmdgwint",required_argument, 0, 'C'}, // SWIFTPROC
         {0, 0, 0, 0}
     };
 
@@ -105,7 +106,7 @@ int utf8main (int argc, char** argv)
     Channel::evbase = event_base_new();
 
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:j", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:jC:", long_options, 0)) ) {
         switch (c) {
             case 'h':
                 if (strlen(optarg)!=40)
@@ -221,6 +222,11 @@ int utf8main (int argc, char** argv)
                 break;
             case 'j': // WIN32
                 break;
+            case 'C': // SWIFTPROC
+                if (sscanf(optarg,"%lli",&cmdgw_report_interval)!=1)
+                	quit("report interval must be int\n");
+                break;
+
         }
 
     }   // arguments parsed
@@ -571,8 +577,10 @@ void ReportCallback(int fd, short event, void *arg) {
     	int ret = event_base_loopexit(Channel::evbase,&tv);
     }
 	// SWIFTPROC
-	// ARNOSMPTODO: SCALE: perhaps less than once a second if many swarms
-	CmdGwUpdateDLStatesCallback();
+    if (cmdgw_report_interval == 1 || ((cmdgw_report_counter % cmdgw_report_interval) == 0))
+    	CmdGwUpdateDLStatesCallback();
+
+	cmdgw_report_counter++;
 
 	// Gertjan fix
 	// Arno, 2011-10-04: Temp disable
