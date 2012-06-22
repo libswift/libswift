@@ -78,9 +78,9 @@ std::string    Sha1Hash::hex() const {
 
 
 MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool check_hashes, std::string binmap_filename) :
-storage_(storage), root_hash_(root_hash), hashes_(NULL), peak_count_(0), hash_fd_(0),
- size_(0), sizec_(0), complete_(0), completec_(0),
-chunk_size_(chunk_size)
+ HashTree(), storage_(storage), root_hash_(root_hash), hashes_(NULL),
+ peak_count_(0), hash_fd_(0), size_(0), sizec_(0), complete_(0), completec_(0),
+ chunk_size_(chunk_size)
 {
 	// MULTIFILE
 	storage_->SetHashTree(this);
@@ -114,8 +114,8 @@ chunk_size_(chunk_size)
 
     hash_fd_ = open_utf8(hash_filename.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (hash_fd_<0) {
-        hash_fd_ = 0;
         print_error("cannot open hash file");
+        SetBroken();
         return;
     }
 
@@ -131,6 +131,7 @@ chunk_size_(chunk_size)
     	FILE *fp = fopen_utf8(binmap_filename.c_str(),"rb");
     	if (!fp) {
     		 print_error("hashtree: cannot open .mbinmap file");
+    		 SetBroken();
     		 return;
     	}
     	if (deserialize(fp) < 0) {
@@ -149,12 +150,13 @@ chunk_size_(chunk_size)
 
 
 MmapHashTree::MmapHashTree(bool dummy, std::string binmap_filename) :
-root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), hash_fd_(0),
+HashTree(), root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), hash_fd_(0),
 filename_(""), size_(0), sizec_(0), complete_(0), completec_(0),
 chunk_size_(0)
 {
 	FILE *fp = fopen_utf8(binmap_filename.c_str(),"rb");
 	if (!fp) {
+		 SetBroken();
 		 return;
 	}
 	if (partial_deserialize(fp) < 0) {
@@ -178,6 +180,7 @@ void            MmapHashTree::Submit () {
     if (!hashes_) {
         size_ = sizec_ = complete_ = completec_ = 0;
         print_error("mmap failed");
+        SetBroken();
         return;
     }
     size_t last_piece_size = (sizec_ - 1) % (chunk_size_) + 1;
@@ -188,6 +191,7 @@ void            MmapHashTree::Submit () {
         if (rd<(chunk_size_) && i!=sizec_-1) {
             free(hashes_);
             hashes_=NULL;
+            SetBroken();
             return;
         }
         bin_t pos(0,i);
@@ -206,7 +210,6 @@ void            MmapHashTree::Submit () {
     }
 
     root_hash_ = DeriveRoot();
-
 }
 
 
@@ -218,7 +221,7 @@ void            MmapHashTree::RecoverProgress () {
 	//fprintf(stderr,"hashtree: recover: cs %i\n", chunk_size_);
 
 	if (!RecoverPeakHashes())
-		return;
+		return; // Not fatal
 
     // at this point, we may use mmapd hashes already
     // so, lets verify hashes and the data we've got

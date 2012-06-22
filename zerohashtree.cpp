@@ -28,7 +28,7 @@ using namespace swift;
 
 
 ZeroHashTree::ZeroHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool check_hashes, std::string binmap_filename) :
-storage_(storage), root_hash_(root_hash), peak_count_(0), hash_fd_(0),
+HashTree(), storage_(storage), root_hash_(root_hash), peak_count_(0), hash_fd_(0),
  size_(0), sizec_(0), complete_(0), completec_(0),
 chunk_size_(chunk_size)
 {
@@ -37,13 +37,16 @@ chunk_size_(chunk_size)
 
     hash_fd_ = open_utf8(hash_filename.c_str(),ROOPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (hash_fd_<0) {
-        hash_fd_ = 0;
         print_error("cannot open hash file");
+        SetBroken();
         return;
     }
 
     if (!RecoverPeakHashes())
+    {
     	dprintf("%s zero hashtree could not recover peak hashes, fatal\n",tintstr() );
+    	SetBroken();
+    }
 
 	complete_ = size_;
 	completec_ = sizec_;

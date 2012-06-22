@@ -29,8 +29,9 @@ std::vector<FileTransfer*> FileTransfer::files(20);
 // FIXME: separate Bootstrap() and Download(), then Size(), Progress(), SeqProgress()
 
 FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool check_hashes, uint32_t chunk_size, bool zerostate) :
-    fd_(files.size()+1), cb_installed(0), mychannels_(),
-    speedzerocount_(0), tracker_(), tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START), tracker_retry_time_(NOW), zerostate_(zerostate)
+	Operational(), fd_(files.size()+1), cb_installed(0), mychannels_(),
+    speedzerocount_(0), tracker_(), tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START),
+    tracker_retry_time_(NOW), zerostate_(zerostate)
 {
     if (files.size()<fd()+1)
         files.resize(fd()+1);
@@ -89,6 +90,8 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
     evtimer_assign(&evclean_,Channel::evbase,&FileTransfer::LibeventCleanCallback,this);
     evtimer_add(&evclean_,tint2tv(5*TINT_SEC));
 
+    if ((hashtree_ != NULL && !hashtree_->IsOperational()) || !storage_->IsOperational())
+    	SetBroken();
 }
 
 

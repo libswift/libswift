@@ -261,7 +261,7 @@ namespace swift {
     class Storage;
 
     /** A class representing single file transfer. */
-    class    FileTransfer {
+    class    FileTransfer : public Operational {
 
     public:
 
@@ -723,7 +723,7 @@ namespace swift {
     /*
      * Class representing a single file in a multi-file swarm.
      */
-    class StorageFile
+    class StorageFile : public Operational
     {
        public:
     	 StorageFile(std::string specpath, int64_t start, int64_t size, std::string ospath);
@@ -765,7 +765,7 @@ namespace swift {
 	 * pseudo filename META-INF-multifile-spec.txt) are the contents of the
 	 * swarm.
      */
-	class Storage {
+	class Storage : public Operational {
 
 	  public:
 

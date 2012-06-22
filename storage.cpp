@@ -22,7 +22,9 @@ using namespace swift;
 const std::string Storage::MULTIFILE_PATHNAME = "META-INF-multifilespec.txt";
 const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 
-Storage::Storage(std::string ospathname, std::string destdir, int transferfd) : state_(STOR_STATE_INIT),
+Storage::Storage(std::string ospathname, std::string destdir, int transferfd) :
+		Operational(),
+		state_(STOR_STATE_INIT),
 		os_pathname_(ospathname), destdir_(destdir), ht_(NULL), spec_size_(0),
 		single_fd_(-1), reserved_size_(-1), total_size_from_spec_(-1), last_sf_(NULL),
 		transfer_fd_(transferfd), alloc_cb_(NULL)
@@ -44,6 +46,7 @@ Storage::Storage(std::string ospathname, std::string destdir, int transferfd) : 
 	{
 		dprintf("%s %s storage: File exists, but error opening\n", tintstr(), roothashhex().c_str() );
 		print_error("Could not open existing storage file");
+		SetBroken();
 		return;
 	}
 
@@ -51,7 +54,10 @@ Storage::Storage(std::string ospathname, std::string destdir, int transferfd) : 
 	int ret = fread(readbuf,sizeof(char),MULTIFILE_PATHNAME.length(),fp);
 	fclose(fp);
 	if (ret < 0)
+	{
+		SetBroken();
 		return;
+	}
 
 	if (!strncmp(readbuf,MULTIFILE_PATHNAME.c_str(),MULTIFILE_PATHNAME.length()))
 	{
@@ -63,7 +69,10 @@ Storage::Storage(std::string ospathname, std::string destdir, int transferfd) : 
 		StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,fsize,ospathname);
 		sfs_.push_back(sf);
 		if (ParseSpec(sf) < 0)
+		{
 			print_error("storage: error parsing multi-file spec");
+			SetBroken();
+		}
 	}
 	else
 	{
@@ -309,6 +318,7 @@ int Storage::ParseSpec(StorageFile *sf)
 	if (fp == NULL)
 	{
 		print_error("cannot open multifile-spec");
+		SetBroken();
 		return -1;
 	}
 
@@ -378,7 +388,10 @@ int Storage::ParseSpec(StorageFile *sf)
 
 	fclose(fp);
 	if (ret < 0)
+	{
+		SetBroken();
 		return ret;
+	}
 	else {
 		total_size_from_spec_ = offset;
 		return 0;
@@ -394,6 +407,7 @@ int Storage::OpenSingleFile()
 	if (single_fd_<0) {
 		single_fd_ = -1;
 		print_error("storage: cannot open single file");
+		SetBroken();
 		return -1;
 	}
 
@@ -405,6 +419,7 @@ int Storage::OpenSingleFile()
 		{
 			close(single_fd_);
 			single_fd_ = -1;
+			SetBroken();
 		}
 	}
 
@@ -606,7 +621,9 @@ std::string Storage::os2specpn(std::string ospn)
 
 
 
-StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std::string ospath) : fd_(-1)
+StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std::string ospath) :
+		Operational(),
+		fd_(-1)
 {
 	spec_pathname_ = specpath;
 	start_ = start;
@@ -646,14 +663,17 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
 				fprintf(stderr,"StorageFile: mkdir %s returns %d\n", path.c_str(), ret );
 
 				if (ret < 0)
+				{
+					SetBroken();
 					return;
+				}
 			}
 			else if (ret == 1)
 			{
 				// Something already exists and it is not a dir
 
 				fprintf(stderr,"StorageFile: exists %s but is not dir %d\n", path.c_str(), ret );
-
+				SetBroken();
 				return;
 			}
 		}
@@ -665,6 +685,7 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
 	if (fd_<0) {
 		//print_error("storage: file: Could not open");
 		dprintf("%s %s storage: file: Could not open %s\n", tintstr(), "0000000000000000000000000000000000000000", os_pathname_.c_str() );
+		SetBroken();
         return;
 	}
 }

@@ -440,7 +440,7 @@ void    swift::Shutdown (int sock_des) {
 
 int      swift::Open (std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size) {
     FileTransfer* ft = new FileTransfer(filename, hash, check_hashes, chunk_size);
-    if (ft && ft->fd()) {
+    if (ft->fd() && ft->IsOperational()) {
 
         // initiate tracker connections
     	// SWIFTPROC
@@ -449,8 +449,7 @@ int      swift::Open (std::string filename, const Sha1Hash& hash, Address tracke
 
     	return ft->fd();
     } else {
-        if (ft)
-            delete ft;
+		delete ft;
         return -1;
     }
 }

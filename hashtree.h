@@ -12,6 +12,7 @@
 #include <string>
 #include "bin.h"
 #include "binmap.h"
+#include "operational.h"
 
 namespace swift {
 
@@ -60,8 +61,9 @@ class Storage;
     spoon-fed later, OR a MmapHashTree is initialized with a data file, so
     the hash tree is derived, including the root hash.
  */
-class HashTree {
+class HashTree : public Operational {
   public:
+	HashTree() : Operational() {}
     /** Offer a hash; returns true if it verified; false otherwise.
      Once it cannot be verified (no sibling or parent), the hash
      is remembered, while returning false. */
@@ -101,6 +103,7 @@ class HashTree {
     // for transfertest.cpp
     virtual Storage *       get_storage() = 0;
     virtual void            set_size(uint64_t size) = 0;
+
     virtual ~HashTree() {};
 };
 
@@ -191,7 +194,7 @@ public:
 
 
 /** This class implements the HashTree interface by reading directly from disk */
-class ZeroHashTree : public HashTree {
+class ZeroHashTree : public HashTree  {
     /** Merkle hash tree: root */
     Sha1Hash        root_hash_;
     /** Merkle hash tree: peak hashes */
