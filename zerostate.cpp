@@ -101,15 +101,15 @@ FileTransfer * ZeroState::Find(Sha1Hash &root_hash)
 
 	std::string reqfilename = file_name;
     int ret = file_exists_utf8(reqfilename);
-	if (ret == 0 || ret == 2)
+	if (ret < 0 || ret == 0 || ret == 2)
 		return NULL;
 	reqfilename = file_name+".mbinmap";
     ret = file_exists_utf8(reqfilename);
-	if (ret == 0 || ret == 2)
+	if (ret < 0 || ret == 0 || ret == 2)
 		return NULL;
 	reqfilename = file_name+".mhash";
     ret = file_exists_utf8(reqfilename);
-	if (ret == 0 || ret == 2)
+	if (ret < 0 || ret == 0 || ret == 2)
 		return NULL;
 
 	FileTransfer *ft = new FileTransfer(file_name,root_hash,false,chunk_size,true);
