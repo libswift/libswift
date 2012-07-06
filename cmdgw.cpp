@@ -294,7 +294,7 @@ void CmdGwGotPEERADDR(Sha1Hash &want_hash, Address &peer)
 
 
 
-void CmdGwSendINFOHashChecking(cmd_gw_t* req, Sha1Hash root_hash)
+void CmdGwSendINFOHashChecking(evutil_socket_t cmdsock, Sha1Hash root_hash)
 {
 	// Send INFO DLSTATUS_HASHCHECKING message.
 
@@ -302,7 +302,7 @@ void CmdGwSendINFOHashChecking(cmd_gw_t* req, Sha1Hash root_hash)
 	sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",root_hash.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,3.14,0,0);
 
     //fprintf(stderr,"cmd: SendINFO: %s", cmd);
-    send(req->cmdsock,cmd,strlen(cmd),0);
+    send(cmdsock,cmd,strlen(cmd),0);
 }
 
 
@@ -815,12 +815,9 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         	dprintf("cmd: START: request for given root hash already exists\n");
         	return ERROR_BAD_ARG;
         }
-        req = cmd_requests + cmd_gw_reqs_open++;
-        req->id = ++cmd_gw_reqs_count;
-        req->cmdsock = cmdsock;
 
         // Send INFO DLSTATUS_HASHCHECKING
-		CmdGwSendINFOHashChecking(req,root_hash);
+		CmdGwSendINFOHashChecking(cmdsock,root_hash);
 
 		// ARNOSMPTODO: disable/interleave hashchecking at startup
         int transfer = swift::Find(root_hash);
@@ -833,20 +830,21 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             transfer = swift::Open(filename,root_hash,trackaddr,false,chunksize);
             if (transfer == -1)
             {
-            	CmdGwFreeRequest(req);
-            	*req = cmd_requests[--cmd_gw_reqs_open];
-
             	CmdGwSendERRORBySocket(cmdsock,"bad swarm",root_hash);
             	return ERROR_BAD_SWARM;
             }
         }
 
-        // RATELIMIT
-        //FileTransfer::file(transfer)->SetMaxSpeed(DDIR_DOWNLOAD,512*1024);
-
+        // All is well, register req
+        req = cmd_requests + cmd_gw_reqs_open++;
+        req->id = ++cmd_gw_reqs_count;
+        req->cmdsock = cmdsock;
         req->transfer = transfer;
         req->startt = usec_time();
         req->mfspecname = mfstr;
+
+        // RATELIMIT
+        //FileTransfer::file(transfer)->SetMaxSpeed(DDIR_DOWNLOAD,512*1024);
 
         if (cmd_gw_debug)
         	fprintf(stderr,"cmd: Already on disk is %lli/%lli\n", swift::Complete(transfer), swift::Size(transfer));
