@@ -113,7 +113,7 @@ void CmdGwCloseConnection(evutil_socket_t sock)
 	// Doesn't remove .mhash state or content
 
 	if (cmd_gw_debug)
-		fprintf(stderr,"CmdGwCloseConnection: ENTER\n");
+		fprintf(stderr,"CmdGwCloseConnection: ENTER %d\n", sock );
 
 	bool scanning = true;
 	while (scanning)
@@ -135,6 +135,9 @@ void CmdGwCloseConnection(evutil_socket_t sock)
 	        }
 	    }
 	}
+
+	// Arno, 2012-07-06: Close
+	swift::close_socket(sock);
 
 	cmd_gw_conns_open--;
 }
@@ -563,6 +566,8 @@ void CmdGwUpdateDLStateCallback(cmd_gw_t* req)
 
 	// Update speed measurements such that they decrease when DL/UL stops
 	FileTransfer *ft = FileTransfer::file(req->transfer);
+	if (ft == NULL) // Concurrency between ERROR_BAD_SWARM and this periodic callback
+		return;
 	ft->OnRecvData(0);
 	ft->OnSendData(0);
 
@@ -711,11 +716,13 @@ void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line)
 			msg = "missing parameter";
 		else if (ret == ERROR_BAD_ARG)
 			msg = "bad parameter";
-		// BAD_SWARM already sent
+		// BAD_SWARM already sent, and not fatal
 
 		if (msg != "")
+		{
 			CmdGwSendERRORBySocket(cmdsock,msg);
-        CmdGwCloseConnection(cmdsock);
+			CmdGwCloseConnection(cmdsock);
+		}
 	}
 
     free(copyline);
