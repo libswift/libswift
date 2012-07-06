@@ -833,6 +833,9 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             transfer = swift::Open(filename,root_hash,trackaddr,false,chunksize);
             if (transfer == -1)
             {
+            	CmdGwFreeRequest(req);
+            	*req = cmd_requests[--cmd_gw_reqs_open];
+
             	CmdGwSendERRORBySocket(cmdsock,"bad swarm",root_hash);
             	return ERROR_BAD_SWARM;
             }
