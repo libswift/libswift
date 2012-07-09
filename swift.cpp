@@ -89,6 +89,9 @@ int utf8main (int argc, char** argv)
         {"zerosdir",required_argument, 0, 'e'},  // ZEROSTATE
         {"dummy",no_argument, 0, 'j'},  // WIN32
         {"cmdgwint",required_argument, 0, 'C'}, // SWIFTPROC
+        {"filehex",    required_argument, 0, '1'},  // SWIFTPROCUNICODE
+        {"urlfilehex",required_argument, 0, '2'},   // SWIFTPROCUNICODE
+        {"zerosdirhex",required_argument, 0, '3'},  // SWIFTPROCUNICODE
         {0, 0, 0, 0}
     };
 
@@ -106,7 +109,7 @@ int utf8main (int argc, char** argv)
     Channel::evbase = event_base_new();
 
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:jC:", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:jC:1:2:3:", long_options, 0)) ) {
         switch (c) {
             case 'h':
                 if (strlen(optarg)!=40)
@@ -226,7 +229,22 @@ int utf8main (int argc, char** argv)
                 if (sscanf(optarg,"%lli",&cmdgw_report_interval)!=1)
                 	quit("report interval must be int\n");
                 break;
-
+            case '1': // SWIFTPROCUNICODE
+				// Swift on Windows expects command line arguments as UTF-16.
+				// When swift is run with Python's popen, however, popen
+            	// doesn't allow us to pass params in UTF-16, hence workaround.
+            	// Format = hex encoded UTF-8
+                filename = hex2bin(strdup(optarg));
+                fprintf(stderr,"WINDOWS FN was %s now %s\n", optarg, filename.c_str() );
+                break;
+            case '2': // SWIFTPROCUNICODE
+           		urlfilename = hex2bin(strdup(optarg));
+           		fprintf(stderr,"WINDOWS URLFN was %s now %s\n", optarg, urlfilename.c_str() );
+           		break;
+            case '3': // ZEROSTATE // SWIFTPROCUNICODE
+                zerostatedir = hex2bin(strdup(optarg));
+                fprintf(stderr,"WINDOWS ZS was %s now %s\n", optarg, zerostatedir.c_str() );
+                break;
         }
 
     }   // arguments parsed
@@ -395,7 +413,14 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
 
 		FILE *fp = stdout;
 		if (urlfilename != "")
-			fp = fopen(urlfilename.c_str(),"wb");
+		{
+			fp = fopen_utf8(urlfilename.c_str(),"wb");
+		    if (!fp)
+			{
+				print_error("cannot open file to write tswift URL to");
+				quit("cannot open file %s",urlfilename.c_str());
+			}
+		}
 
 		if (swift::Complete(single_fd) == 0)
 			quit("cannot open empty file %s",filename.c_str());

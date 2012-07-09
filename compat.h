@@ -182,6 +182,10 @@ int file_exists_utf8(std::string pathname);
 // mkdir with filename in UTF-8
 int mkdir_utf8(std::string dirname);
 
+// remove with filename in UTF-8
+int remove_utf8(std::string pathname);
+
+
 // opendir() + readdir() UTF-8 versions
 class DirEntry
 {
@@ -255,6 +259,9 @@ int inline stringreplace(std::string& source, const std::string& find, const std
     }
     return num;
 }
+
+
+std::string hex2bin(std::string input);
 
 
 };

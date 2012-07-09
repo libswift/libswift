@@ -237,7 +237,7 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 		std::string filename = *iter;
 		if (cmd_gw_debug)
 			fprintf(stderr,"CmdGwREMOVE: removing %s\n", filename.c_str() );
-		int ret = remove(filename.c_str());
+		int ret = remove_utf8(filename);
 		if (ret < 0)
 		{
 			if (cmd_gw_debug)
