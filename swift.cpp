@@ -235,15 +235,12 @@ int utf8main (int argc, char** argv)
             	// doesn't allow us to pass params in UTF-16, hence workaround.
             	// Format = hex encoded UTF-8
                 filename = hex2bin(strdup(optarg));
-                fprintf(stderr,"WINDOWS FN was %s now %s\n", optarg, filename.c_str() );
                 break;
             case '2': // SWIFTPROCUNICODE
            		urlfilename = hex2bin(strdup(optarg));
-           		fprintf(stderr,"WINDOWS URLFN was %s now %s\n", optarg, urlfilename.c_str() );
            		break;
             case '3': // ZEROSTATE // SWIFTPROCUNICODE
                 zerostatedir = hex2bin(strdup(optarg));
-                fprintf(stderr,"WINDOWS ZS was %s now %s\n", optarg, zerostatedir.c_str() );
                 break;
         }
 
