@@ -397,7 +397,8 @@ void CmdGwSendPLAY(cmd_gw_t *req)
     else
     	sprintf(cmd,"PLAY %s http://%s/%s/%s\r\n",root_hash.hex().c_str(),cmd_gw_httpaddr.str(),root_hash.hex().c_str(),req->mfspecname.c_str());
 
-    fprintf(stderr,"cmd: SendPlay: %s", cmd);
+    if (cmd_gw_debug)
+        fprintf(stderr,"cmd: SendPlay: %s", cmd);
 
     send(req->cmdsock,cmd,strlen(cmd),0);
 }
