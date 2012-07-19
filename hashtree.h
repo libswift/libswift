@@ -108,6 +108,8 @@ class HashTree : public Operational {
     virtual Storage *       get_storage() = 0;
     virtual void            set_size(uint64_t size) = 0;
 
+    virtual int TESTGetFD() = 0;
+
     virtual ~HashTree() {};
 };
 
@@ -198,6 +200,8 @@ public:
 
     //NETWVSHASH
     bool get_check_netwvshash() { return check_netwvshash_; }
+
+    int TESTGetFD() { return hash_fd_; }
 };
 
 
@@ -268,6 +272,8 @@ public:
 
     //NETWVSHASH
     bool get_check_netwvshash() { return true; }
+
+    int TESTGetFD() { return hash_fd_; }
 };
 
 

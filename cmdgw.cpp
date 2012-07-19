@@ -573,6 +573,8 @@ void CmdGwUpdateDLStateCallback(cmd_gw_t* req)
 	ft->OnRecvData(0);
 	ft->OnSendData(0);
 
+	fprintf(stderr,"alive fd %d %s\n", ft->hashtree()->TESTGetFD(), ft->root_hash().hex().c_str() );
+
 	if (false)
 	{
 		// DEBUG download speed rate limit
