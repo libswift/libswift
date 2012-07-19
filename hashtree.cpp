@@ -79,7 +79,7 @@ std::string    Sha1Hash::hex() const {
 
 MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool force_check_diskvshash, bool check_netwvshash, std::string binmap_filename) :
  HashTree(), storage_(storage), root_hash_(root_hash), hashes_(NULL),
- peak_count_(0), hash_fd_(0), size_(0), sizec_(0), complete_(0), completec_(0),
+ peak_count_(0), hash_fd_(-1), size_(0), sizec_(0), complete_(0), completec_(0),
  chunk_size_(chunk_size), check_netwvshash_(check_netwvshash)
 {
 	// MULTIFILE
@@ -118,6 +118,7 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
         SetBroken();
         return;
     }
+    fprintf(stderr,"hash open fd %d\n", hash_fd_);
 
     // Arno: if user wants to or no .mhash, and if root hash unknown (new file) and no checkpoint, (re)calc root hash
     if (storage_->GetReservedSize() > storage_->GetMinimalReservedSize() && (actually_force_check_diskvshash || (root_hash_==Sha1Hash::ZERO && !binmap_exists) || !mhash_exists) ) {
@@ -134,10 +135,12 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
     		 SetBroken();
     		 return;
     	}
+    	fprintf(stderr,"binmap2 open fd %d\n", fileno(fp));
     	if (deserialize(fp) < 0) {
     		// Try to rebuild hashtree data
     		Submit();
     	}
+    	fprintf(stderr,"binmap2 close fd %d\n", fileno(fp));
     	fclose(fp);
     } else {
     	// Arno: no data on disk, or mhash on disk, but no binmap. In latter
@@ -159,8 +162,10 @@ chunk_size_(0), check_netwvshash_(false)
 		 SetBroken();
 		 return;
 	}
+	fprintf(stderr,"binmap3 open fd %d\n", fileno(fp));
 	if (partial_deserialize(fp) < 0) {
 	}
+	fprintf(stderr,"binmap3 close fd %d\n", fileno(fp));
 	fclose(fp);
 }
 
@@ -597,7 +602,10 @@ uint64_t      MmapHashTree::seq_complete (int64_t offset) {
 MmapHashTree::~MmapHashTree () {
     if (hashes_)
         memory_unmap(hash_fd_, hashes_, sizec_*2*sizeof(Sha1Hash));
-    if (hash_fd_)
+    if (hash_fd_ >= 0)
+    {
+    	fprintf(stderr,"hash close fd %d\n", hash_fd_);
         close(hash_fd_);
+    }
 }
 
