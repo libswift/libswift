@@ -601,7 +601,7 @@ namespace swift {
         void OnPexReqZeroState(struct evbuffer *evb);
 
 
-    protected:
+    //protected:
 #define DGRAM_MAX_SOCK_OPEN 128
    	    static int sock_count;
 	    static sckrwecb_t sock_open[DGRAM_MAX_SOCK_OPEN];

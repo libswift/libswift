@@ -54,7 +54,20 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
         		delset.insert(ft);
         	}
         	else
+        	{
+        		fprintf(stderr,"%s zero clean %s has %d peers\n",tintstr(),ft->root_hash().hex().c_str(), ft->GetChannels().size() );
+        		std::set<Channel *>::iterator iter;
+        		for (iter=ft->GetChannels().begin(); iter!=ft->GetChannels().end(); iter++)
+        		{
+        			Channel *c = *iter;
+        			if (c == NULL)
+        				fprintf(stderr,"NULL CHANNEL!\n");
+        			else
+        				fprintf(stderr,"zero channel %s send %lli recv %lli next %lli\n", c->peer_.str(), NOW-c->last_send_time_,NOW-c->last_recv_time_,NOW-c->next_send_time_ );
+        		}
+
         		dprintf("%s zero clean %s has %d peers\n",tintstr(),ft->root_hash().hex().c_str(), ft->GetChannels().size() );
+        	}
         }
     }
 
