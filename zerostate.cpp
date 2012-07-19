@@ -114,7 +114,7 @@ FileTransfer * ZeroState::Find(Sha1Hash &root_hash)
 	if (ret < 0 || ret == 0 || ret == 2)
 		return NULL;
 
-	FileTransfer *ft = new FileTransfer(file_name,root_hash,false,chunk_size,true);
+	FileTransfer *ft = new FileTransfer(file_name,root_hash,false,true,chunk_size,true);
 	if (ft->hashtree() == NULL || !ft->hashtree()->is_complete())
 	{
 		// Safety catch
