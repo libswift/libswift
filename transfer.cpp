@@ -28,7 +28,7 @@ std::vector<FileTransfer*> FileTransfer::files(20);
 
 // FIXME: separate Bootstrap() and Download(), then Size(), Progress(), SeqProgress()
 
-FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool check_hashes, uint32_t chunk_size, bool zerostate) :
+FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size, bool zerostate) :
 	Operational(), fd_(files.size()+1), cb_installed(0), mychannels_(),
     speedzerocount_(0), tracker_(), tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START),
     tracker_retry_time_(NOW), zerostate_(zerostate)
@@ -62,7 +62,7 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
 
 	if (!zerostate_)
 	{
-		hashtree_ = (HashTree *)new MmapHashTree(storage_,root_hash,chunk_size,hash_filename,check_hashes,binmap_filename);
+		hashtree_ = (HashTree *)new MmapHashTree(storage_,root_hash,chunk_size,hash_filename,force_check_diskvshash,check_netwvshash,binmap_filename);
 
 		if (ENABLE_VOD_PIECEPICKER) {
 			// Ric: init availability
@@ -77,7 +77,7 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
 	else
 	{
 		// ZEROHASH
-		hashtree_ = (HashTree *)new ZeroHashTree(storage_,root_hash,chunk_size,hash_filename,check_hashes,binmap_filename);
+		hashtree_ = (HashTree *)new ZeroHashTree(storage_,root_hash,chunk_size,hash_filename,binmap_filename);
 	}
 
     init_time_ = Channel::Time();

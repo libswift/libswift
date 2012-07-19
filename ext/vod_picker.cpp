@@ -49,7 +49,10 @@ public:
     }
 
     virtual void Randomize (uint64_t twist) {
-        twist_ = twist;
+    	// Arno, 2012-03-21: After consulting with Riccardo, disable
+    	// twisting for VOD PP. Randomization of peers over the bitmap
+    	// is already guaranteed by the ack_hint_out_ (prevents double requesting)
+    	// and rarest first.
     }
 
     virtual void LimitRange (bin_t range) {

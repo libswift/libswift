@@ -23,8 +23,8 @@ using namespace swift;
 // Local prototypes
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
 int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, std::string urlfilename, double *maxspeed);
-int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size);
-int OpenSwiftDirectory(std::string dirname, Address tracker, bool check_hashes, uint32_t chunk_size);
+int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size);
+int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size);
 
 void ReportCallback(int fd, short event, void *arg);
 void EndCallback(int fd, short event, void *arg);
@@ -222,6 +222,7 @@ int utf8main (int argc, char** argv)
             	break;
             case 'e': // ZEROSTATE
                 zerostatedir = strdup(optarg); // UNICODE
+                wait_time = TINT_NEVER; // seed
                 break;
             case 'j': // WIN32
                 break;
@@ -322,7 +323,7 @@ int utf8main (int argc, char** argv)
 		}
 
 		// For testing
-		if (httpgw_enabled)
+		if (httpgw_enabled || zerostatedir != "")
 			ret = 0;
 
 		// No file/dir nor HTTP gateway nor CMD gateway, will never know what to swarm
@@ -448,7 +449,7 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
 }
 
 
-int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size)
+int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size)
 {
 	std::string binmap_filename = filename;
 	binmap_filename.append(".mbinmap");
@@ -465,7 +466,7 @@ int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, b
 		if (!quiet)
 			fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
 
-		fd = swift::Open(filename,hash,tracker,check_hashes,chunk_size);
+		fd = swift::Open(filename,hash,tracker,force_check_diskvshash,true,chunk_size);
 	}
 	else if (!quiet)
 		fprintf(stderr,"swift: parsedir: Ignoring loaded %s\n", filename.c_str() );
@@ -473,7 +474,7 @@ int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, b
 }
 
 
-int OpenSwiftDirectory(std::string dirname, Address tracker, bool check_hashes, uint32_t chunk_size)
+int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size)
 {
 	DirEntry *de = opendir_utf8(dirname);
 	if (de == NULL)
@@ -487,7 +488,7 @@ int OpenSwiftDirectory(std::string dirname, Address tracker, bool check_hashes, 
 			std::string path = dirname;
 			path.append(FILE_SEP);
 			path.append(de->filename_);
-			int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,check_hashes,chunk_size);
+			int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,force_check_diskvshash,chunk_size);
 			if (fd >= 0)
 				Checkpoint(fd);
 		}
@@ -556,7 +557,8 @@ void ReportCallback(int fd, short event, void *arg) {
         FileTransfer *ft = FileTransfer::file(single_fd);
         if (report_progress) { // TODO: move up
         	fprintf(stderr,"upload %lf\n",ft->GetCurrentSpeed(DDIR_UPLOAD));
-        	fprintf(stderr,"dwload %lf\n",ft->GetCurrentSpeed(DDIR_DOWNLOAD));
+        	fprintf(stderr,"dwload %lf\n",ft->GetCurrentSpeed(DDIR_DOWNLOAD) );
+        	//fprintf(stderr,"npeers %d\n",ft->GetNumLeechers()+ft->GetNumSeeders() );
         }
         // Update speed measurements such that they decrease when DL/UL stops
         // Always

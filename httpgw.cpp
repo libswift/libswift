@@ -706,7 +706,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     // 4. Initiate transfer
     int transfer = swift::Find(root_hash);
     if (transfer==-1) {
-        transfer = swift::Open(hashstr,root_hash,Address(),false,httpgw_chunk_size);
+        transfer = swift::Open(hashstr,root_hash,Address(),false,true,httpgw_chunk_size);
         dprintf("%s @%i trying to HTTP GET swarm %s that has not been STARTed\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str());
 
         // Arno, 2011-12-20: Only on new transfers, otherwise assume that CMD GW

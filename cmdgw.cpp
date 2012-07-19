@@ -829,7 +829,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         		filename = storagepath;
         	else
         		filename = hashstr;
-            transfer = swift::Open(filename,root_hash,trackaddr,false,chunksize);
+            transfer = swift::Open(filename,root_hash,trackaddr,false,true,chunksize);
             if (transfer == -1)
             {
             	CmdGwSendERRORBySocket(cmdsock,"bad swarm",root_hash);

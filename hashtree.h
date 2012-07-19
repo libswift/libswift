@@ -100,6 +100,10 @@ class HashTree : public Operational {
     virtual binmap_t *      ack_out() = 0;
     virtual uint32_t		chunk_size()  = 0; // CHUNKSIZE
 
+    //NETWVSHASH
+    virtual bool get_check_netwvshash() = 0;
+
+
     // for transfertest.cpp
     virtual Storage *       get_storage() = 0;
     virtual void            set_size(uint64_t size) = 0;
@@ -142,6 +146,9 @@ class MmapHashTree : public HashTree, Serializable {
 
     int 			internal_deserialize(FILE *fp,bool contentavail=true);
 
+    //NETWVSHASH
+    bool 			check_netwvshash_;
+
 protected:
     
     void            Submit();
@@ -154,7 +161,7 @@ protected:
 public:
     
     MmapHashTree (Storage *storage, const Sha1Hash& root=Sha1Hash::ZERO, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE,
-              std::string hash_filename=NULL, bool check_hashes=true, std::string binmap_filename=NULL);
+              std::string hash_filename=NULL, bool force_check_diskvshash=true, bool check_netwvshash=true, std::string binmap_filename=NULL);
     
     // Arno, 2012-01-03: Hack to quickly learn root hash from a checkpoint
     MmapHashTree (bool dummy, std::string binmap_filename);
@@ -188,6 +195,9 @@ public:
     int serialize(FILE *fp);
     int deserialize(FILE *fp);
     int partial_deserialize(FILE *fp);
+
+    //NETWVSHASH
+    bool get_check_netwvshash() { return check_netwvshash_; }
 };
 
 
@@ -226,7 +236,7 @@ protected:
 public:
 
     ZeroHashTree (Storage *storage, const Sha1Hash& root=Sha1Hash::ZERO, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE,
-              std::string hash_filename=NULL, bool check_hashes=true, std::string binmap_filename=NULL);
+              std::string hash_filename=NULL, std::string binmap_filename=NULL);
 
     // Arno, 2012-01-03: Hack to quickly learn root hash from a checkpoint
     ZeroHashTree (bool dummy, std::string binmap_filename);
@@ -255,6 +265,9 @@ public:
     // for transfertest.cpp
     Storage *       get_storage() { return storage_; }
     void            set_size(uint64_t size) { size_ = size; fprintf(stderr,"zerohashtree: set_size %llu\n", size ); }
+
+    //NETWVSHASH
+    bool get_check_netwvshash() { return true; }
 };
 
 
