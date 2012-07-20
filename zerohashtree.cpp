@@ -1,6 +1,7 @@
 /*
  *  zerohashtree.cpp
- *  swift
+ *  a hashtree interface implemented by reading hashes from a prepared .mhash
+ *  file on disk directly, to save memory.
  *
  *  Created by Victor Grishchenko, Arno Bakker
  *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.

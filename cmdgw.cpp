@@ -82,7 +82,7 @@ evutil_socket_t   cmd_tunnel_sock=INVALID_SOCKET;
 // HTTP gateway address for PLAY cmd
 Address cmd_gw_httpaddr;
 
-bool cmd_gw_debug=true;
+bool cmd_gw_debug=false;
 
 tint cmd_gw_last_open=0;
 
@@ -157,6 +157,8 @@ cmd_gw_t* CmdGwFindRequestByRootHash(Sha1Hash &want_hash)
     for(int i=0; i<cmd_gw_reqs_open; i++) {
     	cmd_gw_t* req = &cmd_requests[i];
     	ft = FileTransfer::file(req->transfer);
+		if (ft == NULL)
+			continue;
     	Sha1Hash got_hash = ft->root_hash();
         if (want_hash == got_hash)
         	return req;
@@ -342,8 +344,8 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
     	std::ostringstream oss;
     	oss.setf(std::ios::fixed,std::ios::floatfield);
     	oss.precision(5);
-        std::set<Channel *>::iterator iter;
-        std::set<Channel *> peerchans = ft->GetChannels();
+    	channels_t::iterator iter;
+    	channels_t peerchans = ft->GetChannels();
 
         oss << "MOREINFO" << " " << root_hash.hex() << " ";
 

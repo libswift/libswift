@@ -519,7 +519,7 @@ int64_t Storage::GetReservedSize()
 	{
 		StorageFile *sf = *iter;
 
-		fprintf(stderr,"storage: getdisksize: statting %s\n", sf->GetOSPathName().c_str() );
+		dprintf("storage: getdisksize: statting %s\n", sf->GetOSPathName().c_str() );
 
 		int64_t fsize = file_size_by_path_utf8( sf->GetOSPathName().c_str() );
 		if( fsize < 0)
@@ -531,7 +531,7 @@ int64_t Storage::GetReservedSize()
 			totaldisksize += fsize;
 	}
 
-	fprintf(stderr,"storage: getdisksize: total already sized is %lld\n", totaldisksize );
+	dprintf("storage: getdisksize: total already sized is %lld\n", totaldisksize );
 
 	return totaldisksize;
 }
@@ -638,7 +638,7 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
 	end_ = start+size-1;
 	os_pathname_ = ospath;
 
-	fprintf(stderr,"StorageFile: os_pathname_ is %s\n", os_pathname_.c_str() );
+	//fprintf(stderr,"StorageFile: os_pathname_ is %s\n", os_pathname_.c_str() );
 
 	std::string normospath = os_pathname_;
 #ifdef _WIN32
@@ -668,7 +668,7 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
 			{
 				ret = mkdir_utf8(path.c_str());
 
-				fprintf(stderr,"StorageFile: mkdir %s returns %d\n", path.c_str(), ret );
+				//fprintf(stderr,"StorageFile: mkdir %s returns %d\n", path.c_str(), ret );
 
 				if (ret < 0)
 				{
@@ -680,7 +680,7 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
 			{
 				// Something already exists and it is not a dir
 
-				fprintf(stderr,"StorageFile: exists %s but is not dir %d\n", path.c_str(), ret );
+				dprintf("StorageFile: exists %s but is not dir %d\n", path.c_str(), ret );
 				SetBroken();
 				return;
 			}

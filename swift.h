@@ -257,6 +257,7 @@ namespace swift {
     //class CongestionController; // Arno: Currently part of Channel. See ::NextSendTime
     class PeerSelector;
     class Channel;
+    typedef std::vector<Channel *>	channels_t;
     typedef void (*ProgressCallback) (int transfer, bin_t bin);
     class Storage;
 
@@ -331,7 +332,7 @@ namespace swift {
 		/** Arno: Return the number of seeders current channeled with. */
 		uint32_t		GetNumSeeders();
 		/** Arno: Return the set of Channels for this transfer. MORESTATS */
-		std::set<Channel *> GetChannels() { return mychannels_; }
+		channels_t GetChannels() { return mychannels_; }
 
 		/** Arno: set the tracker for this transfer. Reseting it won't kill
 		 * any existing connections.
@@ -390,7 +391,7 @@ namespace swift {
         int             cb_installed;
 
 		// RATELIMIT
-        std::set<Channel *>	mychannels_; // Arno, 2012-01-31: May be duplicate of hs_in_
+        channels_t			mychannels_; // Arno, 2012-01-31: May be duplicate of hs_in_
         MovingAverageSpeed	cur_speed_[2];
         double				max_speed_[2];
         int					speedzerocount_;
@@ -600,8 +601,9 @@ namespace swift {
         void OnPexAddZeroState(struct evbuffer *evb);
         void OnPexReqZeroState(struct evbuffer *evb);
 
+        tint GetOpenTime() { return open_time_; }
 
-    //protected:
+    protected:
 #define DGRAM_MAX_SOCK_OPEN 128
    	    static int sock_count;
 	    static sckrwecb_t sock_open[DGRAM_MAX_SOCK_OPEN];
@@ -637,8 +639,6 @@ namespace swift {
         uint64_t    hint_out_size_;
         /** Types of messages the peer accepts. */
         uint64_t    cap_in_;
-        /** For repeats. */
-        //tint        last_send_time, last_recv_time;
         /** PEX progress */
         bool        pex_requested_;
         tint        last_pex_request_time_;
@@ -654,6 +654,7 @@ namespace swift {
         tint        last_data_in_time_;
         tint        last_loss_time_;
         tint        next_send_time_;
+        tint		open_time_;
         /** Congestion window; TODO: int, bytes. */
         float       cwnd_;
         int         cwnd_count1_;
@@ -711,7 +712,7 @@ namespace swift {
         static tint     last_tick;
         //static tbheap   send_queue;
 
-        static std::vector<Channel*> channels;
+        static channels_t channels;
 
         friend int      Listen (Address addr);
         friend void     Shutdown (int sock_des);

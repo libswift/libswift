@@ -253,7 +253,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
     if (transfer().GetMaxSpeed(DDIR_DOWNLOAD) < DBL_MAX)
     {
 		uint64_t rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
-		std::set<Channel *>::iterator iter;
+		channels_t::iterator iter;
 		for (iter=transfer().mychannels_.begin(); iter!=transfer().mychannels_.end(); iter++)
 		{
 			Channel *c = *iter;
@@ -1083,7 +1083,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
 void Channel::CloseChannelByAddress(const Address &addr)
 {
 	// fprintf(stderr,"CloseChannelByAddress: address is %s\n", addr.str() );
-    std::vector<Channel *>::iterator iter;
+	channels_t::iterator iter;
     for (iter = channels.begin(); iter != channels.end(); iter++)
     {
 		Channel *c = *iter;

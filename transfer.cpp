@@ -106,15 +106,15 @@ void FileTransfer::LibeventCleanCallback(int fd, short event, void *arg)
 		return;
 
 	// STL and MS and conditional delete from set not a happy place :-(
-	std::set<Channel *>	delset;
-	std::set<Channel *>::iterator iter;
+	channels_t	delset;
+	channels_t::iterator iter;
 	bool hasestablishedpeers=false;
 	for (iter=ft->mychannels_.begin(); iter!=ft->mychannels_.end(); iter++)
 	{
 		Channel *c = *iter;
 		if (c != NULL) {
 			if (c->IsScheduled4Close())
-				delset.insert(c);
+				delset.push_back(c);
 
 			if (c->is_established ()) {
 				hasestablishedpeers = true;
@@ -127,8 +127,7 @@ void FileTransfer::LibeventCleanCallback(int fd, short event, void *arg)
 		Channel *c = *iter;
 		dprintf("%s #%u clean cb close\n",tintstr(),c->id());
 		c->Close();
-		ft->mychannels_.erase(c);
-		delete c;
+		delete c; // Does erase from transfer() list of channels
     }
 
 	// Arno, 2012-02-24: Check for liveliness.
@@ -175,7 +174,7 @@ void FileTransfer::ConnectToTracker()
 
 Channel * FileTransfer::FindChannel(const Address &addr, Channel *notc)
 {
-	std::set<Channel *>::iterator iter;
+	channels_t::iterator iter;
 	for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
 	{
 		Channel *c = *iter;
@@ -376,7 +375,7 @@ double		FileTransfer::GetMaxSpeed(data_direction_t ddir)
 uint32_t	FileTransfer::GetNumLeechers()
 {
 	uint32_t count = 0;
-	std::set<Channel *>::iterator iter;
+	channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
 	    Channel *c = *iter;
@@ -391,7 +390,7 @@ uint32_t	FileTransfer::GetNumLeechers()
 uint32_t	FileTransfer::GetNumSeeders()
 {
 	uint32_t count = 0;
-	std::set<Channel *>::iterator iter;
+	channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
 	    Channel *c = *iter;

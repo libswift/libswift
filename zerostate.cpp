@@ -1,3 +1,14 @@
+/*
+ *  zerostate.cpp
+ *  manager for starting on-demand transfers that serve content and hashes
+ *  directly from disk (so little state in memory). Requires content (named
+ *  as roothash-in-hex), hashes (roothash-in-hex.mhash file) and checkpoint
+ *  (roothash-in-hex.mbinmap) to be present on disk.
+ *
+ *  Created by Arno Bakker
+ *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
+ *
+ */
 #include "swift.h"
 #include "compat.h"
 
@@ -6,7 +17,21 @@ using namespace swift;
 
 ZeroState * ZeroState::__singleton = NULL;
 
-#define CLEANUP_INTERVAL	5	// seconds
+#define CLEANUP_INTERVAL			20	// seconds
+
+/* Arno, 2012-07-20: A very slow peer can keep a transfer alive
+  for a long time (3 minute channel close timeout not reached).
+  This causes problems on Mac where there are just 256 file
+  descriptors per process and this problem causes all of them
+  to be used.
+*/
+
+#ifdef __APPLE__
+#define MAX_CONNECT_TIME		300  //seconds
+#else
+#define MAX_CONNECT_TIME		1800 //seconds
+#endif
+#define MIN_UPLOAD_SPEED		512.0 // bytes/s
 
 ZeroState::ZeroState() : contentdir_(".")
 {
@@ -45,30 +70,40 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 	std::set<FileTransfer *>	delset;
     for(int i=0; i<FileTransfer::files.size(); i++)
     {
-        if (FileTransfer::files[i] && FileTransfer::files[i]->IsZeroState())
-        {
-        	FileTransfer *ft = FileTransfer::files[i];
-        	if (ft->GetChannels().size() == 0)
-        	{
-        		// Ain't go no clients, cleanup.
-        		delset.insert(ft);
-        	}
-        	else
-        	{
-        		fprintf(stderr,"%s zero clean %s has %d peers\n",tintstr(),ft->root_hash().hex().c_str(), ft->GetChannels().size() );
-        		std::set<Channel *>::iterator iter;
-        		for (iter=ft->GetChannels().begin(); iter!=ft->GetChannels().end(); iter++)
-        		{
-        			Channel *c = *iter;
-        			if (c == NULL)
-        				fprintf(stderr,"NULL CHANNEL!\n");
-        			else
-        				fprintf(stderr,"zero channel %s send %lli recv %lli next %lli\n", c->peer_.str(), NOW-c->last_send_time_,NOW-c->last_recv_time_,NOW-c->next_send_time_ );
-        		}
+    	FileTransfer *ft = FileTransfer::files[i];
+    	if (ft == NULL)
+    		continue;
 
-        		dprintf("%s zero clean %s has %d peers\n",tintstr(),ft->root_hash().hex().c_str(), ft->GetChannels().size() );
-        	}
-        }
+    	if (!ft->IsZeroState())
+    		continue;
+
+    	// Arno, 2012-07-20: Some weirdness on Win7 when we use GetChannels()
+    	// all the time. Map/set iterators incompatible?!
+    	channels_t channels = ft->GetChannels();
+		if (channels.size() == 0)
+		{
+			// Ain't go no clients, cleanup.
+			delset.insert(ft);
+		}
+		else
+		{
+			// Garbage collect really slow connections, essential on Mac.
+			dprintf("%s zero clean %s has %d peers\n",tintstr(),ft->root_hash().hex().c_str(), ft->GetChannels().size() );
+			channels_t::iterator iter2;
+			for (iter2=channels.begin(); iter2!=channels.end(); iter2++) {
+				Channel *c = *iter2;
+				if (c != NULL)
+				{
+					// Garbage collect when open for long and slow upload
+					if ((NOW-c->GetOpenTime()) > MAX_CONNECT_TIME*TINT_SEC && ft->GetCurrentSpeed(DDIR_UPLOAD) < MIN_UPLOAD_SPEED)
+					{
+						fprintf(stderr,"%s F%u zero clean %s open %lld ulspeed %lf\n",tintstr(),ft->fd(), c->peer().str(), (NOW-c->GetOpenTime())/TINT_SEC, ft->GetCurrentSpeed(DDIR_UPLOAD) );
+						c->Close();
+						delete c;
+					}
+				}
+			}
+		}
     }
 
     // Delete 0-state FileTransfers sans peers
