@@ -29,7 +29,7 @@ ZeroState * ZeroState::__singleton = NULL;
 #ifdef __APPLE__
 #define MAX_CONNECT_TIME		300  //seconds
 #else
-#define MAX_CONNECT_TIME		1800 //seconds
+#define MAX_CONNECT_TIME		900 //seconds
 #endif
 #define MIN_UPLOAD_SPEED		512.0 // bytes/s
 
