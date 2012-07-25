@@ -17,7 +17,7 @@ using namespace swift;
 
 ZeroState * ZeroState::__singleton = NULL;
 
-#define CLEANUP_INTERVAL			20	// seconds
+#define CLEANUP_INTERVAL			30	// seconds
 
 /* Arno, 2012-07-20: A very slow peer can keep a transfer alive
   for a long time (3 minute channel close timeout not reached).
@@ -29,7 +29,7 @@ ZeroState * ZeroState::__singleton = NULL;
 #ifdef __APPLE__
 #define MAX_CONNECT_TIME		300  //seconds
 #else
-#define MAX_CONNECT_TIME		900 //seconds
+#define MAX_CONNECT_TIME		600 //seconds
 #endif
 #define MIN_UPLOAD_SPEED		512.0 // bytes/s
 
@@ -95,11 +95,15 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 				if (c != NULL)
 				{
 					// Garbage collect channels when open for long and slow upload
-					if ((NOW-c->GetOpenTime()) > MAX_CONNECT_TIME*TINT_SEC && ft->GetCurrentSpeed(DDIR_UPLOAD) < MIN_UPLOAD_SPEED)
+					if ((NOW-c->GetOpenTime()) > MAX_CONNECT_TIME*TINT_SEC)
 					{
-						dprintf("%s F%u zero clean close slow channel %s\n",tintstr(),ft->fd(), c->peer().str() );
-						c->Close();
-						delete c;
+						fprintf(stderr,"%s F%u zero clean %s opentime %lld ulspeed %lf\n",tintstr(),ft->fd(), c->peer().str(), (NOW-c->GetOpenTime())/TINT_SEC, ft->GetCurrentSpeed(DDIR_UPLOAD) );
+						if (ft->GetCurrentSpeed(DDIR_UPLOAD) < MIN_UPLOAD_SPEED)
+						{
+							fprintf(stderr,"%s F%u zero clean %s close slow channel\n",tintstr(),ft->fd(), c->peer().str() );
+							c->Close();
+							delete c;
+						}
 					}
 				}
 			}

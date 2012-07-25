@@ -191,7 +191,7 @@ public:
 
     // for transfertest.cpp
     Storage *       get_storage() { return storage_; }
-    void            set_size(uint64_t size) { size_ = size; fprintf(stderr,"hashtree: set_size %llu\n", size ); }
+    void            set_size(uint64_t size) { size_ = size; }
 
     // Arno: persistent storage for state other than hashes (which are in .mhash)
     int serialize(FILE *fp);
@@ -268,7 +268,7 @@ public:
 
     // for transfertest.cpp
     Storage *       get_storage() { return storage_; }
-    void            set_size(uint64_t size) { size_ = size; fprintf(stderr,"zerohashtree: set_size %llu\n", size ); }
+    void            set_size(uint64_t size) { size_ = size; }
 
     //NETWVSHASH
     bool get_check_netwvshash() { return true; }
