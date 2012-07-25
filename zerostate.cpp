@@ -82,7 +82,7 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
     	channels_t channels = ft->GetChannels();
 		if (channels.size() == 0)
 		{
-			// Ain't go no clients, cleanup.
+			// Ain't go no clients, cleanup transfer.
 			delset.insert(ft);
 		}
 		else
@@ -94,14 +94,19 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 				Channel *c = *iter2;
 				if (c != NULL)
 				{
-					// Garbage collect when open for long and slow upload
+					// Garbage collect channels when open for long and slow upload
 					if ((NOW-c->GetOpenTime()) > MAX_CONNECT_TIME*TINT_SEC && ft->GetCurrentSpeed(DDIR_UPLOAD) < MIN_UPLOAD_SPEED)
 					{
-						fprintf(stderr,"%s F%u zero clean %s open %lld ulspeed %lf\n",tintstr(),ft->fd(), c->peer().str(), (NOW-c->GetOpenTime())/TINT_SEC, ft->GetCurrentSpeed(DDIR_UPLOAD) );
+						dprintf("%s F%u zero clean close slow channel %s\n",tintstr(),ft->fd(), c->peer().str() );
 						c->Close();
 						delete c;
 					}
 				}
+			}
+			if (ft->GetChannels().size() == 0)
+			{
+				// Ain't go no clients left, cleanup transfer.
+				delset.insert(ft);
 			}
 		}
     }

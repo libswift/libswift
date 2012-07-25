@@ -42,7 +42,6 @@ chunk_size_(chunk_size)
         SetBroken();
         return;
     }
-    fprintf(stderr,"hashzero open fd %d\n", hash_fd_);
 
     if (!RecoverPeakHashes())
     {
@@ -197,7 +196,6 @@ ZeroHashTree::~ZeroHashTree ()
 {
     if (hash_fd_ >= 0)
     {
-    	fprintf(stderr,"hashzero close fd %d\n", hash_fd_);
         close(hash_fd_);
     }
 }

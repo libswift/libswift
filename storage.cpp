@@ -49,11 +49,9 @@ Storage::Storage(std::string ospathname, std::string destdir, int transferfd) :
 		SetBroken();
 		return;
 	}
-    fprintf(stderr,"storage fopen fd %d\n", fileno(fp));
 
 	char readbuf[1024];
 	int ret = fread(readbuf,sizeof(char),MULTIFILE_PATHNAME.length(),fp);
-	fprintf(stderr,"storage fclose fd %d\n", fileno(fp));
 	fclose(fp);
 	if (ret < 0)
 	{
@@ -90,7 +88,6 @@ Storage::~Storage()
 {
 	if (single_fd_ != -1)
 	{
-		fprintf(stderr,"storagesingle close fd %d\n", single_fd_);
 		close(single_fd_);
 	}
 
@@ -326,7 +323,6 @@ int Storage::ParseSpec(StorageFile *sf)
 		SetBroken();
 		return -1;
 	}
-	fprintf(stderr,"storagemf open fd %d\n", fileno(fp));
 
 	int64_t offset=0;
 	int ret=0;
@@ -391,7 +387,6 @@ int Storage::ParseSpec(StorageFile *sf)
 		dprintf("%s %s storage: parsespec: Got %s start %lld size %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), sf->GetStart(), sf->GetSize() );
 	}
 
-	fprintf(stderr,"storagemf close fd %d\n", fileno(fp));
 	fclose(fp);
 	if (ret < 0)
 	{
@@ -416,7 +411,6 @@ int Storage::OpenSingleFile()
 		SetBroken();
 		return -1;
 	}
-	fprintf(stderr,"storagesingle open fd %d\n", single_fd_);
 
 	// Perform postponed resize.
 	if (reserved_size_ != -1)
@@ -424,7 +418,6 @@ int Storage::OpenSingleFile()
 		int ret = ResizeReserved(reserved_size_);
 		if (ret < 0)
 		{
-			fprintf(stderr,"storagefile close fd %d\n", single_fd_);
 			close(single_fd_);
 			single_fd_ = -1;
 			SetBroken();
@@ -696,14 +689,12 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
 		SetBroken();
         return;
 	}
-	fprintf(stderr,"storagefile open fd %d\n", fd_);
 }
 
 StorageFile::~StorageFile()
 {
 	 if (fd_>=0)
 	 {
-		 fprintf(stderr,"storagefile close fd %d\n", fd_);
 		 close(fd_);
 	 }
 }

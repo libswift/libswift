@@ -566,12 +566,10 @@ int swift::Checkpoint(int transfer) {
         print_error("cannot open mbinmap for writing");
         return -1;
 	}
-	fprintf(stderr,"binmap fopen fd %d\n", fileno(fp));
 
 	int ret = ht->serialize(fp);
   	if (ret < 0)
         print_error("writing to mbinmap");
-  	fprintf(stderr,"binmap fclose fd %d\n", fileno(fp));
 	fclose(fp);
 	return ret;
 }

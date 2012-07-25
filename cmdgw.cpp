@@ -575,8 +575,6 @@ void CmdGwUpdateDLStateCallback(cmd_gw_t* req)
 	ft->OnRecvData(0);
 	ft->OnSendData(0);
 
-	fprintf(stderr,"alive fd %d %s\n", ft->hashtree()->TESTGetFD(), ft->root_hash().hex().c_str() );
-
 	if (false)
 	{
 		// DEBUG download speed rate limit
@@ -618,13 +616,6 @@ void CmdGwUpdateDLStatesCallback()
     }
     else
     	cmd_gw_last_open = NOW;
-
-    for (int i=0; i<FileTransfer::files.size(); i++)
-    {
-    	FileTransfer *ft = FileTransfer::files[i];
-    	if (ft != NULL)
-    		fprintf(stderr,"total fd %d %s %d\n", ft->hashtree()->TESTGetFD(), ft->root_hash().hex().c_str(), (int)ft->IsZeroState() );
-    }
 }
 
 

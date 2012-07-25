@@ -122,11 +122,6 @@ void HttpGwCloseConnection (http_gw_t* req) {
 
 	//swift::Close(req->transfer);
 
-
-    struct bufferevent* evbufev = evhttp_connection_get_bufferevent(evconn);
-    int sockfd = bufferevent_getfd(evbufev);
-    fprintf(stderr,"httpsock close fd %d\n", sockfd);
-
 	*req = http_requests[--http_gw_reqs_open];
 }
 
@@ -754,7 +749,6 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 
     struct bufferevent* evbufev = evhttp_connection_get_bufferevent(evconn);
     int sockfd = bufferevent_getfd(evbufev);
-    fprintf(stderr,"httpsock open fd %d\n", sockfd);
 
     if (swift::Size(transfer)) {
         HttpGwFirstProgressCallback(transfer,bin_t(0,0));
