@@ -92,6 +92,7 @@ int utf8main (int argc, char** argv)
         {"filehex",    required_argument, 0, '1'},  // SWIFTPROCUNICODE
         {"urlfilehex",required_argument, 0, '2'},   // SWIFTPROCUNICODE
         {"zerosdirhex",required_argument, 0, '3'},  // SWIFTPROCUNICODE
+        {"zerostimeout",required_argument, 0, 'T'},  // ZEROSTATE
         {0, 0, 0, 0}
     };
 
@@ -104,12 +105,13 @@ int utf8main (int argc, char** argv)
     Address cmdaddr;
     tint wait_time = 0;
     double maxspeed[2] = {DBL_MAX,DBL_MAX};
+    tint zerostimeout = TINT_NEVER;
 
     LibraryInit();
     Channel::evbase = event_base_new();
 
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:jC:1:2:3:", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:jC:1:2:3:T:", long_options, 0)) ) {
         switch (c) {
             case 'h':
                 if (strlen(optarg)!=40)
@@ -243,6 +245,13 @@ int utf8main (int argc, char** argv)
             case '3': // ZEROSTATE // SWIFTPROCUNICODE
                 zerostatedir = hex2bin(strdup(optarg));
                 break;
+            case 'T': // ZEROSTATE
+            	double t=0.0;
+            	n = sscanf(optarg,"%lf",&t);
+            	if (n != 1)
+					quit("zerostimeout must be seconds as float\n");
+            	zerostimeout = t * TINT_SEC;
+                break;
         }
 
     }   // arguments parsed
@@ -293,6 +302,7 @@ int utf8main (int argc, char** argv)
     // ZEROSTATE
     ZeroState *zs = ZeroState::GetInstance();
     zs->SetContentDir(zerostatedir);
+    zs->SetConnectTimeout(zerostimeout);
 
 
     if (!cmdgw_enabled)

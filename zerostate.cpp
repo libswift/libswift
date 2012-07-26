@@ -19,21 +19,7 @@ ZeroState * ZeroState::__singleton = NULL;
 
 #define CLEANUP_INTERVAL			30	// seconds
 
-/* Arno, 2012-07-20: A very slow peer can keep a transfer alive
-  for a long time (3 minute channel close timeout not reached).
-  This causes problems on Mac where there are just 256 file
-  descriptors per process and this problem causes all of them
-  to be used.
-*/
-
-#ifdef __APPLE__
-#define MAX_CONNECT_TIME		300  //seconds
-#else
-#define MAX_CONNECT_TIME		600 //seconds
-#endif
-#define MIN_UPLOAD_SPEED		512.0 // bytes/s
-
-ZeroState::ZeroState() : contentdir_(".")
+ZeroState::ZeroState() : contentdir_("."), connect_timeout_(TINT_NEVER)
 {
 	if (__singleton == NULL)
 	{
@@ -94,16 +80,14 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 				Channel *c = *iter2;
 				if (c != NULL)
 				{
+					//fprintf(stderr,"%s F%u zero clean %s opentime %lld connect %lld\n",tintstr(),ft->fd(), c->peer().str(), (NOW-c->GetOpenTime()), zs->connect_timeout_ );
 					// Garbage collect channels when open for long and slow upload
-					if ((NOW-c->GetOpenTime()) > MAX_CONNECT_TIME*TINT_SEC)
+					if ((NOW-c->GetOpenTime()) > zs->connect_timeout_)
 					{
-						fprintf(stderr,"%s F%u zero clean %s opentime %lld ulspeed %lf\n",tintstr(),ft->fd(), c->peer().str(), (NOW-c->GetOpenTime())/TINT_SEC, ft->GetCurrentSpeed(DDIR_UPLOAD) );
-						if (ft->GetCurrentSpeed(DDIR_UPLOAD) < MIN_UPLOAD_SPEED)
-						{
-							fprintf(stderr,"%s F%u zero clean %s close slow channel\n",tintstr(),ft->fd(), c->peer().str() );
-							c->Close();
-							delete c;
-						}
+						//fprintf(stderr,"%s F%u zero clean %s opentime %lld ulspeed %lf\n",tintstr(),ft->fd(), c->peer().str(), (NOW-c->GetOpenTime())/TINT_SEC, ft->GetCurrentSpeed(DDIR_UPLOAD) );
+						fprintf(stderr,"%s F%u zero clean %s close slow channel\n",tintstr(),ft->fd(), c->peer().str() );
+						c->Close();
+						delete c;
 					}
 				}
 			}
@@ -145,6 +129,12 @@ ZeroState * ZeroState::GetInstance()
 void ZeroState::SetContentDir(std::string contentdir)
 {
 	contentdir_ = contentdir;
+}
+
+void ZeroState::SetConnectTimeout(tint timeout)
+{
+	//fprintf(stderr,"ZeroState: SetConnectTimeout: %lld\n", timeout/TINT_SEC );
+	connect_timeout_ = timeout;
 }
 
 

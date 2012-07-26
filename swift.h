@@ -870,6 +870,7 @@ namespace swift {
     	~ZeroState();
     	static ZeroState *GetInstance();
     	void SetContentDir(std::string contentdir);
+    	void SetConnectTimeout(tint timeout);
     	FileTransfer * Find(Sha1Hash &root_hash);
 
 
@@ -881,6 +882,13 @@ namespace swift {
     	struct event 		evclean_;
         std::string 		contentdir_;
 
+        /* Arno, 2012-07-20: A very slow peer can keep a transfer alive
+          for a long time (3 minute channel close timeout not reached).
+          This causes problems on Mac where there are just 256 file
+          descriptors per process and this problem causes all of them
+          to be used.
+        */
+        tint				connect_timeout_;
 	};
 
 
