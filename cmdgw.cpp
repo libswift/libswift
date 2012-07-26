@@ -189,7 +189,10 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 
 	cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
 	if (req == NULL)
+	{
+		fprintf(stderr,"cmd: GotREMOVE: %s not found, consistency error!\n",want_hash.hex().c_str());
     	return;
+	}
     FileTransfer *ft = FileTransfer::file(req->transfer);
     if (ft == NULL)
     	return;
@@ -711,7 +714,7 @@ void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line)
 
 	int ret = CmdGwHandleCommand(cmdsock,copyline);
 	if (ret < 0) {
-		dprintf("cmd: Error parsing command %s\n", line );
+		dprintf("cmd: Error processing command %s\n", line );
 		std::string msg = "";
 		if (ret == ERROR_UNKNOWN_CMD)
 			msg = "unknown command";
@@ -845,6 +848,8 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         req->transfer = transfer;
         req->startt = usec_time();
         req->mfspecname = mfstr;
+
+        dprintf("%s @%i start transfer %i\n",tintstr(),req->id,req->transfer);
 
         // RATELIMIT
         //FileTransfer::file(transfer)->SetMaxSpeed(DDIR_DOWNLOAD,512*1024);

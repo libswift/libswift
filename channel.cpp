@@ -87,7 +87,7 @@ Channel::Channel    (FileTransfer* transfer, int socket, Address peer_addr) :
     // RATELIMIT
 	transfer->mychannels_.push_back(this);
 
-	dprintf("%s #%u init channel %s\n",tintstr(),id_,peer_.str());
+	dprintf("%s #%u init channel %s transfer %d\n",tintstr(),id_,peer_.str(), transfer_->fd() );
 	//fprintf(stderr,"new Channel %d %s\n", id_, peer_.str() );
 }
 
@@ -447,8 +447,8 @@ void    swift::Shutdown (int sock_des) {
     Channel::Shutdown();
 }
 
-int      swift::Open (std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size) {
-    FileTransfer* ft = new FileTransfer(filename, hash, force_check_diskvshash, check_netwvshash, chunk_size);
+int      swift::Open (std::string filename, const Sha1Hash& roothash, Address tracker, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size) {
+    FileTransfer* ft = new FileTransfer(filename, roothash, force_check_diskvshash, check_netwvshash, chunk_size);
     if (ft->fd() && ft->IsOperational()) {
 
         // initiate tracker connections

@@ -99,9 +99,14 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
     int res = file_exists_utf8( hash_filename.c_str());
     if( res <= 0)
     	mhash_exists = false;
-    if (!mhash_exists && !force_check_diskvshash)
+    // Arno, 2012-07-26: Quick fix against partial downloads without .mhash.
+    // Previously they would be Submit()ed and the root_hash_ would change.
+    // Now if the root_hash_ is set, we don't recompute the tree. More permanent
+    // solution is to hashcheck the content, and if it doesn't match the root
+    // hash, revert to a clean state.
+    //
+    if (root_hash_==Sha1Hash::ZERO && !mhash_exists)
     	actually_force_check_diskvshash = true;
-
 
     // Arno: if the remainder of the hashtree state is on disk we can
     // hashcheck very quickly
@@ -109,18 +114,20 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
     res = file_exists_utf8( binmap_filename.c_str() );
     if( res <= 0)
     	binmap_exists = false;
+    if (root_hash_==Sha1Hash::ZERO && !binmap_exists)
+    	actually_force_check_diskvshash = true;
 
-    //fprintf(stderr,"hashtree: hashchecking want %s do %s binmap-on-disk %s\n", (force_check_diskvshash ? "yes" : "no"), (actually_force_check_diskvshash? "yes" : "no"), (binmap_exists? "yes" : "no") );
+    //fprintf(stderr,"hashtree: hashchecking %s file %s want %s do %s mhash-on-disk %s binmap-on-disk %s\n", root_hash.hex().c_str(), storage_->GetOSPathName().c_str(), (force_check_diskvshash ? "yes" : "no"), (actually_force_check_diskvshash? "yes" : "no"), (mhash_exists? "yes" : "no"), (binmap_exists? "yes" : "no") );
 
     hash_fd_ = open_utf8(hash_filename.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (hash_fd_<0) {
-        print_error("cannot open hash file");
+        print_error("cannot create/open hash file");
         SetBroken();
         return;
     }
 
     // Arno: if user wants to or no .mhash, and if root hash unknown (new file) and no checkpoint, (re)calc root hash
-    if (storage_->GetReservedSize() > storage_->GetMinimalReservedSize() && (actually_force_check_diskvshash || (root_hash_==Sha1Hash::ZERO && !binmap_exists) || !mhash_exists) ) {
+    if (storage_->GetReservedSize() > storage_->GetMinimalReservedSize() && actually_force_check_diskvshash) {
     	// fresh submit, hash it
     	dprintf("%s hashtree full compute\n",tintstr());
         //assert(storage_->GetReservedSize());
@@ -209,6 +216,13 @@ void            MmapHashTree::Submit () {
         peak_hashes_[p] = hashes_[peaks_[p].toUInt()];
     }
 
+    Sha1Hash calcroothash = DeriveRoot();
+    if (root_hash_ != Sha1Hash::ZERO && calcroothash != root_hash_)
+    {
+    	print_error("hash tree calculation error");
+    	SetBroken();
+    	return;
+    }
     root_hash_ = DeriveRoot();
 }
 
