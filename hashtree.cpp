@@ -118,6 +118,13 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
     	actually_force_check_diskvshash = true;
 
     //fprintf(stderr,"hashtree: hashchecking %s file %s want %s do %s mhash-on-disk %s binmap-on-disk %s\n", root_hash.hex().c_str(), storage_->GetOSPathName().c_str(), (force_check_diskvshash ? "yes" : "no"), (actually_force_check_diskvshash? "yes" : "no"), (mhash_exists? "yes" : "no"), (binmap_exists? "yes" : "no") );
+    // Arno, 2012-07-27: Sanity check
+    if ((mhash_exists || binmap_exists) && storage_->GetReservedSize() == -1)
+    {
+        print_error("meta files present but not content");
+        SetBroken();
+        return;
+    }
 
     hash_fd_ = open_utf8(hash_filename.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (hash_fd_<0) {
@@ -182,6 +189,11 @@ void            MmapHashTree::Submit () {
     peak_count_ = gen_peaks(sizec_,peaks_);
     int hashes_size = Sha1Hash::SIZE*sizec_*2;
     dprintf("%s hashtree submit resizing hash file to %d\n",tintstr(), hashes_size );
+    if (hashes_size == 0) {
+        SetBroken();
+        return;
+    }
+
     file_resize(hash_fd_,hashes_size);
     hashes_ = (Sha1Hash*) memory_map(hash_fd_,hashes_size);
     if (!hashes_) {
