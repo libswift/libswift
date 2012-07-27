@@ -90,8 +90,7 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
     evtimer_assign(&evclean_,Channel::evbase,&FileTransfer::LibeventCleanCallback,this);
     evtimer_add(&evclean_,tint2tv(5*TINT_SEC));
 
-    if ((hashtree_ != NULL && !hashtree_->IsOperational()) || !storage_->IsOperational())
-    	SetBroken();
+    UpdateOperational();
 }
 
 
@@ -164,6 +163,9 @@ void FileTransfer::ReConnectToTrackerIfAllowed(bool hasestablishedpeers)
 
 void FileTransfer::ConnectToTracker()
 {
+	if (!IsOperational())
+		return;
+
 	Channel *c = NULL;
     if (tracker_ != Address())
     	c = new Channel(this,INVALID_SOCKET,tracker_);
@@ -188,6 +190,11 @@ Channel * FileTransfer::FindChannel(const Address &addr, Channel *notc)
 }
 
 
+void FileTransfer::UpdateOperational()
+{
+    if ((hashtree_ != NULL && !hashtree_->IsOperational()) || !storage_->IsOperational())
+    	SetBroken();
+}
 
 
 void    Channel::CloseTransfer (FileTransfer* trans) {

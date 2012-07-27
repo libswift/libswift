@@ -366,6 +366,9 @@ namespace swift {
 		/** Add a peer to the set of addresses to connect to */
 		void AddPeer(Address &peer);
 
+		/** Check whether all components still in working state */
+		void UpdateOperational();
+
     protected:
 
         HashTree*		hashtree_;
@@ -602,6 +605,8 @@ namespace swift {
         void OnPexReqZeroState(struct evbuffer *evb);
 
         tint GetOpenTime() { return open_time_; }
+
+        void CloseOnError();
 
     protected:
 #define DGRAM_MAX_SOCK_OPEN 128

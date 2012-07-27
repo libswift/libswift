@@ -30,6 +30,7 @@ using namespace swift;
 #define DLSTATUS_HASHCHECKING  2
 #define DLSTATUS_DOWNLOADING  3
 #define DLSTATUS_SEEDING 4
+#define DLSTATUS_STOPPED_ON_ERROR  6
 
 #define MAX_CMD_MESSAGE 1024
 
@@ -82,7 +83,7 @@ evutil_socket_t   cmd_tunnel_sock=INVALID_SOCKET;
 // HTTP gateway address for PLAY cmd
 Address cmd_gw_httpaddr;
 
-bool cmd_gw_debug=false;
+bool cmd_gw_debug=true;
 
 tint cmd_gw_last_open=0;
 
@@ -190,7 +191,8 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 	cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
 	if (req == NULL)
 	{
-		fprintf(stderr,"cmd: GotREMOVE: %s not found, consistency error!\n",want_hash.hex().c_str());
+		if (cmd_gw_debug)
+			fprintf(stderr,"cmd: GotREMOVE: %s not found, bad swarm?\n",want_hash.hex().c_str());
     	return;
 	}
     FileTransfer *ft = FileTransfer::file(req->transfer);
@@ -316,7 +318,7 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 {
 	// Send INFO message.
 	if (cmd_gw_debug)
-		fprintf(stderr,"cmd: SendINFO: %d %d\n", req->transfer, dlstatus );
+		fprintf(stderr,"cmd: SendINFO: F%d initdlstatus %d\n", req->transfer, dlstatus );
 
 	FileTransfer *ft = FileTransfer::file(req->transfer);
 	if (ft == NULL)
@@ -328,8 +330,10 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
     char cmd[MAX_CMD_MESSAGE];
     uint64_t size = swift::Size(req->transfer);
     uint64_t complete = swift::Complete(req->transfer);
-    if (size == complete)
+    if (size > 0 && size == complete)
     	dlstatus = DLSTATUS_SEEDING;
+    if (!ft->IsOperational())
+    	dlstatus = DLSTATUS_STOPPED_ON_ERROR;
 
     uint32_t numleech = ft->GetNumLeechers();
     uint32_t numseeds = ft->GetNumSeeders();
@@ -416,6 +420,10 @@ void CmdGwSendERRORBySocket(evutil_socket_t cmdsock, std::string msg, const Sha1
 	cmd += " ";
 	cmd += msg;
 	cmd += "\r\n";
+
+	if (cmd_gw_debug)
+		fprintf(stderr,"cmd: SendERROR: %s\n", cmd);
+
 	char *wire = strdup(cmd.c_str());
 	send(cmdsock,wire,strlen(wire),0);
 	free(wire);

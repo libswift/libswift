@@ -490,6 +490,12 @@ void    Channel::Recv (struct evbuffer *evb) {
     dprintf("%s #%u recvd %ib\n",tintstr(),id_,(int)evbuffer_get_length(evb)+4);
     dgrams_rcvd_++;
 
+    if (!transfer().IsOperational()) {
+    	dprintf("%s #%u recvd on broken transfer %d \n",tintstr(),id_, transfer().fd() );
+		CloseOnError();
+    	return;
+    }
+
     lastrecvwaskeepalive_ = (evbuffer_get_length(evb) == 0);
     if (lastrecvwaskeepalive_)
     	// Update speed measurements such that they decrease when DL stops
@@ -561,16 +567,36 @@ void    Channel::Recv (struct evbuffer *evb) {
                 return;
         }
     }
-    if (DEBUGTRAFFIC)
+	if (DEBUGTRAFFIC)
     {
     	fprintf(stderr,"\n");
     }
 
-
     last_recv_time_ = NOW;
     sent_since_recv_ = 0;
+
+
+    // Arno: see if transfer still in working order
+    transfer().UpdateOperational();
+    if (!transfer().IsOperational()) {
+    	dprintf("%s #%u recvd broke transfer %d \n",tintstr(),id_, transfer().fd() );
+        CloseOnError();
+        return;
+    }
+
     Reschedule();
 }
+
+
+void   Channel::CloseOnError()
+{
+	Close();
+	// set established->false after Close, so Close does send explicit close.
+	// RecvDatagram will schedule this for delete.
+	peer_channel_id_ = 0;
+	return;
+}
+
 
 /*
  * Arno: FAXME: HASH+DATA should be handled as a transaction: only when the
@@ -1015,6 +1041,11 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
 		{
 			return_log ("%s #0 zero hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
 		}
+        if (!ft->IsOperational())
+        {
+        	return_log ("%s #0 hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
+        }
+
         dprintf("%s #0 -hash ALL %s\n",tintstr(),hash.hex().c_str());
 
         // Arno, 2012-02-27: Check for duplicate channel

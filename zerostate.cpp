@@ -71,7 +71,7 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 			// Ain't go no clients, cleanup transfer.
 			delset.insert(ft);
 		}
-		else
+		else if (zs->connect_timeout_ != TINT_NEVER)
 		{
 			// Garbage collect really slow connections, essential on Mac.
 			dprintf("%s zero clean %s has %d peers\n",tintstr(),ft->root_hash().hex().c_str(), ft->GetChannels().size() );
