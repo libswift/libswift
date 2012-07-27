@@ -422,7 +422,7 @@ void CmdGwSendERRORBySocket(evutil_socket_t cmdsock, std::string msg, const Sha1
 	cmd += "\r\n";
 
 	if (cmd_gw_debug)
-		fprintf(stderr,"cmd: SendERROR: %s\n", cmd);
+		fprintf(stderr,"cmd: SendERROR: %s\n", cmd.c_str() );
 
 	char *wire = strdup(cmd.c_str());
 	send(cmdsock,wire,strlen(wire),0);
