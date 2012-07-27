@@ -798,12 +798,13 @@ void LiveSourceFileTimerCallback(int fd, short event, void *arg) {
 #ifdef WIN32
 	if (livesource_pfile == NULL)
 	{
+		// TODO: make parameter
 		livesource_pfile = _popen( "transcode15.bat", "rb" );
-			if (livesource_pfile == NULL)
-			{
-				print_error("live: file: popen failed" );
-				return;
-			}
+	    if (livesource_pfile == NULL)
+        {
+                print_error("live: file: popen failed" );
+                return;
+        }
 	}
 
 	int nread = fread(buf,sizeof(char),sizeof(buf),livesource_pfile);
@@ -876,11 +877,11 @@ void LiveSourceAttemptCreate()
 		uint8_t *chunks = evbuffer_pullup(livesource_evb, nchunklen);
 		int nwrite = swift::LiveWrite(livesource_lt, chunks, nchunklen, -1);
 		if (nwrite < -1)
-			print_error("error creating live chunk");
+			print_error("live: create: error");
 
 		int ret = evbuffer_drain(livesource_evb, nchunklen);
 		if (ret < 0)
-			print_error("live: http: error evbuffer_drain");
+			print_error("live: create: error evbuffer_drain");
 	}
 }
 

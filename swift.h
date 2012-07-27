@@ -604,7 +604,7 @@ namespace swift {
 	    // Arno: Per instance methods
         void        Recv (struct evbuffer *evb);
         void        Send ();  // Called by LibeventSendCallback
-        void        Close ();
+        void        Close (bool sendclose=true);
 
         void        OnAck (struct evbuffer *evb);
         void        OnHave (struct evbuffer *evb);
@@ -679,8 +679,8 @@ namespace swift {
 
         // SAFECLOSE
         void		ClearEvents();
-        void 		Schedule4Close() { scheduled4close_ = true; }
-        bool		IsScheduled4Close() { return scheduled4close_; }
+        void 		Schedule4Delete() { scheduled4del_ = true; }
+        bool		IsScheduled4Delete() { return scheduled4del_; }
 
         //ZEROSTATE
         void OnDataZeroState(struct evbuffer *evb);
@@ -776,7 +776,7 @@ namespace swift {
         uint64_t raw_bytes_up_, raw_bytes_down_, bytes_up_, bytes_down_;
 
         // SAFECLOSE
-        bool		scheduled4close_;
+        bool		scheduled4del_;
         /** Arno: Socket address of the peer where packets are received from,
          * when an IANA private address, otherwise 0.
          * May not be equal to peer_. 2PEERSBEHINDSAMENAT */

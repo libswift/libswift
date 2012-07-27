@@ -82,12 +82,11 @@ void ContentTransfer::GarbageCollectChannels()
 	{
 		Channel *c = *iter;
 		if (c != NULL) {
-			if (c->IsScheduled4Close())
+			if (c->IsScheduled4Delete())
 				delset.insert(c);
 
 			if (c->is_established ())
 				hasestablishedpeers = true;
-
 		}
 	}
 	CloseChannels(delset);

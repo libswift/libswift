@@ -836,22 +836,23 @@ void Channel::OnHandshake (struct evbuffer *evb) {
     dprintf("%s #%u -hs %x\n",tintstr(),id_,pcid);
 
     if (is_established() && pcid == 0) {
-    	// Arno: received explicit close
-    	peer_channel_id_ = 0; // == established -> false
-    	Close();
+    	// Arno: Got explicit close from peer
+    	Close(false);
     	return;
     }
 
+    // Arno, 2012-07-27: Set connection to established, such that self-conn
+    // test will return explicit close during Close()
     peer_channel_id_ = pcid;
-    // self-connection check
 
+    // Self-connection check
     if (!SELF_CONN_OK) {
-        uint32_t try_id = DecodeID(peer_channel_id_);
+        uint32_t try_id = DecodeID(pcid);
         // Arno, 2012-05-29: Fixed duplicate test
-        if (channel(try_id) && channel(try_id)->peer_channel_id_) {
-            peer_channel_id_ = 0;
+        if (channel(try_id) == this) {
+        	// this is a self-connection
             Close();
-            return; // this is a self-connection
+            return;
         }
     }
 
@@ -1088,7 +1089,8 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         if (!channel)
             return_log ("%s #%u is already closed\n",tintstr(),mych);
 		if (channel->IsDiffSenderOrDuplicate(addr,mych)) {
-			channel->Schedule4Close();
+			channel->Close();
+			delete channel; // safe, not in a channel event
 			return;
 		}
         channel->own_id_mentioned_ = true;
@@ -1102,10 +1104,11 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
 	channel->Recv(evb);
 
     evbuffer_free(evb);
+
     //SAFECLOSE
-    if (wasestablished && !channel->is_established()) {
-    	// Arno, 2012-01-26: Received an explict close, clean up channel, safely.
-    	channel->Schedule4Close();
+    if (channel->send_control_==CLOSE_CONTROL) {
+    	// Arno, 2012-07-27: Received an explict close, clean up channel
+    	delete channel;
     }
 }
 
@@ -1124,26 +1127,27 @@ void Channel::CloseChannelByAddress(const Address &addr)
     for (iter = channels.begin(); iter != channels.end(); iter++)
     {
 		Channel *c = *iter;
-		if (c != NULL && c->peer_ == addr)
-		{
-			// ARNOSMPTODO: will do another send attempt before not being
-			// Rescheduled.
-			c->peer_channel_id_ = 0; // established->false, do no more sending
-			c->Schedule4Close();
+		if (c != NULL && c->peer_ == addr) {
+			c->Close(false);
+			delete c; // safe, not in a send event, and doesn't modify channels
 			break;
 		}
     }
 }
 
-
-void Channel::Close () {
+void Channel::Close(bool sendclose) {
 
 	dprintf("%s #%u closing channel\n",tintstr(),id_ );
 
 	this->SwitchSendControl(CLOSE_CONTROL);
 
+	if (!sendclose)
+		peer_channel_id_ = 0; // == established -> false
+
     if (is_established())
     	this->Send(); // Arno: send explicit close
+
+    peer_channel_id_ = 0;
 
 	//LIVE
     if (ENABLE_VOD_PIECEPICKER && transfer()->ttype() == FILE_TRANSFER) {
@@ -1196,7 +1200,10 @@ void Channel::Reschedule () {
     } else {
     	// SAFECLOSE
         dprintf("%s #%u resched, will close\n",tintstr(),id_);
-		this->Schedule4Close();
+        // Arno: Cannot clean up send events or channel here as we may be
+        // LibeventSendCallback() on a specific channel. Do on another event,
+        // see ContentTransfer::LibeventCleanCallback()
+        this->Schedule4Delete();
     }
 }
 

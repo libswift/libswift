@@ -67,7 +67,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     ack_not_rcvd_recent_(0), owd_min_bin_(0), owd_min_bin_start_(NOW),
     owd_cur_bin_(0), dgrams_sent_(0), dgrams_rcvd_(0),
     raw_bytes_up_(0), raw_bytes_down_(0), bytes_up_(0), bytes_down_(0),
-    scheduled4close_(false),
+    scheduled4del_(false),
     peer_is_source_(peerissource),
     direct_sending_(false)
 {
@@ -189,7 +189,6 @@ bool Channel::IsDiffSenderOrDuplicate(Address addr, uint32_t chid)
 						tintstr(),chid,addr.str());
 
 				if (addr.port() > GetMyPort()) {
-					//Schedule4Close();
 					dprintf("%s #%u closing duplicate channel to %s\n",
 							tintstr(),chid,addr.str());
 					return true;
@@ -201,7 +200,6 @@ bool Channel::IsDiffSenderOrDuplicate(Address addr, uint32_t chid)
 			// Received HANDSHAKE reply from other address than I sent
 			// HANDSHAKE to, and the address is not an IANA private
 			// address (=no NAT in play), so close.
-			//Schedule4Close();
 			dprintf("%s #%u invalid peer address %s!=%s\n",
 					tintstr(),chid,peer().str(),addr.str());
 			return true;
