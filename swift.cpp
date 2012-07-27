@@ -426,16 +426,19 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
 		    if (!fp)
 			{
 				print_error("cannot open file to write tswift URL to");
-				quit("cannot open file %s",urlfilename.c_str());
+				quit("cannot open URL file %s",urlfilename.c_str());
 			}
 		}
 
 		if (swift::Complete(single_fd) == 0)
 			quit("cannot open empty file %s",filename.c_str());
+		int ret = 0;
 		if (chunk_size == SWIFT_DEFAULT_CHUNK_SIZE)
-			fprintf(fp,"tswift://%s/%s\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str());
+			ret = fprintf(fp,"tswift://%s/%s\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str());
 		else
-			fprintf(fp,"tswift://%s/%s$%i\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str(), chunk_size);
+			ret = fprintf(fp,"tswift://%s/%s$%i\n", trackerargstr.c_str(), RootMerkleHash(single_fd).hex().c_str(), chunk_size);
+		if (ret <0)
+			print_error("cannot write URL");
 
 		if (urlfilename != "")
 			fclose(fp);
