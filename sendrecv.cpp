@@ -103,16 +103,21 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
     	return bin_t::NONE;
     }
 
-    // Arno, 2012-01-18: Reenable Victor's retransmit
-    if (!data_out_tmo_.empty())
-    {
-        tintbin tb = data_out_tmo_.front();
-        send = tb.bin;
-        data_out_tmo_.pop_front();  
-        *retransmitptr = true;
-    }
-    else
-        *retransmitptr = false;
+    // Arno, 2012-07-27: Reenable Victor's retransmit, check for ACKs
+    *retransmitptr = false;
+	while (!data_out_tmo_.empty()) {
+		tintbin tb = data_out_tmo_.front();
+		data_out_tmo_.pop_front();
+		if (ack_in_.is_filled(tb.bin)) {
+			// chunk was acknowledged in meantime
+			continue;
+		}
+		else {
+			send = tb.bin;
+			*retransmitptr = true;
+			break;
+		}
+	}
 
     if (ENABLE_SENDERSIZE_PUSH && send.is_none() && hint_in_.empty() && last_recv_time_>NOW-rtt_avg_-TINT_SEC) {
         bin_t my_pick = ImposeHint(); // FIXME move to the loop
@@ -324,7 +329,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         }
     } else
         dprintf("%s #%u sendctrl wait cwnd %f data_out %i next %s\n",
-                tintstr(),id_,cwnd_,(int)data_out_.size(),tintstr(last_data_out_time_+NOW-send_interval_));
+                tintstr(),id_,cwnd_,(int)data_out_.size(),tintstr(last_data_out_time_+send_interval_));
 
     if (tosend.is_none())// && (last_data_out_time_>NOW-TINT_SEC || data_out_.empty()))
         return bin_t::NONE; // once in a while, empty data is sent just to check rtt FIXED
