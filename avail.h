@@ -23,7 +23,7 @@ class Availability
 {
     public:
 
-		/**
+	   /**
 	     * Constructor
 	     */
 	    Availability(void) {  	size_ = 0;	    }
@@ -39,11 +39,11 @@ class Availability
 	    	avail_ = new uint8_t[size];
 	    }
 
-        ~Availability(void)
-        {
-            if (size_)
-                delete [] avail_;
-        }
+	    ~Availability(void)
+            {
+                if (size_)
+                    delete [] avail_;
+            }
 
 	    /** return the availability array */
 	    uint8_t* get() { return avail_; }

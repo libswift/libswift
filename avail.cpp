@@ -136,10 +136,10 @@ void Availability::set(uint32_t channel_id, binmap_t& binmap, bin_t target)
    		    {
    		        waiting_peers_.erase(vpci);
    		        break;
-	        }
+	            }
    		}
 
-    	waiting_peers_.push_back(std::make_pair(channel_id, &binmap));
+    		waiting_peers_.push_back(std::make_pair(channel_id, &binmap));
 	}
 }
 

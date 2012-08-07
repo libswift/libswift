@@ -49,12 +49,12 @@ int swift::Find (Sha1Hash hash) {
 int  swift::Open (std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size)
 {
     FileTransfer* ft = new FileTransfer(filename, hash, check_hashes, chunk_size);
-	// initiate tracker connections
-	// SWIFTPROC
-	ft->SetTracker(tracker);
-	ft->ConnectToTracker();
+    // initiate tracker connections
+    // SWIFTPROC
+    ft->SetTracker(tracker);
+    ft->ConnectToTracker();
 
-	return ft->fd();
+    return ft->fd();
 }
 
 
@@ -83,9 +83,9 @@ ssize_t  swift::Write(int fdes, const void *buf, size_t nbyte, int64_t offset)
 uint64_t  swift::Size (int fdes) {
     if (ContentTransfer::swarms.size()>fdes && ContentTransfer::swarms[fdes]) {
     	if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
-    		return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->size();
+            return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->size();
     	else
-    		return 0;
+            return 0;
     }
     else
         return 0;
@@ -95,9 +95,9 @@ uint64_t  swift::Size (int fdes) {
 bool  swift::IsComplete (int fdes) {
     if (ContentTransfer::swarms.size()>fdes && ContentTransfer::swarms[fdes]) {
     	if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
-    		return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->is_complete();
+    	    return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->is_complete();
     	else
-    		return false;
+    	    return false;
     }
     else
         return false;
@@ -108,9 +108,9 @@ uint64_t  swift::Complete (int fdes) {
     if (ContentTransfer::swarms.size()>fdes && ContentTransfer::swarms[fdes]) {
 
     	if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
-    		return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->complete();
+    	     return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->complete();
     	else
-    		return 0;
+    	     return 0;
     }
     else
         return 0;
@@ -120,9 +120,9 @@ uint64_t  swift::Complete (int fdes) {
 uint64_t  swift::SeqComplete (int fdes, int64_t offset) {
     if (ContentTransfer::swarms.size()>fdes && ContentTransfer::swarms[fdes]) {
     	if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
-    		return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->seq_complete(offset);
+    	    return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->seq_complete(offset);
     	else
-    		return ((LiveTransfer *)ContentTransfer::swarms[fdes])->SeqComplete(); // No range support for live
+    	    return ((LiveTransfer *)ContentTransfer::swarms[fdes])->SeqComplete(); // No range support for live
     }
     else
         return 0;
@@ -153,64 +153,64 @@ void    swift::AddPeer (Address address, const Sha1Hash& root) {
 
 
 int swift::Checkpoint(int fdes) {
-	// If file, save transfer's binmap for zero-hashcheck restart
+    // If file, save transfer's binmap for zero-hashcheck restart
 
     ContentTransfer* ct = ContentTransfer::transfer(fdes);
     if (!ct || ct->ttype() == LIVE_TRANSFER)
-            return -1;
+        return -1;
     FileTransfer *ft = (FileTransfer *)ct;
-	if (ft->IsZeroState())
-	    return -1;
+    if (ft->IsZeroState())
+        return -1;
 
     MmapHashTree *ht = (MmapHashTree *)ft->hashtree();
     if (ht == NULL)
     {
          fprintf(stderr,"swift: checkpointing: ht is NULL\n");
-	     return -1;
+	 return -1;
     }
 
-	std::string binmap_filename = ft->GetStorage()->GetOSPathName();
-	binmap_filename.append(".mbinmap");
-	//fprintf(stderr,"swift: HACK checkpointing %s at %lli\n", binmap_filename.c_str(), Complete(fdes));
-	FILE *fp = fopen_utf8(binmap_filename.c_str(),"wb");
-	if (!fp) {
+    std::string binmap_filename = ft->GetStorage()->GetOSPathName();
+    binmap_filename.append(".mbinmap");
+    //fprintf(stderr,"swift: HACK checkpointing %s at %lli\n", binmap_filename.c_str(), Complete(fdes));
+    FILE *fp = fopen_utf8(binmap_filename.c_str(),"wb");
+    if (!fp) {
         print_error("cannot open mbinmap for writing");
         return -1;
-	}
-	int ret = ht->serialize(fp);
-  	if (ret < 0)
+    }
+    int ret = ht->serialize(fp);
+    if (ret < 0)
         print_error("writing to mbinmap");
-	fclose(fp);
-	return ret;
+    fclose(fp);
+    return ret;
 }
 
 
 // SEEK
 int swift::Seek(int fdes, int64_t offset, int whence)
 {
-	dprintf("%s F%i Seek: to %lld\n",tintstr(), fdes, offset );
+    dprintf("%s F%i Seek: to %lld\n",tintstr(), fdes, offset );
 
     ContentTransfer* ct = ContentTransfer::transfer(fdes);
     if (!ct || ct->ttype() == LIVE_TRANSFER)
             return -1;
     FileTransfer *ft = (FileTransfer *)ct;
 
-	if (whence == SEEK_SET)
-	{
-		if (offset >= swift::Size(fdes))
-			return -1; // seek beyond end of content
+    if (whence == SEEK_SET)
+    {
+        if (offset >= swift::Size(fdes))
+           return -1; // seek beyond end of content
 
-		// Which bin to seek to?
-		int64_t coff = offset - (offset % ft->hashtree()->chunk_size()); // ceil to chunk
-		bin_t offbin = bin_t(0,coff/ft->hashtree()->chunk_size());
+        // Which bin to seek to?
+        int64_t coff = offset - (offset % ft->hashtree()->chunk_size()); // ceil to chunk
+        bin_t offbin = bin_t(0,coff/ft->hashtree()->chunk_size());
 
-		char binstr[32];
-		dprintf("%s F%i Seek: to bin %s\n",tintstr(), fdes, offbin.str(binstr) );
+        char binstr[32];
+        dprintf("%s F%i Seek: to bin %s\n",tintstr(), fdes, offbin.str(binstr) );
 
-		return ft->picker()->Seek(offbin,whence);
-	}
-	else
-		return -1; // TODO
+        return ft->picker()->Seek(offbin,whence);
+   }
+   else
+        return -1; // TODO
 }
 
 
@@ -220,7 +220,7 @@ int swift::Seek(int fdes, int64_t offset, int whence)
 
 void swift::AddProgressCallback (int fdes,ProgressCallback cb,uint8_t agg) {
 
-	//fprintf(stderr,"swift::AddProgressCallback: transfer %i\n", fdes );
+   //fprintf(stderr,"swift::AddProgressCallback: transfer %i\n", fdes );
 
     ContentTransfer* trans = ContentTransfer::transfer(fdes);
     if (!trans)
@@ -244,7 +244,7 @@ void swift::ExternallyRetrieved (int fdes,bin_t piece) {
 
 void swift::RemoveProgressCallback (int fdes, ProgressCallback cb) {
 
-	//fprintf(stderr,"swift::RemoveProgressCallback: transfer %i\n", fdes );
+    //fprintf(stderr,"swift::RemoveProgressCallback: transfer %i\n", fdes );
 
     ContentTransfer* trans = ContentTransfer::transfer(fdes);
     if (!trans)
@@ -258,7 +258,7 @@ void swift::RemoveProgressCallback (int fdes, ProgressCallback cb) {
 
     for(int i=0; i<trans->cb_installed; i++)
     {
-    	fprintf(stderr,"swift::RemoveProgressCallback: transfer %i remain %p\n", fdes, trans->callbacks[i] );
+       fprintf(stderr,"swift::RemoveProgressCallback: transfer %i remain %p\n", fdes, trans->callbacks[i] );
     }
 }
 
@@ -270,39 +270,39 @@ void swift::RemoveProgressCallback (int fdes, ProgressCallback cb) {
 
 LiveTransfer *swift::LiveCreate(std::string filename, const Sha1Hash& swarmid, size_t chunk_size)
 {
-	fprintf(stderr,"live: swarmid: %s\n",swarmid.hex().c_str() );
-	LiveTransfer *lt = new LiveTransfer(filename,swarmid,true,chunk_size);
-	return lt;
+    fprintf(stderr,"live: swarmid: %s\n",swarmid.hex().c_str() );
+    LiveTransfer *lt = new LiveTransfer(filename,swarmid,true,chunk_size);
+    return lt;
 }
 
 
 int swift::LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte, long offset)
 {
-	return lt->AddData(buf,nbyte);
+    return lt->AddData(buf,nbyte);
 }
 
 
-int     swift::LiveOpen(std::string filename, const Sha1Hash& hash,Address tracker, bool check_hashes,size_t chunk_size)
+int swift::LiveOpen(std::string filename, const Sha1Hash& hash,Address tracker, bool check_hashes,size_t chunk_size)
 {
-	LiveTransfer *lt = new LiveTransfer(filename,hash,false,chunk_size);
+    LiveTransfer *lt = new LiveTransfer(filename,hash,false,chunk_size);
 
-	// initiate tracker connections
-	// SWIFTPROC
-	lt->SetTracker(tracker);
-	lt->ConnectToTracker();
-	return lt->fd();
+    // initiate tracker connections
+    // SWIFTPROC
+    lt->SetTracker(tracker);
+    lt->ConnectToTracker();
+    return lt->fd();
 }
 
 
 uint64_t  swift::GetHookinOffset(int fdes)
 {
-	if (ContentTransfer::swarms.size()>fdes && ContentTransfer::swarms[fdes]) {
-	   	if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
-	   		return 0;
-	   	else
-	   		return ((LiveTransfer *)ContentTransfer::swarms[fdes])->GetHookinOffset();
+    if (ContentTransfer::swarms.size()>fdes && ContentTransfer::swarms[fdes]) {
+        if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
+            return 0;
+        else
+            return ((LiveTransfer *)ContentTransfer::swarms[fdes])->GetHookinOffset();
     }
     else
-	    return 0;
+       return 0;
 }
 

@@ -77,13 +77,13 @@ static void StatsGwNewRequestCallback (struct evhttp_request *evreq, void *arg);
 
 void StatsExitCallback(struct evhttp_request *evreq)
 {
-	char contlenstr[1024];
-	sprintf(contlenstr,"%i",strlen(exit_page));
-	struct evkeyvalq *headers = evhttp_request_get_output_headers(evreq);
-	evhttp_add_header(headers, "Connection", "close" );
-	evhttp_add_header(headers, "Content-Type", "text/html" );
-	evhttp_add_header(headers, "Content-Length", contlenstr );
-	evhttp_add_header(headers, "Accept-Ranges", "none" );
+    char contlenstr[1024];
+    sprintf(contlenstr,"%i",strlen(exit_page));
+    struct evkeyvalq *headers = evhttp_request_get_output_headers(evreq);
+    evhttp_add_header(headers, "Connection", "close" );
+    evhttp_add_header(headers, "Content-Type", "text/html" );
+    evhttp_add_header(headers, "Content-Length", contlenstr );
+    evhttp_add_header(headers, "Accept-Ranges", "none" );
 
     // Construct evbuffer and send via chunked encoding
     struct evbuffer *evb = evbuffer_new();
@@ -93,34 +93,34 @@ void StatsExitCallback(struct evhttp_request *evreq)
         return;
     }
 
-	evhttp_send_reply(evreq, 200, "OK", evb);
-	evbuffer_free(evb);
+    evhttp_send_reply(evreq, 200, "OK", evb);
+    evbuffer_free(evb);
 }
 
 
 bool StatsQuit()
 {
-	return statsgw_quit_process;
+    return statsgw_quit_process;
 }
 
 
 void StatsOverviewCallback(struct evhttp_request *evreq)
 {
-	tint nu = NOW;
-	uint64_t down = Channel::global_raw_bytes_down;
-	uint64_t up = Channel::global_raw_bytes_up;
+    tint nu = NOW;
+    uint64_t down = Channel::global_raw_bytes_down;
+    uint64_t up = Channel::global_raw_bytes_up;
 
-	int dspeed = 0, uspeed = 0;
-	tint tdiff = (nu - statsgw_last_time)/1000000;
-	if (tdiff > 0) {
-		dspeed = (int)(((down-statsgw_last_down)/1024) / tdiff);
-		uspeed = (int)(((up-statsgw_last_up)/1024) / tdiff);
-	}
+    int dspeed = 0, uspeed = 0;
+    tint tdiff = (nu - statsgw_last_time)/1000000;
+    if (tdiff > 0) {
+	dspeed = (int)(((down-statsgw_last_down)/1024) / tdiff);
+	uspeed = (int)(((up-statsgw_last_up)/1024) / tdiff);
+    }
     //statsgw_last_down = down;
     //statsgw_last_up = up;
 
 
-	char bodystr[102400];
+    char bodystr[102400];
     strcpy(bodystr,"");
     strcat(bodystr,top_page);
 
@@ -129,60 +129,60 @@ void StatsOverviewCallback(struct evhttp_request *evreq)
     	ContentTransfer *ct = swift::ContentTransfer::swarms[i];
     	if (ct != NULL)
     	{
-    		int fd = ct->fd();
-			uint64_t total = (int)swift::Size(fd);
-			uint64_t down  = (int)swift::Complete(fd);
-			int perc = (int)((down * 100) / total);
+    	    int fd = ct->fd();
+	    uint64_t total = (int)swift::Size(fd);
+	    uint64_t down  = (int)swift::Complete(fd);
+	    int perc = (int)((down * 100) / total);
 
-			char roothashhexstr[256];
-			sprintf(roothashhexstr,"%s", SwarmID(fd).hex().c_str() );
+	    char roothashhexstr[256];
+	    sprintf(roothashhexstr,"%s", SwarmID(fd).hex().c_str() );
 
-			char templ[1024];
-			sprintf(templ,swarm_page_templ,roothashhexstr, perc, '%', dspeed, uspeed );
-			strcat(bodystr,templ);
+	    char templ[1024];
+	    sprintf(templ,swarm_page_templ,roothashhexstr, perc, '%', dspeed, uspeed );
+	    strcat(bodystr,templ);
     	}
     }
 
-	strcat(bodystr,bottom_page);
+    strcat(bodystr,bottom_page);
 
-	char contlenstr[1024];
-	sprintf(contlenstr,"%i",strlen(bodystr));
-	struct evkeyvalq *headers = evhttp_request_get_output_headers(evreq);
-	evhttp_add_header(headers, "Connection", "close" );
-	evhttp_add_header(headers, "Content-Type", "text/html" );
-	evhttp_add_header(headers, "Content-Length", contlenstr );
-	evhttp_add_header(headers, "Accept-Ranges", "none" );
+    char contlenstr[1024];
+    sprintf(contlenstr,"%i",strlen(bodystr));
+    struct evkeyvalq *headers = evhttp_request_get_output_headers(evreq);
+    evhttp_add_header(headers, "Connection", "close" );
+    evhttp_add_header(headers, "Content-Type", "text/html" );
+    evhttp_add_header(headers, "Content-Length", contlenstr );
+    evhttp_add_header(headers, "Accept-Ranges", "none" );
 
-	// Construct evbuffer and send via chunked encoding
-	struct evbuffer *evb = evbuffer_new();
-	int ret = evbuffer_add(evb,bodystr,strlen(bodystr));
-	if (ret < 0) {
-		print_error("statsgw: OverviewCallback: error evbuffer_add");
-		return;
-	}
+    // Construct evbuffer and send via chunked encoding
+    struct evbuffer *evb = evbuffer_new();
+    int ret = evbuffer_add(evb,bodystr,strlen(bodystr));
+    if (ret < 0) {
+	print_error("statsgw: OverviewCallback: error evbuffer_add");
+	return;
+    }
 
-	evhttp_send_reply(evreq, 200, "OK", evb);
-	evbuffer_free(evb);
+    evhttp_send_reply(evreq, 200, "OK", evb);
+    evbuffer_free(evb);
 }
 
 
 void StatsGetSpeedCallback(struct evhttp_request *evreq)
 {
-	if (statsgw_last_time == 0)
-	{
-		statsgw_last_time = NOW-1000000;
-	}
+    if (statsgw_last_time == 0)
+    {
+ 	statsgw_last_time = NOW-1000000;
+    }
 
-	tint nu = Channel::Time();
-	uint64_t down = Channel::global_raw_bytes_down;
-	uint64_t up = Channel::global_raw_bytes_up;
+    tint nu = Channel::Time();
+    uint64_t down = Channel::global_raw_bytes_down;
+    uint64_t up = Channel::global_raw_bytes_up;
 
-	int dspeed = 0, uspeed = 0;
-	tint tdiff = (nu - statsgw_last_time)/1000000;
-	if (tdiff > 0) {
-		dspeed = (int)(((down-statsgw_last_down)/1024) / tdiff);
-		uspeed = (int)(((up-statsgw_last_up)/1024) / tdiff);
-	}
+    int dspeed = 0, uspeed = 0;
+    tint tdiff = (nu - statsgw_last_time)/1000000;
+    if (tdiff > 0) {
+        dspeed = (int)(((down-statsgw_last_down)/1024) / tdiff);
+        uspeed = (int)(((up-statsgw_last_up)/1024) / tdiff);
+    }
     statsgw_last_down = down;
     statsgw_last_up = up;
     statsgw_last_time = nu;
@@ -192,39 +192,39 @@ void StatsGetSpeedCallback(struct evhttp_request *evreq)
     uint32_t nleech=0,nseed=0;
     for (int i=0; i<swift::ContentTransfer::swarms.size(); i++)
     {
-    	ContentTransfer *ct = swift::ContentTransfer::swarms[i];
-    	if (ct != NULL)
-    	{
-    		contentdownspeed += ct->GetCurrentSpeed(DDIR_DOWNLOAD);
-    		contentupspeed += ct->GetCurrentSpeed(DDIR_UPLOAD);
-    		nleech += ct->GetNumLeechers();
-    		nseed += ct->GetNumSeeders();
-    	}
+       ContentTransfer *ct = swift::ContentTransfer::swarms[i];
+       if (ct != NULL)
+       {
+          contentdownspeed += ct->GetCurrentSpeed(DDIR_DOWNLOAD);
+          contentupspeed += ct->GetCurrentSpeed(DDIR_UPLOAD);
+          nleech += ct->GetNumLeechers();
+          nseed += ct->GetNumSeeders();
+       }
     }
     int cdownspeed = (int)(contentdownspeed/1024.0);
     int cupspeed = (int)(contentupspeed/1024.0);
 
-	char speedstr[1024];
-	sprintf(speedstr,"{\"downspeed\": %d, \"success\": \"true\", \"upspeed\": %d, \"cdownspeed\": %d, \"cupspeed\": %d, \"nleech\": %d, \"nseed\": %d}", dspeed, uspeed, cdownspeed, cupspeed, nleech, nseed );
+    char speedstr[1024];
+    sprintf(speedstr,"{\"downspeed\": %d, \"success\": \"true\", \"upspeed\": %d, \"cdownspeed\": %d, \"cupspeed\": %d, \"nleech\": %d, \"nseed\": %d}", dspeed, uspeed, cdownspeed, cupspeed, nleech, nseed );
 
-	char contlenstr[1024];
-	sprintf(contlenstr,"%i",strlen(speedstr));
-	struct evkeyvalq *headers = evhttp_request_get_output_headers(evreq);
-	evhttp_add_header(headers, "Connection", "close" );
-	evhttp_add_header(headers, "Content-Type", "application/json" );
-	evhttp_add_header(headers, "Content-Length", contlenstr );
-	evhttp_add_header(headers, "Accept-Ranges", "none" );
+    char contlenstr[1024];
+    sprintf(contlenstr,"%i",strlen(speedstr));
+    struct evkeyvalq *headers = evhttp_request_get_output_headers(evreq);
+    evhttp_add_header(headers, "Connection", "close" );
+    evhttp_add_header(headers, "Content-Type", "application/json" );
+    evhttp_add_header(headers, "Content-Length", contlenstr );
+    evhttp_add_header(headers, "Accept-Ranges", "none" );
 
-	// Construct evbuffer and send via chunked encoding
-	struct evbuffer *evb = evbuffer_new();
-	int ret = evbuffer_add(evb,speedstr,strlen(speedstr));
-	if (ret < 0) {
-		print_error("statsgw: GetSpeedCallback: error evbuffer_add");
-		return;
-	}
+    // Construct evbuffer and send via chunked encoding
+    struct evbuffer *evb = evbuffer_new();
+    int ret = evbuffer_add(evb,speedstr,strlen(speedstr));
+    if (ret < 0) {
+        print_error("statsgw: GetSpeedCallback: error evbuffer_add");
+        return;
+    }
 
-	evhttp_send_reply(evreq, 200, "OK", evb);
-	evbuffer_free(evb);
+    evhttp_send_reply(evreq, 200, "OK", evb);
+    evbuffer_free(evb);
 }
 
 
@@ -234,51 +234,51 @@ void StatsGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     statsgw_reqs_count++;
 
     if (evhttp_request_get_command(evreq) != EVHTTP_REQ_GET) {
-            return;
+        return;
     }
 
     // Parse URI
     const char *uri = evhttp_request_get_uri(evreq);
-    //struct evkeyvalq *headers =	evhttp_request_get_input_headers(evreq);
+    //struct evkeyvalq *headers =   evhttp_request_get_input_headers(evreq);
     //const char *contentrangestr =evhttp_find_header(headers,"Content-Range");
 
     fprintf(stderr,"statsgw: GOT %s\n", uri);
 
     if (strstr(uri,"get_speed_info") != NULL)
     {
-    	StatsGetSpeedCallback(evreq);
+       StatsGetSpeedCallback(evreq);
     }
     else if (!strncmp(uri,"/webUI/exit",strlen("/webUI/exit")) || statsgw_quit_process)
     {
-    	statsgw_quit_process = true;
-    	StatsExitCallback(evreq);
+       statsgw_quit_process = true;
+       StatsExitCallback(evreq);
     }
     else if (!strncmp(uri,"/webUI",strlen("/webUI")))
     {
-    	StatsOverviewCallback(evreq);
+       StatsOverviewCallback(evreq);
     }
 }
 
 
 bool InstallStatsGateway (struct event_base *evbase,Address bindaddr) {
-	// Arno, 2011-10-04: From libevent's http-server.c example
+   // Arno, 2011-10-04: From libevent's http-server.c example
 
-	/* Create a new evhttp object to handle requests. */
-	statsgw_event = evhttp_new(evbase);
-	if (!statsgw_event) {
-		print_error("statsgw: evhttp_new failed");
-		return false;
-	}
+   /* Create a new evhttp object to handle requests. */
+   statsgw_event = evhttp_new(evbase);
+   if (!statsgw_event) {
+      print_error("statsgw: evhttp_new failed");
+      return false;
+   }
 
-	/* Install callback for all requests */
-	evhttp_set_gencb(statsgw_event, StatsGwNewRequestCallback, NULL);
+   /* Install callback for all requests */
+   evhttp_set_gencb(statsgw_event, StatsGwNewRequestCallback, NULL);
 
-	/* Now we tell the evhttp what port to listen on */
-	statsgw_handle = evhttp_bind_socket_with_handle(statsgw_event, bindaddr.ipv4str(), bindaddr.port());
-	if (!statsgw_handle) {
-		print_error("statsgw: evhttp_bind_socket_with_handle failed");
-		return false;
-	}
+   /* Now we tell the evhttp what port to listen on */
+   statsgw_handle = evhttp_bind_socket_with_handle(statsgw_event, bindaddr.ipv4str(), bindaddr.port());
+   if (!statsgw_handle) {
+      print_error("statsgw: evhttp_bind_socket_with_handle failed");
+      return false;
+   }
 
-	return true;
+   return true;
 }

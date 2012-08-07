@@ -55,8 +55,8 @@ struct http_gw_t {
     struct event           *sinkevwrite;
     std::string    mfspecname; // (optional) name from multi-file spec
     std::string xcontentdur;
-    bool   replied;
-    bool   closing;
+    bool     replied;
+    bool     closing;
     uint64_t startoff;   // MULTIFILE: starting offset in content range of desired file
     uint64_t endoff;     // MULTIFILE: ending offset (careful, for an e.g. 100 byte interval this is 99)
     int replycode;         // HTTP status code
@@ -117,16 +117,16 @@ void HttpGwCloseConnection (http_gw_t* req) {
 
     req->closing = true;
 
-        if (!req->replied)
-             evhttp_request_free(req->sinkevreq);
+    if (!req->replied)
+        evhttp_request_free(req->sinkevreq);
     else if (req->offset > req->startoff)
         evhttp_send_reply_end(req->sinkevreq); //WARNING: calls HttpGwLibeventCloseCallback
     req->sinkevreq = NULL;
 
     if (req->sinkevwrite != NULL)
     {
-            event_free(req->sinkevwrite);
-            req->sinkevwrite = NULL;
+        event_free(req->sinkevwrite);
+        req->sinkevwrite = NULL;
     }
 
     // Note: for some reason calling conn_free here prevents the last chunks
@@ -570,7 +570,7 @@ void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
     }
 
     if (req->xcontentdur == "-1")
-    	fprintf(stderr,"httpgw: Live: hook-in at %llu\n", swift::GetHookinOffset(fdes) );
+        fprintf(stderr,"httpgw: Live: hook-in at %llu\n", swift::GetHookinOffset(fdes) );
 
 
     // MULTIFILE
@@ -578,9 +578,9 @@ void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
     ContentTransfer *ct = ContentTransfer::transfer(fdes);
     if (ct == NULL) {
         dprintf("%s @%i http first: ContentTransfer not found\n",tintstr(),req->id);
-            evhttp_send_error(req->sinkevreq,500,"Internal error: Content not found although downloading it.");
-            req->replied = true;
-            return;
+        evhttp_send_error(req->sinkevreq,500,"Internal error: Content not found although downloading it.");
+        req->replied = true;
+        return;
     }
 
     if (ct->ttype() == FILE_TRANSFER)
@@ -642,8 +642,8 @@ void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
     if (req->rangefirst != -1)
     {
         // Range request
-    	// Arno, 2012-06-15: Oops, use startoff before mod.
-    	req->endoff = req->startoff + req->rangelast;
+        // Arno, 2012-06-15: Oops, use startoff before mod.
+        req->endoff = req->startoff + req->rangelast;
         req->startoff += req->rangefirst;
         req->tosend = req->rangelast+1-req->rangefirst;
     }
@@ -809,7 +809,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     dprintf("%s @%i http get: new request\n",tintstr(),http_gw_reqs_count+1);
 
     if (evhttp_request_get_command(evreq) != EVHTTP_REQ_GET) {
-            return;
+        return;
     }
     sawhttpconn = true;
 

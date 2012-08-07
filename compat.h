@@ -98,7 +98,7 @@ typedef void* setsockoptptr_t;
 
 // Arno, 2012-01-05: Handle 64-bit size_t & printf+scanf
 #if SIZE_MAX > UINT_MAX
-#define PRISIZET		"%llu"
+#define PRISIZET	"%llu"
 #else
 #define PRISIZET	"%lu"
 #endif
@@ -124,7 +124,7 @@ typedef void* setsockoptptr_t;
 #ifdef _WIN32
 #define FILE_SEP          "\\"
 #else
-#define FILE_SEP		  "/"
+#define FILE_SEP	  "/"
 #endif
 
 

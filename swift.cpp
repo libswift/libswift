@@ -45,9 +45,9 @@ void usage(void)
     fprintf(stderr,"  -w, --wait\tlimit running time, e.g. 1[DHMs] (default: infinite with -l, -g)\n");
     fprintf(stderr,"  -H, --checkpoint\tcreate checkpoint of file when complete for fast restart\n");
     fprintf(stderr,"  -z, --chunksize\tchunk size in bytes (default: %d)\n", SWIFT_DEFAULT_CHUNK_SIZE);
-	fprintf(stderr,"  -m, --printurl\tcompose URL from tracker, file and chunksize\n");
-	fprintf(stderr,"  -M, --multifile\tcreate multi-file spec with given files\n");
-	fprintf(stderr,"  -e, --zerosdir\tdirectory with checkpointed content to serve from with zero state\n");
+    fprintf(stderr,"  -m, --printurl\tcompose URL from tracker, file and chunksize\n");
+    fprintf(stderr,"  -M, --multifile\tcreate multi-file spec with given files\n");
+    fprintf(stderr,"  -e, --zerosdir\tdirectory with checkpointed content to serve from with zero state\n");
     fprintf(stderr,"  -i, --source\tlive source input (URL or filename or - for stdin)\n");
     fprintf(stderr,"  -k, --live\tperform live download, use with -t and -h\n");
 }
@@ -78,7 +78,7 @@ void CmdGwUpdateDLStatesCallback();
 
 // Global variables
 struct event evreport, evrescan, evend, evlivesource;
-int single_fd = -1;
+int  single_fd = -1;
 bool file_enable_checkpoint = false;
 bool file_checkpointed = false;
 bool report_progress = false;
@@ -276,18 +276,18 @@ int utf8main (int argc, char** argv)
     }   // arguments parsed
 
 
-	// Change dir to destdir, if set, or to tempdir if HTTPGW
-	if (destdir == "") {
-		if (httpgw_enabled) {
-			std::string dd = gettmpdir_utf8();
-			chdir_utf8(dd);
-		}
+    // Change dir to destdir, if set, or to tempdir if HTTPGW
+    if (destdir == "") {
+	if (httpgw_enabled) {
+	    std::string dd = gettmpdir_utf8();
+	    chdir_utf8(dd);
 	}
-	else
-		chdir_utf8(destdir);
+    }
+    else
+	chdir_utf8(destdir);
 
-	if (httpgw_enabled)
-		fprintf(stderr,"CWD %s\n",getcwd_utf8().c_str() );
+    if (httpgw_enabled)
+	fprintf(stderr,"CWD %s\n",getcwd_utf8().c_str() );
 
     if (bindaddr!=Address()) { // seeding
         if (Listen(bindaddr)<=0)
@@ -324,141 +324,141 @@ int utf8main (int argc, char** argv)
 
     if (!cmdgw_enabled && livesource_input == "" && zerostatedir == "")
     {
-		int ret = -1;
-		if (!generate_multifile)
-		{
-			if (filename != "" || root_hash != Sha1Hash::ZERO) {
+        int ret = -1;
+        if (!generate_multifile)
+        {
+            if (filename != "" || root_hash != Sha1Hash::ZERO) {
 
-				// Single file
-				ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,livestream,urlfilename,maxspeed);
-			}
-			else if (scan_dirname != "")
-				ret = OpenSwiftDirectory(scan_dirname,Address(),false,chunk_size);
-			else
-				ret = -1;
-		}
-		else
-		{
-			// MULTIFILE
-			// Generate multi-file spec
-			ret = CreateMultifileSpec(filename,argc,argv,optind); //optind is global var points to first non-opt cmd line argument
-			if (ret < 0)
-				quit("Cannot generate multi-file spec")
-			else
-				// Calc roothash
-				ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,false,urlfilename,maxspeed);
-		}
+                // Single file
+                ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,livestream,urlfilename,maxspeed);
+            }
+            else if (scan_dirname != "")
+                ret = OpenSwiftDirectory(scan_dirname,Address(),false,chunk_size);
+            else
+                ret = -1;
+        }
+        else
+        {
+            // MULTIFILE
+            // Generate multi-file spec
+            ret = CreateMultifileSpec(filename,argc,argv,optind); //optind is global var points to first non-opt cmd line argument
+            if (ret < 0)
+                quit("Cannot generate multi-file spec")
+            else
+                // Calc roothash
+                ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,false,urlfilename,maxspeed);
+        }
 
-		// For testing
-		if (httpgw_enabled)
-			ret = 0;
+        // For testing
+        if (httpgw_enabled)
+            ret = 0;
 
-		// No file/dir nor HTTP gateway nor CMD gateway, will never know what to swarm
-		if (ret == -1) {
-			usage();
-			quit("Don't understand command line parameters.")
-		}
+        // No file/dir nor HTTP gateway nor CMD gateway, will never know what to swarm
+        if (ret == -1) {
+            usage();
+            quit("Don't understand command line parameters.")
+        }
     }
     else if (livesource_input != "")
-	{
-		// LIVE
-    	// Server mode: read from http source or pipe or file
-		livesource_evb = evbuffer_new();
+    {
+        // LIVE
+        // Server mode: read from http source or pipe or file
+        livesource_evb = evbuffer_new();
 
-		std::string httpscheme = "http:";
-		if (livesource_input.substr(0,httpscheme.length()) != httpscheme)
-		{
-			// Source is file or pipe
-			if (livesource_input == "-")
-				livesource_fd = 0; // stdin, aka read from pipe
-			else {
-				livesource_fd = open(livesource_input.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-				if (livesource_fd < 0)
-					quit("Could not open source input");
-			}
+        std::string httpscheme = "http:";
+        if (livesource_input.substr(0,httpscheme.length()) != httpscheme)
+        {
+            // Source is file or pipe
+            if (livesource_input == "-")
+                livesource_fd = 0; // stdin, aka read from pipe
+            else {
+                livesource_fd = open(livesource_input.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+                if (livesource_fd < 0)
+                    quit("Could not open source input");
+            }
 
-			//LIVETODO
-			const char *swarmidstr = "ArnosFirstSwarm";
-			Sha1Hash swarmid(swarmidstr, strlen(swarmidstr));
-			livesource_lt = swift::LiveCreate(filename,swarmid);
+            //LIVETODO
+            const char *swarmidstr = "ArnosFirstSwarm";
+            Sha1Hash swarmid(swarmidstr, strlen(swarmidstr));
+            livesource_lt = swift::LiveCreate(filename,swarmid);
 
-			evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
-			evtimer_add(&evlivesource, tint2tv(TINT_SEC));
-		}
-		else
-		{
-			std::string httpservname,httppath;
-			int httpport=80;
+            evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
+            evtimer_add(&evlivesource, tint2tv(TINT_SEC));
+        }
+        else
+        {
+            std::string httpservname,httppath;
+            int httpport=80;
 
-			std::string httpprefix= "http://";
-			std::string schemeless = livesource_input.substr(httpprefix.length());
-			int sidx = schemeless.find("/");
-			if (sidx == -1)
-			    quit("No path in live source input URL");
-			httppath = schemeless.substr(sidx);
-			std::string server = schemeless.substr(0,sidx);
-			sidx = server.find(":");
-			if (sidx != -1)
-			{
-			    httpservname = server.substr(0,sidx);
-			    std::string portstr = server.substr(sidx+1);
+            std::string httpprefix= "http://";
+            std::string schemeless = livesource_input.substr(httpprefix.length());
+            int sidx = schemeless.find("/");
+            if (sidx == -1)
+                quit("No path in live source input URL");
+            httppath = schemeless.substr(sidx);
+            std::string server = schemeless.substr(0,sidx);
+            sidx = server.find(":");
+            if (sidx != -1)
+            {
+                httpservname = server.substr(0,sidx);
+                std::string portstr = server.substr(sidx+1);
                 std::istringstream(portstr) >> httpport;
-			}
+            }
             else
                 httpservname = server;
 
-			fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str() );
+            fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str() );
 
-			const char *swarmidstr = "ArnosFirstSwarm";
-			Sha1Hash swarmid(swarmidstr, strlen(swarmidstr));
-			livesource_lt = swift::LiveCreate(filename,swarmid);
+            const char *swarmidstr = "ArnosFirstSwarm";
+            Sha1Hash swarmid(swarmidstr, strlen(swarmidstr));
+            livesource_lt = swift::LiveCreate(filename,swarmid);
 
-			struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, httpservname.c_str(), httpport);
-			struct evhttp_request *req = evhttp_request_new(LiveSourceHTTPResponseCallback, NULL);
-			evhttp_request_set_chunked_cb(req,LiveSourceHTTPDownloadChunkCallback);
-			evhttp_make_request(cn, req, EVHTTP_REQ_GET,httppath.c_str());
-			evhttp_add_header(req->output_headers, "Host", httpservname.c_str());
-		}
-	}
+            struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, httpservname.c_str(), httpport);
+            struct evhttp_request *req = evhttp_request_new(LiveSourceHTTPResponseCallback, NULL);
+            evhttp_request_set_chunked_cb(req,LiveSourceHTTPDownloadChunkCallback);
+            evhttp_make_request(cn, req, EVHTTP_REQ_GET,httppath.c_str());
+            evhttp_add_header(req->output_headers, "Host", httpservname.c_str());
+        }
+    }
     else if (!cmdgw_enabled && !httpgw_enabled && zerostatedir == "")
-    	quit("Not client, not live server, not a gateway, not zero state seeder?");
+        quit("Not client, not live server, not a gateway, not zero state seeder?");
 
-	// Arno, 2012-01-04: Allow download and quit mode
-	if (single_fd != -1 && root_hash != Sha1Hash::ZERO && wait_time == 0) {
-		wait_time = TINT_NEVER;
-		exitoncomplete = true;
-	}
+    // Arno, 2012-01-04: Allow download and quit mode
+    if (single_fd != -1 && root_hash != Sha1Hash::ZERO && wait_time == 0) {
+        wait_time = TINT_NEVER;
+        exitoncomplete = true;
+    }
 
     // End after wait_time
     if ((long)wait_time > 0) {
-    	evtimer_assign(&evend, Channel::evbase, EndCallback, NULL);
-    	evtimer_add(&evend, tint2tv(wait_time));
+        evtimer_assign(&evend, Channel::evbase, EndCallback, NULL);
+        evtimer_add(&evend, tint2tv(wait_time));
     }
 
     // Enter mainloop, if daemonizing
     if (wait_time == TINT_NEVER || (long)wait_time > 0) {
-		// Arno: always, for statsgw, rate control, etc.
-		evtimer_assign(&evreport, Channel::evbase, ReportCallback, NULL);
-		evtimer_add(&evreport, tint2tv(TINT_SEC));
+        // Arno: always, for statsgw, rate control, etc.
+        evtimer_assign(&evreport, Channel::evbase, ReportCallback, NULL);
+        evtimer_add(&evreport, tint2tv(TINT_SEC));
 
 
-		// Arno:
-		if (scan_dirname != "") {
-			evtimer_assign(&evrescan, Channel::evbase, RescanDirCallback, NULL);
-			evtimer_add(&evrescan, tint2tv(RESCAN_DIR_INTERVAL*TINT_SEC));
-		}
+        // Arno:
+        if (scan_dirname != "") {
+            evtimer_assign(&evrescan, Channel::evbase, RescanDirCallback, NULL);
+            evtimer_add(&evrescan, tint2tv(RESCAN_DIR_INTERVAL*TINT_SEC));
+        }
 
 
-		fprintf(stderr,"swift: Mainloop\n");
-		// Enter libevent mainloop
-		event_base_dispatch(Channel::evbase);
+        fprintf(stderr,"swift: Mainloop\n");
+        // Enter libevent mainloop
+        event_base_dispatch(Channel::evbase);
 
-		// event_base_loopexit() was called, shutting down
+        // event_base_loopexit() was called, shutting down
     }
 
     // Arno, 2012-01-03: Close all transfers
-	for (int i=0; i<ContentTransfer::swarms.size(); i++) {
-		if (ContentTransfer::swarms[i] != NULL)
+    for (int i=0; i<ContentTransfer::swarms.size(); i++) {
+        if (ContentTransfer::swarms[i] != NULL)
             Close(FileTransfer::swarms[i]->fd());
     }
 
@@ -473,133 +473,133 @@ int utf8main (int argc, char** argv)
 
 int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed)
 {
-	if (root_hash!=Sha1Hash::ZERO && filename == "")
-		filename = strdup(root_hash.hex().c_str());
+    if (root_hash!=Sha1Hash::ZERO && filename == "")
+        filename = strdup(root_hash.hex().c_str());
 
-	single_fd = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size,livestream);
-	if (single_fd < 0)
-		quit("cannot open file %s",filename.c_str());
-	if (printurl) {
+    single_fd = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size,livestream);
+    if (single_fd < 0)
+        quit("cannot open file %s",filename.c_str());
+    if (printurl) {
 
-		FILE *fp = stdout;
-		if (urlfilename != "")
-			fp = fopen(urlfilename.c_str(),"wb");
+        FILE *fp = stdout;
+        if (urlfilename != "")
+            fp = fopen(urlfilename.c_str(),"wb");
 
-		if (swift::Complete(single_fd) == 0)
-			quit("cannot open empty file %s",filename.c_str());
-		if (chunk_size == SWIFT_DEFAULT_CHUNK_SIZE)
-			fprintf(fp,"tswift://%s/%s\n", trackerargstr.c_str(), SwarmID(single_fd).hex().c_str());
-		else
-			fprintf(fp,"tswift://%s/%s$%i\n", trackerargstr.c_str(), SwarmID(single_fd).hex().c_str(), chunk_size);
+        if (swift::Complete(single_fd) == 0)
+            quit("cannot open empty file %s",filename.c_str());
+        if (chunk_size == SWIFT_DEFAULT_CHUNK_SIZE)
+            fprintf(fp,"tswift://%s/%s\n", trackerargstr.c_str(), SwarmID(single_fd).hex().c_str());
+        else
+            fprintf(fp,"tswift://%s/%s$%i\n", trackerargstr.c_str(), SwarmID(single_fd).hex().c_str(), chunk_size);
 
-		if (urlfilename != "")
-			fclose(fp);
+        if (urlfilename != "")
+            fclose(fp);
 
-		// Arno, 2012-01-04: LivingLab: Create checkpoint such that content
-		// can be copied to scanned dir and quickly loaded
-		swift::Checkpoint(single_fd);
-	}
-	else
-	{
-		printf("Root hash: %s\n", SwarmID(single_fd).hex().c_str());
-		fflush(stdout); // For testing
-	}
+        // Arno, 2012-01-04: LivingLab: Create checkpoint such that content
+        // can be copied to scanned dir and quickly loaded
+        swift::Checkpoint(single_fd);
+    }
+    else
+    {
+        printf("Root hash: %s\n", SwarmID(single_fd).hex().c_str());
+        fflush(stdout); // For testing
+    }
 
-	// RATELIMIT
-	ContentTransfer *ct = ContentTransfer::transfer(single_fd);
-	ct->SetMaxSpeed(DDIR_DOWNLOAD,maxspeed[DDIR_DOWNLOAD]);
-	ct->SetMaxSpeed(DDIR_UPLOAD,maxspeed[DDIR_UPLOAD]);
+    // RATELIMIT
+    ContentTransfer *ct = ContentTransfer::transfer(single_fd);
+    ct->SetMaxSpeed(DDIR_DOWNLOAD,maxspeed[DDIR_DOWNLOAD]);
+    ct->SetMaxSpeed(DDIR_UPLOAD,maxspeed[DDIR_UPLOAD]);
 
-	return single_fd;
+    return single_fd;
 }
 
 
 int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size, bool livestream)
 {
-	std::string binmap_filename = filename;
-	binmap_filename.append(".mbinmap");
+    std::string binmap_filename = filename;
+    binmap_filename.append(".mbinmap");
 
-	// Arno, 2012-01-03: Hack to discover root hash of a file on disk, such that
-	// we don't load it twice while rescanning a dir of content.
-	MmapHashTree *ht = new MmapHashTree(true,binmap_filename);
+    // Arno, 2012-01-03: Hack to discover root hash of a file on disk, such that
+    // we don't load it twice while rescanning a dir of content.
+    MmapHashTree *ht = new MmapHashTree(true,binmap_filename);
 
-	//	fprintf(stderr,"swift: parsedir: File %s may have hash %s\n", filename, ht->root_hash().hex().c_str() );
+    //    fprintf(stderr,"swift: parsedir: File %s may have hash %s\n", filename, ht->root_hash().hex().c_str() );
 
-	int fd = swift::Find(ht->root_hash());
-	delete ht;
-	if (fd == -1) {
-		if (!quiet)
-			fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
+    int fd = swift::Find(ht->root_hash());
+    delete ht;
+    if (fd == -1) {
+        if (!quiet)
+            fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
 
-		// Client mode: regular or live download
-		if (!livestream)
-			fd = Open(filename,hash,Address(),false,chunk_size);
-		else
-			fd = LiveOpen(filename,hash,Address(),false,chunk_size);
-	}
-	else if (!quiet)
-		fprintf(stderr,"swift: parsedir: Ignoring loaded %s\n", filename.c_str() );
-	return fd;
+        // Client mode: regular or live download
+        if (!livestream)
+            fd = Open(filename,hash,Address(),false,chunk_size);
+        else
+            fd = LiveOpen(filename,hash,Address(),false,chunk_size);
+    }
+    else if (!quiet)
+        fprintf(stderr,"swift: parsedir: Ignoring loaded %s\n", filename.c_str() );
+    return fd;
 }
 
 
 int OpenSwiftDirectory(std::string dirname, Address tracker, bool check_hashes, uint32_t chunk_size)
 {
-	DirEntry *de = opendir_utf8(dirname);
-	if (de == NULL)
-		return -1;
+    DirEntry *de = opendir_utf8(dirname);
+    if (de == NULL)
+        return -1;
 
-	while(1)
-	{
-		if (!(de->isdir_ || de->filename_.rfind(".mhash") != std::string::npos || de->filename_.rfind(".mbinmap") != std::string::npos))
-		{
-			// Not dir, or metafile
-			std::string path = dirname;
-			path.append(FILE_SEP);
-			path.append(de->filename_);
-			int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,check_hashes,chunk_size,false);
-			if (fd >= 0)
-				Checkpoint(fd);
-		}
+    while(1)
+    {
+        if (!(de->isdir_ || de->filename_.rfind(".mhash") != std::string::npos || de->filename_.rfind(".mbinmap") != std::string::npos))
+        {
+            // Not dir, or metafile
+            std::string path = dirname;
+            path.append(FILE_SEP);
+            path.append(de->filename_);
+            int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,check_hashes,chunk_size,false);
+            if (fd >= 0)
+                Checkpoint(fd);
+        }
 
-		DirEntry *newde = readdir_utf8(de);
-		delete de;
-		de = newde;
-		if (de == NULL)
-			break;
-	}
-	return 1;
+        DirEntry *newde = readdir_utf8(de);
+        delete de;
+        de = newde;
+        if (de == NULL)
+            break;
+    }
+    return 1;
 }
 
 
 
 int CleanSwiftDirectory(std::string dirname)
 {
-	std::set<int>	delset;
-	std::vector<ContentTransfer*>::iterator iter;
-	for (iter=ContentTransfer::swarms.begin(); iter!=ContentTransfer::swarms.end(); iter++)
-	{
-		ContentTransfer *ct = *iter;
-		if (ct != NULL) {
-			std::string filename = ct->GetStorage()->GetOSPathName();
-			fprintf(stderr,"swift: clean: Checking %s\n", filename.c_str() );
-			int res = file_exists_utf8( filename );
-			if (res == 0) {
-				fprintf(stderr,"swift: clean: Missing %s\n", filename.c_str() );
-				delset.insert(ct->fd());
-			}
-		}
-	}
+    std::set<int>    delset;
+    std::vector<ContentTransfer*>::iterator iter;
+    for (iter=ContentTransfer::swarms.begin(); iter!=ContentTransfer::swarms.end(); iter++)
+    {
+        ContentTransfer *ct = *iter;
+        if (ct != NULL) {
+            std::string filename = ct->GetStorage()->GetOSPathName();
+            fprintf(stderr,"swift: clean: Checking %s\n", filename.c_str() );
+            int res = file_exists_utf8( filename );
+            if (res == 0) {
+                fprintf(stderr,"swift: clean: Missing %s\n", filename.c_str() );
+                delset.insert(ct->fd());
+            }
+        }
+    }
 
-	std::set<int>::iterator	iiter;
-	for (iiter=delset.begin(); iiter!=delset.end(); iiter++)
-	{
-		int fd = *iiter;
-		fprintf(stderr,"swift: clean: Deleting transfer %d\n", fd );
-		swift::Close(fd);
-	}
+    std::set<int>::iterator    iiter;
+    for (iiter=delset.begin(); iiter!=delset.end(); iiter++)
+    {
+        int fd = *iiter;
+        fprintf(stderr,"swift: clean: Deleting transfer %d\n", fd );
+        swift::Close(fd);
+    }
 
-	return 1;
+    return 1;
 }
 
 
@@ -607,282 +607,280 @@ int CleanSwiftDirectory(std::string dirname)
 
 
 void ReportCallback(int fd, short event, void *arg) {
-	// Called every second to print/calc some stats
-	// Arno, 2012-05-24: Why-oh-why, update NOW
-	Channel::Time();
+    // Called every second to print/calc some stats
+    // Arno, 2012-05-24: Why-oh-why, update NOW
+    Channel::Time();
 
-	if (single_fd  >= 0)
-	{
-		if (report_progress) {
-			fprintf(stderr,
-				"%s %lli of %lli (seq %lli) %lli dgram %lli bytes up, "	\
-				"%lli dgram %lli bytes down\n",
-				IsComplete(single_fd ) ? "DONE" : "done",
-				Complete(single_fd), Size(single_fd), SeqComplete(single_fd),
-				Channel::global_dgrams_up, Channel::global_raw_bytes_up,
-				Channel::global_dgrams_down, Channel::global_raw_bytes_down );
-		}
+    if (single_fd  >= 0)
+    {
+        if (report_progress) {
+            fprintf(stderr,
+                "%s %lli of %lli (seq %lli) %lli dgram %lli bytes up, "    \
+                "%lli dgram %lli bytes down\n",
+                IsComplete(single_fd ) ? "DONE" : "done",
+                Complete(single_fd), Size(single_fd), SeqComplete(single_fd),
+                Channel::global_dgrams_up, Channel::global_raw_bytes_up,
+                Channel::global_dgrams_down, Channel::global_raw_bytes_down );
+        }
 
         ContentTransfer *ct = ContentTransfer::transfer(single_fd);
         if (report_progress) { // TODO: move up
-        	fprintf(stderr,"upload %lf\n",ct->GetCurrentSpeed(DDIR_UPLOAD));
-        	fprintf(stderr,"dwload %lf\n",ct->GetCurrentSpeed(DDIR_DOWNLOAD));
+            fprintf(stderr,"upload %lf\n",ct->GetCurrentSpeed(DDIR_UPLOAD));
+            fprintf(stderr,"dwload %lf\n",ct->GetCurrentSpeed(DDIR_DOWNLOAD));
         }
         // Update speed measurements such that they decrease when DL/UL stops
         // Always
-    	ct->OnRecvData(0);
-    	ct->OnSendData(0);
+        ct->OnRecvData(0);
+        ct->OnSendData(0);
 
-    	// CHECKPOINT
-    	if (ct->ttype() == FILE_TRANSFER && file_enable_checkpoint && !file_checkpointed && IsComplete(single_fd))
-    	{
-    		std::string binmap_filename = ct->GetStorage()->GetOSPathName();
-    		binmap_filename.append(".mbinmap");
-    		fprintf(stderr,"swift: Complete, checkpointing %s\n", binmap_filename.c_str() );
+        // CHECKPOINT
+        if (ct->ttype() == FILE_TRANSFER && file_enable_checkpoint && !file_checkpointed && IsComplete(single_fd))
+        {
+            std::string binmap_filename = ct->GetStorage()->GetOSPathName();
+            binmap_filename.append(".mbinmap");
+            fprintf(stderr,"swift: Complete, checkpointing %s\n", binmap_filename.c_str() );
 
-    		if (swift::Checkpoint(single_fd) >= 0)
-    			file_checkpointed = true;
-    	}
+            if (swift::Checkpoint(single_fd) >= 0)
+                file_checkpointed = true;
+        }
 
 
-    	if (exitoncomplete && IsComplete(single_fd))
-    		// Download and stop mode
-    	    event_base_loopexit(Channel::evbase, NULL);
+        if (exitoncomplete && IsComplete(single_fd))
+            // Download and stop mode
+            event_base_loopexit(Channel::evbase, NULL);
 
-	}
+    }
     if (httpgw_enabled)
     {
         //fprintf(stderr,".");
 
         // ARNOSMPTODO: Restore fail behaviour when used in SwarmPlayer 3000.
         if (!HTTPIsSending()) {
-        	// TODO
-        	//event_base_loopexit(Channel::evbase, NULL);
+            // TODO
+            //event_base_loopexit(Channel::evbase, NULL);
             return;
         }
     }
     if (StatsQuit())
     {
-    	// SwarmPlayer 3000: User click "Quit" button in webUI.
-    	struct timeval tv;
-    	tv.tv_sec = 1;
-    	int ret = event_base_loopexit(Channel::evbase,&tv);
+        // SwarmPlayer 3000: User click "Quit" button in webUI.
+        struct timeval tv;
+        tv.tv_sec = 1;
+        int ret = event_base_loopexit(Channel::evbase,&tv);
     }
-	// SWIFTPROC
-	// ARNOSMPTODO: SCALE: perhaps less than once a second if many swarms
-	CmdGwUpdateDLStatesCallback();
+    // SWIFTPROC
+    // ARNOSMPTODO: SCALE: perhaps less than once a second if many swarms
+    CmdGwUpdateDLStatesCallback();
 
-	// Gertjan fix
-	// Arno, 2011-10-04: Temp disable
+    // Gertjan fix
+    // Arno, 2011-10-04: Temp disable
     //if (do_nat_test)
     //     nat_test_update();
 
-	evtimer_add(&evreport, tint2tv(TINT_SEC));
+    evtimer_add(&evreport, tint2tv(TINT_SEC));
 }
 
 void EndCallback(int fd, short event, void *arg) {
-	// Called when wait timer expires == fixed time daemon
+    // Called when wait timer expires == fixed time daemon
     event_base_loopexit(Channel::evbase, NULL);
 }
 
 
 void RescanDirCallback(int fd, short event, void *arg) {
 
-	// SEEDDIR
-	// Rescan dir: CAREFUL: this is blocking, better prepare .m* files first
-	// by running swift separately and then copy content + *.m* to scanned dir,
-	// such that a fast restore from checkpoint is done.
-	//
-	OpenSwiftDirectory(scan_dirname,tracker,false,chunk_size);
+    // SEEDDIR
+    // Rescan dir: CAREFUL: this is blocking, better prepare .m* files first
+    // by running swift separately and then copy content + *.m* to scanned dir,
+    // such that a fast restore from checkpoint is done.
+    //
+    OpenSwiftDirectory(scan_dirname,tracker,false,chunk_size);
 
-	CleanSwiftDirectory(scan_dirname);
+    CleanSwiftDirectory(scan_dirname);
 
-	evtimer_add(&evrescan, tint2tv(RESCAN_DIR_INTERVAL*TINT_SEC));
+    evtimer_add(&evrescan, tint2tv(RESCAN_DIR_INTERVAL*TINT_SEC));
 }
 
 
 
 // MULTIFILE
-typedef std::vector<std::pair<std::string,int64_t> >	filelist_t;
+typedef std::vector<std::pair<std::string,int64_t> >    filelist_t;
 int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int argidx)
 {
-	fprintf(stderr,"CreateMultiFileSpec: %s nfiles %d\n", specfilename.c_str(), argc-argidx );
+    fprintf(stderr,"CreateMultiFileSpec: %s nfiles %d\n", specfilename.c_str(), argc-argidx );
 
-	filelist_t	filelist;
+    filelist_t    filelist;
 
+    // MULTIFILE TODO: if arg is a directory, include all files
 
-	// MULTIFILE TODO: if arg is a directory, include all files
+    // 1. Make list of files
+    for (int i=argidx; i<argc; i++)
+    {
+        std::string pathname = argv[i];
+        int64_t fsize = file_size_by_path_utf8(pathname);
+        if( fsize < 0)
+        {
+            fprintf(stderr,"cannot open file in multi-spec list: %s\n", pathname.c_str() );
+            print_error("cannot open file in multi-spec list" );
+            return fsize;
+        }
 
+        // TODO: strip off common path from source pathnames
+        // TODO: convert path separator to standard
+        std::string pathstr = pathname; // TODO: UTF8-encode
+        filelist.push_back(std::make_pair(pathstr,fsize));
+    }
 
-	// 1. Make list of files
-	for (int i=argidx; i<argc; i++)
-	{
-		std::string pathname = argv[i];
-		int64_t fsize = file_size_by_path_utf8(pathname);
-		if( fsize < 0)
-		{
-			fprintf(stderr,"cannot open file in multi-spec list: %s\n", pathname.c_str() );
-			print_error("cannot open file in multi-spec list" );
-			return fsize;
-		}
-
-		// TODO: strip off common path from source pathnames
-		// TODO: convert path separator to standard
-		std::string pathstr = pathname; // TODO: UTF8-encode
-		filelist.push_back(std::make_pair(pathstr,fsize));
-	}
-
-	// 2. Files in multi-file spec must be sorted, such that creating a swarm
-	// from the same set of files results in the same swarm.
-	sort(filelist.begin(), filelist.end());
+    // 2. Files in multi-file spec must be sorted, such that creating a swarm
+    // from the same set of files results in the same swarm.
+    sort(filelist.begin(), filelist.end());
 
 
-	// 3. Create spec body
-	std::ostringstream specbody;
+    // 3. Create spec body
+    std::ostringstream specbody;
 
-	filelist_t::iterator iter;
-	for (iter = filelist.begin(); iter < filelist.end(); iter++)
-	{
-		specbody << Storage::os2specpn( (*iter).first );
-		specbody << " ";
-		specbody << (*iter).second << "\n";
-	}
+    filelist_t::iterator iter;
+    for (iter = filelist.begin(); iter < filelist.end(); iter++)
+    {
+        specbody << Storage::os2specpn( (*iter).first );
+        specbody << " ";
+        specbody << (*iter).second << "\n";
+    }
 
-	// 4. Calc specsize
-	int specsize = Storage::MULTIFILE_PATHNAME.size()+1+0+1+specbody.str().size();
-	char numstr[100];
-	sprintf(numstr,"%d",specsize);
-	char numstr2[100];
-	sprintf(numstr2,"%d",specsize+strlen(numstr));
-	if (strlen(numstr) == strlen(numstr2))
-		specsize += strlen(numstr);
-	else
-		specsize += strlen(numstr)+(strlen(numstr2)-strlen(numstr));
+    // 4. Calc specsize
+    int specsize = Storage::MULTIFILE_PATHNAME.size()+1+0+1+specbody.str().size();
+    char numstr[100];
+    sprintf(numstr,"%d",specsize);
+    char numstr2[100];
+    sprintf(numstr2,"%d",specsize+strlen(numstr));
+    if (strlen(numstr) == strlen(numstr2))
+        specsize += strlen(numstr);
+    else
+        specsize += strlen(numstr)+(strlen(numstr2)-strlen(numstr));
 
-	// 5. Create spec as string
-	std::ostringstream spec;
-	spec << Storage::MULTIFILE_PATHNAME;
-	spec << " ";
-	spec << specsize;
-	spec << "\n";
-	spec << specbody.str();
+    // 5. Create spec as string
+    std::ostringstream spec;
+    spec << Storage::MULTIFILE_PATHNAME;
+    spec << " ";
+    spec << specsize;
+    spec << "\n";
+    spec << specbody.str();
 
-	fprintf(stderr,"spec: <%s>\n", spec.str().c_str() );
+    fprintf(stderr,"spec: <%s>\n", spec.str().c_str() );
 
-	// 6. Write to specfile
-	FILE *fp = fopen_utf8(specfilename.c_str(),"wb");
-	int ret = fwrite(spec.str().c_str(),sizeof(char),spec.str().length(),fp);
-	if (ret < 0)
-		print_error("cannot write multi-file spec");
-	fclose(fp);
+    // 6. Write to specfile
+    FILE *fp = fopen_utf8(specfilename.c_str(),"wb");
+    int ret = fwrite(spec.str().c_str(),sizeof(char),spec.str().length(),fp);
+    if (ret < 0)
+        print_error("cannot write multi-file spec");
+    fclose(fp);
 
-	return ret;
+    return ret;
 }
 
 
 #ifdef WIN32
 FILE *livesource_pfile = NULL;
-#define LIVESOURCE_BUFSIZE	102400
-#define LIVESOURCE_INTERVAL	TINT_SEC
+#define LIVESOURCE_BUFSIZE    102400
+#define LIVESOURCE_INTERVAL    TINT_SEC
 #else
-#define LIVESOURCE_BUFSIZE	102400
-#define LIVESOURCE_INTERVAL	TINT_SEC/10
+#define LIVESOURCE_BUFSIZE    102400
+#define LIVESOURCE_INTERVAL    TINT_SEC/10
 #endif
 
 void LiveSourceFileTimerCallback(int fd, short event, void *arg) {
 
-	char buf[LIVESOURCE_BUFSIZE];
+    char buf[LIVESOURCE_BUFSIZE];
 
-	fprintf(stderr,"live: file: timer\n");
+    fprintf(stderr,"live: file: timer\n");
 
 #ifdef WIN32
-	if (livesource_pfile == NULL)
-	{
-		// TODO: make parameter
-		livesource_pfile = _popen( "transcode15.bat", "rb" );
-	    if (livesource_pfile == NULL)
+    if (livesource_pfile == NULL)
+    {
+        // TODO: make parameter
+        livesource_pfile = _popen( "transcode15.bat", "rb" );
+        if (livesource_pfile == NULL)
         {
                 print_error("live: file: popen failed" );
                 return;
         }
-	}
+    }
 
-	int nread = fread(buf,sizeof(char),sizeof(buf),livesource_pfile);
+    int nread = fread(buf,sizeof(char),sizeof(buf),livesource_pfile);
 #else
-	int nread = read(livesource_fd,buf,sizeof(buf));
+    int nread = read(livesource_fd,buf,sizeof(buf));
 #endif
-	fprintf(stderr,"live: file: read returned %d\n", nread );
+    fprintf(stderr,"live: file: read returned %d\n", nread );
 
-	if (nread < -1)
-		print_error("error reading from live source");
-	else if (nread > 0)
-	{
-		int ret = evbuffer_add(livesource_evb,buf,nread);
-		if (ret < 0)
-			print_error("live: file: error evbuffer_add");
+    if (nread < -1)
+        print_error("error reading from live source");
+    else if (nread > 0)
+    {
+        int ret = evbuffer_add(livesource_evb,buf,nread);
+        if (ret < 0)
+            print_error("live: file: error evbuffer_add");
 
-		LiveSourceAttemptCreate();
-	}
+        LiveSourceAttemptCreate();
+    }
 
-	// Reschedule
-	evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
-	evtimer_add(&evlivesource, tint2tv(LIVESOURCE_INTERVAL));
+    // Reschedule
+    evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
+    evtimer_add(&evlivesource, tint2tv(LIVESOURCE_INTERVAL));
 }
 
 
 void LiveSourceHTTPResponseCallback(struct evhttp_request *req, void *arg)
 {
-	const char *new_location = NULL;
-	switch(req->response_code)
-	{
-		case HTTP_OK:
-			fprintf(stderr,"live: http: GET OK\n");
-			break;
+    const char *new_location = NULL;
+    switch(req->response_code)
+    {
+        case HTTP_OK:
+            fprintf(stderr,"live: http: GET OK\n");
+            break;
 
-		case HTTP_MOVEPERM:
-		case HTTP_MOVETEMP:
-			new_location = evhttp_find_header(req->input_headers, "Location");
-			fprintf(stderr,"live: http: GET REDIRECT %s\n", new_location );
-			break;
-		default:
-			fprintf(stderr,"live: http: GET ERROR %d\n", req->response_code );
-			event_base_loopexit(Channel::evbase, 0);
-			return;
-	}
+        case HTTP_MOVEPERM:
+        case HTTP_MOVETEMP:
+            new_location = evhttp_find_header(req->input_headers, "Location");
+            fprintf(stderr,"live: http: GET REDIRECT %s\n", new_location );
+            break;
+        default:
+            fprintf(stderr,"live: http: GET ERROR %d\n", req->response_code );
+            event_base_loopexit(Channel::evbase, 0);
+            return;
+    }
 
-	// LIVETODO: already reply data here?
-	//evbuffer_add_buffer(ctx->buffer, req->input_buffer);
+    // LIVETODO: already reply data here?
+    //evbuffer_add_buffer(ctx->buffer, req->input_buffer);
 }
 
 
 void LiveSourceHTTPDownloadChunkCallback(struct evhttp_request *req, void *arg)
 {
-	int length = evbuffer_get_length(req->input_buffer);
-	fprintf(stderr,"live: http: read %d bytes\n", length );
+    int length = evbuffer_get_length(req->input_buffer);
+    fprintf(stderr,"live: http: read %d bytes\n", length );
 
-	// Create chunks of chunk_size()
-	int ret = evbuffer_add_buffer(livesource_evb,req->input_buffer);
-	if (ret < 0)
-		print_error("live: http: error evbuffer_add");
+    // Create chunks of chunk_size()
+    int ret = evbuffer_add_buffer(livesource_evb,req->input_buffer);
+    if (ret < 0)
+        print_error("live: http: error evbuffer_add");
 
-	LiveSourceAttemptCreate();
+    LiveSourceAttemptCreate();
 }
 
 
 void LiveSourceAttemptCreate()
 {
-	if (evbuffer_get_length(livesource_evb) > livesource_lt->chunk_size())
-	{
-		size_t nchunklen = livesource_lt->chunk_size() * (size_t)(evbuffer_get_length(livesource_evb)/livesource_lt->chunk_size());
-		uint8_t *chunks = evbuffer_pullup(livesource_evb, nchunklen);
-		int nwrite = swift::LiveWrite(livesource_lt, chunks, nchunklen, -1);
-		if (nwrite < -1)
-			print_error("live: create: error");
+    if (evbuffer_get_length(livesource_evb) > livesource_lt->chunk_size())
+    {
+        size_t nchunklen = livesource_lt->chunk_size() * (size_t)(evbuffer_get_length(livesource_evb)/livesource_lt->chunk_size());
+        uint8_t *chunks = evbuffer_pullup(livesource_evb, nchunklen);
+        int nwrite = swift::LiveWrite(livesource_lt, chunks, nchunklen, -1);
+        if (nwrite < -1)
+            print_error("live: create: error");
 
-		int ret = evbuffer_drain(livesource_evb, nchunklen);
-		if (ret < 0)
-			print_error("live: create: error evbuffer_drain");
-	}
+        int ret = evbuffer_drain(livesource_evb, nchunklen);
+        if (ret < 0)
+            print_error("live: create: error evbuffer_drain");
+    }
 }
 
 
@@ -893,24 +891,24 @@ void LiveSourceAttemptCreate()
 // UTF-16 version of app entry point for console Windows-apps
 int wmain( int wargc, wchar_t *wargv[ ], wchar_t *envp[ ] )
 {
-	char **utf8args = (char **)malloc(wargc*sizeof(char *));
-	for (int i=0; i<wargc; i++)
-	{
-		//std::wcerr << "wmain: orig " << wargv[i] << std::endl;
-		std::string utf8c = utf16to8(wargv[i]);
-		utf8args[i] = strdup(utf8c.c_str());
-	}
-	return utf8main(wargc,utf8args);
+    char **utf8args = (char **)malloc(wargc*sizeof(char *));
+    for (int i=0; i<wargc; i++)
+    {
+        //std::wcerr << "wmain: orig " << wargv[i] << std::endl;
+        std::string utf8c = utf16to8(wargv[i]);
+        utf8args[i] = strdup(utf8c.c_str());
+    }
+    return utf8main(wargc,utf8args);
 }
 
 // UTF-16 version of app entry point for non-console Windows apps
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
-	int wargc=0;
-	fprintf(stderr,"wWinMain: enter\n");
-	// Arno, 2012-05-30: TODO: add dummy first arg, because getopt eats the first
-	// the argument when it is a non-console app. Currently done with -j dummy arg.
-	LPWSTR* wargv = CommandLineToArgvW(pCmdLine, &wargc );
+    int wargc=0;
+    fprintf(stderr,"wWinMain: enter\n");
+    // Arno, 2012-05-30: TODO: add dummy first arg, because getopt eats the first
+    // the argument when it is a non-console app. Currently done with -j dummy arg.
+    LPWSTR* wargv = CommandLineToArgvW(pCmdLine, &wargc );
     return wmain(wargc,wargv,NULL);
 }
 
@@ -919,8 +917,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 // UNIX version of app entry point for console apps
 int main(int argc, char *argv[])
 {
-	// TODO: Convert to UTF-8 if locale not UTF-8
-	return utf8main(argc,argv);
+    // TODO: Convert to UTF-8 if locale not UTF-8
+    return utf8main(argc,argv);
 }
 
 #endif

@@ -47,8 +47,8 @@ tint Channel::MIN_PEX_REQUEST_INTERVAL = TINT_SEC;
  */
 
 Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool peerissource) :
-	// Arno, 2011-10-03: Reordered to avoid g++ Wall warning
-	peer_(peer_addr), socket_(socket==INVALID_SOCKET?default_socket():socket), // FIXME
+    // Arno, 2011-10-03: Reordered to avoid g++ Wall warning
+    peer_(peer_addr), socket_(socket==INVALID_SOCKET?default_socket():socket), // FIXME
     transfer_(transfer), peer_channel_id_(0), own_id_mentioned_(false),
     data_in_(TINT_NEVER,bin_t::NONE), data_in_dbl_(bin_t::NONE),
     data_out_cap_(bin_t::ALL),hint_out_size_(0),
@@ -73,8 +73,10 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
 {
     if (peer_==Address())
         peer_ = tracker;
+  
     this->id_ = channels.size();
     channels.push_back(this);
+
     for(int i=0; i<4; i++) {
         owd_min_bins_[i] = TINT_NEVER;
         owd_current_[i] = TINT_NEVER;
@@ -87,125 +89,126 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     evsendlive_ptr_ = NULL;
 
     // RATELIMIT
-	transfer->GetChannels().insert(this);
+    transfer->GetChannels().insert(this);
 
-	dprintf("%s #%u init channel %s\n",tintstr(),id_,peer_.str());
-	//fprintf(stderr,"new Channel %d %s\n", id_, peer_.str() );
+    dprintf("%s #%u init channel %s\n",tintstr(),id_,peer_.str());
+    //fprintf(stderr,"new Channel %d %s\n", id_, peer_.str() );
 }
 
 
 Channel::~Channel () {
-	dprintf("%s #%u dealloc channel\n",tintstr(),id_);
+    dprintf("%s #%u dealloc channel\n",tintstr(),id_);
     channels[id_] = NULL;
     ClearEvents();
 
     // RATELIMIT
     if (transfer_ != NULL)
-    	transfer_->GetChannels().erase(this);
+        transfer_->GetChannels().erase(this);
 }
 
 
 void Channel::ClearEvents()
 {
     if (evsend_ptr_ != NULL) {
-    	if (evtimer_pending(evsend_ptr_,NULL))
-    		evtimer_del(evsend_ptr_);
-    	delete evsend_ptr_;
-    	evsend_ptr_ = NULL;
+        if (evtimer_pending(evsend_ptr_,NULL))
+            evtimer_del(evsend_ptr_);
+        delete evsend_ptr_;
+        evsend_ptr_ = NULL;
     }
     if (evsendlive_ptr_ != NULL) {
-    	if (evtimer_pending(evsendlive_ptr_,NULL))
-    		evtimer_del(evsendlive_ptr_);
-    	delete evsendlive_ptr_;
-    	evsendlive_ptr_ = NULL;
+        if (evtimer_pending(evsendlive_ptr_,NULL))
+            evtimer_del(evsendlive_ptr_);
+        delete evsendlive_ptr_;
+        evsendlive_ptr_ = NULL;
     }
 }
 
 HashTree * Channel::hashtree()
 {
-	if (transfer()->ttype() == LIVE_TRANSFER)
-		return NULL;
-	else
-		return ((FileTransfer *)transfer_)->hashtree();
+    if (transfer()->ttype() == LIVE_TRANSFER)
+        return NULL;
+    else
+        return ((FileTransfer *)transfer_)->hashtree();
 }
 
 bool Channel::IsComplete() {
- 	// Check if peak hash bins are filled.
-	if (hashtree()->peak_count() == 0)
-		return false;
+    // Check if peak hash bins are filled.
+    if (hashtree()->peak_count() == 0)
+        return false;
 
     for(int i=0; i<hashtree()->peak_count(); i++) {
         bin_t peak = hashtree()->peak(i);
         if (!ack_in_.is_filled(peak))
             return false;
     }
- 	return true;
+    return true;
 }
 
 
 
 uint16_t Channel::GetMyPort() {
-	struct sockaddr_in mysin = {};
-	socklen_t mysinlen = sizeof(mysin);
-	if (getsockname(socket_, (struct sockaddr *)&mysin, &mysinlen) < 0)
-	{
-		print_error("error on getsockname");
-		return 0;
-	}
-	else
-		return ntohs(mysin.sin_port);
+    struct sockaddr_in mysin = {};
+    socklen_t mysinlen = sizeof(mysin);
+    if (getsockname(socket_, (struct sockaddr *)&mysin, &mysinlen) < 0)
+    {
+        print_error("error on getsockname");
+        return 0;
+    }
+    else
+        return ntohs(mysin.sin_port);
 }
 
 bool Channel::IsDiffSenderOrDuplicate(Address addr, uint32_t chid)
 {
     if (peer() != addr)
     {
-    	// Got message from different address than I send to
-    	//
-		if (!own_id_mentioned_ && addr.is_private()) {
-			// Arno, 2012-02-27: Got HANDSHAKE reply from IANA private address,
-			// check for duplicate connections:
-			//
-			// When two peers A and B are behind the same firewall, they will get
-			// extB, resp. extA addresses from the tracker. They will both
-			// connect to their counterpart but because the incoming packet
-			// will be from the intNAT address the duplicates are not
-			// recognized.
-			//
-			// Solution: when the second datagram comes in (HANDSHAKE reply),
-			// see if you have had a first datagram from the same addr
-			// (HANDSHAKE). If so, close the channel if his port number is
-			// larger than yours (such that one channel remains).
-			//
-			recv_peer_ = addr;
+        // Got message from different address than I send to
+        //
+        if (!own_id_mentioned_ && addr.is_private()) {
+            // Arno, 2012-02-27: Got HANDSHAKE reply from IANA private address,
+            // check for duplicate connections:
+            //
+            // When two peers A and B are behind the same firewall, they will get
+            // extB, resp. extA addresses from the tracker. They will both
+            // connect to their counterpart but because the incoming packet
+            // will be from the intNAT address the duplicates are not
+            // recognized.
+            //
+            // Solution: when the second datagram comes in (HANDSHAKE reply),
+            // see if you have had a first datagram from the same addr
+            // (HANDSHAKE). If so, close the channel if his port number is
+            // larger than yours (such that one channel remains).
+            //
+            recv_peer_ = addr;
 
-			Channel *c = transfer()->FindChannel(addr,this);
-			if (c != NULL) {
-				// I already initiated a connection to this peer,
-				// this new incoming message would establish a duplicate.
-				// One must break the connection, decide using port
-				// number:
-				dprintf("%s #%u found duplicate channel to %s\n",
-						tintstr(),chid,addr.str());
+            Channel *c = transfer()->FindChannel(addr,this);
+            if (c == NULL)
+	        return false;
+	  
+            // I already initiated a connection to this peer,
+            // this new incoming message would establish a duplicate.
+            // One must break the connection, decide using port
+            // number:
+            dprintf("%s #%u found duplicate channel to %s\n",
+                    tintstr(),chid,addr.str());
 
-				if (addr.port() > GetMyPort()) {
-					dprintf("%s #%u closing duplicate channel to %s\n",
-							tintstr(),chid,addr.str());
-					return true;
-				}
-			}
-		}
-		else
-		{
-			// Received HANDSHAKE reply from other address than I sent
-			// HANDSHAKE to, and the address is not an IANA private
-			// address (=no NAT in play), so close.
-			dprintf("%s #%u invalid peer address %s!=%s\n",
-					tintstr(),chid,peer().str(),addr.str());
-			return true;
-		}
+            if (addr.port() > GetMyPort()) {
+                dprintf("%s #%u closing duplicate channel to %s\n",
+                    tintstr(),chid,addr.str());
+                return true;
+            }
+        }
+        else
+        {
+            // Received HANDSHAKE reply from other address than I sent
+            // HANDSHAKE to, and the address is not an IANA private
+            // address (=no NAT in play), so close.
+            dprintf("%s #%u invalid peer address %s!=%s\n",
+                    tintstr(),chid,peer().str(),addr.str());
+            return true;
+        }
     }
-	return false;
+    return false;
 }
 
 
@@ -252,16 +255,16 @@ Address Channel::BoundAddress(evutil_socket_t sock) {
     socklen_t mylen = sizeof(myaddr);
     int ret = getsockname(sock,(sockaddr*)&myaddr,&mylen);
     if (ret >= 0) {
-		return Address(myaddr);
+        return Address(myaddr);
     }
-	else {
-		return Address();
-	}
+    else {
+        return Address();
+    }
 }
 
 
 Address swift::BoundAddress(evutil_socket_t sock) {
-	return Channel::BoundAddress(sock);
+    return Channel::BoundAddress(sock);
 }
 
 
@@ -275,7 +278,7 @@ int Channel::SendTo (evutil_socket_t sock, const Address& addr, struct evbuffer 
         evbuffer_drain(evb, length); // Arno: behaviour is to pretend the packet got lost
     }
     else
-    	evbuffer_drain(evb,r);
+        evbuffer_drain(evb,r);
     global_dgrams_up++;
     global_raw_bytes_up+=length;
     Time();
@@ -286,11 +289,11 @@ int Channel::RecvFrom (evutil_socket_t sock, Address& addr, struct evbuffer *evb
     socklen_t addrlen = sizeof(struct sockaddr_in);
     struct evbuffer_iovec vec;
     if (evbuffer_reserve_space(evb, SWIFT_MAX_RECV_DGRAM_SIZE, &vec, 1) < 0) {
-    	print_error("error on evbuffer_reserve_space");
-    	return 0;
+        print_error("error on evbuffer_reserve_space");
+        return 0;
     }
     int length = recvfrom (sock, (char *)vec.iov_base, SWIFT_MAX_RECV_DGRAM_SIZE, 0,
-			   (struct sockaddr*)&(addr.addr), &addrlen);
+               (struct sockaddr*)&(addr.addr), &addrlen);
     if (length<0) {
         length = 0;
 
@@ -301,13 +304,13 @@ int Channel::RecvFrom (evutil_socket_t sock, Address& addr, struct evbuffer *evb
 #ifdef _WIN32
         if (WSAGetLastError() == 10054) // Sometimes errno == 2 ?!
 #else
-		if (errno == ECONNREFUSED)
+        if (errno == ECONNREFUSED)
 #endif
-		{
-        	CloseChannelByAddress(addr);
-		}
+        {
+            CloseChannelByAddress(addr);
+        }
         else
-        	print_error("error on recv");
+            print_error("error on recv");
     }
     vec.iov_len = length;
     if (evbuffer_commit_space(evb, &vec, 1) < 0)  {
@@ -470,28 +473,28 @@ int swift::evbuffer_add_hash(struct evbuffer *evb, const Sha1Hash& hash)  {
 uint8_t swift::evbuffer_remove_8(struct evbuffer *evb) {
     uint8_t b;
     if (evbuffer_remove(evb, &b, 1) < 1)
-	return 0;
+    return 0;
     return b;
 }
 
 uint16_t swift::evbuffer_remove_16be(struct evbuffer *evb) {
     uint16_t wbe;
     if (evbuffer_remove(evb, &wbe, 2) < 2)
-	return 0;
+    return 0;
     return ntohs(wbe);
 }
 
 uint32_t swift::evbuffer_remove_32be(struct evbuffer *evb) {
     uint32_t ibe;
     if (evbuffer_remove(evb, &ibe, 4) < 4)
-	return 0;
+    return 0;
     return ntohl(ibe);
 }
 
 uint64_t swift::evbuffer_remove_64be(struct evbuffer *evb) {
     uint32_t lbe[2];
     if (evbuffer_remove(evb, lbe, 8) < 8)
-	return 0;
+    return 0;
     uint64_t l = ntohl(lbe[0]);
     l<<=32;
     l |= ntohl(lbe[1]);
@@ -501,7 +504,7 @@ uint64_t swift::evbuffer_remove_64be(struct evbuffer *evb) {
 Sha1Hash swift::evbuffer_remove_hash(struct evbuffer* evb)  {
     char bits[Sha1Hash::SIZE];
     if (evbuffer_remove(evb, bits, Sha1Hash::SIZE) < Sha1Hash::SIZE)
-	return Sha1Hash::ZERO;
+    return Sha1Hash::ZERO;
     return Sha1Hash(false, bits);
 }
 

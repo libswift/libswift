@@ -96,7 +96,7 @@ class HashTree {
     virtual bool            is_complete ()  = 0;
     /** The binmap of complete chunks. */
     virtual binmap_t *      ack_out() = 0;
-    virtual uint32_t		chunk_size()  = 0; // CHUNKSIZE
+    virtual uint32_t        chunk_size()  = 0; // CHUNKSIZE
 
     // for transfertest.cpp
     virtual Storage *       get_storage() = 0;
@@ -116,7 +116,7 @@ class MmapHashTree : public HashTree, Serializable {
     int             peak_count_;
     /** File descriptor to put hashes to */
     int             hash_fd_;
-    std::string		filename_; // for easy serialization
+    std::string        filename_; // for easy serialization
     /** Base size, as derived from the hashes. */
     uint64_t        size_;
     uint64_t        sizec_;
@@ -126,24 +126,24 @@ class MmapHashTree : public HashTree, Serializable {
     /**    Binmap of own chunk availability */
     binmap_t        ack_out_;
 
-	// CHUNKSIZE
-	/** Arno: configurable fixed chunk size in bytes */
-    uint32_t			chunk_size_;
+    // CHUNKSIZE
+    /** Arno: configurable fixed chunk size in bytes */
+    uint32_t        chunk_size_;
 
-	// LESSHASH
-	binmap_t		is_hash_verified_; // binmap being abused as bitmap, only layer 0 used
-	// FAXME: make is_hash_verified_ part of persistent state?
+    // LESSHASH
+    binmap_t        is_hash_verified_; // binmap being abused as bitmap, only layer 0 used
+    // FAXME: make is_hash_verified_ part of persistent state?
 
-	//MULTIFILE
-	Storage *		storage_;
+    //MULTIFILE
+    Storage *       storage_;
 
-    int 			internal_deserialize(FILE *fp,bool contentavail=true);
+    int             internal_deserialize(FILE *fp,bool contentavail=true);
 
 protected:
     
     void            Submit();
     void            RecoverProgress();
-    bool 			RecoverPeakHashes();
+    bool            RecoverPeakHashes();
     Sha1Hash        DeriveRoot();
     bool            OfferPeakHash (bin_t pos, const Sha1Hash& hash);
 
@@ -174,7 +174,7 @@ public:
     uint64_t        seq_complete(int64_t offset); // SEEK
     bool            is_complete () { return size_ && complete_==size_; }
     binmap_t *       ack_out () { return &ack_out_; }
-    uint32_t		chunk_size() { return chunk_size_; } // CHUNKSIZE
+    uint32_t        chunk_size() { return chunk_size_; } // CHUNKSIZE
     ~MmapHashTree ();
 
     // for transfertest.cpp
@@ -207,16 +207,16 @@ class ZeroHashTree : public HashTree {
     uint64_t        complete_;
     uint64_t        completec_;
 
-	// CHUNKSIZE
-	/** Arno: configurable fixed chunk size in bytes */
-    uint32_t			chunk_size_;
+    // CHUNKSIZE
+    /** Arno: configurable fixed chunk size in bytes */
+    uint32_t        chunk_size_;
 
-	//MULTIFILE
-	Storage *		storage_;
+    //MULTIFILE
+    Storage *       storage_;
 
 protected:
 
-    bool 			RecoverPeakHashes();
+    bool            RecoverPeakHashes();
     Sha1Hash        DeriveRoot();
     bool            OfferPeakHash (bin_t pos, const Sha1Hash& hash);
 
@@ -244,9 +244,9 @@ public:
     uint64_t        complete () const { return complete_; }
     uint64_t        chunks_complete () const { return completec_; }
     uint64_t        seq_complete(int64_t offset); // SEEK
-	bool            is_complete () { return size_ && complete_==size_; }
+    bool            is_complete () { return size_ && complete_==size_; }
     binmap_t *       ack_out () { return NULL; }
-    uint32_t		chunk_size() { return chunk_size_; } // CHUNKSIZE
+    uint32_t        chunk_size() { return chunk_size_; } // CHUNKSIZE
     ~ZeroHashTree ();
 
     // for transfertest.cpp

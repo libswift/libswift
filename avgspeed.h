@@ -3,7 +3,7 @@
  *  Class to compute moving average speed
  *
  *  Created by Arno Bakker
- *  Copyright 2009 Delft University of Technology. All rights reserved.
+ *  Copyright 2009-2012 Delft University of Technology. All rights reserved.
  *
  */
 #include "compat.h"
@@ -17,8 +17,8 @@ namespace swift {
 class MovingAverageSpeed
 {
     public: 
-		MovingAverageSpeed( tint speed_interval = 5 * TINT_SEC, tint fudge = TINT_SEC );
-		void AddPoint( uint64_t amount );
+        MovingAverageSpeed( tint speed_interval = 5 * TINT_SEC, tint fudge = TINT_SEC );
+	void AddPoint( uint64_t amount );
         double GetSpeed();
         double GetSpeedNeutral();
         void Reset();
