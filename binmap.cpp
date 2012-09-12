@@ -2164,7 +2164,8 @@ int binmap_t::deserialize(FILE *fp)
 	 if (cell_ != NULL) {
 		 free(cell_);
 	 }
-	 cell_ = (cell_t *)new cell_t[cells];
+	 // Arno, 2012-09-12: freed using free(), so alloc via malloc.
+	 cell_ = (cell_t *)malloc(cells*sizeof(cell_t));
 	 size_t i=0;
 	 for (i=0; i<cells; i++)
 	 {
