@@ -538,7 +538,7 @@ namespace swift {
         void        OnPexReq(void);
         void        AddPexReq(struct evbuffer *evb);
         void        BackOffOnLosses (float ratio=0.5);
-        tint        SwitchSendControl (int control_mode);
+        tint        SwitchSendControl (send_control_t control_mode);
         tint        NextSendTime ();
         tint        KeepAliveNextSendTime ();
         tint        PingPongNextSendTime ();
@@ -666,7 +666,7 @@ namespace swift {
         /** Data sending interval. */
         tint        send_interval_;
         /** The congestion control strategy. */
-        int         send_control_;
+        send_control_t         send_control_;
         /** Datagrams (not data) sent since last recv.    */
         int         sent_since_recv_;
 
