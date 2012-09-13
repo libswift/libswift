@@ -1037,18 +1037,18 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         FileTransfer* ft = FileTransfer::Find(hash);
         if (!ft)
         {
-        	ZeroState *zs = ZeroState::GetInstance();
-        	ft = zs->Find(hash);
-        	if (!ft)
-            	return_log ("%s #0 hash %s unknown, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
+            ZeroState *zs = ZeroState::GetInstance();
+            ft = zs->Find(hash);
+            if (!ft)
+                return_log ("%s #0 hash %s unknown, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
         }
-		else if (ft->IsZeroState() && !ft->hashtree()->is_complete())
-		{
-			return_log ("%s #0 zero hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
-		}
+	else if (ft->IsZeroState() && !ft->hashtree()->is_complete())
+	{
+	    return_log ("%s #0 zero hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
+	}
         if (!ft->IsOperational())
         {
-        	return_log ("%s #0 hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
+            return_log ("%s #0 hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
         }
 
         dprintf("%s #0 -hash ALL %s\n",tintstr(),hash.hex().c_str());
@@ -1057,18 +1057,18 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         Channel* existchannel = ft->FindChannel(addr,NULL);
         if (existchannel)
         {
-			// Arno: 2011-10-13: Ignore if established, otherwise consider
-			// it a concurrent connection attempt.
-			if (existchannel->is_established()) {
-				// ARNOTODO: Read complete handshake here so we know whether
-				// attempt is to new channel or to existing. Currently read
-				// in OnHandshake()
-				//
-				return_log("%s #0 have a channel already to %s\n",tintstr(),addr.str());
-			} else {
-				channel = existchannel;
-				//fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: reuse channel %s\n", channel->peer_.str() );
-			}
+             // Arno: 2011-10-13: Ignore if established, otherwise consider
+             // it a concurrent connection attempt.
+             if (existchannel->is_established()) {
+                  // ARNOTODO: Read complete handshake here so we know whether
+                  // attempt is to new channel or to existing. Currently read
+                  // in OnHandshake()
+                  //
+		  return_log("%s #0 have a channel already to %s\n",tintstr(),addr.str());
+	     } else {
+		channel = existchannel;
+		//fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: reuse channel %s\n", channel->peer_.str() );
+	     }
         }
         if (channel == NULL) {
         	//fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: create new channel %s\n", addr.str() );
@@ -1088,10 +1088,10 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         channel = channels[mych];
         if (!channel)
             return_log ("%s #%u is already closed\n",tintstr(),mych);
-		if (channel->IsDiffSenderOrDuplicate(addr,mych)) {
-			channel->Schedule4Close();
-			return;
-		}
+	if (channel->IsDiffSenderOrDuplicate(addr,mych)) {
+	    channel->Schedule4Close();
+	    return_log ("%s #%u is duplicate\n",tintstr(),mych);
+	}
         channel->own_id_mentioned_ = true;
     }
     channel->raw_bytes_down_ += evboriglen;
@@ -1100,7 +1100,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
 
     //dprintf("%s #%u peer %s recv_peer %s addr %s\n", tintstr(),mych, channel->peer().str(), channel->recv_peer().str(), addr.str() );
 
-	channel->Recv(evb);
+    channel->Recv(evb);
 
     evbuffer_free(evb);
     //SAFECLOSE

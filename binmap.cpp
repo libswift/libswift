@@ -269,6 +269,13 @@ bool binmap_t::reserve_cells(size_t count)
             fprintf(stderr, "Warning: binmap_t::reserve_cells: MEMORY ERROR\n");
             return false /* MEMORY ERROR */;
         }
+      
+        // Arno, 2012-09-13: Clear cells before use.
+	if (new_cells_number > cells_number_) {
+            for (int i=cells_number_; i<new_cells_number; i++) {
+	          memset(&cell[i], 0, sizeof(cell_t));
+	    }
+	}
 
         cell_ = cell;
         cells_number_ = new_cells_number;

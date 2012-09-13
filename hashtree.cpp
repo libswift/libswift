@@ -279,8 +279,8 @@ void            MmapHashTree::RecoverProgress () {
         if (rd!=(chunk_size_) && p==size_in_chunks()-1) // set the exact file size
             size_ = ((sizec_-1)*chunk_size_) + rd;
     }
-    delete buf;
-    delete zero_chunk;
+    delete[] buf;
+    delete[] zero_chunk;
 }
 
 /** Precondition: root hash known */

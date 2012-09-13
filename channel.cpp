@@ -298,13 +298,13 @@ int Channel::RecvFrom (evutil_socket_t sock, Address& addr, struct evbuffer *evb
 #ifdef _WIN32
         if (WSAGetLastError() == 10054) // Sometimes errno == 2 ?!
 #else
-		if (errno == ECONNREFUSED)
+	if (errno == ECONNREFUSED)
 #endif
-		{
-        	CloseChannelByAddress(addr);
-		}
+	{
+            CloseChannelByAddress(addr);
+	}
         else
-        	print_error("error on recv");
+            print_error("error on recv");
     }
     vec.iov_len = length;
     if (evbuffer_commit_space(evb, &vec, 1) < 0)  {
