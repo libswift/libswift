@@ -38,7 +38,7 @@ Address Channel::tracker;
 //tbheap Channel::send_queue;
 FILE* Channel::debug_file = NULL;
 #include "ext/simple_selector.cpp"
-PeerSelector* Channel::peer_selector = new SimpleSelector();
+//PeerSelector* Channel::peer_selector = new SimpleSelector();
 tint Channel::MIN_PEX_REQUEST_INTERVAL = TINT_SEC;
 
 
@@ -55,9 +55,8 @@ Channel::Channel    (FileTransfer* transfer, int socket, Address peer_addr) :
     // Gertjan fix 996e21e8abfc7d88db3f3f8158f2a2c4fc8a8d3f
     // "Changed PEX rate limiting to per channel limiting"
     last_pex_request_time_(0), next_pex_request_time_(0),
-    pex_request_outstanding_(false), useless_pex_count_(0),
-    pex_requested_(false),  // Ric: init var that wasn't initialiazed
-    //
+    pex_request_outstanding_(false), pex_requested_(false),  // Ric: init var that wasn't initialiazed
+    useless_pex_count_(0),
     rtt_avg_(TINT_SEC), dev_avg_(0), dip_avg_(TINT_SEC),
     last_send_time_(0), last_recv_time_(0), last_data_out_time_(0), last_data_in_time_(0),
     last_loss_time_(0), next_send_time_(0), open_time_(NOW), cwnd_(1),
@@ -471,7 +470,7 @@ void    swift::Close (int fd) {
 
 
 void    swift::AddPeer (Address address, const Sha1Hash& root) {
-    Channel::peer_selector->AddPeer(address,root);
+    //Channel::peer_selector->AddPeer(address,root);
 }
 
 

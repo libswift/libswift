@@ -9,6 +9,7 @@
 #include <math.h>
 #include <iostream>
 #include <sstream>
+#include <malloc.h>
 
 #include "swift.h"
 #include "compat.h"
@@ -601,6 +602,8 @@ void CmdGwUpdateDLStateCallback(cmd_gw_t* req)
 }
 
 
+int icount=0;
+
 void CmdGwUpdateDLStatesCallback()
 {
 	// Called by swift main approximately every second
@@ -627,6 +630,27 @@ void CmdGwUpdateDLStatesCallback()
     }
     else
     	cmd_gw_last_open = NOW;
+
+  
+    icount++;
+    if ((icount % 10) == 0)
+    {
+        int counta=0,countz=0;
+        for(int i=0; i<FileTransfer::files.size(); i++)
+        {
+            FileTransfer *ft = FileTransfer::files[i];
+            if (ft == NULL)
+               continue;
+      
+            if (ft->IsZeroState())
+	       countz++;
+            else
+	       counta++;
+        }
+        fprintf(stderr,"cmd: active %d zero %d total %d\n", counta, countz, counta+countz );
+      
+  	malloc_stats();    
+    }
 }
 
 
@@ -1031,21 +1055,21 @@ void CmdGwNewConnectionCallback(struct evconnlistener *listener,
     evutil_socket_t fd, struct sockaddr *address, int socklen,
     void *ctx)
 {
-	// New TCP connection on cmd listen socket
+    // New TCP connection on cmd listen socket
 
-	fprintf(stderr,"cmd: Got new cmd connection %i\n",fd);
+    fprintf(stderr,"cmd: Got new cmd connection %i\n",fd);
 
-	struct event_base *base = evconnlistener_get_base(listener);
-	struct bufferevent *bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
+    struct event_base *base = evconnlistener_get_base(listener);
+    struct bufferevent *bev = bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);
 
-	bufferevent_setcb(bev, CmdGwDataCameInCallback, NULL, CmdGwEventCameInCallback, NULL);
-	bufferevent_enable(bev, EV_READ|EV_WRITE);
+    bufferevent_setcb(bev, CmdGwDataCameInCallback, NULL, CmdGwEventCameInCallback, NULL);
+    bufferevent_enable(bev, EV_READ|EV_WRITE);
 
-	// ARNOTODO: free bufferevent when conn closes.
+    // ARNOTODO: free bufferevent when conn closes.
 
-	// One buffer for all cmd connections, reset
-	if (cmd_evbuffer != NULL)
-		evbuffer_free(cmd_evbuffer);
+    // One buffer for all cmd connections, reset
+    if (cmd_evbuffer != NULL)
+	evbuffer_free(cmd_evbuffer);
     cmd_evbuffer = evbuffer_new();
 
     // SOCKTUNNEL: assume 1 command connection
