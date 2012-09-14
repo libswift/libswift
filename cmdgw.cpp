@@ -9,7 +9,11 @@
 #include <math.h>
 #include <iostream>
 #include <sstream>
+
+//MEMLEAK
+#ifndef WIN32
 #include <malloc.h>
+#endif
 
 #include "swift.h"
 #include "compat.h"
@@ -649,7 +653,9 @@ void CmdGwUpdateDLStatesCallback()
         }
         fprintf(stderr,"cmd: active %d zero %d total %d\n", counta, countz, counta+countz );
       
-  	malloc_stats();    
+#ifndef WIN32      
+  	malloc_stats();
+#endif      
     }
 }
 
