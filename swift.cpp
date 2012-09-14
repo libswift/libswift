@@ -18,7 +18,7 @@ using namespace swift;
 
 // Local constants
 #define RESCAN_DIR_INTERVAL	30 // seconds
-
+#define REPORT_INTERVAL		 4 // seconds
 
 // Local prototypes
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
@@ -377,7 +377,7 @@ int utf8main (int argc, char** argv)
     if (wait_time == TINT_NEVER || (long)wait_time > 0) {
 		// Arno: always, for statsgw, rate control, etc.
 		evtimer_assign(&evreport, Channel::evbase, ReportCallback, NULL);
-		evtimer_add(&evreport, tint2tv(TINT_SEC));
+		evtimer_add(&evreport, tint2tv(REPORT_INTERVAL*TINT_SEC));
 
 
 		// Arno:
@@ -624,7 +624,7 @@ void ReportCallback(int fd, short event, void *arg) {
     //if (do_nat_test)
     //     nat_test_update();
 
-	evtimer_add(&evreport, tint2tv(TINT_SEC));
+	evtimer_add(&evreport, tint2tv(REPORT_INTERVAL*TINT_SEC));
 }
 
 void EndCallback(int fd, short event, void *arg) {
