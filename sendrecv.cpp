@@ -11,6 +11,7 @@
 #include <algorithm>  // kill it
 #include <cassert>
 #include <math.h>
+#include <cfloat>
 #include "compat.h"
 
 using namespace swift;
@@ -101,16 +102,21 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
         return bin_t::NONE;
     }
 
-    // Arno, 2012-01-18: Reenable Victor's retransmit
-    if (!data_out_tmo_.empty())
-    {
-        tintbin tb = data_out_tmo_.front();
-        send = tb.bin;
-        data_out_tmo_.pop_front();  
-        *retransmitptr = true;
-    }
-    else
-        *retransmitptr = false;
+    // Arno, 2012-07-27: Reenable Victor's retransmit, check for ACKs
+    *retransmitptr = false;
+	while (!data_out_tmo_.empty()) {
+		tintbin tb = data_out_tmo_.front();
+		data_out_tmo_.pop_front();
+		if (ack_in_.is_filled(tb.bin)) {
+			// chunk was acknowledged in meantime
+			continue;
+		}
+		else {
+			send = tb.bin;
+			*retransmitptr = true;
+			break;
+		}
+	}
 
     if (ENABLE_SENDERSIZE_PUSH && send.is_none() && hint_in_.empty() && last_recv_time_>NOW-rtt_avg_-TINT_SEC) {
         bin_t my_pick = ImposeHint(); // FIXME move to the loop
@@ -210,7 +216,7 @@ void    Channel::Send () {
             peer_channel_id_);
     int r = SendTo(socket_,peer(),evb);
     if (r==-1)
-        print_error("can't send datagram");
+        print_error("swift can't send datagram");
     else
         raw_bytes_up_ += r;
     last_send_time_ = NOW;
@@ -222,16 +228,15 @@ void    Channel::Send () {
 
 void    Channel::AddHint (struct evbuffer *evb) {
 
-    // RATELIMIT
-    // Policy is to not send hints when we are above speed limit
-    //fprintf(stderr,"AddHint: cur %f max %f\n", transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), transfer()->GetMaxSpeed(DDIR_DOWNLOAD));
-
+	// RATELIMIT
+	// Policy is to not send hints when we are above speed limit
     if (transfer()->GetCurrentSpeed(DDIR_DOWNLOAD) > transfer()->GetMaxSpeed(DDIR_DOWNLOAD)) {
         if (DEBUGTRAFFIC)
             fprintf(stderr,"hint: forbidden#");
         return;
     }
 
+	// 1. Calc max of what we are allowed to request, uncongested bandwidth wise
     tint plan_for = max(TINT_SEC,rtt_avg_*4);
 
     tint timed_out = NOW - plan_for*2;
@@ -242,33 +247,40 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
     int first_plan_pck = max ( (tint)1, plan_for / dip_avg_ );
 
+    // Riccardo, 2012-04-04: Actually allowed is max minus what we already asked for
+    int queue_allowed_hints = max(0,first_plan_pck-(int)hint_out_size_);
+
+
     // RATELIMIT
-    uint64_t rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
-    std::set<Channel *>::iterator iter;
-    for (iter=transfer()->GetChannels().begin(); iter!=transfer()->GetChannels().end(); iter++)
+    // 2. Calc max of what is allowed by the rate limiter
+    int rate_allowed_hints = LONG_MAX;
+    if (transfer()->GetMaxSpeed(DDIR_DOWNLOAD) < DBL_MAX)
     {
-        Channel *c = *iter;
-        if (c != NULL)
-            rough_global_hint_out_size += c->hint_out_size_;
+		uint64_t rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
+		channels_t::iterator iter;
+		for (iter=transfer()->GetChannels()->begin(); iter!=transfer()->GetChannels()->end(); iter++)
+		{
+			Channel *c = *iter;
+			if (c != NULL)
+				rough_global_hint_out_size += c->hint_out_size_;
+		}
+
+		// Policy: this channel is allowed to hint at the limit - global_hinted_at
+		// Handle MaxSpeed = unlimited
+		double rate_hints_limit_float = transfer()->GetMaxSpeed(DDIR_DOWNLOAD)/((double)hashtree()->chunk_size());
+
+		int rate_hints_limit = (int)min((double)LONG_MAX,rate_hints_limit_float);
+
+		// Actually allowed is max minus what we already asked for, globally (=all channels)
+		rate_allowed_hints = max(0,rate_hints_limit-(int)rough_global_hint_out_size);
     }
 
-    // Policy: this channel is allowed to hint at the limit - global_hinted_at
-    // Handle MaxSpeed = unlimited
-    double hints_limit_float = transfer()->GetMaxSpeed(DDIR_DOWNLOAD)/((double)transfer()->chunk_size());
+    // 3. Take the smallest allowance from rate and queue limit
+    uint64_t plan_pck = (uint64_t)min(rate_allowed_hints,queue_allowed_hints);
 
-    int hints_limit = (int)min((double)LONG_MAX,hints_limit_float);
-    int allowed_hints = max(0,hints_limit-(int)rough_global_hint_out_size);
-
-    if (DEBUGTRAFFIC)
-        fprintf(stderr,"hint c%d: %f want %d allow %d chanout %llu globout %llu\n", id(), transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, allowed_hints, hint_out_size_, rough_global_hint_out_size );
-
-    // Take into account network limit
-    uint64_t plan_pck = (uint64_t)min(allowed_hints,first_plan_pck);
-    //fprintf(stderr,"send c%d: %f fp %d p %d count %d ghs %d allow %d\n", id(), transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, plan_pck, count, rough_global_hint_out_size, allowed_hints );
-
-    if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY) {
-
-    //if (hint_out_size_ == 0 || hint_out_size_+HINT_GRANULARITY < plan_pck ) {
+    // 4. Ask allowance in blocks of chunks to get pipelining going from serving peer.
+    if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY)
+    {
         bin_t hint = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2);
         if (!hint.is_none()) {
             if (DEBUGTRAFFIC)
@@ -291,6 +303,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
     }
 }
+
 
 bin_t        Channel::AddData (struct evbuffer *evb) {
     // RATELIMIT
@@ -315,7 +328,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         }
     } else
         dprintf("%s #%u sendctrl wait cwnd %f data_out %i next %s\n",
-                tintstr(),id_,cwnd_,(int)data_out_.size(),tintstr(last_data_out_time_+NOW-send_interval_));
+                tintstr(),id_,cwnd_,(int)data_out_.size(),tintstr(last_data_out_time_+send_interval_));
 
     if (tosend.is_none())// && (last_data_out_time_>NOW-TINT_SEC || data_out_.empty()))
         return bin_t::NONE; // once in a while, empty data is sent just to check rtt FIXED
@@ -324,8 +337,11 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     if (transfer()->ttype() == FILE_TRANSFER) {
         if (ack_in_.is_empty() && hashtree()->size())
             AddPeakHashes(evb);
-        AddUncleHashes(evb,tosend);
+        //NETWVSHASH
+        if (hashtree()->get_check_netwvshash())
+        	AddUncleHashes(evb,tosend);
     }
+
     if (!ack_in_.is_empty()) // TODO: cwnd_>1
         data_out_cap_ = tosend;
 
@@ -480,6 +496,12 @@ void    Channel::Recv (struct evbuffer *evb) {
     dprintf("%s #%u recvd %ib\n",tintstr(),id_,(int)evbuffer_get_length(evb)+4);
     dgrams_rcvd_++;
 
+    if (!transfer()->IsOperational()) {
+    	dprintf("%s #%u recvd on broken transfer %d \n",tintstr(),id_, transfer()->fd() );
+		CloseOnError();
+    	return;
+    }
+
     lastrecvwaskeepalive_ = (evbuffer_get_length(evb) == 0);
     if (lastrecvwaskeepalive_)
         // Update speed measurements such that they decrease when DL stops
@@ -551,11 +573,10 @@ void    Channel::Recv (struct evbuffer *evb) {
                 return;
         }
     }
-    if (DEBUGTRAFFIC)
+	if (DEBUGTRAFFIC)
     {
         fprintf(stderr,"\n");
     }
-
 
     // Arno, 2012-01-09: Provide PP with info needed for hook-in.
     if (transfer()->ttype() == LIVE_TRANSFER) {
@@ -566,8 +587,29 @@ void    Channel::Recv (struct evbuffer *evb) {
 
     last_recv_time_ = NOW;
     sent_since_recv_ = 0;
+
+
+    // Arno: see if transfer still in working order
+    transfer()->UpdateOperational();
+    if (!transfer()->IsOperational()) {
+    	dprintf("%s #%u recvd broke transfer %d \n",tintstr(),id_, transfer()->fd() );
+        CloseOnError();
+        return;
+    }
+
     Reschedule();
 }
+
+
+void   Channel::CloseOnError()
+{
+	Close();
+	// set established->false after Close, so Close does send explicit close.
+	// RecvDatagram will schedule this for delete.
+	peer_channel_id_ = 0;
+	return;
+}
+
 
 /*
  * Arno: FAXME: HASH+DATA should be handled as a transaction: only when the
@@ -973,7 +1015,7 @@ void Channel::AddPexReq(struct evbuffer *evb) {
     pex_request_outstanding_ = false;
 
     // Initiate at most SWIFT_MAX_CONNECTIONS connections
-    if (transfer()->GetChannels().size() >= SWIFT_MAX_CONNECTIONS ||
+    if (transfer()->GetChannels()->size() >= SWIFT_MAX_CONNECTIONS ||
             // Check whether this channel has been providing useful peer information
             useless_pex_count_ > 2)
     {
@@ -1035,10 +1077,12 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         bin_t pos = bin_fromUInt32(evbuffer_remove_32be(evb));
         if (!pos.is_all())
             return_log ("%s #0 that is not the root hash %s\n",tintstr(),addr.str());
+
         hash = evbuffer_remove_hash(evb);
         ContentTransfer* ct = ContentTransfer::Find(hash);
         if (!ct)
         {
+        	// See if available on disk, if so, activate
             ZeroState *zs = ZeroState::GetInstance();
             ct = zs->Find(hash);
             if (!ct)
@@ -1046,10 +1090,18 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         }
         else if (ct->ttype() == FILE_TRANSFER)
         {
+        	// Active zerostate transfer, but broken
             FileTransfer *ft = (FileTransfer *)ct;
             if (ft->IsZeroState() && !ft->hashtree()->is_complete())
                 return_log ("%s #0 zero hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
         }
+
+        if (!ct->IsOperational())
+        {
+        	// Active, but broken
+            return_log ("%s #0 hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
+        }
+
         dprintf("%s #0 -hash ALL %s\n",tintstr(),hash.hex().c_str());
 
         // Arno, 2012-02-27: Check for duplicate channel
@@ -1090,7 +1142,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         if (channel->IsDiffSenderOrDuplicate(addr,mych)) {
             channel->Close();
             delete channel; // safe, not in a channel event
-            return;
+    	    return_log ("%s #%u is duplicate\n",tintstr(),mych);
         }
         channel->own_id_mentioned_ = true;
     }
@@ -1122,7 +1174,7 @@ void Channel::CloseChannelByAddress(const Address &addr)
     // fprintf(stderr,"CloseChannelByAddress: address is %s\n", addr.str() );
 
     dprintf("%s #-1 close channel by address %s\n",tintstr(), addr.str() );
-    std::vector<Channel *>::iterator iter;
+	channels_t::iterator iter;
     for (iter = channels.begin(); iter != channels.end(); iter++)
     {
         Channel *c = *iter;

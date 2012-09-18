@@ -101,7 +101,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
     // Announce chunks to peers
     //fprintf(stderr,"live: AddData: announcing to %d channel\n", mychannels_.size() );
 
-    std::set<Channel *>::iterator iter;
+    channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
         Channel *c = *iter;
@@ -112,6 +112,11 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
     }
 
     return 0;
+}
+
+
+void LiveTransfer::UpdateOperational()
+{
 }
 
 

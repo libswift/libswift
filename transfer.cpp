@@ -20,7 +20,7 @@ using namespace swift;
 
 // FIXME: separate Bootstrap() and Download(), then Size(), Progress(), SeqProgress()
 
-FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool check_hashes, uint32_t chunk_size, bool zerostate) :
+FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size, bool zerostate) :
     ContentTransfer(FILE_TRANSFER), zerostate_(zerostate)
 {
     std::string destdir;
@@ -48,25 +48,33 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
 
     if (!zerostate_)
     {
-        hashtree_ = (HashTree *)new MmapHashTree(storage_,root_hash,chunk_size,hash_filename,check_hashes,binmap_filename);
-
+        hashtree_ = (HashTree *)new MmapHashTree(storage_,root_hash,chunk_size,hash_filename,force_check_diskvshash,check_netwvshash,binmap_filename);
         if (ENABLE_VOD_PIECEPICKER) {
             // Ric: init availability
             availability_ = new Availability();
             // Ric: TODO assign picker based on input params...
             picker_ = new VodPiecePicker(this);
-        }
-        else
-            picker_ = new SeqPiecePicker(this);
-        picker_->Randomize(rand()&63);
-    }
-    else
-    {
-        // ZEROHASH
-        hashtree_ = (HashTree *)new ZeroHashTree(storage_,root_hash,chunk_size,hash_filename,check_hashes,binmap_filename);
-    }
+		}
+		else
+			picker_ = new SeqPiecePicker(this);
+		picker_->Randomize(rand()&63);
+	}
+	else
+	{
+		// ZEROHASH
+		hashtree_ = (HashTree *)new ZeroHashTree(storage_,root_hash,chunk_size,hash_filename,binmap_filename);
+	}
 
-    init_time_ = Channel::Time();
+    UpdateOperational();
+}
+
+
+
+
+void FileTransfer::UpdateOperational()
+{
+    if ((hashtree_ != NULL && !hashtree_->IsOperational()) || !storage_->IsOperational())
+    	SetBroken();
 }
 
 

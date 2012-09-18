@@ -12,6 +12,7 @@
 #include <string>
 #include "bin.h"
 #include "binmap.h"
+#include "operational.h"
 
 namespace swift {
 
@@ -60,8 +61,9 @@ class Storage;
     spoon-fed later, OR a MmapHashTree is initialized with a data file, so
     the hash tree is derived, including the root hash.
  */
-class HashTree {
+class HashTree : public Operational {
   public:
+	HashTree() : Operational() {}
     /** Offer a hash; returns true if it verified; false otherwise.
      Once it cannot be verified (no sibling or parent), the hash
      is remembered, while returning false. */
@@ -98,9 +100,16 @@ class HashTree {
     virtual binmap_t *      ack_out() = 0;
     virtual uint32_t        chunk_size()  = 0; // CHUNKSIZE
 
+    //NETWVSHASH
+    virtual bool get_check_netwvshash() = 0;
+
+
     // for transfertest.cpp
     virtual Storage *       get_storage() = 0;
     virtual void            set_size(uint64_t size) = 0;
+
+    virtual int TESTGetFD() = 0;
+
     virtual ~HashTree() {};
 };
 
@@ -139,6 +148,9 @@ class MmapHashTree : public HashTree, Serializable {
 
     int             internal_deserialize(FILE *fp,bool contentavail=true);
 
+    //NETWVSHASH
+    bool 			check_netwvshash_;
+
 protected:
     
     void            Submit();
@@ -151,7 +163,7 @@ protected:
 public:
     
     MmapHashTree (Storage *storage, const Sha1Hash& root=Sha1Hash::ZERO, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE,
-              std::string hash_filename=NULL, bool check_hashes=true, std::string binmap_filename=NULL);
+              std::string hash_filename=NULL, bool force_check_diskvshash=true, bool check_netwvshash=true, std::string binmap_filename=NULL);
     
     // Arno, 2012-01-03: Hack to quickly learn root hash from a checkpoint
     MmapHashTree (bool dummy, std::string binmap_filename);
@@ -179,19 +191,24 @@ public:
 
     // for transfertest.cpp
     Storage *       get_storage() { return storage_; }
-    void            set_size(uint64_t size) { size_ = size; fprintf(stderr,"hashtree: set_size %llu\n", size ); }
+    void            set_size(uint64_t size) { size_ = size; }
 
     // Arno: persistent storage for state other than hashes (which are in .mhash)
     int serialize(FILE *fp);
     int deserialize(FILE *fp);
     int partial_deserialize(FILE *fp);
+
+    //NETWVSHASH
+    bool get_check_netwvshash() { return check_netwvshash_; }
+
+    int TESTGetFD() { return hash_fd_; }
 };
 
 
 
 
 /** This class implements the HashTree interface by reading directly from disk */
-class ZeroHashTree : public HashTree {
+class ZeroHashTree : public HashTree  {
     /** Merkle hash tree: root */
     Sha1Hash        root_hash_;
     /** Merkle hash tree: peak hashes */
@@ -223,7 +240,7 @@ protected:
 public:
 
     ZeroHashTree (Storage *storage, const Sha1Hash& root=Sha1Hash::ZERO, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE,
-              std::string hash_filename=NULL, bool check_hashes=true, std::string binmap_filename=NULL);
+              std::string hash_filename=NULL, std::string binmap_filename=NULL);
 
     // Arno, 2012-01-03: Hack to quickly learn root hash from a checkpoint
     ZeroHashTree (bool dummy, std::string binmap_filename);
@@ -251,7 +268,12 @@ public:
 
     // for transfertest.cpp
     Storage *       get_storage() { return storage_; }
-    void            set_size(uint64_t size) { size_ = size; fprintf(stderr,"zerohashtree: set_size %llu\n", size ); }
+    void            set_size(uint64_t size) { size_ = size; }
+
+    //NETWVSHASH
+    bool get_check_netwvshash() { return true; }
+
+    int TESTGetFD() { return hash_fd_; }
 };
 
 

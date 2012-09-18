@@ -33,12 +33,10 @@ swift::tint Channel::last_tick = 0;
 int Channel::MAX_REORDERING = 4;
 bool Channel::SELF_CONN_OK = false;
 swift::tint Channel::TIMEOUT = TINT_SEC*60;
-std::vector<Channel*> Channel::channels(1);
+channels_t Channel::channels(1);
 Address Channel::tracker;
 //tbheap Channel::send_queue;
 FILE* Channel::debug_file = NULL;
-#include "ext/simple_selector.cpp"
-PeerSelector* Channel::peer_selector = new SimpleSelector();
 tint Channel::MIN_PEX_REQUEST_INTERVAL = TINT_SEC;
 
 
@@ -55,12 +53,12 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     // Gertjan fix 996e21e8abfc7d88db3f3f8158f2a2c4fc8a8d3f
     // "Changed PEX rate limiting to per channel limiting"
     last_pex_request_time_(0), next_pex_request_time_(0),
-    pex_request_outstanding_(false), useless_pex_count_(0),
-    pex_requested_(false),  // Ric: init var that wasn't initialiazed
-    //
+    pex_request_outstanding_(false), pex_requested_(false),  // Ric: init var that wasn't initialiazed
+    useless_pex_count_(0),
     rtt_avg_(TINT_SEC), dev_avg_(0), dip_avg_(TINT_SEC),
     last_send_time_(0), last_recv_time_(0), last_data_out_time_(0), last_data_in_time_(0),
-    last_loss_time_(0), next_send_time_(0), cwnd_(1), cwnd_count1_(0), send_interval_(TINT_SEC),
+    last_loss_time_(0), next_send_time_(0), open_time_(NOW), cwnd_(1),
+    cwnd_count1_(0), send_interval_(TINT_SEC),
     send_control_(PING_PONG_CONTROL), sent_since_recv_(0),
     lastrecvwaskeepalive_(false), lastsendwaskeepalive_(false), // Arno: nap bug fix
     ack_rcvd_recent_(0),
@@ -89,10 +87,10 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     evsendlive_ptr_ = NULL;
 
     // RATELIMIT
-    transfer->GetChannels().insert(this);
+	transfer_->GetChannels()->push_back(this);
 
-    dprintf("%s #%u init channel %s\n",tintstr(),id_,peer_.str());
-    //fprintf(stderr,"new Channel %d %s\n", id_, peer_.str() );
+	dprintf("%s #%u init channel %s transfer %d\n",tintstr(),id_,peer_.str(), transfer_->fd() );
+	//fprintf(stderr,"new Channel %d %s\n", id_, peer_.str() );
 }
 
 
@@ -103,7 +101,16 @@ Channel::~Channel () {
 
     // RATELIMIT
     if (transfer_ != NULL)
-        transfer_->GetChannels().erase(this);
+    {
+		channels_t::iterator iter;
+		channels_t *channels = transfer_->GetChannels();
+		for (iter=channels->begin(); iter!=channels->end(); iter++)
+		{
+			if (*iter == this)
+				break;
+		}
+    	channels->erase(iter);
+    }
 }
 
 
@@ -433,7 +440,6 @@ std::string swift::sock2str (struct sockaddr_in addr) {
     sprintf(ipch+strlen(ipch),":%i",ntohs(addr.sin_port));
     return std::string(ipch);
 }
-
 
 
 

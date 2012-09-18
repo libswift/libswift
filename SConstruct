@@ -57,6 +57,8 @@ if sys.platform == "win32":
     if DEBUG:
         env.Append(CXXFLAGS="/Zi /MTd")
         env.Append(LINKFLAGS="/DEBUG")
+    else:
+        env.Append(CXXFLAGS="/DNDEBUG") # disable asserts
     env.Append(CXXPATH=cxxpath)
     env.Append(CPPPATH=cxxpath)
 

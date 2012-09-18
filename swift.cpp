@@ -22,6 +22,7 @@ using namespace swift;
 
 // Local constants
 #define RESCAN_DIR_INTERVAL	30 // seconds
+#define REPORT_INTERVAL		 1 // 1 second. Use cmdgw_report_interval for larger intervals
 
 // Arno, 2012-09-18: LIVE: Somehow Win32 works better when reading at a slower pace
 #ifdef WIN32
@@ -31,7 +32,6 @@ using namespace swift;
 #define LIVESOURCE_BUFSIZE    102400
 #define LIVESOURCE_INTERVAL    TINT_SEC/10
 #endif
-
 
 
 // Local prototypes
@@ -61,11 +61,10 @@ void usage(void)
     fprintf(stderr,"  -i, --source\tlive source input (URL or filename or - for stdin)\n");
     fprintf(stderr,"  -k, --live\tperform live download, use with -t and -h\n");
 }
-#define quit(...) {usage(); fprintf(stderr,__VA_ARGS__); print_error("fatal"); exit(1); }
-
+#define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
 int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
-int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size, bool livestream);
-int OpenSwiftDirectory(std::string dirname, Address tracker, bool check_hashes, uint32_t chunk_size);
+int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream);
+int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size);
 void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Hash root_hash);
 
 void ReportCallback(int fd, short event, void *arg);
@@ -110,6 +109,8 @@ LiveTransfer *livesource_lt = NULL;
 FILE *livesource_filep=NULL;
 struct evbuffer *livesource_evb = NULL;
 
+long long int cmdgw_report_counter=0;
+long long int cmdgw_report_interval=REPORT_INTERVAL; // seconds
 
 // UNICODE: TODO, convert to std::string carrying UTF-8 arguments. Problem is
 // a string based getopt_long type parser.
@@ -141,6 +142,11 @@ int utf8main (int argc, char** argv)
         {"dummy",no_argument, 0, 'j'},  // WIN32
         {"source",required_argument, 0, 'i'}, // LIVE
         {"live",no_argument, 0, 'k'}, // LIVE
+        {"cmdgwint",required_argument, 0, 'C'}, // SWIFTPROC
+        {"filehex",    required_argument, 0, '1'},  // SWIFTPROCUNICODE
+        {"urlfilehex",required_argument, 0, '2'},   // SWIFTPROCUNICODE
+        {"zerosdirhex",required_argument, 0, '3'},  // SWIFTPROCUNICODE
+        {"zerostimeout",required_argument, 0, 'T'},  // ZEROSTATE
         {0, 0, 0, 0}
     };
 
@@ -153,12 +159,13 @@ int utf8main (int argc, char** argv)
     Address cmdaddr;
     tint wait_time = 0;
     double maxspeed[2] = {DBL_MAX,DBL_MAX};
+    tint zerostimeout = TINT_NEVER;
 
     LibraryInit();
     Channel::evbase = event_base_new();
 
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:ji:k", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:ji:kC:1:2:3:T:", long_options, 0)) ) {
         switch (c) {
             case 'h':
                 if (strlen(optarg)!=40)
@@ -271,7 +278,7 @@ int utf8main (int argc, char** argv)
             	break;
             case 'e': // ZEROSTATE
                 zerostatedir = strdup(optarg); // UNICODE
-                wait_time = TINT_NEVER;
+                wait_time = TINT_NEVER; // seed
                 break;
             case 'j': // WIN32
                 break;
@@ -281,6 +288,30 @@ int utf8main (int argc, char** argv)
                 break;
             case 'k': // LIVE
                 livestream = true;
+                break;
+            case 'C': // SWIFTPROC
+                if (sscanf(optarg,"%lli",&cmdgw_report_interval)!=1)
+                	quit("report interval must be int\n");
+                break;
+            case '1': // SWIFTPROCUNICODE
+				// Swift on Windows expects command line arguments as UTF-16.
+				// When swift is run with Python's popen, however, popen
+            	// doesn't allow us to pass params in UTF-16, hence workaround.
+            	// Format = hex encoded UTF-8
+                filename = hex2bin(strdup(optarg));
+                break;
+            case '2': // SWIFTPROCUNICODE
+           		urlfilename = hex2bin(strdup(optarg));
+           		break;
+            case '3': // ZEROSTATE // SWIFTPROCUNICODE
+                zerostatedir = hex2bin(strdup(optarg));
+                break;
+            case 'T': // ZEROSTATE
+            	double t=0.0;
+            	n = sscanf(optarg,"%lf",&t);
+            	if (n != 1)
+					quit("zerostimeout must be seconds as float\n");
+            	zerostimeout = t * TINT_SEC;
                 break;
         }
 
@@ -332,6 +363,7 @@ int utf8main (int argc, char** argv)
     // ZEROSTATE
     ZeroState *zs = ZeroState::GetInstance();
     zs->SetContentDir(zerostatedir);
+    zs->SetConnectTimeout(zerostimeout);
 
     if (!cmdgw_enabled && livesource_input == "" && zerostatedir == "")
     {
@@ -361,9 +393,9 @@ int utf8main (int argc, char** argv)
                 ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,false,urlfilename,maxspeed);
         }
 
-        // For testing
-        if (httpgw_enabled)
-            ret = 0;
+		// For testing
+		if (httpgw_enabled || zerostatedir != "")
+			ret = 0;
 
         // No file/dir nor HTTP gateway nor CMD gateway, will never know what to swarm
         if (ret == -1) {
@@ -395,10 +427,9 @@ int utf8main (int argc, char** argv)
 
     // Enter mainloop, if daemonizing
     if (wait_time == TINT_NEVER || (long)wait_time > 0) {
-        // Arno: always, for statsgw, rate control, etc.
-        evtimer_assign(&evreport, Channel::evbase, ReportCallback, NULL);
-        evtimer_add(&evreport, tint2tv(TINT_SEC));
-
+		// Arno: always, for statsgw, rate control, etc.
+		evtimer_assign(&evreport, Channel::evbase, ReportCallback, NULL);
+		evtimer_add(&evreport, tint2tv(REPORT_INTERVAL*TINT_SEC));
 
         // Arno:
         if (scan_dirname != "") {
@@ -439,16 +470,26 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
         quit("cannot open file %s",filename.c_str());
     if (printurl) {
 
-        FILE *fp = stdout;
-        if (urlfilename != "")
-            fp = fopen(urlfilename.c_str(),"wb");
+		FILE *fp = stdout;
+		if (urlfilename != "")
+		{
+			fp = fopen_utf8(urlfilename.c_str(),"wb");
+		    if (!fp)
+			{
+				print_error("cannot open file to write tswift URL to");
+				quit("cannot open URL file %s",urlfilename.c_str());
+			}
+		}
 
-        if (swift::Complete(single_fd) == 0)
-            quit("cannot open empty file %s",filename.c_str());
-        if (chunk_size == SWIFT_DEFAULT_CHUNK_SIZE)
-            fprintf(fp,"tswift://%s/%s\n", trackerargstr.c_str(), SwarmID(single_fd).hex().c_str());
-        else
-            fprintf(fp,"tswift://%s/%s$%i\n", trackerargstr.c_str(), SwarmID(single_fd).hex().c_str(), chunk_size);
+		if (swift::Complete(single_fd) == 0)
+			quit("cannot open empty file %s",filename.c_str());
+		int ret = 0;
+		if (chunk_size == SWIFT_DEFAULT_CHUNK_SIZE)
+			ret = fprintf(fp,"tswift://%s/%s\n", trackerargstr.c_str(), SwarmID(single_fd).hex().c_str());
+		else
+			ret = fprintf(fp,"tswift://%s/%s$%i\n", trackerargstr.c_str(), SwarmID(single_fd).hex().c_str(), chunk_size);
+		if (ret <0)
+			print_error("cannot write URL");
 
         if (urlfilename != "")
             fclose(fp);
@@ -472,7 +513,7 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
 }
 
 
-int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size, bool livestream)
+int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream)
 {
     std::string binmap_filename = filename;
     binmap_filename.append(".mbinmap");
@@ -491,7 +532,7 @@ int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, b
 
         // Client mode: regular or live download
         if (!livestream)
-            fd = Open(filename,hash,Address(),false,chunk_size);
+			fd = Open(filename,hash,tracker,force_check_diskvshash,true,chunk_size);
         else
             fd = LiveOpen(filename,hash,Address(),false,chunk_size);
     }
@@ -501,24 +542,24 @@ int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, b
 }
 
 
-int OpenSwiftDirectory(std::string dirname, Address tracker, bool check_hashes, uint32_t chunk_size)
+int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size)
 {
     DirEntry *de = opendir_utf8(dirname);
     if (de == NULL)
         return -1;
 
-    while(1)
-    {
-        if (!(de->isdir_ || de->filename_.rfind(".mhash") != std::string::npos || de->filename_.rfind(".mbinmap") != std::string::npos))
-        {
-            // Not dir, or metafile
-            std::string path = dirname;
-            path.append(FILE_SEP);
-            path.append(de->filename_);
-            int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,check_hashes,chunk_size,false);
-            if (fd >= 0)
-                Checkpoint(fd);
-        }
+	while(1)
+	{
+		if (!(de->isdir_ || de->filename_.rfind(".mhash") != std::string::npos || de->filename_.rfind(".mbinmap") != std::string::npos))
+		{
+			// Not dir, or metafile
+			std::string path = dirname;
+			path.append(FILE_SEP);
+			path.append(de->filename_);
+			int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,force_check_diskvshash,chunk_size,false);
+			if (fd >= 0)
+				Checkpoint(fd);
+		}
 
         DirEntry *newde = readdir_utf8(de);
         delete de;
@@ -672,6 +713,7 @@ void ReportCallback(int fd, short event, void *arg) {
         if (report_progress) { // TODO: move up
             fprintf(stderr,"upload %lf\n",ct->GetCurrentSpeed(DDIR_UPLOAD));
             fprintf(stderr,"dwload %lf\n",ct->GetCurrentSpeed(DDIR_DOWNLOAD));
+        	//fprintf(stderr,"npeers %d\n",ft->GetNumLeechers()+ft->GetNumSeeders() );
         }
         // Update speed measurements such that they decrease when DL/UL stops
         // Always
@@ -713,16 +755,14 @@ void ReportCallback(int fd, short event, void *arg) {
         tv.tv_sec = 1;
         int ret = event_base_loopexit(Channel::evbase,&tv);
     }
-    // SWIFTPROC
-    // ARNOSMPTODO: SCALE: perhaps less than once a second if many swarms
-    CmdGwUpdateDLStatesCallback();
+	// SWIFTPROC
+    if (cmdgw_report_interval == 1 || ((cmdgw_report_counter % cmdgw_report_interval) == 0))
+    	CmdGwUpdateDLStatesCallback();
 
-    // Gertjan fix
-    // Arno, 2011-10-04: Temp disable
-    //if (do_nat_test)
-    //     nat_test_update();
+	cmdgw_report_counter++;
 
     evtimer_add(&evreport, tint2tv(TINT_SEC));
+	evtimer_add(&evreport, tint2tv(REPORT_INTERVAL*TINT_SEC));
 }
 
 void EndCallback(int fd, short event, void *arg) {

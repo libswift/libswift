@@ -57,16 +57,15 @@ ContentTransfer::~ContentTransfer()
 }
 
 
-void ContentTransfer::CloseChannels(std::set<Channel *>   delset)
+void ContentTransfer::CloseChannels(channels_t &delset)
 {
-    std::set<Channel *>::iterator iter;
+    channels_t::iterator iter;
     for (iter=delset.begin(); iter!=delset.end(); iter++)
     {
         Channel *c = *iter;
         c->Close();
-        mychannels_.erase(c);
         delete c;
-        // ~Channel removes it from Channel::channels
+        // ~Channel removes it from Channel::channels and mychannels_.erase(c);
     }
 }
 
@@ -74,15 +73,15 @@ void ContentTransfer::CloseChannels(std::set<Channel *>   delset)
 void ContentTransfer::GarbageCollectChannels()
 {
     // STL and MS and conditional delete from set not a happy place :-(
-    std::set<Channel *>   delset;
-    std::set<Channel *>::iterator iter;
+    channels_t   delset;
+    channels_t::iterator iter;
     bool hasestablishedpeers=false;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
         Channel *c = *iter;
         if (c != NULL) {
             if (c->IsScheduled4Delete())
-                delset.insert(c);
+                delset.push_back(c);
 
             if (c->is_established ())
                 hasestablishedpeers = true;
@@ -141,6 +140,9 @@ void ContentTransfer::ReConnectToTrackerIfAllowed(bool hasestablishedpeers)
 
 void ContentTransfer::ConnectToTracker()
 {
+	if (!IsOperational())
+		return;
+
     // SWIFTPROC
     Channel *c = NULL;
     // Arno, 2012-01-09: LIVE Old hack: the tracker is assumed to be the live source
@@ -185,7 +187,7 @@ bool ContentTransfer::OnPexIn (const Address& addr) {
     //if (addr.is_private())
     //   return false;
 
-    std::set<Channel *>::iterator iter;
+	channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
         Channel *c = *iter;
@@ -200,8 +202,8 @@ bool ContentTransfer::OnPexIn (const Address& addr) {
 
 //Gertjan
 Channel *ContentTransfer::RandomChannel(Channel *notc) {
-    std::vector<Channel *>   choose_from;
-    std::set<Channel *>::iterator iter;
+	channels_t choose_from;
+    channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
        Channel *c = *iter;
@@ -268,7 +270,7 @@ double      ContentTransfer::GetMaxSpeed(data_direction_t ddir)
 uint32_t   ContentTransfer::GetNumLeechers()
 {
     uint32_t count = 0;
-    std::set<Channel *>::iterator iter;
+    channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
        Channel *c = *iter;
@@ -283,7 +285,7 @@ uint32_t   ContentTransfer::GetNumLeechers()
 uint32_t   ContentTransfer::GetNumSeeders()
 {
     uint32_t count = 0;
-    std::set<Channel *>::iterator iter;
+    channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
        Channel *c = *iter;
@@ -302,7 +304,7 @@ void ContentTransfer::AddPeer(Address &peer)
 
 Channel * ContentTransfer::FindChannel(const Address &addr, Channel *notc)
 {
-    std::set<Channel *>::iterator iter;
+	channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
         Channel *c = *iter;
@@ -314,3 +316,6 @@ Channel * ContentTransfer::FindChannel(const Address &addr, Channel *notc)
    }
    return NULL;
 }
+
+
+

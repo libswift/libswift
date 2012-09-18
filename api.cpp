@@ -45,17 +45,22 @@ int swift::Find (Sha1Hash hash) {
  * Per-Swarm Operations
  */
 
+int swift::Open (std::string filename, const Sha1Hash& roothash, Address tracker, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size) {
+    FileTransfer* ft = new FileTransfer(filename, roothash, force_check_diskvshash, check_netwvshash, chunk_size);
+    if (ft->fd() && ft->IsOperational()) {
 
-int  swift::Open (std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size)
-{
-    FileTransfer* ft = new FileTransfer(filename, hash, check_hashes, chunk_size);
-    // initiate tracker connections
-    // SWIFTPROC
-    ft->SetTracker(tracker);
-    ft->ConnectToTracker();
+        // initiate tracker connections
+    	// SWIFTPROC
+    	ft->SetTracker(tracker);
+    	ft->ConnectToTracker();
 
-    return ft->fd();
+    	return ft->fd();
+    } else {
+		delete ft;
+        return -1;
+    }
 }
+
 
 
 void    swift::Close (int fd) {
@@ -144,11 +149,6 @@ size_t	  swift::ChunkSize(int fdes)
     }
     else
         return 0;
-}
-
-
-void    swift::AddPeer (Address address, const Sha1Hash& root) {
-    Channel::peer_selector->AddPeer(address,root);
 }
 
 
@@ -282,7 +282,7 @@ int swift::LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte, long offse
 }
 
 
-int swift::LiveOpen(std::string filename, const Sha1Hash& hash,Address tracker, bool check_hashes,size_t chunk_size)
+int swift::LiveOpen(std::string filename, const Sha1Hash& hash,Address tracker,  bool check_netwvshash, size_t chunk_size)
 {
     LiveTransfer *lt = new LiveTransfer(filename,hash,false,chunk_size);
 

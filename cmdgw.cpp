@@ -10,6 +10,11 @@
 #include <iostream>
 #include <sstream>
 
+//MEMLEAK
+#ifndef WIN32
+#include <malloc.h>
+#endif
+
 #include "swift.h"
 #include "compat.h"
 #include <event2/buffer.h>
@@ -31,6 +36,7 @@ using namespace swift;
 #define DLSTATUS_HASHCHECKING  		2
 #define DLSTATUS_DOWNLOADING  		3
 #define DLSTATUS_SEEDING 		4
+#define DLSTATUS_STOPPED_ON_ERROR  6
 
 #define MAX_CMD_MESSAGE 1024
 
@@ -38,6 +44,7 @@ using namespace swift;
 #define ERROR_UNKNOWN_CMD		-1
 #define ERROR_MISS_ARG			-2
 #define ERROR_BAD_ARG			-3
+#define ERROR_BAD_SWARM		-4
 
 #define CMDGW_MAX_CLIENT 1024   // Arno: == maximum number of swarms per proc
 
@@ -116,8 +123,8 @@ void CmdGwCloseConnection(evutil_socket_t sock)
     // Close cmd connection and stop all associated downloads.
     // Doesn't remove .mhash state or content
 
-    if (cmd_gw_debug)
-        fprintf(stderr,"CmdGwCloseConnection: ENTER\n");
+	if (cmd_gw_debug)
+		fprintf(stderr,"CmdGwCloseConnection: ENTER %d\n", sock );
 
     bool scanning = true;
     while (scanning)
@@ -140,7 +147,10 @@ void CmdGwCloseConnection(evutil_socket_t sock)
         }
     }
 
-    cmd_gw_conns_open--;
+	// Arno, 2012-07-06: Close
+	swift::close_socket(sock);
+
+	cmd_gw_conns_open--;
 }
 
 
@@ -152,12 +162,14 @@ cmd_gw_t* CmdGwFindRequestByFD(int fdes)
     return NULL;
 }
 
-cmd_gw_t* CmdGwFindRequestByRootHash(Sha1Hash &want_hash)
+cmd_gw_t* CmdGwFindRequestBySwarmID(Sha1Hash &want_hash)
 {
     ContentTransfer *ct = NULL;
     for(int i=0; i<cmd_gw_reqs_open; i++) {
         cmd_gw_t* req = &cmd_requests[i];
         ct = ContentTransfer::transfer(req->fdes);
+		if (ct == NULL)
+			continue;
         Sha1Hash got_hash = ct->swarm_id();
         if (want_hash == got_hash)
             return req;
@@ -169,9 +181,10 @@ cmd_gw_t* CmdGwFindRequestByRootHash(Sha1Hash &want_hash)
 void CmdGwGotCHECKPOINT(Sha1Hash &want_hash)
 {
     // Checkpoint the specified download
-    fprintf(stderr,"cmd: GotCHECKPOINT: %s\n",want_hash.hex().c_str());
+    if (cmd_gw_debug)
+        fprintf(stderr,"cmd: GotCHECKPOINT: %s\n",want_hash.hex().c_str());
 
-    cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
     if (req == NULL)
         return;
 
@@ -185,9 +198,13 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
     if (cmd_gw_debug)
         fprintf(stderr,"cmd: GotREMOVE: %s %d %d\n",want_hash.hex().c_str(),removestate,removecontent);
 
-    cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
     if (req == NULL)
-        return;
+    {
+		if (cmd_gw_debug)
+			fprintf(stderr,"cmd: GotREMOVE: %s not found, bad swarm?\n",want_hash.hex().c_str());
+    	return;
+    }
     ContentTransfer *ct = ContentTransfer::transfer(req->fdes);
     if (ct == NULL)
         return;
@@ -240,18 +257,18 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
     // All ct info now invalid
 
     std::set<std::string>::iterator iter;
-    for (iter=delset.begin(); iter!=delset.end(); iter++)
-    {
-        std::string filename = *iter;
-        if (cmd_gw_debug)
-            fprintf(stderr,"CmdGwREMOVE: removing %s\n", filename.c_str() );
-        int ret = remove(filename.c_str());
-        if (ret < 0)
-        {
-            if (cmd_gw_debug)
-                print_error("Could not remove file");
-        }
-    }
+	for (iter=delset.begin(); iter!=delset.end(); iter++)
+	{
+		std::string filename = *iter;
+		if (cmd_gw_debug)
+			fprintf(stderr,"CmdGwREMOVE: removing %s\n", filename.c_str() );
+		int ret = remove_utf8(filename);
+		if (ret < 0)
+		{
+			if (cmd_gw_debug)
+				print_error("Could not remove file");
+		}
+	}
 
     CmdGwFreeRequest(req);
     *req = cmd_requests[--cmd_gw_reqs_open];
@@ -263,7 +280,7 @@ void CmdGwGotMAXSPEED(Sha1Hash &want_hash, data_direction_t ddir, double speed)
     // Set maximum speed on the specified download
     //fprintf(stderr,"cmd: GotMAXSPEED: %s %d %lf\n",want_hash.hex().c_str(),ddir,speed);
 
-    cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
     if (req == NULL)
         return;
     ContentTransfer *ct = ContentTransfer::transfer(req->fdes);
@@ -282,7 +299,7 @@ void CmdGwGotMAXSPEED(Sha1Hash &want_hash, data_direction_t ddir, double speed)
 
 void CmdGwGotSETMOREINFO(Sha1Hash &want_hash, bool enable)
 {
-    cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
     if (req == NULL)
         return;
     req->moreinfo = enable;
@@ -290,7 +307,7 @@ void CmdGwGotSETMOREINFO(Sha1Hash &want_hash, bool enable)
 
 void CmdGwGotPEERADDR(Sha1Hash &want_hash, Address &peer)
 {
-    cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
     if (req == NULL)
         return;
     ContentTransfer *ct = ContentTransfer::transfer(req->fdes);
@@ -302,7 +319,7 @@ void CmdGwGotPEERADDR(Sha1Hash &want_hash, Address &peer)
 
 
 
-void CmdGwSendINFOHashChecking(cmd_gw_t* req, Sha1Hash swarm_id)
+void CmdGwSendINFOHashChecking(evutil_socket_t cmdsock, Sha1Hash swarm_id)
 {
     // Send INFO DLSTATUS_HASHCHECKING message.
 
@@ -310,15 +327,15 @@ void CmdGwSendINFOHashChecking(cmd_gw_t* req, Sha1Hash swarm_id)
     sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",swarm_id.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,3.14,0,0);
 
     //fprintf(stderr,"cmd: SendINFO: %s", cmd);
-    send(req->cmdsock,cmd,strlen(cmd),0);
+    send(cmdsock,cmd,strlen(cmd),0);
 }
 
 
 void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 {
-    // Send INFO message.
-    if (cmd_gw_debug)
-        fprintf(stderr,"cmd: SendINFO: %d %d\n", req->fdes, dlstatus );
+	// Send INFO message.
+	if (cmd_gw_debug)
+		fprintf(stderr,"cmd: SendINFO: F%d initdlstatus %d\n", req->fdes, dlstatus );
 
     ContentTransfer *ct = ContentTransfer::transfer(req->fdes);
     if (ct == NULL)
@@ -330,8 +347,10 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
     char cmd[MAX_CMD_MESSAGE];
     uint64_t size = swift::Size(req->fdes);
     uint64_t complete = swift::Complete(req->fdes);
-    if (size == complete)
+    if (size > 0 && size == complete)
         dlstatus = DLSTATUS_SEEDING;
+    if (!ct->IsOperational())
+    	dlstatus = DLSTATUS_STOPPED_ON_ERROR;
 
     uint32_t numleech = ct->GetNumLeechers();
     uint32_t numseeds = ct->GetNumSeeders();
@@ -349,8 +368,8 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
         std::ostringstream oss;
         oss.setf(std::ios::fixed,std::ios::floatfield);
         oss.precision(5);
-        std::set<Channel *>::iterator iter;
-        std::set<Channel *> peerchans = ct->GetChannels();
+    	channels_t::iterator iter;
+    	channels_t *peerchans = ct->GetChannels();
 
         oss << "MOREINFO" << " " << swarm_id.hex() << " ";
 
@@ -358,12 +377,12 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
         oss << "{\"timestamp\":\"" << tss << "\", ";
         oss << "\"channels\":";
         oss << "[";
-        for (iter=peerchans.begin(); iter!=peerchans.end(); iter++) {
+        for (iter=peerchans->begin(); iter!=peerchans->end(); iter++) {
             Channel *c = *iter;
             if (c == NULL) 
                 continue;
 
-	    if (iter!=peerchans.begin())
+	    if (iter!=peerchans->begin())
                 oss << ", ";
             oss << "{";
             oss << "\"ip\": \"" << c->peer().ipv4str() << "\", ";
@@ -411,31 +430,33 @@ void CmdGwSendPLAY(cmd_gw_t *req)
         strcat(cmd,req->xcontentdur.c_str());
     }
 
-    fprintf(stderr,"cmd: SendPlay: %s", cmd);
+    if (cmd_gw_debug)
+        fprintf(stderr,"cmd: SendPlay: %s", cmd);
 
     send(req->cmdsock,cmd,strlen(cmd),0);
 }
 
 
-void CmdGwSendERRORBySocket(evutil_socket_t cmdsock, std::string msg)
+void CmdGwSendERRORBySocket(evutil_socket_t cmdsock, std::string msg, const Sha1Hash& roothash=Sha1Hash::ZERO)
 {
-    std::string cmd = "ERROR 0000000000000000000000000000000000000000 ";
-    cmd += msg;
-    cmd += "\r\n";
-    char *wire = strdup(cmd.c_str());
-    send(cmdsock,wire,strlen(wire),0);
-    free(wire);
+	std::string cmd = "ERROR ";
+	cmd += roothash.hex();
+	cmd += " ";
+	cmd += msg;
+	cmd += "\r\n";
+
+	if (cmd_gw_debug)
+		fprintf(stderr,"cmd: SendERROR: %s\n", cmd.c_str() );
+
+	char *wire = strdup(cmd.c_str());
+	send(cmdsock,wire,strlen(wire),0);
+	free(wire);
 }
 
-void CmdGwSendERRORByFD(int fdes, std::string msg)
-{
-    cmd_gw_t* req = CmdGwFindRequestByFD(fdes);
-    if (req == NULL)
-        return;
-    CmdGwSendERRORBySocket(req->cmdsock,msg);
-}
 
-
+/*
+ * For VOD and Live, wait until PREBUF_BYTES are in before sending PLAY.
+ */
 void CmdGwSwiftPrebufferProgressCallback (int fdes, bin_t bin)
 {
     //
@@ -451,7 +472,7 @@ void CmdGwSwiftPrebufferProgressCallback (int fdes, bin_t bin)
 #ifdef WIN32
     int64_t wantsize = min(req->endoff+1-req->startoff,CMDGW_MAX_PREBUF_BYTES);
 #else
-        int64_t wantsize = std::min(req->endoff+1-req->startoff,(uint64_t)CMDGW_MAX_PREBUF_BYTES);
+    int64_t wantsize = std::min(req->endoff+1-req->startoff,(uint64_t)CMDGW_MAX_PREBUF_BYTES);
 #endif
 
     if (cmd_gw_debug)
@@ -496,7 +517,7 @@ void CmdGwSwiftVODFirstProgressCallback (int fdes, bin_t bin)
 
     ContentTransfer *ct = ContentTransfer::transfer(fdes);
     if (ct == NULL) {
-        CmdGwSendERRORBySocket(req->cmdsock,"Unknown transfer?!");
+        CmdGwSendERRORBySocket(req->cmdsock,"Unknown transfer?!",ct->swarm_id());
         return;
     }
     else if (ct->ttype() == LIVE_TRANSFER)
@@ -506,6 +527,7 @@ void CmdGwSwiftVODFirstProgressCallback (int fdes, bin_t bin)
         return;
     }
 
+    // VOD from here
     FileTransfer *ft = (FileTransfer *)ct;
     if (!ft->GetStorage()->IsReady()) {
         // Wait until (multi-file) storage is ready
@@ -524,7 +546,7 @@ void CmdGwSwiftVODFirstProgressCallback (int fdes, bin_t bin)
         if (!req->playsent)
             swift::AddProgressCallback(fdes,&CmdGwSwiftPrebufferProgressCallback,CMDGW_PREBUF_PROGRESS_BYTE_INTERVAL_AS_LAYER);
     }
-    else if (ct->ttype() == FILE_TRANSFER)
+    else
     {
         // MULTIFILE
         // Have spec, seek to wanted file
@@ -559,10 +581,10 @@ void CmdGwSwiftVODFirstProgressCallback (int fdes, bin_t bin)
             if (cmd_gw_debug)
                 fprintf(stderr,"cmd: SwiftFirstProgress: Error file not found %d\n", fdes );
 
-            CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.");
-            return;
-        }
-    }
+			CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.",ft->swarm_id());
+			return;
+		}
+	}
 }
 
 
@@ -598,6 +620,8 @@ void CmdGwUpdateDLStateCallback(cmd_gw_t* req)
 
     // Update speed measurements such that they decrease when DL/UL stops
     ContentTransfer *ct = ContentTransfer::transfer(req->fdes);
+	if (ct == NULL) // Concurrency between ERROR_BAD_SWARM and this periodic callback
+		return;
     ct->OnRecvData(0);
     ct->OnSendData(0);
 
@@ -615,6 +639,8 @@ void CmdGwUpdateDLStateCallback(cmd_gw_t* req)
     }
 }
 
+
+int icount=0;
 
 void CmdGwUpdateDLStatesCallback()
 {
@@ -643,6 +669,29 @@ void CmdGwUpdateDLStatesCallback()
     else
         cmd_gw_last_open = NOW;
 
+    // MEMLEAK
+    icount++;
+    if ((icount % 10) == 0)
+    {
+        int counta=0,countz=0;
+        for(int i=0; i<ContentTransfer::swarms.size(); i++)
+        {
+            ContentTransfer *ct = ContentTransfer::swarms[i];
+            if (ct == NULL || ct->ttype() != FILE_TRANSFER)
+               continue;
+
+            FileTransfer *ft = (FileTransfer *)ct;
+            if (ft->IsZeroState())
+            	countz++;
+            else
+            	counta++;
+        }
+        fprintf(stderr,"cmd: active %d zero %d total %d\n", counta, countz, counta+countz );
+      
+#ifndef WIN32      
+  	    malloc_stats();
+#endif      
+    }
 }
 
 
@@ -736,18 +785,23 @@ void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line)
     char *copyline = (char *)malloc(strlen(line)+1);
     strcpy(copyline,line);
 
-    int ret = CmdGwHandleCommand(cmdsock,copyline);
-    if (ret < 0) {
-        dprintf("cmd: Error parsing command %s\n", line );
-        std::string msg = "";
-        if (ret == ERROR_UNKNOWN_CMD)
-            msg = "unknown command";
-        else if (ret == ERROR_MISS_ARG)
-            msg = "missing parameter";
-        else
-            msg = "bad parameter";
-        CmdGwSendERRORBySocket(cmdsock,msg);
-        CmdGwCloseConnection(cmdsock);
+	int ret = CmdGwHandleCommand(cmdsock,copyline);
+	if (ret < 0) {
+		dprintf("cmd: Error processing command %s\n", line );
+		std::string msg = "";
+		if (ret == ERROR_UNKNOWN_CMD)
+			msg = "unknown command";
+		else if (ret == ERROR_MISS_ARG)
+			msg = "missing parameter";
+		else if (ret == ERROR_BAD_ARG)
+			msg = "bad parameter";
+		// BAD_SWARM already sent, and not fatal
+
+		if (msg != "")
+		{
+			CmdGwSendERRORBySocket(cmdsock,msg);
+			CmdGwCloseConnection(cmdsock);
+		}
     }
 
     free(copyline);
@@ -777,11 +831,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
     if (!strcmp(method,"START"))
     {
         // New START request
-        cmd_gw_t* req = cmd_requests + cmd_gw_reqs_open++;
-        req->id = ++cmd_gw_reqs_count;
-        req->cmdsock = cmdsock;
-
-        //fprintf(stderr,"cmd: START: new request %i\n",req->id);
+        //fprintf(stderr,"cmd: START: new request %i\n",cmd_gw_reqs_count+1);
 
         // Format: START url destdir\r\n
         // Arno, 2012-04-13: See if URL followed by storagepath for seeding
@@ -837,8 +887,16 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         // initiate transmission
         Sha1Hash swarm_id = Sha1Hash(true,hashstr.c_str());
 
+        // Arno, 2012-06-12: Check for duplicate requests
+        cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarm_id);
+        if (req != NULL)
+        {
+        	dprintf("cmd: START: request for given root hash already exists\n");
+        	return ERROR_BAD_ARG;
+        }
+
         // Send INFO DLSTATUS_HASHCHECKING
-        CmdGwSendINFOHashChecking(req,swarm_id);
+		CmdGwSendINFOHashChecking(cmdsock,swarm_id);
 
         // ARNOSMPTODO: disable/interleave hashchecking at startup
         int fdes = swift::Find(swarm_id);
@@ -853,16 +911,30 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
                 fdes = swift::Open(filename,swarm_id,trackaddr,false,chunksize);
             else
                 fdes = swift::LiveOpen(filename,swarm_id,trackaddr,false,chunksize);
+            if (fdes == -1)
+            {
+            	CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarm_id);
+            	return ERROR_BAD_SWARM;
+            }
         }
 
         // RATELIMIT
         //ContentTransfer::transfer(fdes)->SetMaxSpeed(DDIR_DOWNLOAD,512*1024);
 
+        // All is well, register req
+        req = cmd_requests + cmd_gw_reqs_open++;
+        req->id = ++cmd_gw_reqs_count;
+        req->cmdsock = cmdsock;
         req->fdes = fdes;
         req->startt = usec_time();
         req->mfspecname = mfstr;
         req->playsent = false;
         req->xcontentdur = durationstr;
+
+        dprintf("%s @%i start transfer %i\n",tintstr(),req->id,req->fdes);
+
+        // RATELIMIT
+        //FileTransfer::file(transfer)->SetMaxSpeed(DDIR_DOWNLOAD,512*1024);
 
         if (cmd_gw_debug)
             fprintf(stderr,"cmd: Already on disk is %lli/%lli\n", swift::Complete(fdes), swift::Size(fdes));
@@ -1061,7 +1133,7 @@ void CmdGwNewConnectionCallback(struct evconnlistener *listener,
 
     // One buffer for all cmd connections, reset
     if (cmd_evbuffer != NULL)
-        evbuffer_free(cmd_evbuffer);
+	evbuffer_free(cmd_evbuffer);
     cmd_evbuffer = evbuffer_new();
 
     // SOCKTUNNEL: assume 1 command connection

@@ -1,11 +1,14 @@
 /*
  *  zerostate.cpp
- *  Class to seed content directly from disk, both hashes and data.
+ *  manager for starting on-demand transfers that serve content and hashes
+ *  directly from disk (so little state in memory). Requires content (named
+ *  as roothash-in-hex), hashes (roothash-in-hex.mhash file) and checkpoint
+ *  (roothash-in-hex.mbinmap) to be present on disk.
  *
- *  Created by Arno Bakker.
+ *  Created by Arno Bakker
  *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
+ *
  */
-
 #include "swift.h"
 #include "compat.h"
 
@@ -14,9 +17,9 @@ using namespace swift;
 
 ZeroState * ZeroState::__singleton = NULL;
 
-#define CLEANUP_INTERVAL    5    // seconds
+#define CLEANUP_INTERVAL			30	// seconds
 
-ZeroState::ZeroState() : contentdir_(".")
+ZeroState::ZeroState() : contentdir_("."), connect_timeout_(TINT_NEVER)
 {
     if (__singleton == NULL)
     {
@@ -54,20 +57,47 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
     for(int i=0; i<ContentTransfer::swarms.size(); i++)
     {
         ContentTransfer *ct = ContentTransfer::swarms[i];
-        if (ct && ct->ttype() == FILE_TRANSFER)
-        {
-            FileTransfer *ft = (FileTransfer *)ct;
-            if (ft->IsZeroState())
-            {
-                if (ft->GetChannels().size() == 0)
-                {
-                    // Ain't go no clients, cleanup.
-                    delset.insert(ft);
-                }
-                else
-                    dprintf("%s zero clean %s has %d peers\n",tintstr(),ft->root_hash().hex().c_str(), ft->GetChannels().size() );
-            }
-         }
+		if (ct == NULL || ct->ttype() != FILE_TRANSFER)
+			continue;
+
+		FileTransfer *ft = (FileTransfer *)ct;
+    	if (!ft->IsZeroState())
+    		continue;
+
+    	// Arno, 2012-07-20: Some weirdness on Win7 when we use GetChannels()
+    	// all the time. Map/set iterators incompatible?!
+    	channels_t *channels = ft->GetChannels();
+		if (channels->size() == 0)
+		{
+			// Ain't go no clients, cleanup transfer.
+			delset.insert(ft);
+		}
+		else if (zs->connect_timeout_ != TINT_NEVER)
+		{
+			// Garbage collect really slow connections, essential on Mac.
+			dprintf("%s zero clean %s has %d peers\n",tintstr(),ft->swarm_id().hex().c_str(), ft->GetChannels()->size() );
+			channels_t::iterator iter2;
+			for (iter2=channels->begin(); iter2!=channels->end(); iter2++) {
+				Channel *c = *iter2;
+				if (c != NULL)
+				{
+					//fprintf(stderr,"%s F%u zero clean %s opentime %lld connect %lld\n",tintstr(),ft->fd(), c->peer().str(), (NOW-c->GetOpenTime()), zs->connect_timeout_ );
+					// Garbage collect channels when open for long and slow upload
+					if ((NOW-c->GetOpenTime()) > zs->connect_timeout_)
+					{
+						//fprintf(stderr,"%s F%u zero clean %s opentime %lld ulspeed %lf\n",tintstr(),ft->fd(), c->peer().str(), (NOW-c->GetOpenTime())/TINT_SEC, ft->GetCurrentSpeed(DDIR_UPLOAD) );
+						fprintf(stderr,"%s F%u zero clean %s close slow channel\n",tintstr(),ft->fd(), c->peer().str() );
+						c->Close();
+						delete c;
+					}
+				}
+			}
+			if (ft->GetChannels()->size() == 0)
+			{
+				// Ain't go no clients left, cleanup transfer.
+				delset.insert(ft);
+			}
+		}
     }
 
     // Delete 0-state FileTransfers sans peers
@@ -102,6 +132,12 @@ void ZeroState::SetContentDir(std::string contentdir)
     contentdir_ = contentdir;
 }
 
+void ZeroState::SetConnectTimeout(tint timeout)
+{
+	//fprintf(stderr,"ZeroState: SetConnectTimeout: %lld\n", timeout/TINT_SEC );
+	connect_timeout_ = timeout;
+}
+
 
 FileTransfer * ZeroState::Find(Sha1Hash &root_hash)
 {
@@ -111,27 +147,29 @@ FileTransfer * ZeroState::Find(Sha1Hash &root_hash)
     std::string file_name = contentdir_+FILE_SEP+root_hash.hex();
     uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE;
 
-    std::string reqfilename = file_name;
+	dprintf("%s #0 zero find %s from %s\n",tintstr(),file_name.c_str(), getcwd_utf8().c_str() );
+
+	std::string reqfilename = file_name;
     int ret = file_exists_utf8(reqfilename);
-    if (ret == 0 || ret == 2)
+    if (ret < 0 || ret == 0 || ret == 2)
         return NULL;
-    reqfilename = file_name+".mbinmap";
+	reqfilename = file_name+".mbinmap";
     ret = file_exists_utf8(reqfilename);
-    if (ret == 0 || ret == 2)
+    if (ret < 0 || ret == 0 || ret == 2)
         return NULL;
-    reqfilename = file_name+".mhash";
+	reqfilename = file_name+".mhash";
     ret = file_exists_utf8(reqfilename);
-    if (ret == 0 || ret == 2)
+    if (ret < 0 || ret == 0 || ret == 2)
         return NULL;
 
-    FileTransfer *ft = new FileTransfer(file_name,root_hash,false,chunk_size,true);
-    if (ft->hashtree() == NULL || !ft->hashtree()->is_complete())
-    {
-        // Safety catch
-        return NULL; 
-    }
-    else
-          return ft;
+	FileTransfer *ft = new FileTransfer(file_name,root_hash,false,true,chunk_size,true);
+	if (ft->hashtree() == NULL || !ft->hashtree()->is_complete())
+	{
+		// Safety catch
+		return NULL; 
+	}
+	else
+  	    return ft;
 }
 
 

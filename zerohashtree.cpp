@@ -1,6 +1,7 @@
 /*
  *  zerohashtree.cpp
- *  swift
+ *  a hashtree interface implemented by reading hashes from a prepared .mhash
+ *  file on disk directly, to save memory.
  *
  *  Created by Victor Grishchenko, Arno Bakker
  *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
@@ -27,23 +28,26 @@ using namespace swift;
 /**     0  H a s h   t r e e       */
 
 
-ZeroHashTree::ZeroHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool check_hashes, std::string binmap_filename) :
-    storage_(storage), root_hash_(root_hash), peak_count_(0), hash_fd_(0),
-    size_(0), sizec_(0), complete_(0), completec_(0),
-    chunk_size_(chunk_size)
+ZeroHashTree::ZeroHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, std::string binmap_filename) :
+HashTree(), storage_(storage), root_hash_(root_hash), peak_count_(0), hash_fd_(0),
+ size_(0), sizec_(0), complete_(0), completec_(0),
+chunk_size_(chunk_size)
 {
     // MULTIFILE
     storage_->SetHashTree(this);
 
     hash_fd_ = open_utf8(hash_filename.c_str(),ROOPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (hash_fd_<0) {
-        hash_fd_ = 0;
         print_error("cannot open hash file");
+        SetBroken();
         return;
     }
 
     if (!RecoverPeakHashes())
+    {
         dprintf("%s zero hashtree could not recover peak hashes, fatal\n",tintstr() );
+    	SetBroken();
+    }
 
     complete_ = size_;
     completec_ = sizec_;
@@ -189,8 +193,11 @@ uint64_t      ZeroHashTree::seq_complete (int64_t offset)
 }
 
 
-ZeroHashTree::~ZeroHashTree () {
-    if (hash_fd_)
+ZeroHashTree::~ZeroHashTree ()
+{
+    if (hash_fd_ >= 0)
+    {
         close(hash_fd_);
+    }
 }
 

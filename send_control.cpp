@@ -36,7 +36,7 @@ tint    Channel::NextSendTime () {
     }
 }
 
-tint    Channel::SwitchSendControl (int control_mode) {
+tint    Channel::SwitchSendControl (send_control_t control_mode) {
     dprintf("%s #%u sendctrl switch %s->%s\n",tintstr(),id(),
             SEND_CONTROL_MODES[send_control_],SEND_CONTROL_MODES[control_mode]);
     switch (control_mode) {

@@ -869,12 +869,11 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     if (fdes==-1) {
         // LIVE
         if (durstr != "-1") {
-            fdes = swift::Open(hashstr,swarm_id,Address(),false,httpgw_chunk_size);
+            fdes = swift::Open(hashstr,swarm_id,Address(),false,true,httpgw_chunk_size);
         }
         else {
             fdes = swift::LiveOpen(hashstr,swarm_id,Address(),false,httpgw_chunk_size);
         }
-        dprintf("%s @%i http get: swarm %s has not been STARTed\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str());
 
         // Arno, 2011-12-20: Only on new transfers, otherwise assume that CMD GW
         // controls speed
@@ -924,7 +923,6 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
          * on disk.
          */
         HttpGwFirstProgressCallback(fdes,bin_t(0,0));
-
     } else {
         swift::AddProgressCallback(fdes,&HttpGwFirstProgressCallback,HTTPGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER);
     }
