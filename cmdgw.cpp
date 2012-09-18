@@ -635,7 +635,7 @@ void CmdGwUpdateDLStatesCallback()
     else
     	cmd_gw_last_open = NOW;
 
-  
+    // MEMLEAK
     icount++;
     if ((icount % 10) == 0)
     {
@@ -654,7 +654,7 @@ void CmdGwUpdateDLStatesCallback()
         fprintf(stderr,"cmd: active %d zero %d total %d\n", counta, countz, counta+countz );
       
 #ifndef WIN32      
-  	malloc_stats();
+  	    malloc_stats();
 #endif      
     }
 }
