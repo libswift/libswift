@@ -88,8 +88,6 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
 #endif
     for (uint64_t c=0; c<till; c++)
     {
-        fprintf(stderr,"live: AddData: adding chunkid %lli\n", last_chunkid_);
-
         // New chunk is here
         bin_t chunkbin(0,last_chunkid_);
         ack_out_.set(chunkbin);
@@ -97,6 +95,8 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         last_chunkid_++;
         offset_ += chunk_size_;
     }
+
+    fprintf(stderr,"live: AddData: added till chunkid %lli\n", last_chunkid_);
 
     // Announce chunks to peers
     //fprintf(stderr,"live: AddData: announcing to %d channel\n", mychannels_.size() );

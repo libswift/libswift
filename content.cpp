@@ -19,9 +19,11 @@ std::vector<ContentTransfer*> ContentTransfer::swarms;
 /*
  * Local Constants
  */
+#define CHANNEL_GARBAGECOLLECT_INTERVAL	(5*TINT_SEC)
+
 #define TRACKER_RETRY_INTERVAL_START	(5*TINT_SEC)
-#define TRACKER_RETRY_INTERVAL_EXP	1.1	// exponent used to increase INTERVAL_START
-#define TRACKER_RETRY_INTERVAL_MAX	(1800*TINT_SEC) // 30 minutes
+#define TRACKER_RETRY_INTERVAL_EXP		1.1	// exponent used to increase INTERVAL_START
+#define TRACKER_RETRY_INTERVAL_MAX		(1800*TINT_SEC) // 30 minutes
 
 
 
@@ -37,16 +39,13 @@ ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), mychannels_
     max_speed_[DDIR_UPLOAD] = DBL_MAX;
     max_speed_[DDIR_DOWNLOAD] = DBL_MAX;
 
-    fprintf(stderr,"ContentTransfer::ContentTransfer: Add timer\n" );
     evtimer_assign(&evclean_,Channel::evbase,&ContentTransfer::LibeventCleanCallback,this);
-    evtimer_add(&evclean_,tint2tv(5*TINT_SEC));
+    evtimer_add(&evclean_,tint2tv(CHANNEL_GARBAGECOLLECT_INTERVAL));
 }
 
 
 ContentTransfer::~ContentTransfer()
 {
-    fprintf(stderr,"ContentTransfer::~ContentTransfer\n" );
-
     CloseChannels(mychannels_);
     if (storage_ != NULL)
         delete storage_;
@@ -98,7 +97,7 @@ void ContentTransfer::GarbageCollectChannels()
 
 void ContentTransfer::LibeventCleanCallback(int fd, short event, void *arg)
 {
-    fprintf(stderr,"ContentTransfer::CleanCallback\n");
+    //fprintf(stderr,"ContentTransfer::CleanCallback\n");
 
     // Arno, 2012-02-24: Why-oh-why, update NOW
     Channel::Time();
@@ -111,7 +110,7 @@ void ContentTransfer::LibeventCleanCallback(int fd, short event, void *arg)
 
     // Reschedule cleanup
     evtimer_assign(&(ct->evclean_),Channel::evbase,&ContentTransfer::LibeventCleanCallback,ct);
-    evtimer_add(&(ct->evclean_),tint2tv(5*TINT_SEC));
+    evtimer_add(&(ct->evclean_),tint2tv(CHANNEL_GARBAGECOLLECT_INTERVAL));
 }
 
 
