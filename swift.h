@@ -401,14 +401,6 @@ namespace swift {
         // LIVE
         const Sha1Hash& swarm_id() const { return hashtree_->root_hash(); }
 
-        /** While we need to feed ACKs to every peer, we try (1) avoid
-            unnecessary duplication and (2) keep minimum state. Thus,
-            we use a rotating queue of bin completion events. */
-        //bin64_t       RevealAck (uint64_t& offset);
-        /** Rotating queue read for channels of this transmission. */
-        // Jori
-        int             RevealChannel (int& i);
-
         /** The binmap pointer for data already retrieved and checked. */
         binmap_t *      ack_out ()  { return hashtree_->ack_out(); }
         /** Piece picking strategy used by this transfer. */
@@ -679,7 +671,7 @@ namespace swift {
 
         // SAFECLOSE
         void        ClearEvents();
-        void         Schedule4Delete() { scheduled4del_ = true; }
+        void        Schedule4Delete() { scheduled4del_ = true; }
         bool        IsScheduled4Delete() { return scheduled4del_; }
 
         //ZEROSTATE

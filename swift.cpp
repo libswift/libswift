@@ -23,6 +23,16 @@ using namespace swift;
 // Local constants
 #define RESCAN_DIR_INTERVAL	30 // seconds
 
+// Arno, 2012-09-18: LIVE: Somehow Win32 works better when reading at a slower pace
+#ifdef WIN32
+#define LIVESOURCE_BUFSIZE    102400
+#define LIVESOURCE_INTERVAL    TINT_SEC
+#else
+#define LIVESOURCE_BUFSIZE    102400
+#define LIVESOURCE_INTERVAL    TINT_SEC/10
+#endif
+
+
 
 // Local prototypes
 void usage(void)
@@ -56,6 +66,7 @@ void usage(void)
 int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
 int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size, bool livestream);
 int OpenSwiftDirectory(std::string dirname, Address tracker, bool check_hashes, uint32_t chunk_size);
+void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Hash root_hash);
 
 void ReportCallback(int fd, short event, void *arg);
 void EndCallback(int fd, short event, void *arg);
@@ -96,7 +107,7 @@ Address tracker;
 // LIVE
 std::string livesource_input = "";
 LiveTransfer *livesource_lt = NULL;
-int livesource_fd=-1;
+FILE *livesource_filep=NULL;
 struct evbuffer *livesource_evb = NULL;
 
 
@@ -133,7 +144,7 @@ int utf8main (int argc, char** argv)
         {0, 0, 0, 0}
     };
 
-    Sha1Hash root_hash;
+    Sha1Hash root_hash=Sha1Hash::ZERO;
     std::string filename = "",destdir = "", trackerargstr= "", zerostatedir="", urlfilename="";
     bool printurl=false, livestream=false;
     Address bindaddr;
@@ -324,6 +335,7 @@ int utf8main (int argc, char** argv)
 
     if (!cmdgw_enabled && livesource_input == "" && zerostatedir == "")
     {
+    	// Seed file or dir, or create multi-spec
         int ret = -1;
         if (!generate_multifile)
         {
@@ -362,66 +374,12 @@ int utf8main (int argc, char** argv)
     else if (livesource_input != "")
     {
         // LIVE
-        // Server mode: read from http source or pipe or file
-        livesource_evb = evbuffer_new();
-
-        std::string httpscheme = "http:";
-        if (livesource_input.substr(0,httpscheme.length()) != httpscheme)
-        {
-            // Source is file or pipe
-            if (livesource_input == "-")
-                livesource_fd = 0; // stdin, aka read from pipe
-            else {
-                livesource_fd = open(livesource_input.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-                if (livesource_fd < 0)
-                    quit("Could not open source input");
-            }
-
-            //LIVETODO
-            const char *swarmidstr = "ArnosFirstSwarm";
-            Sha1Hash swarmid(swarmidstr, strlen(swarmidstr));
-            livesource_lt = swift::LiveCreate(filename,swarmid);
-
-            evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
-            evtimer_add(&evlivesource, tint2tv(TINT_SEC));
-        }
-        else
-        {
-            std::string httpservname,httppath;
-            int httpport=80;
-
-            std::string httpprefix= "http://";
-            std::string schemeless = livesource_input.substr(httpprefix.length());
-            int sidx = schemeless.find("/");
-            if (sidx == -1)
-                quit("No path in live source input URL");
-            httppath = schemeless.substr(sidx);
-            std::string server = schemeless.substr(0,sidx);
-            sidx = server.find(":");
-            if (sidx != -1)
-            {
-                httpservname = server.substr(0,sidx);
-                std::string portstr = server.substr(sidx+1);
-                std::istringstream(portstr) >> httpport;
-            }
-            else
-                httpservname = server;
-
-            fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str() );
-
-            const char *swarmidstr = "ArnosFirstSwarm";
-            Sha1Hash swarmid(swarmidstr, strlen(swarmidstr));
-            livesource_lt = swift::LiveCreate(filename,swarmid);
-
-            struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, httpservname.c_str(), httpport);
-            struct evhttp_request *req = evhttp_request_new(LiveSourceHTTPResponseCallback, NULL);
-            evhttp_request_set_chunked_cb(req,LiveSourceHTTPDownloadChunkCallback);
-            evhttp_make_request(cn, req, EVHTTP_REQ_GET,httppath.c_str());
-            evhttp_add_header(req->output_headers, "Host", httpservname.c_str());
-        }
+    	// Act as live source
+    	HandleLiveSource(livesource_input,filename,root_hash);
     }
     else if (!cmdgw_enabled && !httpgw_enabled && zerostatedir == "")
         quit("Not client, not live server, not a gateway, not zero state seeder?");
+
 
     // Arno, 2012-01-04: Allow download and quit mode
     if (single_fd != -1 && root_hash != Sha1Hash::ZERO && wait_time == 0) {
@@ -603,6 +561,93 @@ int CleanSwiftDirectory(std::string dirname)
 }
 
 
+void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Hash root_hash)
+{
+	// LIVE
+    // Server mode: read from http source or pipe or file
+    livesource_evb = evbuffer_new();
+
+    // LIVETODO: swarmID is hash of public key
+    Sha1Hash swarmid = root_hash;
+    if (swarmid == Sha1Hash::ZERO)
+    {
+    	std::string swarmidstr = "ArnosFirstSwarm";
+    	swarmid = Sha1Hash(swarmidstr.c_str(), swarmidstr.length());
+    }
+
+    std::string httpscheme = "http:";
+    std::string pipescheme = "pipe:";
+    if (livesource_input.substr(0,httpscheme.length()) != httpscheme)
+    {
+        // Source is file or pipe
+        if (livesource_input == "-")
+            livesource_filep = stdin; // aka read from shell pipe
+
+        else if (livesource_input.substr(0,pipescheme.length()) == pipescheme) {
+        	// Source is program output
+        	std::string program = livesource_input.substr(pipescheme.length());
+#ifdef WIN32
+        	livesource_filep = _popen( program.c_str(), "rb" );
+        	if (livesource_filep == NULL)
+        		quit("live: file: popen failed" );
+
+        	fprintf(stderr,"live: pipe: Reading from %s\n", program.c_str() );
+#else
+        	quit("live: pipe as source not yet implemented on non-win32");
+#endif
+        }
+        else {
+        	// Source is file
+            livesource_filep = fopen(livesource_input.c_str(),"rb");
+            if (livesource_filep == NULL)
+                quit("live: Could not open source input");
+        }
+
+        // Create swarm
+        livesource_lt = swift::LiveCreate(filename,swarmid);
+
+        // Periodically create chunks by reading from source
+        evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
+        evtimer_add(&evlivesource, tint2tv(TINT_SEC));
+    }
+    else
+    {
+    	// Source is HTTP server
+        std::string httpservname,httppath;
+        int httpport=80;
+
+        std::string httpprefix= "http://";
+        std::string schemeless = livesource_input.substr(httpprefix.length());
+        int sidx = schemeless.find("/");
+        if (sidx == -1)
+            quit("No path in live source input URL");
+        httppath = schemeless.substr(sidx);
+        std::string server = schemeless.substr(0,sidx);
+        sidx = server.find(":");
+        if (sidx != -1)
+        {
+            httpservname = server.substr(0,sidx);
+            std::string portstr = server.substr(sidx+1);
+            std::istringstream(portstr) >> httpport;
+        }
+        else
+            httpservname = server;
+
+        fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str() );
+
+        // Create swarm
+        livesource_lt = swift::LiveCreate(filename,swarmid);
+
+        // Create HTTP client
+        struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, httpservname.c_str(), httpport);
+        struct evhttp_request *req = evhttp_request_new(LiveSourceHTTPResponseCallback, NULL);
+        evhttp_request_set_chunked_cb(req,LiveSourceHTTPDownloadChunkCallback);
+
+        // Make request to server
+        evhttp_make_request(cn, req, EVHTTP_REQ_GET,httppath.c_str());
+        evhttp_add_header(req->output_headers, "Host", httpservname.c_str());
+    }
+}
 
 
 
@@ -778,37 +823,13 @@ int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int ar
 }
 
 
-#ifdef WIN32
-FILE *livesource_pfile = NULL;
-#define LIVESOURCE_BUFSIZE    102400
-#define LIVESOURCE_INTERVAL    TINT_SEC
-#else
-#define LIVESOURCE_BUFSIZE    102400
-#define LIVESOURCE_INTERVAL    TINT_SEC/10
-#endif
-
 void LiveSourceFileTimerCallback(int fd, short event, void *arg) {
 
     char buf[LIVESOURCE_BUFSIZE];
 
     fprintf(stderr,"live: file: timer\n");
 
-#ifdef WIN32
-    if (livesource_pfile == NULL)
-    {
-        // TODO: make parameter
-        livesource_pfile = _popen( "transcode15.bat", "rb" );
-        if (livesource_pfile == NULL)
-        {
-                print_error("live: file: popen failed" );
-                return;
-        }
-    }
-
-    int nread = fread(buf,sizeof(char),sizeof(buf),livesource_pfile);
-#else
-    int nread = read(livesource_fd,buf,sizeof(buf));
-#endif
+    int nread = fread(buf,sizeof(char),sizeof(buf),livesource_filep);
     fprintf(stderr,"live: file: read returned %d\n", nread );
 
     if (nread < -1)
