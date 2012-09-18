@@ -684,6 +684,7 @@ void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
     }
     else
     {
+    	// LIVE
         evhttp_add_header(reqheaders, "Content-Type", "video/mp2t" );
         evhttp_add_header(reqheaders, "Accept-Ranges", "none" );
     }
