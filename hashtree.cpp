@@ -77,9 +77,9 @@ std::string    Sha1Hash::hex() const {
 
 
 MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool force_check_diskvshash, bool check_netwvshash, std::string binmap_filename) :
- HashTree(), storage_(storage), root_hash_(root_hash), hashes_(NULL),
- peak_count_(0), hash_fd_(-1), size_(0), sizec_(0), complete_(0), completec_(0),
- chunk_size_(chunk_size), check_netwvshash_(check_netwvshash)
+ HashTree(), root_hash_(root_hash), hashes_(NULL),
+ peak_count_(0), hash_fd_(-1), hash_filename_(hash_filename), size_(0), sizec_(0), complete_(0), completec_(0),
+ chunk_size_(chunk_size), storage_(storage), check_netwvshash_(check_netwvshash)
 {
     // MULTIFILE
     storage_->SetHashTree(this);
@@ -92,11 +92,11 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
         (void)storage_->ResizeReserved(sizefromspec);
     }
 
-	// Arno: if user doesn't want to check hashes but no .mhash, check hashes anyway
-	bool actually_force_check_diskvshash = force_check_diskvshash;
+    // Arno: if user doesn't want to check hashes but no .mhash, check hashes anyway
+    bool actually_force_check_diskvshash = force_check_diskvshash;
     bool mhash_exists=true;
-    int res = file_exists_utf8( hash_filename.c_str());
-    if( res <= 0)
+    int64_t mhash_size = file_size_by_path_utf8( hash_filename.c_str());
+    if (mhash_size < 0)
         mhash_exists = false;
     // Arno, 2012-07-26: Quick fix against partial downloads without .mhash.
     // Previously they would be Submit()ed and the root_hash_ would change.
@@ -110,7 +110,7 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
     // Arno: if the remainder of the hashtree state is on disk we can
     // hashcheck very quickly
     bool binmap_exists=true;
-    res = file_exists_utf8( binmap_filename.c_str() );
+    int res = file_exists_utf8( binmap_filename.c_str() );
     if( res <= 0)
         binmap_exists = false;
     if (root_hash_==Sha1Hash::ZERO && !binmap_exists)
@@ -125,11 +125,11 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
         return;
     }
 
-    hash_fd_ = open_utf8(hash_filename.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-    if (hash_fd_<0) {
-        print_error("cannot create/open hash file");
-        SetBroken();
-        return;
+    // Arno, 2012-09-19: Hash file created only when msgs incoming
+    if (mhash_exists) {
+        hash_fd_ = OpenHashFile();
+        if (hash_fd_ < 0)
+            return;
     }
 
     // Arno: if user wants to or no .mhash, and if root hash unknown (new file) and no checkpoint, (re)calc root hash
@@ -138,7 +138,7 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
         dprintf("%s hashtree full compute\n",tintstr());
         //assert(storage_->GetReservedSize());
         Submit();
-    } else if (mhash_exists && binmap_exists && file_size(hash_fd_)) {
+    } else if (mhash_exists && binmap_exists && mhash_size > 0) {
         // Arno: recreate hash tree without rereading content
         dprintf("%s hashtree read from checkpoint\n",tintstr());
         FILE *fp = fopen_utf8(binmap_filename.c_str(),"rb");
@@ -164,7 +164,7 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
 
 MmapHashTree::MmapHashTree(bool dummy, std::string binmap_filename) :
 HashTree(), root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), hash_fd_(0),
-filename_(""), size_(0), sizec_(0), complete_(0), completec_(0),
+hash_filename_(""), filename_(""), size_(0), sizec_(0), complete_(0), completec_(0),
 chunk_size_(0), check_netwvshash_(false)
 {
     FILE *fp = fopen_utf8(binmap_filename.c_str(),"rb");
@@ -175,6 +175,16 @@ chunk_size_(0), check_netwvshash_(false)
     if (partial_deserialize(fp) < 0) {
     }
     fclose(fp);
+}
+
+int MmapHashTree::OpenHashFile() {
+    hash_fd_ = open_utf8(hash_filename_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+    if (hash_fd_<0) {
+    	hash_fd_ = -1;
+        print_error("cannot create/open hash file");
+        SetBroken();
+    }
+    return hash_fd_;
 }
 
 
@@ -193,6 +203,13 @@ void            MmapHashTree::Submit () {
         return;
     }
 
+    // Arno, 2012-09-19: Hash file created only when msgs incoming
+    if (hash_fd_ == -1) {
+    	hash_fd_ = OpenHashFile();
+    	if (hash_fd_ < 0)
+    		return;
+    }
+  
     file_resize(hash_fd_,hashes_size);
     hashes_ = (Sha1Hash*) memory_map(hash_fd_,hashes_size);
     if (!hashes_) {
@@ -410,6 +427,13 @@ bool            MmapHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
         }
     }
 
+    // Arno, 2012-09-19: Hash file created only when msgs incoming
+    if (hash_fd_ == -1) {
+    	hash_fd_ = OpenHashFile();
+    	if (hash_fd_ < 0)
+    		return false;
+    }
+  
     // mmap the hash file into memory
     uint64_t expected_size = sizeof(Sha1Hash)*sizec_*2;
     // Arno, 2011-10-18: on Windows we could optimize this away,

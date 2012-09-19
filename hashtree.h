@@ -125,7 +125,8 @@ class MmapHashTree : public HashTree, Serializable {
     int             peak_count_;
     /** File descriptor to put hashes to */
     int             hash_fd_;
-    std::string        filename_; // for easy serialization
+    std::string     hash_filename_;
+    std::string	    filename_; // for easy serialization
     /** Base size, as derived from the hashes. */
     uint64_t        size_;
     uint64_t        sizec_;
@@ -144,7 +145,7 @@ class MmapHashTree : public HashTree, Serializable {
     // FAXME: make is_hash_verified_ part of persistent state?
 
     //MULTIFILE
-    Storage *       storage_;
+    Storage *		storage_;
 
     int             internal_deserialize(FILE *fp,bool contentavail=true);
 
@@ -153,6 +154,7 @@ class MmapHashTree : public HashTree, Serializable {
 
 protected:
     
+    int             OpenHashFile();
     void            Submit();
     void            RecoverProgress();
     bool            RecoverPeakHashes();
