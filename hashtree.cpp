@@ -97,7 +97,7 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
     bool actually_force_check_diskvshash = force_check_diskvshash;
     bool mhash_exists=true;
     int64_t mhash_size = file_size_by_path_utf8( hash_filename.c_str());
-    if( mhash_size < 0)
+    if (mhash_size < 0)
     	mhash_exists = false;
     // Arno, 2012-07-26: Quick fix against partial downloads without .mhash.
     // Previously they would be Submit()ed and the root_hash_ would change.
@@ -127,6 +127,11 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
     }
 
     // Arno, 2012-09-19: Hash file created only when msgs incoming
+    if (mhash_exists) {
+        hash_fd_ = OpenHashFile();
+        if (hash_fd_ < 0)
+            return;
+    }
 
     // Arno: if user wants to or no .mhash, and if root hash unknown (new file) and no checkpoint, (re)calc root hash
     if (storage_->GetReservedSize() > storage_->GetMinimalReservedSize() && actually_force_check_diskvshash) {
@@ -176,6 +181,7 @@ chunk_size_(0), check_netwvshash_(false)
 int MmapHashTree::OpenHashFile() {
     hash_fd_ = open_utf8(hash_filename_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (hash_fd_<0) {
+    	hash_fd_ = -1;
         print_error("cannot create/open hash file");
         SetBroken();
     }
@@ -198,9 +204,12 @@ void            MmapHashTree::Submit () {
         return;
     }
 
-    hash_fd_ = OpenHashFile();
-    if (hash_fd_ < 0)
-        return;
+    // Arno, 2012-09-19: Hash file created only when msgs incoming
+    if (hash_fd_ == -1) {
+    	hash_fd_ = OpenHashFile();
+    	if (hash_fd_ < 0)
+    		return;
+    }
   
     file_resize(hash_fd_,hashes_size);
     hashes_ = (Sha1Hash*) memory_map(hash_fd_,hashes_size);
@@ -419,9 +428,12 @@ bool            MmapHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
         }
     }
 
-    hash_fd_ = OpenHashFile();
-    if (hash_fd_ < 0)
-        return false;
+    // Arno, 2012-09-19: Hash file created only when msgs incoming
+    if (hash_fd_ == -1) {
+    	hash_fd_ = OpenHashFile();
+    	if (hash_fd_ < 0)
+    		return false;
+    }
   
     // mmap the hash file into memory
     uint64_t expected_size = sizeof(Sha1Hash)*sizec_*2;
