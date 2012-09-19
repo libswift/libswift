@@ -488,7 +488,7 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
 	        oss << "tswift:";
 		if (trackerargstr != "")
 	    	    oss << "//" << trackerargstr;
-	        oss << "/" << RootMerkleHash(single_fd).hex();
+	        oss << "/" << SwarmID(single_fd).hex();
  		if (chunk_size != SWIFT_DEFAULT_CHUNK_SIZE)
 	  	    oss << "$" << chunk_size;
 	        oss << "\n";
@@ -497,14 +497,7 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
 	        if (pbuf == NULL)
 	             print_error("cannot create URL");
 		int ret = 0;
-<<<<<<< .working
-		if (chunk_size == SWIFT_DEFAULT_CHUNK_SIZE)
-			ret = fprintf(fp,"tswift://%s/%s\n", trackerargstr.c_str(), SwarmID(single_fd).hex().c_str());
-		else
-			ret = fprintf(fp,"tswift://%s/%s$%i\n", trackerargstr.c_str(), SwarmID(single_fd).hex().c_str(), chunk_size);
-=======
 		ret = fprintf(fp,"%s", pbuf->str().c_str());
->>>>>>> .merge-right.r28277
 		if (ret <0)
 			print_error("cannot write URL");
 
