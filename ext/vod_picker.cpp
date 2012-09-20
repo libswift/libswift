@@ -7,7 +7,7 @@
  *
  */
 
-#include "swift.h"
+#include "swift.h" 
 #include <cassert>
 
 using namespace swift;
@@ -36,7 +36,7 @@ public:
     VodPiecePicker (FileTransfer* file_to_pick_from) : ack_hint_out_(),
            transfer_(file_to_pick_from), twist_(0), range_(bin_t::ALL), initseq_(0,0)
     {
-    	avail_ = &(transfer_->availability());
+    	avail_ = transfer_->availability();
         binmap_t::copy(ack_hint_out_, *(hashtree()->ack_out()));
         playback_pos_ = -1;
         high_pri_window_ = HIGHPRIORITYWINDOW;

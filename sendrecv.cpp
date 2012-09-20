@@ -839,12 +839,12 @@ void Channel::OnHave (struct evbuffer *evb) {
     if (ENABLE_VOD_PIECEPICKER && transfer()->ttype() == FILE_TRANSFER) {
         FileTransfer *ft = (FileTransfer *)transfer();
         // Ric: check if we should set the size in the file transfer
-        if (ft->availability().size() <= 0 && ft->hashtree()->size() > 0)
+        if (ft->availability()->size() <= 0 && ft->hashtree()->size() > 0)
         {
-            ft->availability().setSize(hashtree()->size_in_chunks());
+            ft->availability()->setSize(hashtree()->size_in_chunks());
         }
         // Ric: update the availability if needed
-        ft->availability().set(id_, ack_in_, ackd_pos);
+        ft->availability()->set(id_, ack_in_, ackd_pos);
     }
 
     ack_in_.set(ackd_pos);
@@ -1203,10 +1203,10 @@ void Channel::Close(bool sendclose) {
     //LIVE
     if (ENABLE_VOD_PIECEPICKER && transfer()->ttype() == FILE_TRANSFER) {
         FileTransfer *ft = (FileTransfer *)transfer();
-        if (!ft->IsZeroState())
+        if (!ft->IsZeroState() && ft->availability() != NULL) // availability() is NULL when this is called from ContentTransfer/CloseChannels()
         {
             // Ric: remove its binmap from the availability
-            ft->availability().remove(id_, ack_in_);
+            ft->availability()->remove(id_, ack_in_);
         }
     }
 

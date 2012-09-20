@@ -74,17 +74,24 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
 void FileTransfer::UpdateOperational()
 {
     if ((hashtree_ != NULL && !hashtree_->IsOperational()) || !storage_->IsOperational())
+	{
     	SetBroken();
+	}
 }
 
 
 FileTransfer::~FileTransfer ()
 {
     delete hashtree_;
+    hashtree_ = NULL;
     if (!IsZeroState())
     {
         delete picker_;
+        picker_ = NULL;
         delete availability_;
+        // ~ContentTransfer calls CloseChannels which calls Channel::Close which tries to unregister
+        // the availability of that peer from availability_, which has been deallocated here already :-(
+        availability_ = NULL;
     }
 }
 

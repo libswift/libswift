@@ -272,7 +272,7 @@ namespace swift {
 
       public:
         ContentTransfer(transfer_t ttype);
-        ~ContentTransfer();
+        virtual ~ContentTransfer();
 
         // Global var
         static std::vector<ContentTransfer*> swarms;
@@ -306,7 +306,7 @@ namespace swift {
         Channel *       RandomChannel(Channel *notc);
         /** Arno: Return the Channel to peer "addr" that is not equal to "notc". */
         Channel *       FindChannel(const Address &addr, Channel *notc);
-        void            CloseChannels(channels_t &delset);
+        void            CloseChannels(channels_t delset); // do not pass by reference
         void            GarbageCollectChannels();
 
         // RATELIMIT
@@ -416,7 +416,7 @@ namespace swift {
         HashTree *      hashtree() { return hashtree_; }
 
         /** Ric: the availability in the swarm */
-        Availability&   availability() { return *availability_; }
+        Availability*   availability() { return availability_; }
 
 
         //ZEROSTATE

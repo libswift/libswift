@@ -64,10 +64,9 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
     	if (!ft->IsZeroState())
     		continue;
 
-    	// Arno, 2012-07-20: Some weirdness on Win7 when we use GetChannels()
-    	// all the time. Map/set iterators incompatible?!
-    	channels_t *channels = ft->GetChannels();
-		if (channels->size() == 0)
+    	// Arno, 2012-09-20: Work with copy of list, as "delete c" edits list.
+    	channels_t copychans(*ft->GetChannels());
+		if (copychans.size() == 0)
 		{
 			// Ain't go no clients, cleanup transfer.
 			delset.insert(ft);
@@ -77,12 +76,12 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 			// Garbage collect really slow connections, essential on Mac.
 			dprintf("%s zero clean %s has %d peers\n",tintstr(),ft->swarm_id().hex().c_str(), ft->GetChannels()->size() );
 			channels_t::iterator iter2;
-			for (iter2=channels->begin(); iter2!=channels->end(); iter2++) {
+			for (iter2=copychans.begin(); iter2!=copychans.end(); iter2++) {
 				Channel *c = *iter2;
 				if (c != NULL)
 				{
 					//fprintf(stderr,"%s F%u zero clean %s opentime %lld connect %lld\n",tintstr(),ft->fd(), c->peer().str(), (NOW-c->GetOpenTime()), zs->connect_timeout_ );
-					// Garbage collect channels when open for long and slow upload
+					// Garbage collect copychans when open for long and slow upload
 					if ((NOW-c->GetOpenTime()) > zs->connect_timeout_)
 					{
 						//fprintf(stderr,"%s F%u zero clean %s opentime %lld ulspeed %lf\n",tintstr(),ft->fd(), c->peer().str(), (NOW-c->GetOpenTime())/TINT_SEC, ft->GetCurrentSpeed(DDIR_UPLOAD) );

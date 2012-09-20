@@ -334,8 +334,8 @@ void CmdGwSendINFOHashChecking(evutil_socket_t cmdsock, Sha1Hash swarm_id)
 void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 {
 	// Send INFO message.
-	if (cmd_gw_debug)
-		fprintf(stderr,"cmd: SendINFO: F%d initdlstatus %d\n", req->fdes, dlstatus );
+	//if (cmd_gw_debug)
+	//	fprintf(stderr,"cmd: SendINFO: F%d initdlstatus %d\n", req->fdes, dlstatus );
 
     ContentTransfer *ct = ContentTransfer::transfer(req->fdes);
     if (ct == NULL)
@@ -462,8 +462,8 @@ void CmdGwSwiftPrebufferProgressCallback (int fdes, bin_t bin)
     //
     // Subsequent bytes of content downloaded
     //
-    if (cmd_gw_debug)
-        fprintf(stderr,"cmd: SwiftPrebuffProgress: %d\n", fdes );
+    //if (cmd_gw_debug)
+    //    fprintf(stderr,"cmd: SwiftPrebuffProgress: %d\n", fdes );
 
     cmd_gw_t* req = CmdGwFindRequestByFD(fdes);
     if (req == NULL)
@@ -475,8 +475,8 @@ void CmdGwSwiftPrebufferProgressCallback (int fdes, bin_t bin)
     int64_t wantsize = std::min(req->endoff+1-req->startoff,(uint64_t)CMDGW_MAX_PREBUF_BYTES);
 #endif
 
-    if (cmd_gw_debug)
-        fprintf(stderr,"cmd: SwiftPrebuffProgress: want %lld got %lld\n", swift::SeqComplete(req->fdes,req->startoff), wantsize );
+    //if (cmd_gw_debug)
+    //    fprintf(stderr,"cmd: SwiftPrebuffProgress: want %lld got %lld\n", swift::SeqComplete(req->fdes,req->startoff), wantsize );
 
 
     if (swift::SeqComplete(req->fdes,req->startoff) >= wantsize)
@@ -484,8 +484,8 @@ void CmdGwSwiftPrebufferProgressCallback (int fdes, bin_t bin)
         // First CMDGW_MAX_PREBUF_BYTES bytes received via swift,
         // tell user to PLAY
         // ARNOSMPTODO: bitrate-dependent prebuffering?
-        if (cmd_gw_debug)
-            fprintf(stderr,"cmd: SwiftPrebufferProgress: Prebuf done %d\n", fdes );
+        //if (cmd_gw_debug)
+        //    fprintf(stderr,"cmd: SwiftPrebufferProgress: Prebuf done %d\n", fdes );
 
         swift::RemoveProgressCallback(fdes,&CmdGwSwiftPrebufferProgressCallback);
 
@@ -600,8 +600,8 @@ void CmdGwSwiftErrorCallback (evutil_socket_t cmdsock)
 
 void CmdGwSwiftAllocatingDiskspaceCallback (int fdes, bin_t bin)
 {
-    if (cmd_gw_debug)
-        fprintf(stderr,"cmd: CmdGwSwiftAllocatingDiskspaceCallback: ENTER %d\n", fdes );
+    //if (cmd_gw_debug)
+    //    fprintf(stderr,"cmd: CmdGwSwiftAllocatingDiskspaceCallback: ENTER %d\n", fdes );
 
     // Called before swift starts reserving diskspace.
     cmd_gw_t* req = CmdGwFindRequestByFD(fdes);
@@ -701,8 +701,8 @@ void CmdGwDataCameInCallback(struct bufferevent *bev, void *ctx)
     // Turn TCP stream into lines deliniated by \r\n
 
     evutil_socket_t cmdsock = bufferevent_getfd(bev);
-    if (cmd_gw_debug)
-        fprintf(stderr,"CmdGwDataCameIn: ENTER %d\n", cmdsock );
+    //if (cmd_gw_debug)
+    //    fprintf(stderr,"CmdGwDataCameIn: ENTER %d\n", cmdsock );
 
     struct evbuffer *inputevbuf = bufferevent_get_input(bev);
 
@@ -716,8 +716,8 @@ void CmdGwDataCameInCallback(struct bufferevent *bev, void *ctx)
 
     int totlen = evbuffer_get_length(cmd_evbuffer);
 
-    if (cmd_gw_debug)
-        fprintf(stderr,"cmdgw: TCPDataCameIn: State %d, got %d new bytes, have %d want %d\n", (int)cmd_tunnel_state, inlen, totlen, cmd_tunnel_expect );
+    //if (cmd_gw_debug)
+    //    fprintf(stderr,"cmdgw: TCPDataCameIn: State %d, got %d new bytes, have %d want %d\n", (int)cmd_tunnel_state, inlen, totlen, cmd_tunnel_expect );
 
     CmdGwProcessData(cmdsock);
 }
@@ -911,8 +911,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
                 fdes = swift::Open(filename,swarm_id,trackaddr,false,chunksize);
             else
                 fdes = swift::LiveOpen(filename,swarm_id,trackaddr,false,chunksize);
-            if (fdes == -1)
-            {
+            if (fdes == -1) {
             	CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarm_id);
             	return ERROR_BAD_SWARM;
             }

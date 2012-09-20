@@ -47,7 +47,7 @@ int swift::Find (Sha1Hash hash) {
 
 int swift::Open (std::string filename, const Sha1Hash& roothash, Address tracker, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size) {
     FileTransfer* ft = new FileTransfer(filename, roothash, force_check_diskvshash, check_netwvshash, chunk_size);
-    if (ft->fd() && ft->IsOperational()) {
+    if (ft->IsOperational()) {
 
         // initiate tracker connections
     	// SWIFTPROC

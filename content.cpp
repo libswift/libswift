@@ -57,7 +57,7 @@ ContentTransfer::~ContentTransfer()
 }
 
 
-void ContentTransfer::CloseChannels(channels_t &delset)
+void ContentTransfer::CloseChannels(channels_t delset)
 {
     channels_t::iterator iter;
     for (iter=delset.begin(); iter!=delset.end(); iter++)

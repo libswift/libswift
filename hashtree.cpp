@@ -643,12 +643,13 @@ uint64_t      MmapHashTree::seq_complete (int64_t offset) {
 }
 
 
-MmapHashTree::~MmapHashTree () {
+MmapHashTree::~MmapHashTree () 
+{
     if (hashes_)
         memory_unmap(hash_fd_, hashes_, sizec_*2*sizeof(Sha1Hash));
-    if (hash_fd_ >= 0)
-    {
-        close(hash_fd_);
+    if (hash_fd_ >= 0) 
+	{
+	    close(hash_fd_);
     }
 }
 
