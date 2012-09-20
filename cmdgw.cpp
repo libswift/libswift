@@ -577,13 +577,13 @@ void CmdGwSwiftVODFirstProgressCallback (int fdes, bin_t bin)
             }
         }
         if (!found) 
-	{
+        {
             if (cmd_gw_debug)
                 fprintf(stderr,"cmd: SwiftFirstProgress: Error file not found %d\n", fdes );
 
-	    CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.",ft->swarm_id());
-	    return;
-	}
+	        CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.",ft->swarm_id());
+	        return;
+	    }
     }
 }
 
@@ -790,18 +790,18 @@ void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line)
         dprintf("cmd: Error processing command %s\n", line );
         std::string msg = "";
         if (ret == ERROR_UNKNOWN_CMD)
-	    msg = "unknown command";
-	else if (ret == ERROR_MISS_ARG)
+	        msg = "unknown command";
+	    else if (ret == ERROR_MISS_ARG)
 	    msg = "missing parameter";
-	else if (ret == ERROR_BAD_ARG)
-	    msg = "bad parameter";
-	// BAD_SWARM already sent, and not fatal
+	    else if (ret == ERROR_BAD_ARG)
+	        msg = "bad parameter";
+	    // BAD_SWARM already sent, and not fatal
 
-	if (msg != "")
-	{
-	    CmdGwSendERRORBySocket(cmdsock,msg);
-	    CmdGwCloseConnection(cmdsock);
-	}
+	    if (msg != "")
+	    {
+	        CmdGwSendERRORBySocket(cmdsock,msg);
+	        CmdGwCloseConnection(cmdsock);
+	    }
     }
 
     free(copyline);
@@ -896,7 +896,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         }
 
         // Send INFO DLSTATUS_HASHCHECKING
-	CmdGwSendINFOHashChecking(cmdsock,swarm_id);
+        CmdGwSendINFOHashChecking(cmdsock,swarm_id);
 
         // ARNOSMPTODO: disable/interleave hashchecking at startup
         int fdes = swift::Find(swarm_id);

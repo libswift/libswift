@@ -60,6 +60,12 @@ void usage(void)
     fprintf(stderr,"  -e, --zerosdir\tdirectory with checkpointed content to serve from with zero state\n");
     fprintf(stderr,"  -i, --source\tlive source input (URL or filename or - for stdin)\n");
     fprintf(stderr,"  -k, --live\tperform live download, use with -t and -h\n");
+    fprintf(stderr,"  -r filename to save URL to\n");
+    fprintf(stderr,"  -1 filename-in-hex, a win32 workaround for non UTF-16 popen\n");
+    fprintf(stderr,"  -2 urlfilename-in-hex, a win32 workaround for non UTF-16 popen\n");
+    fprintf(stderr,"  -3 zerosdir-in-hex, a win32 workaround for non UTF-16 popen\n");
+    fprintf(stderr,"  -T time-out in seconds for slow zero state connections\n");
+
 }
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
 int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
@@ -294,8 +300,8 @@ int utf8main (int argc, char** argv)
                     quit("report interval must be int\n");
                 break;
             case '1': // SWIFTPROCUNICODE
-		// Swift on Windows expects command line arguments as UTF-16.
-		// When swift is run with Python's popen, however, popen
+                // Swift on Windows expects command line arguments as UTF-16.
+                // When swift is run with Python's popen, however, popen
             	// doesn't allow us to pass params in UTF-16, hence workaround.
             	// Format = hex encoded UTF-8
                 filename = hex2bin(strdup(optarg));
@@ -468,41 +474,41 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
     single_fd = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size,livestream);
     if (single_fd < 0)
         quit("cannot open file %s",filename.c_str());
-    if (printurl) {
-
+    if (printurl)
+    {
         FILE *fp = stdout;
         if (urlfilename != "")
-	{
-	    fp = fopen_utf8(urlfilename.c_str(),"wb");
-	    if (!fp)
-	    {
-	        print_error("cannot open file to write tswift URL to");
-		quit("cannot open URL file %s",urlfilename.c_str());
+        {
+	        fp = fopen_utf8(urlfilename.c_str(),"wb");
+	        if (!fp)
+	        {
+	            print_error("cannot open file to write tswift URL to");
+                quit("cannot open URL file %s",urlfilename.c_str());
+	        }
 	    }
-	}
 
-	if (swift::Complete(single_fd) == 0)
-	    quit("cannot open empty file %s",filename.c_str());
+	    if (swift::Complete(single_fd) == 0)
+	        quit("cannot open empty file %s",filename.c_str());
 	  
         std::ostringstream oss;
-	oss << "tswift:";
-	if (trackerargstr != "")
-	    oss << "//" << trackerargstr;
-	oss << "/" << SwarmID(single_fd).hex();
- 	if (chunk_size != SWIFT_DEFAULT_CHUNK_SIZE)
-	    oss << "$" << chunk_size;
-	oss << "\n";
+	    oss << "tswift:";
+	    if (trackerargstr != "")
+            oss << "//" << trackerargstr;
+	    oss << "/" << SwarmID(single_fd).hex();
+ 	    if (chunk_size != SWIFT_DEFAULT_CHUNK_SIZE)
+	        oss << "$" << chunk_size;
+	    oss << "\n";
        	        
-	std::stringbuf *pbuf=oss.rdbuf();
-	if (pbuf == NULL)
-	{
-	    print_error("cannot create URL");
-	    return -1;
-	}
-	int ret = 0;
-	ret = fprintf(fp,"%s", pbuf->str().c_str());
-	if (ret <0)
-	    print_error("cannot write URL");
+	    std::stringbuf *pbuf=oss.rdbuf();
+	    if (pbuf == NULL)
+	    {
+	        print_error("cannot create URL");
+	        return -1;
+	    }
+	    int ret = 0;
+	    ret = fprintf(fp,"%s", pbuf->str().c_str());
+	    if (ret <0)
+	        print_error("cannot write URL");
 
         if (urlfilename != "")
             fclose(fp);
@@ -563,16 +569,16 @@ int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_di
 
     while(1)
     {
-	if (!(de->isdir_ || de->filename_.rfind(".mhash") != std::string::npos || de->filename_.rfind(".mbinmap") != std::string::npos))
-	{
-	    // Not dir, or metafile
-	    std::string path = dirname;
-	    path.append(FILE_SEP);
-	    path.append(de->filename_);
-	    int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,force_check_diskvshash,chunk_size,false);
-	    if (fd >= 0)
-		Checkpoint(fd);
-	}
+        if (!(de->isdir_ || de->filename_.rfind(".mhash") != std::string::npos || de->filename_.rfind(".mbinmap") != std::string::npos))
+	    {
+	        // Not dir, or metafile
+	        std::string path = dirname;
+	        path.append(FILE_SEP);
+	        path.append(de->filename_);
+	        int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,force_check_diskvshash,chunk_size,false);
+	        if (fd >= 0)
+		        Checkpoint(fd);
+	    }
 
         DirEntry *newde = readdir_utf8(de);
         delete de;
