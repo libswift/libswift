@@ -203,14 +203,14 @@ int utf8main (int argc, char** argv)
                 break;
             // Arno hack: get opt diff Win32 doesn't allow -D without arg
             case 'B':
-            	fprintf(stderr,"SETTING DEBUG TO STDOUT\n");
+                fprintf(stderr,"SETTING DEBUG TO STDOUT\n");
                 Channel::debug_file = stderr;
                 break;
             case 'p':
                 report_progress = true;
                 break;
             case 'g':
-            	httpgw_enabled = true;
+                httpgw_enabled = true;
                 httpaddr = Address(optarg);
                 wait_time = TINT_NEVER; // seed
                 break;
@@ -241,7 +241,7 @@ int utf8main (int argc, char** argv)
                     quit("address must be hostname:port, ip:port or just port\n");
                 break;
             case 'c': // SWIFTPROC
-            	cmdgw_enabled = true;
+                cmdgw_enabled = true;
                 cmdaddr = Address(optarg);
                 if (cmdaddr==Address())
                     quit("address must be hostname:port, ip:port or just port\n");
@@ -251,37 +251,37 @@ int utf8main (int argc, char** argv)
                 destdir = strdup(optarg); // UNICODE
                 break;
             case 'u': // RATELIMIT
-            	n = sscanf(optarg,"%lf",&maxspeed[DDIR_UPLOAD]);
-            	if (n != 1)
-            	    quit("uprate must be KiB/s as float\n");
-            	maxspeed[DDIR_UPLOAD] *= 1024.0;
-            	break;
+                n = sscanf(optarg,"%lf",&maxspeed[DDIR_UPLOAD]);
+                if (n != 1)
+                    quit("uprate must be KiB/s as float\n");
+                maxspeed[DDIR_UPLOAD] *= 1024.0;
+                break;
             case 'y': // RATELIMIT
-            	n = sscanf(optarg,"%lf",&maxspeed[DDIR_DOWNLOAD]);
-            	if (n != 1)
-            	    quit("downrate must be KiB/s as float\n");
-            	maxspeed[DDIR_DOWNLOAD] *= 1024.0;
-            	break;
+                n = sscanf(optarg,"%lf",&maxspeed[DDIR_DOWNLOAD]);
+                if (n != 1)
+                    quit("downrate must be KiB/s as float\n");
+                maxspeed[DDIR_DOWNLOAD] *= 1024.0;
+                break;
             case 'H': //CHECKPOINT
                 file_enable_checkpoint = true;
                 break;
             case 'z': // CHUNKSIZE
-            	n = sscanf(optarg,"%i",&chunk_size);
-            	if (n != 1)
-            	    quit("chunk size must be bytes as int\n");
-            	break;
+                n = sscanf(optarg,"%i",&chunk_size);
+                if (n != 1)
+                    quit("chunk size must be bytes as int\n");
+                break;
             case 'm': // printurl
-            	printurl = true;
-            	quiet = true;
-            	wait_time = 0;
-            	break;
+                printurl = true;
+                quiet = true;
+                wait_time = 0;
+                break;
             case 'r':
-           	urlfilename = strdup(optarg);
-           	break;
+               urlfilename = strdup(optarg);
+               break;
             case 'M': // MULTIFILE
-            	filename = strdup(optarg);
-            	generate_multifile = true;
-            	break;
+                filename = strdup(optarg);
+                generate_multifile = true;
+                break;
             case 'e': // ZEROSTATE
                 zerostatedir = strdup(optarg); // UNICODE
                 wait_time = TINT_NEVER; // seed
@@ -302,22 +302,22 @@ int utf8main (int argc, char** argv)
             case '1': // SWIFTPROCUNICODE
                 // Swift on Windows expects command line arguments as UTF-16.
                 // When swift is run with Python's popen, however, popen
-            	// doesn't allow us to pass params in UTF-16, hence workaround.
-            	// Format = hex encoded UTF-8
+                // doesn't allow us to pass params in UTF-16, hence workaround.
+                // Format = hex encoded UTF-8
                 filename = hex2bin(strdup(optarg));
                 break;
             case '2': // SWIFTPROCUNICODE
-           	urlfilename = hex2bin(strdup(optarg));
-           	break;
+                urlfilename = hex2bin(strdup(optarg));
+                break;
             case '3': // ZEROSTATE // SWIFTPROCUNICODE
                 zerostatedir = hex2bin(strdup(optarg));
                 break;
             case 'T': // ZEROSTATE
-            	double t=0.0;
-            	n = sscanf(optarg,"%lf",&t);
-            	if (n != 1)
-		    quit("zerostimeout must be seconds as float\n");
-            	zerostimeout = t * TINT_SEC;
+                double t=0.0;
+                n = sscanf(optarg,"%lf",&t);
+                if (n != 1)
+                    quit("zerostimeout must be seconds as float\n");
+                zerostimeout = t * TINT_SEC;
                 break;
         }
 
@@ -326,22 +326,22 @@ int utf8main (int argc, char** argv)
 
     // Change dir to destdir, if set, or to tempdir if HTTPGW
     if (destdir == "") {
-	if (httpgw_enabled) {
-	    std::string dd = gettmpdir_utf8();
-	    chdir_utf8(dd);
-	}
+        if (httpgw_enabled) {
+            std::string dd = gettmpdir_utf8();
+            chdir_utf8(dd);
+        }
     }
     else
-	chdir_utf8(destdir);
+        chdir_utf8(destdir);
 
     if (httpgw_enabled)
-	fprintf(stderr,"CWD %s\n",getcwd_utf8().c_str() );
+        fprintf(stderr,"CWD %s\n",getcwd_utf8().c_str() );
 
     if (bindaddr!=Address()) { // seeding
         if (Listen(bindaddr)<=0)
             quit("cant listen to %s\n",bindaddr.str())
     } else if (tracker!=Address() || httpgw_enabled || cmdgw_enabled) { // leeching
-    	evutil_socket_t sock = INVALID_SOCKET;
+        evutil_socket_t sock = INVALID_SOCKET;
         for (int i=0; i<=10; i++) {
             bindaddr = Address((uint32_t)INADDR_ANY,0);
             sock = Listen(bindaddr);
@@ -351,7 +351,7 @@ int utf8main (int argc, char** argv)
                 quit("cant listen on %s\n",bindaddr.str());
         }
         if (!quiet)
-        	fprintf(stderr,"swift: My listen port is %d\n", BoundAddress(sock).port() );
+            fprintf(stderr,"swift: My listen port is %d\n", BoundAddress(sock).port() );
     }
 
     if (tracker!=Address() && !printurl)
@@ -360,11 +360,11 @@ int utf8main (int argc, char** argv)
     if (httpgw_enabled)
         InstallHTTPGateway(Channel::evbase,httpaddr,chunk_size,maxspeed);
     if (cmdgw_enabled)
-	InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr);
+        InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr);
 
     // TRIALM36: Allow browser to retrieve stats via AJAX and as HTML page
     if (statsaddr != Address())
-    	InstallStatsGateway(Channel::evbase,statsaddr);
+        InstallStatsGateway(Channel::evbase,statsaddr);
 
     // ZEROSTATE
     ZeroState *zs = ZeroState::GetInstance();
@@ -373,7 +373,7 @@ int utf8main (int argc, char** argv)
 
     if (!cmdgw_enabled && livesource_input == "" && zerostatedir == "")
     {
-    	// Seed file or dir, or create multi-spec
+        // Seed file or dir, or create multi-spec
         int ret = -1;
         if (!generate_multifile)
         {
@@ -399,9 +399,9 @@ int utf8main (int argc, char** argv)
                 ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,false,urlfilename,maxspeed);
         }
 
-	// For testing
-	if (httpgw_enabled || zerostatedir != "")
-	    ret = 0;
+    // For testing
+    if (httpgw_enabled || zerostatedir != "")
+        ret = 0;
 
         // No file/dir nor HTTP gateway nor CMD gateway, will never know what to swarm
         if (ret == -1) {
@@ -412,8 +412,8 @@ int utf8main (int argc, char** argv)
     else if (livesource_input != "")
     {
         // LIVE
-    	// Act as live source
-    	HandleLiveSource(livesource_input,filename,root_hash);
+        // Act as live source
+        HandleLiveSource(livesource_input,filename,root_hash);
     }
     else if (!cmdgw_enabled && !httpgw_enabled && zerostatedir == "")
         quit("Not client, not live server, not a gateway, not zero state seeder?");
@@ -433,9 +433,9 @@ int utf8main (int argc, char** argv)
 
     // Enter mainloop, if daemonizing
     if (wait_time == TINT_NEVER || (long)wait_time > 0) {
-	// Arno: always, for statsgw, rate control, etc.
-	evtimer_assign(&evreport, Channel::evbase, ReportCallback, NULL);
-	evtimer_add(&evreport, tint2tv(REPORT_INTERVAL*TINT_SEC));
+        // Arno: always, for statsgw, rate control, etc.
+        evtimer_assign(&evreport, Channel::evbase, ReportCallback, NULL);
+        evtimer_add(&evreport, tint2tv(REPORT_INTERVAL*TINT_SEC));
 
         // Arno:
         if (scan_dirname != "") {
@@ -479,36 +479,36 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
         FILE *fp = stdout;
         if (urlfilename != "")
         {
-	        fp = fopen_utf8(urlfilename.c_str(),"wb");
-	        if (!fp)
-	        {
-	            print_error("cannot open file to write tswift URL to");
+            fp = fopen_utf8(urlfilename.c_str(),"wb");
+            if (!fp)
+            {
+                print_error("cannot open file to write tswift URL to");
                 quit("cannot open URL file %s",urlfilename.c_str());
-	        }
-	    }
+            }
+        }
 
-	    if (swift::Complete(single_fd) == 0)
-	        quit("cannot open empty file %s",filename.c_str());
-	  
+        if (swift::Complete(single_fd) == 0)
+            quit("cannot open empty file %s",filename.c_str());
+  
         std::ostringstream oss;
-	    oss << "tswift:";
-	    if (trackerargstr != "")
-            oss << "//" << trackerargstr;
-	    oss << "/" << SwarmID(single_fd).hex();
- 	    if (chunk_size != SWIFT_DEFAULT_CHUNK_SIZE)
-	        oss << "$" << chunk_size;
-	    oss << "\n";
-       	        
-	    std::stringbuf *pbuf=oss.rdbuf();
-	    if (pbuf == NULL)
-	    {
-	        print_error("cannot create URL");
-	        return -1;
-	    }
-	    int ret = 0;
-	    ret = fprintf(fp,"%s", pbuf->str().c_str());
-	    if (ret <0)
-	        print_error("cannot write URL");
+        oss << "tswift:";
+        if (trackerargstr != "")
+           oss << "//" << trackerargstr;
+        oss << "/" << SwarmID(single_fd).hex();
+        if (chunk_size != SWIFT_DEFAULT_CHUNK_SIZE)
+           oss << "$" << chunk_size;
+        oss << "\n";
+                   
+        std::stringbuf *pbuf=oss.rdbuf();
+        if (pbuf == NULL)
+        {
+            print_error("cannot create URL");
+            return -1;
+        }
+        int ret = 0;
+        ret = fprintf(fp,"%s", pbuf->str().c_str());
+        if (ret <0)
+            print_error("cannot write URL");
 
         if (urlfilename != "")
             fclose(fp);
@@ -570,15 +570,15 @@ int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_di
     while(1)
     {
         if (!(de->isdir_ || de->filename_.rfind(".mhash") != std::string::npos || de->filename_.rfind(".mbinmap") != std::string::npos))
-	    {
-	        // Not dir, or metafile
-	        std::string path = dirname;
-	        path.append(FILE_SEP);
-	        path.append(de->filename_);
-	        int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,force_check_diskvshash,chunk_size,false);
-	        if (fd >= 0)
-		        Checkpoint(fd);
-	    }
+        {
+            // Not dir, or metafile
+            std::string path = dirname;
+            path.append(FILE_SEP);
+            path.append(de->filename_);
+            int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,force_check_diskvshash,chunk_size,false);
+            if (fd >= 0)
+                Checkpoint(fd);
+        }
 
         DirEntry *newde = readdir_utf8(de);
         delete de;
@@ -631,8 +631,8 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
     Sha1Hash swarmid = root_hash;
     if (swarmid == Sha1Hash::ZERO)
     {
-    	std::string swarmidstr = "ArnosFirstSwarm";
-    	swarmid = Sha1Hash(swarmidstr.c_str(), swarmidstr.length());
+        std::string swarmidstr = "ArnosFirstSwarm";
+        swarmid = Sha1Hash(swarmidstr.c_str(), swarmidstr.length());
     }
 
     std::string httpscheme = "http:";
@@ -649,7 +649,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
 #ifdef WIN32
             livesource_filep = _popen( program.c_str(), "rb" );
             if (livesource_filep == NULL)
-        	quit("live: file: popen failed" );
+            quit("live: file: popen failed" );
 
             fprintf(stderr,"live: pipe: Reading from %s\n", program.c_str() );
 #else
@@ -672,7 +672,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
     }
     else
     {
-    	// Source is HTTP server
+        // Source is HTTP server
         std::string httpservname,httppath;
         int httpport=80;
 
@@ -776,7 +776,7 @@ void ReportCallback(int fd, short event, void *arg) {
     }
     // SWIFTPROC
     if (cmdgw_report_interval == 1 || ((cmdgw_report_counter % cmdgw_report_interval) == 0))
-    	CmdGwUpdateDLStatesCallback();
+        CmdGwUpdateDLStatesCallback();
 
     cmdgw_report_counter++;
 

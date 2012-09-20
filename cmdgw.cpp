@@ -792,7 +792,7 @@ void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line)
         if (ret == ERROR_UNKNOWN_CMD)
 	        msg = "unknown command";
 	    else if (ret == ERROR_MISS_ARG)
-	    msg = "missing parameter";
+                msg = "missing parameter";
 	    else if (ret == ERROR_BAD_ARG)
 	        msg = "bad parameter";
 	    // BAD_SWARM already sent, and not fatal
