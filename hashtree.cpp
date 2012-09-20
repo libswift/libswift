@@ -207,7 +207,7 @@ void            MmapHashTree::Submit () {
     if (hash_fd_ == -1) {
     	hash_fd_ = OpenHashFile();
     	if (hash_fd_ < 0)
-    		return;
+            return;
     }
   
     file_resize(hash_fd_,hashes_size);
@@ -431,7 +431,7 @@ bool            MmapHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
     if (hash_fd_ == -1) {
     	hash_fd_ = OpenHashFile();
     	if (hash_fd_ < 0)
-    		return false;
+            return false;
     }
   
     // mmap the hash file into memory
@@ -648,8 +648,8 @@ MmapHashTree::~MmapHashTree ()
     if (hashes_)
         memory_unmap(hash_fd_, hashes_, sizec_*2*sizeof(Sha1Hash));
     if (hash_fd_ >= 0) 
-	{
-	    close(hash_fd_);
+    {
+        close(hash_fd_);
     }
 }
 

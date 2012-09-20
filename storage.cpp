@@ -23,8 +23,8 @@ const std::string Storage::MULTIFILE_PATHNAME = "META-INF-multifilespec.txt";
 const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 
 Storage::Storage(std::string ospathname, std::string destdir, int transferfd) :
-		Operational(),
-		state_(STOR_STATE_INIT),
+	Operational(),
+	state_(STOR_STATE_INIT),
         os_pathname_(ospathname), destdir_(destdir), ht_(NULL), spec_size_(0),
         single_fd_(-1), reserved_size_(-1), total_size_from_spec_(-1), last_sf_(NULL),
         transfer_fd_(transferfd), alloc_cb_(NULL)
@@ -70,7 +70,7 @@ Storage::Storage(std::string ospathname, std::string destdir, int transferfd) :
         sfs_.push_back(sf);
         if (ParseSpec(sf) < 0)
         {
-        	print_error("storage: error parsing multi-file spec");
+            print_error("storage: error parsing multi-file spec");
             SetBroken();
         }
     }
@@ -512,7 +512,7 @@ int64_t Storage::GetReservedSize()
     {
         StorageFile *sf = *iter;
 
-		dprintf("storage: getdisksize: statting %s\n", sf->GetOSPathName().c_str() );
+	dprintf("storage: getdisksize: statting %s\n", sf->GetOSPathName().c_str() );
 
         int64_t fsize = file_size_by_path_utf8( sf->GetOSPathName().c_str() );
         if( fsize < 0)
@@ -524,7 +524,7 @@ int64_t Storage::GetReservedSize()
             totaldisksize += fsize;
     }
 
-	dprintf("storage: getdisksize: total already sized is %lld\n", totaldisksize );
+    dprintf("storage: getdisksize: total already sized is %lld\n", totaldisksize );
 
     return totaldisksize;
 }
@@ -623,15 +623,15 @@ std::string Storage::os2specpn(std::string ospn)
 
 
 StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std::string ospath) :
-		Operational(),
-		fd_(-1)
+	Operational(),
+	fd_(-1)
 {
     spec_pathname_ = specpath;
     start_ = start;
     end_ = start+size-1;
     os_pathname_ = ospath;
 
-	//fprintf(stderr,"StorageFile: os_pathname_ is %s\n", os_pathname_.c_str() );
+    //fprintf(stderr,"StorageFile: os_pathname_ is %s\n", os_pathname_.c_str() );
 
     std::string normospath = os_pathname_;
 #ifdef _WIN32
@@ -661,7 +661,7 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
             {
                 ret = mkdir_utf8(path.c_str());
 
-				//fprintf(stderr,"StorageFile: mkdir %s returns %d\n", path.c_str(), ret );
+                //fprintf(stderr,"StorageFile: mkdir %s returns %d\n", path.c_str(), ret );
 
                 if (ret < 0)
                 {
@@ -673,8 +673,8 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
             {
                 // Something already exists and it is not a dir
 
-				dprintf("StorageFile: exists %s but is not dir %d\n", path.c_str(), ret );
-				SetBroken();
+		dprintf("StorageFile: exists %s but is not dir %d\n", path.c_str(), ret );
+	        SetBroken();
                 return;
             }
         }
@@ -686,7 +686,7 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
     if (fd_<0) {
         //print_error("storage: file: Could not open");
         dprintf("%s %s storage: file: Could not open %s\n", tintstr(), "0000000000000000000000000000000000000000", os_pathname_.c_str() );
-		SetBroken();
+  	SetBroken();
         return;
     }
 }
@@ -696,6 +696,6 @@ StorageFile::~StorageFile()
     if (fd_>=0)
     {
         close(fd_);
-	 }
+    }
 }
 

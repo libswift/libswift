@@ -104,19 +104,19 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
 
     // Arno, 2012-07-27: Reenable Victor's retransmit, check for ACKs
     *retransmitptr = false;
-	while (!data_out_tmo_.empty()) {
-		tintbin tb = data_out_tmo_.front();
-		data_out_tmo_.pop_front();
-		if (ack_in_.is_filled(tb.bin)) {
-			// chunk was acknowledged in meantime
-			continue;
-		}
-		else {
-			send = tb.bin;
-			*retransmitptr = true;
-			break;
-		}
+    while (!data_out_tmo_.empty()) {
+        tintbin tb = data_out_tmo_.front();
+        data_out_tmo_.pop_front();
+        if (ack_in_.is_filled(tb.bin)) {
+	    // chunk was acknowledged in meantime
+	    continue;
 	}
+	else {
+	    send = tb.bin;
+	    *retransmitptr = true;
+	    break;
+	}
+    }
 
     if (ENABLE_SENDERSIZE_PUSH && send.is_none() && hint_in_.empty() && last_recv_time_>NOW-rtt_avg_-TINT_SEC) {
         bin_t my_pick = ImposeHint(); // FIXME move to the loop
@@ -228,15 +228,15 @@ void    Channel::Send () {
 
 void    Channel::AddHint (struct evbuffer *evb) {
 
-	// RATELIMIT
-	// Policy is to not send hints when we are above speed limit
+    // RATELIMIT
+    // Policy is to not send hints when we are above speed limit
     if (transfer()->GetCurrentSpeed(DDIR_DOWNLOAD) > transfer()->GetMaxSpeed(DDIR_DOWNLOAD)) {
         if (DEBUGTRAFFIC)
             fprintf(stderr,"hint: forbidden#");
         return;
     }
 
-	// 1. Calc max of what we are allowed to request, uncongested bandwidth wise
+    // 1. Calc max of what we are allowed to request, uncongested bandwidth wise
     tint plan_for = max(TINT_SEC,rtt_avg_*4);
 
     tint timed_out = NOW - plan_for*2;
@@ -256,23 +256,23 @@ void    Channel::AddHint (struct evbuffer *evb) {
     int rate_allowed_hints = LONG_MAX;
     if (transfer()->GetMaxSpeed(DDIR_DOWNLOAD) < DBL_MAX)
     {
-		uint64_t rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
-		channels_t::iterator iter;
-		for (iter=transfer()->GetChannels()->begin(); iter!=transfer()->GetChannels()->end(); iter++)
-		{
-			Channel *c = *iter;
-			if (c != NULL)
-				rough_global_hint_out_size += c->hint_out_size_;
-		}
+	uint64_t rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
+	channels_t::iterator iter;
+	for (iter=transfer()->GetChannels()->begin(); iter!=transfer()->GetChannels()->end(); iter++)
+	{
+            Channel *c = *iter;
+	    if (c != NULL)
+		rough_global_hint_out_size += c->hint_out_size_;
+	}
 
-		// Policy: this channel is allowed to hint at the limit - global_hinted_at
-		// Handle MaxSpeed = unlimited
-		double rate_hints_limit_float = transfer()->GetMaxSpeed(DDIR_DOWNLOAD)/((double)hashtree()->chunk_size());
+	// Policy: this channel is allowed to hint at the limit - global_hinted_at
+	// Handle MaxSpeed = unlimited
+	double rate_hints_limit_float = transfer()->GetMaxSpeed(DDIR_DOWNLOAD)/((double)hashtree()->chunk_size());
 
-		int rate_hints_limit = (int)min((double)LONG_MAX,rate_hints_limit_float);
+	int rate_hints_limit = (int)min((double)LONG_MAX,rate_hints_limit_float);
 
-		// Actually allowed is max minus what we already asked for, globally (=all channels)
-		rate_allowed_hints = max(0,rate_hints_limit-(int)rough_global_hint_out_size);
+	// Actually allowed is max minus what we already asked for, globally (=all channels)
+	rate_allowed_hints = max(0,rate_hints_limit-(int)rough_global_hint_out_size);
     }
 
     // 3. Take the smallest allowance from rate and queue limit
@@ -339,7 +339,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
             AddPeakHashes(evb);
         //NETWVSHASH
         if (hashtree()->get_check_netwvshash())
-        	AddUncleHashes(evb,tosend);
+            AddUncleHashes(evb,tosend);
     }
 
     if (!ack_in_.is_empty()) // TODO: cwnd_>1
@@ -498,7 +498,7 @@ void    Channel::Recv (struct evbuffer *evb) {
 
     if (!transfer()->IsOperational()) {
     	dprintf("%s #%u recvd on broken transfer %d \n",tintstr(),id_, transfer()->fd() );
-		CloseOnError();
+	CloseOnError();
     	return;
     }
 
@@ -573,7 +573,7 @@ void    Channel::Recv (struct evbuffer *evb) {
                 return;
         }
     }
-	if (DEBUGTRAFFIC)
+    if (DEBUGTRAFFIC)
     {
         fprintf(stderr,"\n");
     }
@@ -603,11 +603,10 @@ void    Channel::Recv (struct evbuffer *evb) {
 
 void   Channel::CloseOnError()
 {
-	Close();
-	// set established->false after Close, so Close does send explicit close.
-	// RecvDatagram will schedule this for delete.
-	peer_channel_id_ = 0;
-	return;
+    Close();
+    // set established->false after Close, so Close does send explicit close.
+    // RecvDatagram will schedule this for delete.
+    peer_channel_id_ = 0;
 }
 
 
@@ -1082,7 +1081,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         ContentTransfer* ct = ContentTransfer::Find(hash);
         if (!ct)
         {
-        	// See if available on disk, if so, activate
+            // See if available on disk, if so, activate
             ZeroState *zs = ZeroState::GetInstance();
             ct = zs->Find(hash);
             if (!ct)
@@ -1090,7 +1089,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         }
         else if (ct->ttype() == FILE_TRANSFER)
         {
-        	// Active zerostate transfer, but broken
+            // Active zerostate transfer, but broken
             FileTransfer *ft = (FileTransfer *)ct;
             if (ft->IsZeroState() && !ft->hashtree()->is_complete())
                 return_log ("%s #0 zero hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
@@ -1098,7 +1097,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
 
         if (!ct->IsOperational())
         {
-        	// Active, but broken
+            // Active, but broken
             return_log ("%s #0 hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
         }
 
@@ -1142,7 +1141,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         if (channel->IsDiffSenderOrDuplicate(addr,mych)) {
             channel->Close();
             delete channel; // safe, not in a channel event
-    	    return_log ("%s #%u is duplicate\n",tintstr(),mych);
+            return_log ("%s #%u is duplicate\n",tintstr(),mych);
         }
         channel->own_id_mentioned_ = true;
     }
@@ -1174,7 +1173,7 @@ void Channel::CloseChannelByAddress(const Address &addr)
     // fprintf(stderr,"CloseChannelByAddress: address is %s\n", addr.str() );
 
     dprintf("%s #-1 close channel by address %s\n",tintstr(), addr.str() );
-	channels_t::iterator iter;
+    channels_t::iterator iter;
     for (iter = channels.begin(); iter != channels.end(); iter++)
     {
         Channel *c = *iter;

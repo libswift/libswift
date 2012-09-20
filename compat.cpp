@@ -324,13 +324,13 @@ int mkdir_utf8(std::string dirname)
 int remove_utf8(std::string pathname)
 {
 #ifdef WIN32
-	wchar_t *utf16c = utf8to16(pathname);
-	int ret = _wremove(utf16c);
-	free(utf16c);
+    wchar_t *utf16c = utf8to16(pathname);
+    int ret = _wremove(utf16c);
+    free(utf16c);
 #else
-	int ret = remove(pathname.c_str()); // TODO: UNIX with locale != UTF-8
+    int ret = remove(pathname.c_str()); // TODO: UNIX with locale != UTF-8
 #endif
-	return ret;
+    return ret;
 }
 
 
@@ -344,48 +344,53 @@ int remove_utf8(std::string pathname)
 DirEntry *opendir_utf8(std::string pathname)
 {
 #ifdef _WIN32
-	HANDLE hFind;
-	WIN32_FIND_DATAW ffd;
+    HANDLE hFind;
+    WIN32_FIND_DATAW ffd;
 
-	std::string pathsearch = pathname + "\\*.*";
-	wchar_t *pathsearch_utf16 = utf8to16(pathsearch);
-	hFind = FindFirstFileW(pathsearch_utf16, &ffd);
-	free(pathsearch_utf16);
-	if (hFind != INVALID_HANDLE_VALUE)
-	{
-		std::string utf8fn = utf16to8(ffd.cFileName);
-		DirEntry *de = new DirEntry(utf8fn,(bool)((ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0));
-		de->hFind_ = hFind;
-		return de;
-	}
-	else
-		return NULL;
+    std::string pathsearch = pathname + "\\*.*";
+    wchar_t *pathsearch_utf16 = utf8to16(pathsearch);
+    hFind = FindFirstFileW(pathsearch_utf16, &ffd);
+    free(pathsearch_utf16);
+    if (hFind != INVALID_HANDLE_VALUE)
+    {
+	std::string utf8fn = utf16to8(ffd.cFileName);
+	DirEntry *de = new DirEntry(utf8fn,(bool)((ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0));
+	de->hFind_ = hFind;
+	return de;
+    }
+    else
+	return NULL;
 #else
-	DIR *dirp = opendir( pathname.c_str() ); // TODO: UNIX with locale != UTF-8
-	if (dirp == NULL)
-		return NULL;
-	struct dirent *unixde = readdir(dirp);
-	if (unixde == NULL)
-		return NULL;
-	else
-	{
+    DIR *dirp = opendir( pathname.c_str() ); // TODO: UNIX with locale != UTF-8
+    if (dirp == NULL)
+        return NULL;
+    struct dirent *unixde = readdir(dirp);
+    if (unixde == NULL)
+        return NULL;
+    else
+    {
 #if _DIR_ENT_HAVE_D_TYPE
-		if( unixde->d_type == DT_UNKNOWN ) {
+        if( unixde->d_type == DT_UNKNOWN ) {
 #endif
-			std::string fullpath = pathname + FILE_SEP;
-			struct stat st;
-			st.st_mode = 0;
-			stat(fullpath.append(unixde->d_name).c_str(), &st);
+	    std::string fullpath = pathname + FILE_SEP;
+	    struct stat st;
+	    st.st_mode = 0;
+	    int ret = stat(fullpath.append(unixde->d_name).c_str(), &st);
+	    if (ret < 0)
+	    {
+	        print_error("failed to stat file in directory");
+	        return NULL;
+	    }
 #if _DIR_ENT_HAVE_D_TYPE
-			if( S_ISDIR(st.st_mode) )
-				unixde->d_type = DT_DIR;
-		}
-#endif
-		DirEntry *de = new DirEntry(unixde->d_name,TEST_IS_DIR(unixde, st));
-		de->dirp_ = dirp;
-		de->basename_ = pathname;
-		return de;
+	    if( S_ISDIR(st.st_mode) )
+		unixde->d_type = DT_DIR;
 	}
+#endif
+	DirEntry *de = new DirEntry(unixde->d_name,TEST_IS_DIR(unixde, st));
+	de->dirp_ = dirp;
+	de->basename_ = pathname;
+	return de;
+    }
 #endif
 }
 
@@ -393,46 +398,51 @@ DirEntry *opendir_utf8(std::string pathname)
 DirEntry *readdir_utf8(DirEntry *prevde)
 {
 #ifdef _WIN32
-	WIN32_FIND_DATAW ffd;
-	BOOL ret = FindNextFileW(prevde->hFind_, &ffd);
-	if (!ret)
-	{
-		FindClose(prevde->hFind_);
-		return NULL;
-	}
-	else
-	{
-		std::string utf8fn = utf16to8(ffd.cFileName);
-		DirEntry *de = new DirEntry(utf8fn,(bool)((ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0));
-		de->hFind_ = prevde->hFind_;
-		return de;
-	}
+    WIN32_FIND_DATAW ffd;
+    BOOL ret = FindNextFileW(prevde->hFind_, &ffd);
+    if (!ret)
+    {
+	FindClose(prevde->hFind_);
+	return NULL;
+    }
+    else
+    {
+  	std::string utf8fn = utf16to8(ffd.cFileName);
+	DirEntry *de = new DirEntry(utf8fn,(bool)((ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0));
+	de->hFind_ = prevde->hFind_;
+	return de;
+    }
 #else
-	struct dirent *unixde = readdir(prevde->dirp_);
-	if (unixde == NULL)
-	{
-		closedir(prevde->dirp_);
-		return NULL;
-	}
-	else
-	{
+    struct dirent *unixde = readdir(prevde->dirp_);
+    if (unixde == NULL)
+    {
+	closedir(prevde->dirp_);
+	return NULL;
+    }
+    else
+    {
 #if _DIR_ENT_HAVE_D_TYPE
-		if( unixde->d_type == DT_UNKNOWN ) {
+       if( unixde->d_type == DT_UNKNOWN ) {
 #endif
-			std::string fullpath = prevde->basename_ + FILE_SEP;
-			struct stat st;
-			st.st_mode = 0;
-			stat(fullpath.append(unixde->d_name).c_str(), &st);
+            std::string fullpath = prevde->basename_ + FILE_SEP;
+	    struct stat st;
+	    st.st_mode = 0;
+	    int ret = stat(fullpath.append(unixde->d_name).c_str(), &st);
+            if (ret < 0)
+	    {
+	        print_error("failed to stat file in directory");
+	        return NULL;
+	    }
 #if _DIR_ENT_HAVE_D_TYPE
-			if( S_ISDIR(st.st_mode) )
-				unixde->d_type = DT_DIR;
-		}
+	    if( S_ISDIR(st.st_mode) )
+	        unixde->d_type = DT_DIR;
+        }
 #endif
-		DirEntry *de = new DirEntry(unixde->d_name,TEST_IS_DIR(unixde, st));
-		de->dirp_ = prevde->dirp_;
-		de->basename_ = prevde->basename_;
-		return de;
-	}
+        DirEntry *de = new DirEntry(unixde->d_name,TEST_IS_DIR(unixde, st));
+        de->dirp_ = prevde->dirp_;
+        de->basename_ = prevde->basename_;
+        return de;
+    }
 #endif
 }
 
@@ -527,16 +537,16 @@ struct timeval* tint2tv (tint t) {
 
 std::string hex2bin(std::string input)
 {
-	std::string res;
-	res.reserve(input.size() / 2);
-	for (int i = 0; i < input.size(); i += 2)
-	{
-	    std::istringstream iss(input.substr(i, 2));
-	    int temp;
-	    iss >> std::hex >> temp;
-	    res += static_cast<char>(temp);
-	}
-	return res;
+    std::string res;
+    res.reserve(input.size() / 2);
+    for (int i = 0; i < input.size(); i += 2)
+    {
+        std::istringstream iss(input.substr(i, 2));
+        int temp;
+        iss >> std::hex >> temp;
+        res += static_cast<char>(temp);
+    }
+    return res;
 }
 
 

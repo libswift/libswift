@@ -87,10 +87,10 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     evsendlive_ptr_ = NULL;
 
     // RATELIMIT
-	transfer_->GetChannels()->push_back(this);
+    transfer_->GetChannels()->push_back(this);
 
-	dprintf("%s #%u init channel %s transfer %d\n",tintstr(),id_,peer_.str(), transfer_->fd() );
-	//fprintf(stderr,"new Channel %d %s\n", id_, peer_.str() );
+    dprintf("%s #%u init channel %s transfer %d\n",tintstr(),id_,peer_.str(), transfer_->fd() );
+    //fprintf(stderr,"new Channel %d %s\n", id_, peer_.str() );
 }
 
 
@@ -102,14 +102,14 @@ Channel::~Channel () {
     // RATELIMIT
     if (transfer_ != NULL)
     {
-		channels_t::iterator iter;
-		channels_t *channels = transfer_->GetChannels();
-		for (iter=channels->begin(); iter!=channels->end(); iter++)
-		{
-			if (*iter == this)
-				break;
-		}
-    	channels->erase(iter);
+        channels_t::iterator iter;
+        channels_t *channels = transfer_->GetChannels();
+        for (iter=channels->begin(); iter!=channels->end(); iter++)
+        {
+           if (*iter == this)
+               break;
+        }
+        channels->erase(iter);
     }
 }
 
@@ -190,8 +190,8 @@ bool Channel::IsDiffSenderOrDuplicate(Address addr, uint32_t chid)
 
             Channel *c = transfer()->FindChannel(addr,this);
             if (c == NULL)
-	        return false;
-	  
+                return false;
+  
             // I already initiated a connection to this peer,
             // this new incoming message would establish a duplicate.
             // One must break the connection, decide using port

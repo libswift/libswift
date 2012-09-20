@@ -140,8 +140,8 @@ void ContentTransfer::ReConnectToTrackerIfAllowed(bool hasestablishedpeers)
 
 void ContentTransfer::ConnectToTracker()
 {
-	if (!IsOperational())
-		return;
+    if (!IsOperational())
+ 	return;
 
     // SWIFTPROC
     Channel *c = NULL;
@@ -187,7 +187,7 @@ bool ContentTransfer::OnPexIn (const Address& addr) {
     //if (addr.is_private())
     //   return false;
 
-	channels_t::iterator iter;
+    channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
         Channel *c = *iter;
@@ -202,7 +202,7 @@ bool ContentTransfer::OnPexIn (const Address& addr) {
 
 //Gertjan
 Channel *ContentTransfer::RandomChannel(Channel *notc) {
-	channels_t choose_from;
+    channels_t choose_from;
     channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
@@ -304,7 +304,7 @@ void ContentTransfer::AddPeer(Address &peer)
 
 Channel * ContentTransfer::FindChannel(const Address &addr, Channel *notc)
 {
-	channels_t::iterator iter;
+    channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
         Channel *c = *iter;

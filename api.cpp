@@ -23,7 +23,7 @@ int     swift::Listen (Address addr) {
     cb.sock = Channel::Bind(addr,cb);
     // swift UDP receive
     event_assign(&Channel::evrecv, Channel::evbase, cb.sock, EV_READ,
-		 cb.may_read, NULL);
+         cb.may_read, NULL);
     event_add(&Channel::evrecv, NULL);
     return cb.sock;
 }
@@ -50,13 +50,13 @@ int swift::Open (std::string filename, const Sha1Hash& roothash, Address tracker
     if (ft->IsOperational()) {
 
         // initiate tracker connections
-    	// SWIFTPROC
-    	ft->SetTracker(tracker);
-    	ft->ConnectToTracker();
+        // SWIFTPROC
+        ft->SetTracker(tracker);
+        ft->ConnectToTracker();
 
-    	return ft->fd();
+        return ft->fd();
     } else {
-		delete ft;
+        delete ft;
         return -1;
     }
 }
@@ -87,9 +87,9 @@ ssize_t  swift::Write(int fdes, const void *buf, size_t nbyte, int64_t offset)
 
 uint64_t  swift::Size (int fdes) {
     if (ContentTransfer::swarms.size()>fdes && ContentTransfer::swarms[fdes]) {
-    	if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
+        if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
             return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->size();
-    	else
+        else
             return 0;
     }
     else
@@ -99,10 +99,10 @@ uint64_t  swift::Size (int fdes) {
 
 bool  swift::IsComplete (int fdes) {
     if (ContentTransfer::swarms.size()>fdes && ContentTransfer::swarms[fdes]) {
-    	if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
-    	    return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->is_complete();
-    	else
-    	    return false;
+        if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
+            return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->is_complete();
+        else
+            return false;
     }
     else
         return false;
@@ -112,10 +112,10 @@ bool  swift::IsComplete (int fdes) {
 uint64_t  swift::Complete (int fdes) {
     if (ContentTransfer::swarms.size()>fdes && ContentTransfer::swarms[fdes]) {
 
-    	if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
-    	     return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->complete();
-    	else
-    	     return 0;
+        if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
+             return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->complete();
+        else
+             return 0;
     }
     else
         return 0;
@@ -124,10 +124,10 @@ uint64_t  swift::Complete (int fdes) {
 
 uint64_t  swift::SeqComplete (int fdes, int64_t offset) {
     if (ContentTransfer::swarms.size()>fdes && ContentTransfer::swarms[fdes]) {
-    	if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
-    	    return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->seq_complete(offset);
-    	else
-    	    return ((LiveTransfer *)ContentTransfer::swarms[fdes])->SeqComplete(); // No range support for live
+        if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
+            return ((FileTransfer *)ContentTransfer::swarms[fdes])->hashtree()->seq_complete(offset);
+        else
+            return ((LiveTransfer *)ContentTransfer::swarms[fdes])->SeqComplete(); // No range support for live
     }
     else
         return 0;
@@ -142,10 +142,10 @@ const Sha1Hash& swift::SwarmID (int fd) {
 }
 
 
-size_t	  swift::ChunkSize(int fdes)
+size_t swift::ChunkSize(int fdes)
 {
     if (ContentTransfer::swarms.size()>fdes && ContentTransfer::swarms[fdes]) {
-    	return ContentTransfer::swarms[fdes]->chunk_size();
+        return ContentTransfer::swarms[fdes]->chunk_size();
     }
     else
         return 0;
@@ -165,8 +165,8 @@ int swift::Checkpoint(int fdes) {
     MmapHashTree *ht = (MmapHashTree *)ft->hashtree();
     if (ht == NULL)
     {
-         fprintf(stderr,"swift: checkpointing: ht is NULL\n");
-	 return -1;
+        fprintf(stderr,"swift: checkpointing: ht is NULL\n");
+        return -1;
     }
 
     std::string binmap_filename = ft->GetStorage()->GetOSPathName();

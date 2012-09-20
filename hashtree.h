@@ -63,7 +63,7 @@ class Storage;
  */
 class HashTree : public Operational {
   public:
-	HashTree() : Operational() {}
+    HashTree() : Operational() {}
     /** Offer a hash; returns true if it verified; false otherwise.
      Once it cannot be verified (no sibling or parent), the hash
      is remembered, while returning false. */
@@ -145,12 +145,12 @@ class MmapHashTree : public HashTree, Serializable {
     // FAXME: make is_hash_verified_ part of persistent state?
 
     //MULTIFILE
-    Storage *		storage_;
+    Storage *	    storage_;
 
     int             internal_deserialize(FILE *fp,bool contentavail=true);
 
     //NETWVSHASH
-    bool 			check_netwvshash_;
+    bool            check_netwvshash_;
 
 protected:
     

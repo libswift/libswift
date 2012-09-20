@@ -54,16 +54,16 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
             availability_ = new Availability();
             // Ric: TODO assign picker based on input params...
             picker_ = new VodPiecePicker(this);
-		}
-		else
-			picker_ = new SeqPiecePicker(this);
-		picker_->Randomize(rand()&63);
 	}
 	else
-	{
-		// ZEROHASH
-		hashtree_ = (HashTree *)new ZeroHashTree(storage_,root_hash,chunk_size,hash_filename,binmap_filename);
-	}
+		picker_ = new SeqPiecePicker(this);
+		picker_->Randomize(rand()&63);
+    }
+    else
+    {
+	// ZEROHASH
+	hashtree_ = (HashTree *)new ZeroHashTree(storage_,root_hash,chunk_size,hash_filename,binmap_filename);
+    }
 
     UpdateOperational();
 }
@@ -74,9 +74,9 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
 void FileTransfer::UpdateOperational()
 {
     if ((hashtree_ != NULL && !hashtree_->IsOperational()) || !storage_->IsOperational())
-	{
-    	SetBroken();
-	}
+    {
+        SetBroken();
+    }
 }
 
 

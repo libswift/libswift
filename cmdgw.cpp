@@ -44,7 +44,7 @@ using namespace swift;
 #define ERROR_UNKNOWN_CMD		-1
 #define ERROR_MISS_ARG			-2
 #define ERROR_BAD_ARG			-3
-#define ERROR_BAD_SWARM		-4
+#define ERROR_BAD_SWARM			-4
 
 #define CMDGW_MAX_CLIENT 1024   // Arno: == maximum number of swarms per proc
 
@@ -52,9 +52,9 @@ struct cmd_gw_t {
     int         id;
     evutil_socket_t   cmdsock;
     int		fdes; // swift FD
-    bool	moreinfo;		  // whether to report detailed stats (see SETMOREINFO cmd)
-    tint 	startt;			  // ARNOSMPTODO: debug speed measurements, remove
-    std::string mfspecname;	  // MULTIFILE
+    bool	moreinfo;   // whether to report detailed stats (see SETMOREINFO cmd)
+    tint 	startt;	    // ARNOSMPTODO: debug speed measurements, remove
+    std::string mfspecname; // MULTIFILE
     uint64_t    startoff;   // MULTIFILE: starting offset in content range of desired file
     uint64_t    endoff;     // MULTIFILE: ending offset (careful, for an e.g. 100 byte interval this is 99)
     bool        playsent;
@@ -123,8 +123,8 @@ void CmdGwCloseConnection(evutil_socket_t sock)
     // Close cmd connection and stop all associated downloads.
     // Doesn't remove .mhash state or content
 
-	if (cmd_gw_debug)
-		fprintf(stderr,"CmdGwCloseConnection: ENTER %d\n", sock );
+    if (cmd_gw_debug)
+       fprintf(stderr,"CmdGwCloseConnection: ENTER %d\n", sock );
 
     bool scanning = true;
     while (scanning)
@@ -147,10 +147,10 @@ void CmdGwCloseConnection(evutil_socket_t sock)
         }
     }
 
-	// Arno, 2012-07-06: Close
-	swift::close_socket(sock);
+    // Arno, 2012-07-06: Close
+    swift::close_socket(sock);
 
-	cmd_gw_conns_open--;
+    cmd_gw_conns_open--;
 }
 
 
@@ -168,8 +168,8 @@ cmd_gw_t* CmdGwFindRequestBySwarmID(Sha1Hash &want_hash)
     for(int i=0; i<cmd_gw_reqs_open; i++) {
         cmd_gw_t* req = &cmd_requests[i];
         ct = ContentTransfer::transfer(req->fdes);
-		if (ct == NULL)
-			continue;
+        if (ct == NULL)
+             continue;
         Sha1Hash got_hash = ct->swarm_id();
         if (want_hash == got_hash)
             return req;
@@ -201,9 +201,9 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
     cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
     if (req == NULL)
     {
-		if (cmd_gw_debug)
-			fprintf(stderr,"cmd: GotREMOVE: %s not found, bad swarm?\n",want_hash.hex().c_str());
-    	return;
+        if (cmd_gw_debug)
+	    fprintf(stderr,"cmd: GotREMOVE: %s not found, bad swarm?\n",want_hash.hex().c_str());
+        return;
     }
     ContentTransfer *ct = ContentTransfer::transfer(req->fdes);
     if (ct == NULL)
@@ -257,18 +257,18 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
     // All ct info now invalid
 
     std::set<std::string>::iterator iter;
-	for (iter=delset.begin(); iter!=delset.end(); iter++)
+    for (iter=delset.begin(); iter!=delset.end(); iter++)
+    {
+	std::string filename = *iter;
+	if (cmd_gw_debug)
+             fprintf(stderr,"CmdGwREMOVE: removing %s\n", filename.c_str() );
+	int ret = remove_utf8(filename);
+	if (ret < 0)
 	{
-		std::string filename = *iter;
-		if (cmd_gw_debug)
-			fprintf(stderr,"CmdGwREMOVE: removing %s\n", filename.c_str() );
-		int ret = remove_utf8(filename);
-		if (ret < 0)
-		{
-			if (cmd_gw_debug)
-				print_error("Could not remove file");
-		}
-	}
+	    if (cmd_gw_debug)
+                print_error("Could not remove file");
+        }
+    }
 
     CmdGwFreeRequest(req);
     *req = cmd_requests[--cmd_gw_reqs_open];
@@ -333,9 +333,9 @@ void CmdGwSendINFOHashChecking(evutil_socket_t cmdsock, Sha1Hash swarm_id)
 
 void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 {
-	// Send INFO message.
-	//if (cmd_gw_debug)
-	//	fprintf(stderr,"cmd: SendINFO: F%d initdlstatus %d\n", req->fdes, dlstatus );
+    // Send INFO message.
+    //if (cmd_gw_debug)
+    //    fprintf(stderr,"cmd: SendINFO: F%d initdlstatus %d\n", req->fdes, dlstatus );
 
     ContentTransfer *ct = ContentTransfer::transfer(req->fdes);
     if (ct == NULL)
@@ -439,18 +439,18 @@ void CmdGwSendPLAY(cmd_gw_t *req)
 
 void CmdGwSendERRORBySocket(evutil_socket_t cmdsock, std::string msg, const Sha1Hash& roothash=Sha1Hash::ZERO)
 {
-	std::string cmd = "ERROR ";
-	cmd += roothash.hex();
-	cmd += " ";
-	cmd += msg;
-	cmd += "\r\n";
+     std::string cmd = "ERROR ";
+     cmd += roothash.hex();
+     cmd += " ";
+     cmd += msg;
+     cmd += "\r\n";
 
-	if (cmd_gw_debug)
-		fprintf(stderr,"cmd: SendERROR: %s\n", cmd.c_str() );
+     if (cmd_gw_debug)
+         fprintf(stderr,"cmd: SendERROR: %s\n", cmd.c_str() );
 
-	char *wire = strdup(cmd.c_str());
-	send(cmdsock,wire,strlen(wire),0);
-	free(wire);
+     char *wire = strdup(cmd.c_str());
+     send(cmdsock,wire,strlen(wire),0);
+     free(wire);
 }
 
 
@@ -576,15 +576,15 @@ void CmdGwSwiftVODFirstProgressCallback (int fdes, bin_t bin)
                 break;
             }
         }
-        if (!found) {
-
+        if (!found) 
+	{
             if (cmd_gw_debug)
                 fprintf(stderr,"cmd: SwiftFirstProgress: Error file not found %d\n", fdes );
 
-			CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.",ft->swarm_id());
-			return;
-		}
+	    CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.",ft->swarm_id());
+	    return;
 	}
+    }
 }
 
 
@@ -620,8 +620,8 @@ void CmdGwUpdateDLStateCallback(cmd_gw_t* req)
 
     // Update speed measurements such that they decrease when DL/UL stops
     ContentTransfer *ct = ContentTransfer::transfer(req->fdes);
-	if (ct == NULL) // Concurrency between ERROR_BAD_SWARM and this periodic callback
-		return;
+    if (ct == NULL) // Concurrency between ERROR_BAD_SWARM and this periodic callback
+       return;
     ct->OnRecvData(0);
     ct->OnSendData(0);
 
@@ -689,7 +689,7 @@ void CmdGwUpdateDLStatesCallback()
         fprintf(stderr,"cmd: active %d zero %d total %d\n", counta, countz, counta+countz );
       
 #ifndef WIN32      
-  	    malloc_stats();
+        malloc_stats();
 #endif      
     }
 }
@@ -785,23 +785,23 @@ void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line)
     char *copyline = (char *)malloc(strlen(line)+1);
     strcpy(copyline,line);
 
-	int ret = CmdGwHandleCommand(cmdsock,copyline);
-	if (ret < 0) {
-		dprintf("cmd: Error processing command %s\n", line );
-		std::string msg = "";
-		if (ret == ERROR_UNKNOWN_CMD)
-			msg = "unknown command";
-		else if (ret == ERROR_MISS_ARG)
-			msg = "missing parameter";
-		else if (ret == ERROR_BAD_ARG)
-			msg = "bad parameter";
-		// BAD_SWARM already sent, and not fatal
+    int ret = CmdGwHandleCommand(cmdsock,copyline);
+    if (ret < 0) {
+        dprintf("cmd: Error processing command %s\n", line );
+        std::string msg = "";
+        if (ret == ERROR_UNKNOWN_CMD)
+	    msg = "unknown command";
+	else if (ret == ERROR_MISS_ARG)
+	    msg = "missing parameter";
+	else if (ret == ERROR_BAD_ARG)
+	    msg = "bad parameter";
+	// BAD_SWARM already sent, and not fatal
 
-		if (msg != "")
-		{
-			CmdGwSendERRORBySocket(cmdsock,msg);
-			CmdGwCloseConnection(cmdsock);
-		}
+	if (msg != "")
+	{
+	    CmdGwSendERRORBySocket(cmdsock,msg);
+	    CmdGwCloseConnection(cmdsock);
+	}
     }
 
     free(copyline);
@@ -891,12 +891,12 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarm_id);
         if (req != NULL)
         {
-        	dprintf("cmd: START: request for given root hash already exists\n");
-        	return ERROR_BAD_ARG;
+            dprintf("cmd: START: request for given root hash already exists\n");
+            return ERROR_BAD_ARG;
         }
 
         // Send INFO DLSTATUS_HASHCHECKING
-		CmdGwSendINFOHashChecking(cmdsock,swarm_id);
+	CmdGwSendINFOHashChecking(cmdsock,swarm_id);
 
         // ARNOSMPTODO: disable/interleave hashchecking at startup
         int fdes = swift::Find(swarm_id);
@@ -1132,7 +1132,7 @@ void CmdGwNewConnectionCallback(struct evconnlistener *listener,
 
     // One buffer for all cmd connections, reset
     if (cmd_evbuffer != NULL)
-	evbuffer_free(cmd_evbuffer);
+        evbuffer_free(cmd_evbuffer);
     cmd_evbuffer = evbuffer_new();
 
     // SOCKTUNNEL: assume 1 command connection

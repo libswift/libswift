@@ -74,7 +74,7 @@ tint    Channel::KeepAliveNextSendTime () {
         return SwitchSendControl(SLOW_START_CONTROL);
     if (data_in_.time!=TINT_NEVER)
         return NOW;
-	/* Gertjan fix 5f51e5451e3785a74c058d9651b2d132c5a94557
+    /* Gertjan fix 5f51e5451e3785a74c058d9651b2d132c5a94557
     "Do not increase send interval in keep-alive mode when previous Reschedule
     was already in the future.
     The problem this solves is that when we keep on receiving packets in keep-alive
@@ -119,7 +119,7 @@ tint    Channel::KeepAliveNextSendTime () {
 }
 
 tint    Channel::PingPongNextSendTime () { // FIXME INFINITE LOOP
-	//fprintf(stderr,"PING: dgrams %d ackrec %d dataintime %lli lastrecv %lli lastsend %lli\n", dgrams_sent_, ack_rcvd_recent_, data_in_.time, last_recv_time_, last_send_time_);
+    //fprintf(stderr,"PING: dgrams %d ackrec %d dataintime %lli lastrecv %lli lastsend %lli\n", dgrams_sent_, ack_rcvd_recent_, data_in_.time, last_recv_time_, last_send_time_);
     if (dgrams_sent_>=10)
         return SwitchSendControl(KEEP_ALIVE_CONTROL);
     if (ack_rcvd_recent_)
@@ -216,7 +216,7 @@ tint Channel::LedbatNextSendTime () {
     if (cwnd_count1_ > 10)
     {
         dprintf("%s #%u sendctrl ledbat stuck, reset\n",tintstr(),id() );
-	cwnd_count1_ = 0;
+        cwnd_count1_ = 0;
         for(int i=0; i<4; i++) {
             owd_min_bins_[i] = TINT_NEVER;
             owd_current_[i] = TINT_NEVER;
