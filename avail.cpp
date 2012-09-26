@@ -203,7 +203,7 @@ void Availability::setSize(uint64_t size)
 		if (DEBUGAVAILABILITY)
 		{
 			char bin_name_buf[32];
-			dprintf("%s #1 Availability -> setting size in chunk %lu \t avail size %u\n",tintstr(), size, s);
+			dprintf("%s #1 Availability -> setting size in chunk %llu \t avail size %llu\n",tintstr(), size, s);
 		}
 	}
 }

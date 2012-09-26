@@ -42,30 +42,26 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 		return;
 
 	// See which zero state FileTransfers have no clients
-	std::set<FileTransfer *>	delset;
-    for(int i=0; i<FileTransfer::files.size(); i++)
-    {
-        if (FileTransfer::files[i] && FileTransfer::files[i]->IsZeroState())
-        {
-        	FileTransfer *ft = FileTransfer::files[i];
-        	if (ft->GetChannels().size() == 0)
-        	{
-        		// Ain't go no clients, cleanup.
-        		delset.insert(ft);
-        	}
-        	else
-        		dprintf("%s zero clean %s has %d peers\n",tintstr(),ft->root_hash().hex().c_str(), ft->GetChannels().size() );
+	std::list<Sha1Hash> delset;
+    for( SwarmManager::Iterator iter = SwarmManager::GetManager().begin(); iter != SwarmManager::GetManager().end(); iter++ ) {
+        if( (*iter)->IsZeroState() ) { 
+            FileTransfer* ft = (*iter)->GetTransfer(false);
+            if( ft ) {
+                if( ft->GetChannels().size() == 0 )
+                    delset.push_back( (*iter)->RootHash() );
+                else
+                    dprintf("%s zero clean %s has %d peers\n",tintstr(),ft->root_hash().hex().c_str(), (int)ft->GetChannels().size() );
+            }
         }
     }
 
     // Delete 0-state FileTransfers sans peers
-	std::set<FileTransfer *>::iterator iter;
-	for (iter=delset.begin(); iter!=delset.end(); iter++)
+	std::list<Sha1Hash>::iterator deliter;
+	for (deliter=delset.begin(); deliter!=delset.end(); deliter++)
 	{
-		FileTransfer *ft = *iter;
-		dprintf("%s F%u zero clean close\n",tintstr(),ft->fd() );
-		//fprintf(stderr,"%s F%u zero clean close\n",tintstr(),ft->fd() );
-		swift::Close(ft->fd());
+		dprintf("%s hash %s zero clean close\n",tintstr(),(*deliter).hex().c_str() );
+		//fprintf(stderr,"%s F%u zero clean close\n",tintstr(),ft->transfer_id() );
+        SwarmManager::GetManager().DeactivateSwarm( *deliter );
 	}
 
 	// Reschedule cleanup
@@ -91,7 +87,7 @@ void ZeroState::SetContentDir(std::string contentdir)
 }
 
 
-FileTransfer * ZeroState::Find(Sha1Hash &root_hash)
+int ZeroState::Find(Sha1Hash &root_hash)
 {
 	//fprintf(stderr,"swift: zero: Got request for %s\n",root_hash.hex().c_str() );
 
@@ -101,25 +97,37 @@ FileTransfer * ZeroState::Find(Sha1Hash &root_hash)
 
 	std::string reqfilename = file_name;
     int ret = file_exists_utf8(reqfilename);
-	if (ret < 0 || ret == 0 || ret == 2)
-		return NULL;
+	if (ret <= 0 || ret == 2)
+		return -1;
 	reqfilename = file_name+".mbinmap";
     ret = file_exists_utf8(reqfilename);
-	if (ret < 0 || ret == 0 || ret == 2)
-		return NULL;
+	if (ret <= 0 || ret == 2)
+		return -1;
 	reqfilename = file_name+".mhash";
     ret = file_exists_utf8(reqfilename);
-	if (ret < 0 || ret == 0 || ret == 2)
-		return NULL;
+	if (ret <= 0 || ret == 2)
+		return -1;
 
-	FileTransfer *ft = new FileTransfer(file_name,root_hash,false,chunk_size,true);
+    SwarmData* swarm = SwarmManager::GetManager().AddSwarm(file_name, root_hash, Address(), false, chunk_size, true);
+    if( !swarm )
+        return -1;
+    FileTransfer* ft = swarm->GetTransfer();
+    if( !ft ) {
+        SwarmData* newSwarm = SwarmManager::GetManager().ActivateSwarm(swarm->RootHash());
+        if( !newSwarm )
+            return swarm->Id();
+        swarm = newSwarm;
+        ft = swarm->GetTransfer();
+        if( !ft )
+            return swarm->Id();
+    }
 	if (ft->hashtree() == NULL || !ft->hashtree()->is_complete())
 	{
 		// Safety catch
-		return NULL; 
+		return -1;
 	}
 	else
-  	    return ft;
+  	    return swarm->Id();
 }
 
 

@@ -38,8 +38,12 @@ Address Channel::tracker;
 //tbheap Channel::send_queue;
 FILE* Channel::debug_file = NULL;
 #include "ext/simple_selector.cpp"
-PeerSelector* Channel::peer_selector = new SimpleSelector();
+// SCHAAP: 2012-06-15 - Removed unused peer_selector to prevent confusion
+// PeerSelector* Channel::peer_selector = new SimpleSelector();
 tint Channel::MIN_PEX_REQUEST_INTERVAL = TINT_SEC;
+#if OPTION_INCLUDE_PEER_TRACKING
+std::vector<Channel::PeerListItem> Channel::knownPeers_(32);
+#endif
 
 
 /*
@@ -54,9 +58,9 @@ Channel::Channel    (FileTransfer* transfer, int socket, Address peer_addr) :
     data_out_cap_(bin_t::ALL),hint_out_size_(0),
     // Gertjan fix 996e21e8abfc7d88db3f3f8158f2a2c4fc8a8d3f
     // "Changed PEX rate limiting to per channel limiting"
+    pex_requested_(false),  // Ric: init var that wasn't initialiazed
     last_pex_request_time_(0), next_pex_request_time_(0),
     pex_request_outstanding_(false), useless_pex_count_(0),
-    pex_requested_(false),  // Ric: init var that wasn't initialiazed
     //
     rtt_avg_(TINT_SEC), dev_avg_(0), dip_avg_(TINT_SEC),
     last_send_time_(0), last_recv_time_(0), last_data_out_time_(0), last_data_in_time_(0),
@@ -258,6 +262,7 @@ int Channel::SendTo (evutil_socket_t sock, const Address& addr, struct evbuffer 
     int length = evbuffer_get_length(evb);
     int r = sendto(sock,(const char *)evbuffer_pullup(evb, length),length,0,
                    (struct sockaddr*)&(addr.addr),sizeof(struct sockaddr_in));
+    // SCHAAP: 2012-06-16 - How about EAGAIN and EWOULDBLOCK? Do we just drop the packet then as well?
     if (r<0) {
         print_error("can't send");
         evbuffer_drain(evb, length); // Arno: behaviour is to pretend the packet got lost
@@ -375,6 +380,62 @@ uint32_t Address::LOCALHOST = INADDR_LOOPBACK;
 
 
 /*
+ * Peer list management
+ */
+#if OPTION_INCLUDE_PEER_TRACKING
+Channel::PeerReference* Channel::AddKnownPeer( const Address& adr ) {
+    int loc;
+    int oldloc = -1;
+    tint ts = usec_time();
+    for( loc = 0; loc < knownPeers_.size(); loc++ ) {
+        if( *(knownPeers_[loc].peer) == adr )
+            return new Channel::PeerReference( loc, knownPeers_[loc].timestamp );
+        if( knownPeers_[loc].timestamp < ts ) {
+            ts = knownPeers_[loc].timestamp;
+            oldloc = loc;
+        }
+    }
+    if( knownPeers_.size() >= MAX_SIZE_PEER_LIST ) {
+        ts = usec_time();
+        knownPeers_[oldloc].timestamp = ts;
+        knownPeers_[oldloc].peer = new Address(adr);
+        return new Channel::PeerReference( oldloc, ts );
+    }
+    else {
+        loc = knownPeers_.size();
+        struct PeerListItem pli( adr );
+        knownPeers_.push_back( pli );
+        return new Channel::PeerReference( loc, knownPeers_[loc].timestamp );
+    }
+}
+
+void Channel::RemoveKnownPeer( const Address& adr ) {
+    for( int loc = 0; loc < knownPeers_.size(); loc++ ) {
+        if( *(knownPeers_[loc].peer) == adr ) {
+            knownPeers_[loc].peer = NULL;
+            return;
+        }
+    }
+}
+
+const Address* Channel::LookupKnownPeer( const Channel::PeerReference& ref ) {
+    if( ref.index < knownPeers_.size() && knownPeers_[ref.index].timestamp == ref.timestamp )
+        return knownPeers_[ref.index].peer;
+    return NULL;
+}
+
+Channel::PeerReference* Channel::LookupKnownPeer( const Address& adr ) {
+    for( int loc = 0; loc < knownPeers_.size(); loc++ ) {
+        if( *(knownPeers_[loc].peer) == adr )
+            return new Channel::PeerReference( loc, knownPeers_[loc].timestamp );
+    }
+    return NULL;
+}
+#endif // OPTION_INCLUDE_PEER_TRACKING
+
+
+
+/*
  * Utility methods 1
  */
 
@@ -438,108 +499,142 @@ void    swift::Shutdown (int sock_des) {
     Channel::Shutdown();
 }
 
-int      swift::Open (std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size) {
-    FileTransfer* ft = new FileTransfer(filename, hash, check_hashes, chunk_size);
-    if (ft->fd() && ft->IsOperational()) {
+int swift::Open( std::string filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size ) {
+    SwarmData* swarm = SwarmManager::GetManager().AddSwarm( filename, hash, tracker, check_hashes, chunk_size, false );
+    if( swarm )
+    	return swarm->Id();
+    return -1;
+}
 
-        // initiate tracker connections
-    	// SWIFTPROC
-    	ft->SetTracker(tracker);
-    	ft->ConnectToTracker();
 
-    	return ft->fd();
-    } else {
-		delete ft;
-        return -1;
+void swift::Close( int transfer, bool removestate, bool removecontent ) {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+    if( swarm )
+        SwarmManager::GetManager().RemoveSwarm( swarm->RootHash(), removestate, removecontent );
+}
+
+
+void swift::AddPeer( Address address, const Sha1Hash& root ) {
+    // SCHAAP: 2012-06-15 - Removed unused peer_selector to prevent confusion
+    // Channel::peer_selector->AddPeer(address,root);
+
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( root );
+    if( !swarm )
+        return;
+    if( !swarm->Touch() ) {
+        swarm = SwarmManager::GetManager().ActivateSwarm( root );
+        if( !swarm->Touch() )
+            return;
     }
+    FileTransfer* ft = swarm->GetTransfer();
+    if( ft )
+        ft->AddPeer(address);
+    // FIXME: When cached addresses are supported in swapped-out swarms, add the peer to that cache instead
 }
 
 
-void    swift::Close (int fd) {
-    if (fd<FileTransfer::files.size() && FileTransfer::files[fd])
-        delete FileTransfer::files[fd];
-}
-
-
-void    swift::AddPeer (Address address, const Sha1Hash& root) {
-    Channel::peer_selector->AddPeer(address,root);
-}
-
-
-ssize_t  swift::Read(int fdes, void *buf, size_t nbyte, int64_t offset)
+ssize_t swift::Read( int transfer, void *buf, size_t nbyte, int64_t offset )
 {
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->GetStorage()->Read(buf,nbyte,offset);
-    else
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+    if( !swarm )
         return -1;
+    if( !swarm->Touch() ) {
+        swarm = SwarmManager::GetManager().ActivateSwarm( swarm->RootHash() );
+        if( !swarm->Touch() )
+            return -1;
+    }
+    FileTransfer* ft = swarm->GetTransfer();
+    if( !ft )
+        return -1;
+    return ft->GetStorage()->Read(buf, nbyte, offset);
 }
 
-ssize_t  swift::Write(int fdes, const void *buf, size_t nbyte, int64_t offset)
+ssize_t swift::Write( int transfer, const void *buf, size_t nbyte, int64_t offset )
 {
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->GetStorage()->Write(buf,nbyte,offset);
-    else
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+    if( !swarm )
         return -1;
+    if( !swarm->Touch() ) {
+        swarm = SwarmManager::GetManager().ActivateSwarm( swarm->RootHash() );
+        if( !swarm->Touch() )
+            return -1;
+    }
+    FileTransfer* ft = swarm->GetTransfer();
+    if( !ft )
+        return -1;
+    return ft->GetStorage()->Write(buf, nbyte, offset);
 }
 
 
-uint64_t  swift::Size (int fdes) {
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->hashtree()->size();
-    else
+uint64_t swift::Size( int transfer ) {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+    if( !swarm )
         return 0;
+    return swarm->Size();
 }
 
 
-bool  swift::IsComplete (int fdes) {
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->hashtree()->is_complete();
-    else
+bool swift::IsComplete( int transfer ) {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+    if( !swarm )
+        return false;
+    return swarm->IsComplete();
+}
+
+
+uint64_t swift::Complete( int transfer ) {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+    if( !swarm )
         return 0;
+    return swarm->Complete();
 }
 
 
-uint64_t  swift::Complete (int fdes) {
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->hashtree()->complete();
-    else
+uint64_t swift::SeqComplete( int transfer, int64_t offset ) {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+    if( !swarm )
         return 0;
-}
-
-
-uint64_t  swift::SeqComplete (int fdes, int64_t offset) {
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->hashtree()->seq_complete(offset);
-    else
+    if( !swarm->Touch() ) {
+        swarm = SwarmManager::GetManager().ActivateSwarm( swarm->RootHash() );
+        if( !swarm->Touch() )
+            return 0;
+    }
+    FileTransfer* ft = swarm->GetTransfer();
+    if( !ft )
         return 0;
+    return ft->hashtree()->seq_complete(offset);
 }
 
 
-const Sha1Hash& swift::RootMerkleHash (int file) {
-    FileTransfer* trans = FileTransfer::file(file);
-    if (!trans)
+const Sha1Hash& swift::RootMerkleHash( int transfer ) {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+    if( !swarm )
         return Sha1Hash::ZERO;
-    return trans->hashtree()->root_hash();
+    return swarm->RootHash();
 }
 
 
 /** Returns the number of bytes in a chunk for this transmission */
-uint32_t	  swift::ChunkSize(int fdes)
+uint32_t swift::ChunkSize( int transfer )
 {
-    if (FileTransfer::files.size()>fdes && FileTransfer::files[fdes])
-        return FileTransfer::files[fdes]->hashtree()->chunk_size();
-    else
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+    if( !swarm )
         return 0;
+    return swarm->ChunkSize();
 }
 
 
 // CHECKPOINT
-int swift::Checkpoint(int transfer) {
+int swift::Checkpoint( int transfer ) {
 	// Save transfer's binmap for zero-hashcheck restart
-	FileTransfer *ft = FileTransfer::file(transfer);
-	if (ft == NULL)
-            return -1;
-	if (ft->IsZeroState())
+
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+    if( !swarm )
+        return -1;
+	FileTransfer* ft = swarm->GetTransfer(false);
+	if( !ft )
+        return -1;
+	if( ft->IsZeroState() )
 	    return -1;
 
     MmapHashTree *ht = (MmapHashTree *)ft->hashtree();
@@ -566,30 +661,38 @@ int swift::Checkpoint(int transfer) {
 
 
 // SEEK
-int swift::Seek(int fd, int64_t offset, int whence)
+int swift::Seek( int transfer, int64_t offset, int whence )
 {
-	dprintf("%s F%i Seek: to %lld\n",tintstr(), fd, offset );
+	dprintf("%s F%i Seek: to %lld\n",tintstr(), transfer, offset );
 
-	FileTransfer *ft = FileTransfer::file(fd);
-	if (ft == NULL)
-		return -1;
+    // Quick fail in order not to activate a swarm only to fail after activation
+    if( whence != SEEK_SET )
+        return -1; // TODO
+    if( offset >= swift::Size(transfer) )
+        return -1;
 
-	if (whence == SEEK_SET)
-	{
-		if (offset >= swift::Size(fd))
-			return -1; // seek beyond end of content
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+    if( !swarm )
+        return -1;
+    if( !swarm->Touch() ) {
+        swarm = SwarmManager::GetManager().ActivateSwarm( swarm->RootHash() );
+        if( !swarm->Touch() )
+            return -1;
+    }
+    FileTransfer* ft = swarm->GetTransfer();
+    if( !ft )
+        return -1;
 
-		// Which bin to seek to?
-		int64_t coff = offset - (offset % ft->hashtree()->chunk_size()); // ceil to chunk
-		bin_t offbin = bin_t(0,coff/ft->hashtree()->chunk_size());
+    // whence == SEEK_SET && offset < swift::Size(transfer)  - validated by quick fail above
 
-		char binstr[32];
-		dprintf("%s F%i Seek: to bin %s\n",tintstr(), fd, offbin.str(binstr) );
+    // Which bin to seek to?
+    int64_t coff = offset - (offset % ft->hashtree()->chunk_size()); // ceil to chunk
+    bin_t offbin = bin_t(0,coff/ft->hashtree()->chunk_size());
 
-		return ft->picker().Seek(offbin,whence);
-	}
-	else
-		return -1; // TODO
+    char binstr[32];
+    dprintf("%s F%i Seek: to bin %s\n",tintstr(), transfer, offbin.str(binstr) );
+
+    return ft->picker().Seek(offbin,whence);
 }
 
 

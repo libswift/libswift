@@ -78,9 +78,9 @@ std::string    Sha1Hash::hex() const {
 
 
 MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool check_hashes, std::string binmap_filename) :
- HashTree(), storage_(storage), root_hash_(root_hash), hashes_(NULL),
- peak_count_(0), hash_fd_(0), size_(0), sizec_(0), complete_(0), completec_(0),
- chunk_size_(chunk_size)
+ HashTree(), root_hash_(root_hash), hashes_(NULL), peak_count_(0), hash_fd_(0),
+ size_(0), sizec_(0), complete_(0), completec_(0),
+ chunk_size_(chunk_size), storage_(storage) 
 {
 	// MULTIFILE
 	storage_->SetHashTree(this);
@@ -131,7 +131,7 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
     	FILE *fp = fopen_utf8(binmap_filename.c_str(),"rb");
     	if (!fp) {
     		 print_error("hashtree: cannot open .mbinmap file");
-    		 SetBroken();
+             SetBroken();
     		 return;
     	}
     	if (deserialize(fp) < 0) {
@@ -150,14 +150,14 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
 
 
 MmapHashTree::MmapHashTree(bool dummy, std::string binmap_filename) :
-HashTree(), root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), hash_fd_(0),
-filename_(""), size_(0), sizec_(0), complete_(0), completec_(0),
-chunk_size_(0)
+ HashTree(), root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), hash_fd_(0),
+ filename_(""), size_(0), sizec_(0), complete_(0), completec_(0),
+ chunk_size_(0)
 {
 	FILE *fp = fopen_utf8(binmap_filename.c_str(),"rb");
 	if (!fp) {
-		 SetBroken();
-		 return;
+        SetBroken();
+		return;
 	}
 	if (partial_deserialize(fp) < 0) {
 	}
@@ -288,7 +288,7 @@ int MmapHashTree::serialize(FILE *fp)
 {
 	fprintf_retiffail(fp,"version %i\n", 1 );
 	fprintf_retiffail(fp,"root hash %s\n", root_hash_.hex().c_str() );
-	fprintf_retiffail(fp,"chunk size %lu\n", chunk_size_ );
+	fprintf_retiffail(fp,"chunk size %u\n", chunk_size_ );
 	fprintf_retiffail(fp,"complete %llu\n", complete_ );
 	fprintf_retiffail(fp,"completec %llu\n", completec_ );
 	return ack_out_.serialize(fp);
@@ -311,12 +311,12 @@ int MmapHashTree::internal_deserialize(FILE *fp,bool contentavail) {
 
 	char hexhashstr[256];
 	uint64_t c,cc;
-	size_t cs;
+	uint32_t cs;
 	int version;
 
 	fscanf_retiffail(fp,"version %i\n", &version );
 	fscanf_retiffail(fp,"root hash %s\n", hexhashstr);
-	fscanf_retiffail(fp,"chunk size %lu\n", &cs);
+	fscanf_retiffail(fp,"chunk size %u\n", &cs);
 	fscanf_retiffail(fp,"complete %llu\n", &c );
 	fscanf_retiffail(fp,"completec %llu\n", &cc );
 

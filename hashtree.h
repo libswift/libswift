@@ -63,7 +63,7 @@ class Storage;
  */
 class HashTree : public Operational {
   public:
-	HashTree() : Operational() {}
+    HashTree() : Operational() {}
     /** Offer a hash; returns true if it verified; false otherwise.
      Once it cannot be verified (no sibling or parent), the hash
      is remembered, while returning false. */
@@ -194,7 +194,7 @@ public:
 
 
 /** This class implements the HashTree interface by reading directly from disk */
-class ZeroHashTree : public HashTree  {
+class ZeroHashTree : public HashTree {
     /** Merkle hash tree: root */
     Sha1Hash        root_hash_;
     /** Merkle hash tree: peak hashes */

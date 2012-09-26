@@ -53,6 +53,7 @@
 #include <vector>
 #include <set>
 #include <map>
+#include <list>
 #include <algorithm>
 #include <string>
 #include <math.h>
@@ -68,6 +69,10 @@
 // Arno, 2012-05-21: MacOS X has an Availability.h :-(
 #include "avail.h"
 
+// SCHAAP: swarmmanager.h is included at the end, since it depends on a alot and nothing depends on it
+#ifndef OPTION_INCLUDE_PEER_TRACKING
+#define OPTION_INCLUDE_PEER_TRACKING 0
+#endif
 
 namespace swift {
 
@@ -270,7 +275,7 @@ namespace swift {
          *  @param root_hash    the root hash of the file; zero hash if the file
 	 	 *                      is newly submitted
 	 	 */
-        FileTransfer(std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO,bool check_hashes=true,uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, bool zerostate=false);
+        FileTransfer(int transfer_id, std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO,bool check_hashes=true,uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, bool zerostate=false);
 
         /**    Close everything. */
         ~FileTransfer();
@@ -287,13 +292,6 @@ namespace swift {
         int             RandomChannel (int own_id);
 
 
-        /** Find transfer by the root hash. */
-        static FileTransfer* Find (const Sha1Hash& hash);
-        /** Find transfer by the file descriptor. */
-        static FileTransfer* file (int fd) {
-            return fd<files.size() ? files[fd] : NULL;
-        }
-
         /** The binmap pointer for data already retrieved and checked. */
         binmap_t *           ack_out ()  { return hashtree_->ack_out(); }
         /** Piece picking strategy used by this transfer. */
@@ -302,8 +300,8 @@ namespace swift {
         int             channel_count () const { return hs_in_.size(); }
         /** Hash tree checked file; all the hashes and data are kept here. */
         HashTree *       hashtree() { return hashtree_; }
-        /** File descriptor for the data file. */
-        int             fd () const { return fd_; }
+        /** Transfer identifier **/
+        int             transfer_id() const { return transfer_id_; }
         /** Root SHA1 hash of the transfer (and the data file). */
         const Sha1Hash& root_hash () const { return hashtree_->root_hash(); }
         /** Ric: the availability in the swarm */
@@ -361,7 +359,14 @@ namespace swift {
 		/** Add a peer to the set of addresses to connect to */
 		void AddPeer(Address &peer);
 
+        /** Progress callback management **/
+        void AddProgressCallback(ProgressCallback cb, uint8_t agg);
+        void RemoveProgressCallback(ProgressCallback cb);
+        void Progress(bin_t bin);
+
     protected:
+
+        int             transfer_id_;
 
         HashTree*		hashtree_;
 
@@ -380,10 +385,7 @@ namespace swift {
         /** Availability in the swarm */
         Availability* 	availability_;
 
-#define SWFT_MAX_TRANSFER_CB 8
-        ProgressCallback callbacks[SWFT_MAX_TRANSFER_CB];
-        uint8_t         cb_agg[SWFT_MAX_TRANSFER_CB];
-        int             cb_installed;
+        std::list< std::pair<ProgressCallback,uint8_t> > callbacks_;
 
 		// RATELIMIT
         std::set<Channel *>	mychannels_; // Arno, 2012-01-31: May be duplicate of hs_in_
@@ -400,7 +402,6 @@ namespace swift {
 
         // MULTIFILE
         Storage				*storage_;
-        int					fd_;
 
         //ZEROSTATE
         bool				zerostate_;
@@ -410,21 +411,20 @@ namespace swift {
         // Gertjan fix: return bool
         bool            OnPexAddIn (const Address& addr);
 
-        static std::vector<FileTransfer*> files;
-
 
         friend class Channel;
         // Ric: maybe not really needed
         friend class Availability;
-        friend uint64_t  Size (int fdes);
-        friend bool      IsComplete (int fdes);
-        friend uint64_t  Complete (int fdes);
-        friend uint64_t  SeqComplete (int fdes, int64_t offset);
+        friend uint64_t  Size (int transfer);
+        friend bool      IsComplete (int transfer);
+        friend uint64_t  Complete (int transfer);
+        friend uint64_t  SeqComplete (int transfer, int64_t offset);
         friend int     Open (const char* filename, const Sha1Hash& hash, Address tracker, bool check_hashes, uint32_t chunk_size);
-        friend void    Close (int fd) ;
+        friend void    Close (int transfer, bool removestate, bool removecontent) ;
         friend void AddProgressCallback (int transfer,ProgressCallback cb,uint8_t agg);
         friend void RemoveProgressCallback (int transfer,ProgressCallback cb);
         friend void ExternallyRetrieved (int transfer,bin_t piece);
+        friend class SwarmManager;
     };
 
 
@@ -506,7 +506,38 @@ namespace swift {
 	    /** the current time */
 	    static tint Time();
 
-	    // Arno: Per instance methods
+#if OPTION_INCLUDE_PEER_TRACKING
+        /** Management methods for the global peer list. **/
+        // The address of the peer and the timestamp it was added to the list of all peers.
+        class PeerListItem {
+        public:
+            PeerListItem() : peer(NULL), timestamp(0) {}
+            PeerListItem( const PeerListItem& pli ) : peer(pli.peer), timestamp(pli.timestamp) {}
+            PeerListItem( const Address& adr ) : peer(new Address(adr)), timestamp(usec_time()) {}
+        protected:
+            Address* peer;
+            tint timestamp;
+            friend class Channel;
+        };
+        // A reference to a peer, which is its index into the list and timestamp it was added.
+        class PeerReference {
+        public:
+            PeerReference( int index_, tint timestamp_ ) : index(index_), timestamp(timestamp_) {}
+        protected:
+            int index;
+            tint timestamp;
+            friend class Channel;
+        };
+        // Returned PeerReference is to be deleted by caller
+        static PeerReference* AddKnownPeer( const Address& adr );
+        static void RemoveKnownPeer( const Address& adr );
+        // Might very well return NULL, so check that
+        static const Address* LookupKnownPeer( const PeerReference& ref );
+        // May return NULL, check that; returned PeerReference is to be deleted by caller
+        static PeerReference* LookupKnownPeer( const Address& adr );
+#endif // OPTION_INCLUDE_PEER_TRACKING
+
+        // Arno: Per instance methods
         void        Recv (struct evbuffer *evb);
         void        Send ();  // Called by LibeventSendCallback
         void        Close ();
@@ -602,6 +633,11 @@ namespace swift {
    	    static int sock_count;
 	    static sckrwecb_t sock_open[DGRAM_MAX_SOCK_OPEN];
 
+#if OPTION_INCLUDE_PEER_TRACKING
+#define MAX_SIZE_PEER_LIST 16384
+        /** The list of all known peers. **/
+        static std::vector<PeerListItem> knownPeers_;
+#endif // OPTION_INCLUDE_PEER_TRACKING
 
         /** Channel id: index in the channel array. */
         uint32_t    id_;
@@ -702,7 +738,8 @@ namespace swift {
         void 		UpdateDIP(bin_t pos); // RETRANSMIT
 
 
-        static PeerSelector* peer_selector;
+        // SCHAAP: 2012-06-15 - Removed unused peer_selector to prevent confusion
+        // static PeerSelector* peer_selector;
 
         static tint     last_tick;
         //static tbheap   send_queue;
@@ -788,7 +825,7 @@ namespace swift {
 		static std::string os2specpn(std::string ospn);
 
 		/** Create Storage from specified path and destination dir if content turns about to be a multi-file */
-		Storage(std::string ospathname, std::string destdir,int transferfd);
+		Storage(std::string ospathname, std::string destdir,int transfer);
 		~Storage();
 
 		/** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
@@ -847,7 +884,7 @@ namespace swift {
 			int64_t total_size_from_spec_;
 			StorageFile *last_sf_;
 
-			int transfer_fd_;
+			int transfer_;
 			ProgressCallback alloc_cb_;
 
 			int WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
@@ -865,7 +902,7 @@ namespace swift {
     	~ZeroState();
     	static ZeroState *GetInstance();
     	void SetContentDir(std::string contentdir);
-    	FileTransfer * Find(Sha1Hash &root_hash);
+    	int Find(Sha1Hash &root_hash);
 
 
     	static void LibeventCleanCallback(int fd, short event, void *arg);
@@ -899,21 +936,21 @@ namespace swift {
     int     Open (std::string filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(), bool check_hashes=true,uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** Get the root hash for the transmission. */
     const Sha1Hash& RootMerkleHash (int file) ;
-    /** Close a file and a transmission. */
-    void    Close (int fd) ;
+    /** Close a file and a transmission, remove state or content if desired. */
+    void    Close (int transfer, bool removestate = false, bool removecontent = false) ;
     /** Add a possible peer which participares in a given transmission. In the case
         root hash is zero, the peer might be talked to regarding any transmission
         (likely, a tracker, cache or an archive). */
     void    AddPeer (Address address, const Sha1Hash& root=Sha1Hash::ZERO);
 
 	/** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
-	ssize_t  Read(int fd, void *buf, size_t nbyte, int64_t offset); // off_t not 64-bit dynamically on Win32
+	ssize_t  Read(int transfer, void *buf, size_t nbyte, int64_t offset); // off_t not 64-bit dynamically on Win32
 
 	/** UNIX pwrite approximation. Does change file pointer. Is not thread-safe */
-	ssize_t  Write(int fd, const void *buf, size_t nbyte, int64_t offset);
+	ssize_t  Write(int transfer, const void *buf, size_t nbyte, int64_t offset);
 
     /** Seek, i.e., move start of interest window */
-    int Seek(int fd, int64_t offset, int whence);
+    int Seek(int transfer, int64_t offset, int whence);
 
 	void    SetTracker(const Address& tracker);
     /** Set the default tracker that is used when Open is not passed a tracker
@@ -921,18 +958,18 @@ namespace swift {
 
     /** Returns size of the file in bytes, 0 if unknown. Might be rounded up to a kilobyte
         before the transmission is complete. */
-    uint64_t  Size (int fdes);
+    uint64_t  Size (int transfer);
     /** Returns the amount of retrieved and verified data, in bytes.
         A 100% complete transmission has Size()==Complete(). */
-    uint64_t  Complete (int fdes);
-    bool      IsComplete (int fdes);
+    uint64_t  Complete (int transfer);
+    bool      IsComplete (int transfer);
     /** Returns the number of bytes that are complete sequentially, starting from the
         beginning, till the first not-yet-retrieved packet. */
-    uint64_t  SeqComplete(int fdes, int64_t offset=0);
+    uint64_t  SeqComplete(int transfer, int64_t offset=0);
     /***/
     int       Find (Sha1Hash hash);
     /** Returns the number of bytes in a chunk for this transmission */
-    uint32_t	  ChunkSize(int fdes);
+    uint32_t	  ChunkSize(int transfer);
 
     /** Get the address bound to the socket descriptor returned by Listen() */
     Address BoundAddress(evutil_socket_t sock);
@@ -965,13 +1002,15 @@ namespace swift {
     void nat_test_update(void);
 
     // Arno: Save transfer's binmap for zero-hashcheck restart
-    int Checkpoint(int fdes);
+    int Checkpoint(int transfer);
 
     // SOCKTUNNEL
     void CmdGwTunnelUDPDataCameIn(Address srcaddr, uint32_t srcchan, struct evbuffer* evb);
     void CmdGwTunnelSendUDP(struct evbuffer *evb); // for friendship with Channel
 
 } // namespace end
+
+#include "swarmmanager.h"
 
 // #define SWIFT_MUTE
 

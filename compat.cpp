@@ -23,7 +23,6 @@
 #include <sys/time.h>
 #endif
 #include <iostream>
-#include <sstream>
 
 namespace swift {
 
@@ -309,21 +308,6 @@ int mkdir_utf8(std::string dirname)
 	return ret;
 }
 
-
-int remove_utf8(std::string pathname)
-{
-#ifdef WIN32
-	wchar_t *utf16c = utf8to16(pathname);
-	int ret = _wremove(utf16c);
-	free(utf16c);
-#else
-	int ret = remove(pathname.c_str()); // TODO: UNIX with locale != UTF-8
-#endif
-	return ret;
-}
-
-
-
 #if _DIR_ENT_HAVE_D_TYPE
 #define TEST_IS_DIR(unixde, st) ((bool)(unixde->d_type & DT_DIR))
 #else
@@ -513,21 +497,6 @@ struct timeval* tint2tv (tint t) {
     tv.tv_usec = t%TINT_SEC;
     tv.tv_sec = t/TINT_SEC;
     return &tv;
-}
-
-
-std::string hex2bin(std::string input)
-{
-	std::string res;
-	res.reserve(input.size() / 2);
-	for (int i = 0; i < input.size(); i += 2)
-	{
-	    std::istringstream iss(input.substr(i, 2));
-	    int temp;
-	    iss >> std::hex >> temp;
-	    res += static_cast<char>(temp);
-	}
-	return res;
 }
 
 

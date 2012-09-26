@@ -17,8 +17,6 @@
 
 using namespace swift;
 
-std::vector<FileTransfer*> FileTransfer::files(20);
-
 #define BINHASHSIZE (sizeof(bin64_t)+sizeof(Sha1Hash))
 
 
@@ -28,15 +26,13 @@ std::vector<FileTransfer*> FileTransfer::files(20);
 
 // FIXME: separate Bootstrap() and Download(), then Size(), Progress(), SeqProgress()
 
-FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool check_hashes, uint32_t chunk_size, bool zerostate) :
-	Operational(), fd_(files.size()+1), cb_installed(0), mychannels_(),
-    speedzerocount_(0), tracker_(), tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START),
-    tracker_retry_time_(NOW), zerostate_(zerostate)
+FileTransfer::FileTransfer(int transfer_id, std::string filename, const Sha1Hash& root_hash, bool check_hashes, uint32_t chunk_size, bool zerostate) :
+    Operational(),
+    transfer_id_(transfer_id), picker_(NULL), availability_(NULL),
+    mychannels_(), speedzerocount_(0),
+    tracker_(), tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START), tracker_retry_time_(NOW),
+    zerostate_(zerostate)
 {
-    if (files.size()<fd()+1)
-        files.resize(fd()+1);
-    files[fd()] = this;
-
     std::string destdir;
 	int ret = file_exists_utf8(filename);
 	if (ret == 2 && root_hash != Sha1Hash::ZERO) {
@@ -50,7 +46,7 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
 	}
 
 	// MULTIFILE
-    storage_ = new Storage(filename,destdir,fd());
+    storage_ = new Storage(filename,destdir,transfer_id_);
 
 	std::string hash_filename;
 	hash_filename.assign(filename);
@@ -91,7 +87,7 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
     evtimer_add(&evclean_,tint2tv(5*TINT_SEC));
 
     if ((hashtree_ != NULL && !hashtree_->IsOperational()) || !storage_->IsOperational())
-    	SetBroken();
+        SetBroken();
 }
 
 
@@ -206,23 +202,29 @@ void swift::AddProgressCallback (int transfer,ProgressCallback cb,uint8_t agg) {
 
 	//fprintf(stderr,"swift::AddProgressCallback: transfer %i\n", transfer );
 
-    FileTransfer* trans = FileTransfer::file(transfer);
-    if (!trans)
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+    if( !swarm )
         return;
+    swarm->AddProgressCallback( cb, agg );
 
-    //fprintf(stderr,"swift::AddProgressCallback: ft obj %p %p\n", trans, cb );
-
-    trans->cb_agg[trans->cb_installed] = agg;
-    trans->callbacks[trans->cb_installed] = cb;
-    trans->cb_installed++;
+    //fprintf(stderr,"swift::AddProgressCallback: swarm obj %p %p\n", swarm, cb );
 }
 
 
 void swift::ExternallyRetrieved (int transfer,bin_t piece) {
-    FileTransfer* trans = FileTransfer::file(transfer);
-    if (!trans)
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(transfer);
+    if( !swarm )
         return;
-    trans->ack_out()->set(piece); // that easy
+    FileTransfer* ft = swarm->GetTransfer();
+    if( !ft ) {
+        swarm = SwarmManager::GetManager().ActivateSwarm(swarm->RootHash());
+        if( !swarm )
+            return;
+        ft = swarm->GetTransfer();
+        if( !ft )
+            return;
+    }
+    ft->ack_out()->set(piece); // that easy
 }
 
 
@@ -230,20 +232,10 @@ void swift::RemoveProgressCallback (int transfer, ProgressCallback cb) {
 
 	//fprintf(stderr,"swift::RemoveProgressCallback: transfer %i\n", transfer );
 
-    FileTransfer* trans = FileTransfer::file(transfer);
-    if (!trans)
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+    if( !swarm )
         return;
-
-    //fprintf(stderr,"swift::RemoveProgressCallback: transfer %i ft obj %p %p\n", transfer, trans, cb );
-
-    for(int i=0; i<trans->cb_installed; i++)
-        if (trans->callbacks[i]==cb)
-            trans->callbacks[i]=trans->callbacks[--trans->cb_installed];
-
-    for(int i=0; i<trans->cb_installed; i++)
-    {
-    	fprintf(stderr,"swift::RemoveProgressCallback: transfer %i remain %p\n", transfer, trans->callbacks[i] );
-    }
+    swarm->RemoveProgressCallback( cb );
 }
 
 
@@ -252,31 +244,21 @@ FileTransfer::~FileTransfer ()
     Channel::CloseTransfer(this);
 	delete hashtree_;
 	delete storage_;
-    files[fd()] = NULL;
-	if (!IsZeroState())
-	{
-		delete picker_;
-		delete availability_;
-	}
+    if( picker_ )
+        delete picker_;
+    if( availability_ )
+        delete availability_;
   
     // Arno, 2012-02-06: Cancel cleanup timer, otherwise chaos!
     evtimer_del(&evclean_);
 }
 
 
-FileTransfer* FileTransfer::Find (const Sha1Hash& root_hash) {
-    for(int i=0; i<files.size(); i++)
-        if (files[i] && files[i]->root_hash()==root_hash)
-            return files[i];
-    return NULL;
-}
-
-
 int swift:: Find (Sha1Hash hash) {
-    FileTransfer* t = FileTransfer::Find(hash);
-    if (t)
-        return t->fd();
-    return -1;
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(hash);
+    if( !swarm )
+        return -1;
+    return swarm->Id();
 }
 
 
@@ -310,7 +292,7 @@ int FileTransfer::RandomChannel (int own_id) {
         if (hs_in_[i].toUInt() == own_id)
             continue;
         Channel *c = Channel::channel(hs_in_[i].toUInt());
-        if (c == NULL || c->transfer().fd() != this->fd()) {
+        if (c == NULL || c->transfer().transfer_id() != this->transfer_id()) {
             /* Channel was closed or is not associated with this FileTransfer (anymore). */
             hs_in_[i] = hs_in_[0];
             hs_in_.pop_front();
@@ -402,8 +384,32 @@ uint32_t	FileTransfer::GetNumSeeders()
     return count;
 }
 
-
 void FileTransfer::AddPeer(Address &peer)
 {
 	Channel *c = new Channel(this,INVALID_SOCKET,peer);
+#if OPTION_INCLUDE_PEER_TRACKING
+    Channel::PeerReference* ref = Channel::AddKnownPeer(peer);
+    delete ref; // TODO
+#endif
+}
+
+void FileTransfer::AddProgressCallback(ProgressCallback cb, uint8_t agg) {
+    callbacks_.push_back( std::pair<ProgressCallback, uint8_t>( cb, agg ) );
+}
+
+void FileTransfer::RemoveProgressCallback(ProgressCallback cb) {
+    for( std::list< std::pair<ProgressCallback, uint8_t> >::iterator iter = callbacks_.begin(); iter != callbacks_.end(); iter++ ) {
+        if( (*iter).first == cb ) {
+            callbacks_.erase( iter );
+            return;
+        }
+    }
+}
+
+void FileTransfer::Progress(bin_t bin) {
+    int minlayer = bin.layer();
+    for( std::list< std::pair<ProgressCallback, uint8_t> >::iterator iter = callbacks_.begin(); iter != callbacks_.end(); iter++ ) {
+        if( minlayer >= (*iter).second )
+            ((*iter).first)( transfer_id_, bin );
+    }
 }

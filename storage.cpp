@@ -8,6 +8,8 @@
  * TODO:
  * - Unicode?
  * - Slow resume after alloc big file (Win32, work on swift-trunk)
+ * - Support large arrays of files in one MULTIFILE spec: currently each file is opened and kept open,
+ *   which wastes lots of (limited) file handles; they should be opened on-demand
  */
 
 #include "swift.h"
@@ -22,12 +24,12 @@ using namespace swift;
 const std::string Storage::MULTIFILE_PATHNAME = "META-INF-multifilespec.txt";
 const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 
-Storage::Storage(std::string ospathname, std::string destdir, int transferfd) :
-		Operational(),
-		state_(STOR_STATE_INIT),
+Storage::Storage(std::string ospathname, std::string destdir, int transfer) :
+        Operational(),
+        state_(STOR_STATE_INIT),
 		os_pathname_(ospathname), destdir_(destdir), ht_(NULL), spec_size_(0),
 		single_fd_(-1), reserved_size_(-1), total_size_from_spec_(-1), last_sf_(NULL),
-		transfer_fd_(transferfd), alloc_cb_(NULL)
+		transfer_(transfer), alloc_cb_(NULL)
 {
 
 	//fprintf(stderr,"Storage: ospathname %s destdir %s\n", ospathname.c_str(), destdir.c_str() );
@@ -46,7 +48,7 @@ Storage::Storage(std::string ospathname, std::string destdir, int transferfd) :
 	{
 		dprintf("%s %s storage: File exists, but error opening\n", tintstr(), roothashhex().c_str() );
 		print_error("Could not open existing storage file");
-		SetBroken();
+        SetBroken();
 		return;
 	}
 
@@ -54,10 +56,10 @@ Storage::Storage(std::string ospathname, std::string destdir, int transferfd) :
 	int ret = fread(readbuf,sizeof(char),MULTIFILE_PATHNAME.length(),fp);
 	fclose(fp);
 	if (ret < 0)
-	{
-		SetBroken();
+    {
+        SetBroken();
 		return;
-	}
+    }
 
 	if (!strncmp(readbuf,MULTIFILE_PATHNAME.c_str(),MULTIFILE_PATHNAME.length()))
 	{
@@ -69,10 +71,10 @@ Storage::Storage(std::string ospathname, std::string destdir, int transferfd) :
 		StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,fsize,ospathname);
 		sfs_.push_back(sf);
 		if (ParseSpec(sf) < 0)
-		{
+        {
 			print_error("storage: error parsing multi-file spec");
-			SetBroken();
-		}
+            SetBroken();
+        }
 	}
 	else
 	{
@@ -318,7 +320,7 @@ int Storage::ParseSpec(StorageFile *sf)
 	if (fp == NULL)
 	{
 		print_error("cannot open multifile-spec");
-		SetBroken();
+        SetBroken();
 		return -1;
 	}
 
@@ -388,10 +390,10 @@ int Storage::ParseSpec(StorageFile *sf)
 
 	fclose(fp);
 	if (ret < 0)
-	{
-		SetBroken();
+    {
+        SetBroken();
 		return ret;
-	}
+    }
 	else {
 		total_size_from_spec_ = offset;
 		return 0;
@@ -407,7 +409,7 @@ int Storage::OpenSingleFile()
 	if (single_fd_<0) {
 		single_fd_ = -1;
 		print_error("storage: cannot open single file");
-		SetBroken();
+        SetBroken();
 		return -1;
 	}
 
@@ -419,7 +421,7 @@ int Storage::OpenSingleFile()
 		{
 			close(single_fd_);
 			single_fd_ = -1;
-			SetBroken();
+            SetBroken();
 		}
 	}
 
@@ -523,7 +525,7 @@ int64_t Storage::GetReservedSize()
 			totaldisksize += fsize;
 	}
 
-	fprintf(stderr,"storage: getdisksize: total already sized is %lld\n", totaldisksize );
+    fprintf(stderr,"storage: getdisksize: total already sized is %lld\n", totaldisksize );
 
 	return totaldisksize;
 }
@@ -549,7 +551,7 @@ int Storage::ResizeReserved(int64_t size)
 	// make this detectable.
 	if (alloc_cb_ != NULL)
 	{
-		alloc_cb_(transfer_fd_,bin_t::NONE);
+		alloc_cb_(transfer_,bin_t::NONE);
 		alloc_cb_ = NULL; // One time callback
 	}
 
@@ -622,8 +624,8 @@ std::string Storage::os2specpn(std::string ospn)
 
 
 StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std::string ospath) :
-		Operational(),
-		fd_(-1)
+    Operational(),
+    fd_(-1)
 {
 	spec_pathname_ = specpath;
 	start_ = start;
@@ -663,17 +665,17 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
 				fprintf(stderr,"StorageFile: mkdir %s returns %d\n", path.c_str(), ret );
 
 				if (ret < 0)
-				{
-					SetBroken();
+                {
+                    SetBroken();
 					return;
-				}
+                }
 			}
 			else if (ret == 1)
 			{
 				// Something already exists and it is not a dir
 
 				fprintf(stderr,"StorageFile: exists %s but is not dir %d\n", path.c_str(), ret );
-				SetBroken();
+                SetBroken();
 				return;
 			}
 		}
@@ -685,14 +687,14 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
 	if (fd_<0) {
 		//print_error("storage: file: Could not open");
 		dprintf("%s %s storage: file: Could not open %s\n", tintstr(), "0000000000000000000000000000000000000000", os_pathname_.c_str() );
-		SetBroken();
+        SetBroken();
         return;
 	}
 }
 
 StorageFile::~StorageFile()
 {
-	 if (fd_ != -1)
+	 if (fd_ >= 0)
 		 close(fd_);
 }
 

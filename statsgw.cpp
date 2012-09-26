@@ -78,7 +78,7 @@ static void StatsGwNewRequestCallback (struct evhttp_request *evreq, void *arg);
 void StatsExitCallback(struct evhttp_request *evreq)
 {
 	char contlenstr[1024];
-	sprintf(contlenstr,"%i",strlen(exit_page));
+	sprintf(contlenstr,"%i",(int)strlen(exit_page));
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(evreq);
 	evhttp_add_header(headers, "Connection", "close" );
 	evhttp_add_header(headers, "Content-Type", "text/html" );
@@ -124,29 +124,24 @@ void StatsOverviewCallback(struct evhttp_request *evreq)
     strcpy(bodystr,"");
     strcat(bodystr,top_page);
 
-    for (int i=0; i<swift::FileTransfer::files.size(); i++)
-    {
-    	FileTransfer *ft = swift::FileTransfer::files[i];
-    	if (ft != NULL)
-    	{
-    		int fd = ft->fd();
-			uint64_t total = (int)swift::Size(fd);
-			uint64_t down  = (int)swift::Complete(fd);
-			int perc = (int)((down * 100) / total);
+    for( SwarmManager::Iterator it = SwarmManager::GetManager().begin(); it != SwarmManager::GetManager().end(); it++ ) {
+        int id = (*it)->Id();
+        uint64_t total = (int)swift::Size(id);
+        uint64_t down  = (int)swift::Complete(id);
+        int perc = (int)((down * 100) / total);
 
-			char roothashhexstr[256];
-			sprintf(roothashhexstr,"%s", RootMerkleHash(fd).hex().c_str() );
+        char roothashhexstr[256];
+        sprintf(roothashhexstr,"%s", RootMerkleHash(id).hex().c_str() );
 
-			char templ[1024];
-			sprintf(templ,swarm_page_templ,roothashhexstr, perc, '%', dspeed, uspeed );
-			strcat(bodystr,templ);
-    	}
+        char templ[1024];
+        sprintf(templ,swarm_page_templ,roothashhexstr, perc, '%', dspeed, uspeed );
+        strcat(bodystr,templ);
     }
 
 	strcat(bodystr,bottom_page);
 
 	char contlenstr[1024];
-	sprintf(contlenstr,"%i",strlen(bodystr));
+	sprintf(contlenstr,"%i",(int)strlen(bodystr));
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(evreq);
 	evhttp_add_header(headers, "Connection", "close" );
 	evhttp_add_header(headers, "Content-Type", "text/html" );
@@ -190,16 +185,15 @@ void StatsGetSpeedCallback(struct evhttp_request *evreq)
     // Arno: PDD+ wants content speeds too
     double contentdownspeed = 0.0, contentupspeed = 0.0;
     uint32_t nleech=0,nseed=0;
-    for (int i=0; i<swift::FileTransfer::files.size(); i++)
-    {
-    	FileTransfer *ft = swift::FileTransfer::files[i];
-    	if (ft != NULL)
-    	{
+    for( SwarmManager::Iterator it = SwarmManager::GetManager().begin(); it != SwarmManager::GetManager().end(); it++ ) {
+        FileTransfer* ft = (*it)->GetTransfer(false);
+        if( ft ) {
     		contentdownspeed += ft->GetCurrentSpeed(DDIR_DOWNLOAD);
     		contentupspeed += ft->GetCurrentSpeed(DDIR_UPLOAD);
     		nleech += ft->GetNumLeechers();
     		nseed += ft->GetNumSeeders();
     	}
+        // TODO: Are these active leechers and seeders, or potential seeders and leechers? In the latter case these can be retrieved when cached peers are implemented
     }
     int cdownspeed = (int)(contentdownspeed/1024.0);
     int cupspeed = (int)(contentupspeed/1024.0);
@@ -208,7 +202,7 @@ void StatsGetSpeedCallback(struct evhttp_request *evreq)
 	sprintf(speedstr,"{\"downspeed\": %d, \"success\": \"true\", \"upspeed\": %d, \"cdownspeed\": %d, \"cupspeed\": %d, \"nleech\": %d, \"nseed\": %d}", dspeed, uspeed, cdownspeed, cupspeed, nleech, nseed );
 
 	char contlenstr[1024];
-	sprintf(contlenstr,"%i",strlen(speedstr));
+	sprintf(contlenstr,"%i",(int)strlen(speedstr));
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(evreq);
 	evhttp_add_header(headers, "Connection", "close" );
 	evhttp_add_header(headers, "Content-Type", "application/json" );

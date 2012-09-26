@@ -28,9 +28,9 @@ using namespace swift;
 
 
 ZeroHashTree::ZeroHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool check_hashes, std::string binmap_filename) :
-HashTree(), storage_(storage), root_hash_(root_hash), peak_count_(0), hash_fd_(0),
+ HashTree(), root_hash_(root_hash), peak_count_(0), hash_fd_(0),
  size_(0), sizec_(0), complete_(0), completec_(0),
-chunk_size_(chunk_size)
+ chunk_size_(chunk_size), storage_(storage)
 {
 	// MULTIFILE
 	storage_->SetHashTree(this);
@@ -45,7 +45,7 @@ chunk_size_(chunk_size)
     if (!RecoverPeakHashes())
     {
     	dprintf("%s zero hashtree could not recover peak hashes, fatal\n",tintstr() );
-    	SetBroken();
+        SetBroken();
     }
 
 	complete_ = size_;
@@ -186,7 +186,7 @@ bool            ZeroHashTree::OfferData (bin_t pos, const char* data, size_t len
 
 uint64_t      ZeroHashTree::seq_complete (int64_t offset)
 {
-	fprintf(stderr,"ZeroHashTree: seq_complete returns %llu\n", size_ ); 
+	fprintf(stderr,"ZeroHashTree: seq_complete returns %llu\n", size_ );
 	return size_;
 }
 
