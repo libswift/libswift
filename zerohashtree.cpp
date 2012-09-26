@@ -48,24 +48,21 @@ chunk_size_(chunk_size)
     	dprintf("%s zero hashtree could not recover peak hashes, fatal\n",tintstr() );
     	SetBroken();
     }
-
-	complete_ = size_;
-	completec_ = sizec_;
 }
 
 /** Precondition: root hash known */
 bool ZeroHashTree::RecoverPeakHashes()
 {
-	int64_t ret = storage_->GetReservedSize();
-	if (ret < 0)
-		return false;
+    int64_t ret = storage_->GetReservedSize();
+    if (ret < 0)
+	return false;
 
     uint64_t size = ret;
     uint64_t sizek = (size + chunk_size_-1) / chunk_size_;
 
-	// Arno: Calc location of peak hashes, read them from hash file and check if
-	// they match to root hash. If so, load hashes into memory.
-	bin_t peaks[64];
+    // Arno: Calc location of peak hashes, read them from hash file and check if
+    // they match to root hash. If so, load hashes into memory.
+    bin_t peaks[64];
     int peak_count = gen_peaks(sizek,peaks);
     for(int i=0; i<peak_count; i++) {
         Sha1Hash peak_hash = hash(peaks[i]);
@@ -75,6 +72,9 @@ bool ZeroHashTree::RecoverPeakHashes()
     }
     if (!this->size())
         return false; // if no valid peak hashes found
+
+    // Arno, 2012-09-26: Reset by OfferPeakHash
+    complete_ = size_ = size;
 
     return true;
 }

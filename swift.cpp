@@ -326,10 +326,10 @@ int utf8main (int argc, char** argv)
 			// Generate multi-file spec
 			ret = CreateMultifileSpec(filename,argc,argv,optind); //optind is global var points to first non-opt cmd line argument
 			if (ret < 0)
-				quit("Cannot generate multi-file spec")
+			    quit("Cannot generate multi-file spec")
 			else
-				// Calc roothash
-				ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,urlfilename,maxspeed);
+			    // Calc roothash
+			    ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,urlfilename,maxspeed);
 		}
 
 		// For testing
@@ -452,15 +452,18 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
 
 		if (urlfilename != "")
 			fclose(fp);
-
-		// Arno, 2012-01-04: LivingLab: Create checkpoint such that content
-		// can be copied to scanned dir and quickly loaded
-		swift::Checkpoint(single_fd);
 	}
 	else
 	{
 		printf("Root hash: %s\n", RootMerkleHash(single_fd).hex().c_str());
 		fflush(stdout); // For testing
+	}
+
+	if (printurl || file_enable_checkpoint)
+	{
+	    // Arno, 2012-01-04: LivingLab: Create checkpoint such that content
+	    // can be copied to scanned dir and quickly loaded
+	    swift::Checkpoint(single_fd);
 	}
 
 	// RATELIMIT
