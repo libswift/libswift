@@ -53,28 +53,27 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
         return;
 
     // See which zero state FileTransfers have no clients
-    std::set<FileTransfer *>    delset;
-    for(int i=0; i<ContentTransfer::swarms.size(); i++)
-    {
-        ContentTransfer *ct = ContentTransfer::swarms[i];
+    std::list<Sha1Hash> delset;
+    for (SwarmManager::Iterator iter=SwarmManager::GetManager().begin(); iter != SwarmManager::GetManager().end(); iter++) {
+
+	SwarmData *swarm = *iter;
+	if (!swarm->IsZeroState())
+	    continue;
+
+	//ARNOTODO: LiveTransfers not under swarm management
+
+	ContentTransfer *ct = (*iter)->GetTransfer(false);
 	if (ct == NULL || ct->ttype() != FILE_TRANSFER)
   	    continue;
 
-	FileTransfer *ft = (FileTransfer *)ct;
-    	if (!ft->IsZeroState())
-    	    continue;
-
     	// Arno, 2012-09-20: Work with copy of list, as "delete c" edits list.
-    	channels_t copychans(*ft->GetChannels());
+    	channels_t copychans(*ct->GetChannels());
 	if (copychans.size() == 0)
-	{
-	    // Ain't go no clients, cleanup transfer.
-	    delset.insert(ft);
-	}
+	    delset.push_back( swarm->swarm_id() );
 	else if (zs->connect_timeout_ != TINT_NEVER)
 	{
 	    // Garbage collect really slow connections, essential on Mac.
-	    dprintf("%s zero clean %s has %d peers\n",tintstr(),ft->swarm_id().hex().c_str(), ft->GetChannels()->size() );
+	    dprintf("%s zero clean %s has %d peers\n",tintstr(),ct->swarm_id().hex().c_str(), ct->GetChannels()->size() );
 	    channels_t::iterator iter2;
 	    for (iter2=copychans.begin(); iter2!=copychans.end(); iter2++) {
 		Channel *c = *iter2;
@@ -91,22 +90,22 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 		    }
 		}
 	    }
-	    if (ft->GetChannels()->size() == 0)
+	    if (ct->GetChannels()->size() == 0)
 	    {
 		// Ain't go no clients left, cleanup transfer.
-		delset.insert(ft);
+		delset.push_back(ct->swarm_id());
 	    }
 	}
     }
 
+
     // Delete 0-state FileTransfers sans peers
-    std::set<FileTransfer *>::iterator iter;
-    for (iter=delset.begin(); iter!=delset.end(); iter++)
+    std::list<Sha1Hash>::iterator deliter;
+    for (deliter=delset.begin(); deliter!=delset.end(); deliter++)
     {
-        FileTransfer *ft = *iter;
-        dprintf("%s F%u zero clean close\n",tintstr(),ft->fd() );
-        //fprintf(stderr,"%s F%u zero clean close\n",tintstr(),ft->fd() );
-        swift::Close(ft->fd());
+	dprintf("%s hash %s zero clean close\n",tintstr(),(*deliter).hex().c_str() );
+	//fprintf(stderr,"%s F%u zero clean close\n",tintstr(),ft->transfer_id() );
+        SwarmManager::GetManager().DeactivateSwarm( *deliter );
     }
 
     // Reschedule cleanup
@@ -137,8 +136,7 @@ void ZeroState::SetConnectTimeout(tint timeout)
     connect_timeout_ = timeout;
 }
 
-
-FileTransfer * ZeroState::Find(Sha1Hash &root_hash)
+int ZeroState::Find(Sha1Hash &root_hash)
 {
     //fprintf(stderr,"swift: zero: Got request for %s\n",root_hash.hex().c_str() );
 
@@ -151,24 +149,34 @@ FileTransfer * ZeroState::Find(Sha1Hash &root_hash)
     std::string reqfilename = file_name;
     int ret = file_exists_utf8(reqfilename);
     if (ret < 0 || ret == 0 || ret == 2)
-        return NULL;
+        return -1;
     reqfilename = file_name+".mbinmap";
     ret = file_exists_utf8(reqfilename);
     if (ret < 0 || ret == 0 || ret == 2)
-        return NULL;
+        return -1;
     reqfilename = file_name+".mhash";
     ret = file_exists_utf8(reqfilename);
     if (ret < 0 || ret == 0 || ret == 2)
-        return NULL;
+        return -1;
 
-    FileTransfer *ft = new FileTransfer(file_name,root_hash,false,true,chunk_size,true);
-    if (ft->hashtree() == NULL || !ft->hashtree()->is_complete())
-    {
-	// Safety catch
-	return NULL; 
+    SwarmData* swarm = SwarmManager::GetManager().AddSwarm(file_name, root_hash, Address(), false, chunk_size, true);
+    if (!swarm)
+        return -1;
+    ContentTransfer* ct = swarm->GetTransfer();
+    if (!ct) {
+        SwarmData* newSwarm = SwarmManager::GetManager().ActivateSwarm(swarm->swarm_id());
+        if (!newSwarm)
+            return swarm->Id();
+        swarm = newSwarm;
+        ct = swarm->GetTransfer();
+        if (!ct)
+            return swarm->Id();
     }
+
+    if (!ct->IsOperational())
+	return -1;
     else
-      return ft;
+	return swarm->Id();
 }
 
 

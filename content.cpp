@@ -299,6 +299,10 @@ uint32_t   ContentTransfer::GetNumSeeders()
 void ContentTransfer::AddPeer(Address &peer)
 {
     Channel *c = new Channel(this,INVALID_SOCKET,peer);
+#if OPTION_INCLUDE_PEER_TRACKING
+    Channel::PeerReference* ref = Channel::AddKnownPeer(peer);
+    delete ref; // TODO
+#endif
 }
 
 
@@ -319,3 +323,28 @@ Channel * ContentTransfer::FindChannel(const Address &addr, Channel *notc)
 
 
 
+/*
+ * Progress Monitoring
+ */
+
+
+void ContentTransfer::AddProgressCallback(ProgressCallback cb, uint8_t agg) {
+    callbacks_.push_back( std::pair<ProgressCallback, uint8_t>( cb, agg ) );
+}
+
+void ContentTransfer::RemoveProgressCallback(ProgressCallback cb) {
+    for( std::list< std::pair<ProgressCallback, uint8_t> >::iterator iter = callbacks_.begin(); iter != callbacks_.end(); iter++ ) {
+	if( (*iter).first == cb ) {
+	    callbacks_.erase( iter );
+	    return;
+	}
+    }
+}
+
+void ContentTransfer::Progress(bin_t bin) {
+    int minlayer = bin.layer();
+    for( std::list< std::pair<ProgressCallback, uint8_t> >::iterator iter = callbacks_.begin(); iter != callbacks_.end(); iter++ ) {
+	if( minlayer >= (*iter).second )
+	    ((*iter).first)( transfer_id_, bin );
+    }
+}

@@ -124,23 +124,18 @@ void StatsOverviewCallback(struct evhttp_request *evreq)
     strcpy(bodystr,"");
     strcat(bodystr,top_page);
 
-    for (int i=0; i<swift::ContentTransfer::swarms.size(); i++)
-    {
-    	ContentTransfer *ct = swift::ContentTransfer::swarms[i];
-    	if (ct != NULL)
-    	{
-    	    int fd = ct->fd();
-	    uint64_t total = (int)swift::Size(fd);
-	    uint64_t down  = (int)swift::Complete(fd);
-	    int perc = (int)((down * 100) / total);
+    for( SwarmManager::Iterator it = SwarmManager::GetManager().begin(); it != SwarmManager::GetManager().end(); it++ ) {
+        int id = (*it)->Id();
+        uint64_t total = (int)swift::Size(id);
+        uint64_t down  = (int)swift::Complete(id);
+        int perc = (int)((down * 100) / total);
 
-	    char roothashhexstr[256];
-	    sprintf(roothashhexstr,"%s", SwarmID(fd).hex().c_str() );
+        char roothashhexstr[256];
+        sprintf(roothashhexstr,"%s", SwarmID(id).hex().c_str() );
 
-	    char templ[1024];
-	    sprintf(templ,swarm_page_templ,roothashhexstr, perc, '%', dspeed, uspeed );
-	    strcat(bodystr,templ);
-    	}
+        char templ[1024];
+        sprintf(templ,swarm_page_templ,roothashhexstr, perc, '%', dspeed, uspeed );
+        strcat(bodystr,templ);
     }
 
     strcat(bodystr,bottom_page);
@@ -190,16 +185,15 @@ void StatsGetSpeedCallback(struct evhttp_request *evreq)
     // Arno: PDD+ wants content speeds too
     double contentdownspeed = 0.0, contentupspeed = 0.0;
     uint32_t nleech=0,nseed=0;
-    for (int i=0; i<swift::ContentTransfer::swarms.size(); i++)
-    {
-       ContentTransfer *ct = swift::ContentTransfer::swarms[i];
-       if (ct != NULL)
-       {
-          contentdownspeed += ct->GetCurrentSpeed(DDIR_DOWNLOAD);
-          contentupspeed += ct->GetCurrentSpeed(DDIR_UPLOAD);
-          nleech += ct->GetNumLeechers();
-          nseed += ct->GetNumSeeders();
-       }
+    for( SwarmManager::Iterator it = SwarmManager::GetManager().begin(); it != SwarmManager::GetManager().end(); it++ ) {
+        FileTransfer* ft = (*it)->GetTransfer(false);
+        if( ft ) {
+    		contentdownspeed += ft->GetCurrentSpeed(DDIR_DOWNLOAD);
+    		contentupspeed += ft->GetCurrentSpeed(DDIR_UPLOAD);
+    		nleech += ft->GetNumLeechers();
+    		nseed += ft->GetNumSeeders();
+    	}
+        // TODO: Are these active leechers and seeders, or potential seeders and leechers? In the latter case these can be retrieved when cached peers are implemented
     }
     int cdownspeed = (int)(contentdownspeed/1024.0);
     int cupspeed = (int)(contentupspeed/1024.0);

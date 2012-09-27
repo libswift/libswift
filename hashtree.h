@@ -210,7 +210,7 @@ public:
 
 
 /** This class implements the HashTree interface by reading directly from disk */
-class ZeroHashTree : public HashTree  {
+class ZeroHashTree : public HashTree {
     /** Merkle hash tree: root */
     Sha1Hash        root_hash_;
     /** Merkle hash tree: peak hashes */

@@ -52,6 +52,7 @@
 #include <vector>
 #include <set>
 #include <map>
+#include <list>
 #include <algorithm>
 #include <string>
 #include <math.h>
@@ -67,6 +68,10 @@
 // Arno, 2012-05-21: MacOS X has an Availability.h :-(
 #include "avail.h"
 
+// SCHAAP: swarmmanager.h is included at the end, since it depends on a alot and nothing depends on it
+#ifndef OPTION_INCLUDE_PEER_TRACKING
+#define OPTION_INCLUDE_PEER_TRACKING 0
+#endif
 
 namespace swift {
 
@@ -274,8 +279,6 @@ namespace swift {
         ContentTransfer(transfer_t ttype);
         virtual ~ContentTransfer();
 
-        // Global var
-        static std::vector<ContentTransfer*> swarms;
         /** Find transfer by the root hash. */
         static ContentTransfer* Find (const Sha1Hash& swarmid);
         /** Find transfer by the file descriptor. */
@@ -292,9 +295,9 @@ namespace swift {
         /** The binmap pointer for data already retrieved and checked. */
         virtual binmap_t *  ack_out() = 0;
         /** Returns the number of bytes in a chunk for this transfer */
-        virtual size_t  chunk_size() = 0;
-		/** Check whether all components still in working state */
-		virtual void 	UpdateOperational() = 0;
+        virtual uint32_t chunk_size() = 0;
+	/** Check whether all components still in working state */
+	virtual void 	UpdateOperational() = 0;
 
         /** Piece picking strategy used by this transfer. */
         PiecePicker *   picker() { return picker_; }
@@ -327,7 +330,7 @@ namespace swift {
         /** Arno: Return the number of seeders current channeled with. */
         uint32_t        GetNumSeeders();
 		/** Arno: Return the list of Channels for this transfer. MORESTATS */
-        channels_t 	*	GetChannels() { return &mychannels_; }
+        channels_t *	GetChannels() { return &mychannels_; }
 
         // MULTIFILE
         Storage *       GetStorage() { return storage_; }
@@ -345,20 +348,23 @@ namespace swift {
          * exp backoff allows it. */
         void            ReConnectToTrackerIfAllowed(bool hasestablishedpeers);
 
+        /** Progress callback management **/
+        void AddProgressCallback(ProgressCallback cb, uint8_t agg);
+        void RemoveProgressCallback(ProgressCallback cb);
+        void Progress(bin_t bin);  /** Called by channels when data comes in */
+
         /** Arno: Callback to do maintenance for a transfer */
         static void     LibeventCleanCallback(int fd, short event, void *arg);
 
       protected:
         transfer_t      ttype_;
-        int             fd_;    // Arno: index into ContentTransfer::swarms vector
+        int             transfer_id_;
 
         /** Channels working for this transfer. */
         channels_t    	mychannels_;
 
-#define SWFT_MAX_TRANSFER_CB 8
-        ProgressCallback callbacks[SWFT_MAX_TRANSFER_CB];
-        uint8_t         cb_agg[SWFT_MAX_TRANSFER_CB];
-        int             cb_installed;
+        /** Progress callback management **/
+        std::list< std::pair<ProgressCallback,uint8_t> > callbacks_;
 
         /** Piece picker strategy. */
         PiecePicker*    picker_;
@@ -377,27 +383,24 @@ namespace swift {
         tint            tracker_retry_interval_;
         tint            tracker_retry_time_;
 
-        friend void     AddProgressCallback (int fdes,ProgressCallback cb,uint8_t agg);
-        friend void     RemoveProgressCallback (int fdes,ProgressCallback cb);
-        friend class Channel;
+
     };
 
 
     /** A class representing a file/VOD transfer of one or multiple files */
     class    FileTransfer : public ContentTransfer {
 
-    public:
+      public:
         /** A constructor. Open/submit/retrieve a file.
          *  @param file_name    the name of the file
          *  @param root_hash    the root hash of the file; zero hash if the file
-	 	 *                      is newly submitted
-	 	 *  @param force_check_diskvshash	whether to force a check of disk versus hashes
-	 	 *  @param check_netwvshash			whether to hash check chunk on receipt
-	 	 *  @param chunk_size				size of chunk to use
-	 	 *  @param zerostate				whether to serve the hashes + content directly from disk
-	 	 */
+	 *                      is newly submitted
+	 *  @param force_check_diskvshash	whether to force a check of disk versus hashes
+	 *  @param check_netwvshash			whether to hash check chunk on receipt
+	 *  @param chunk_size				size of chunk to use
+	 *  @param zerostate				whether to serve the hashes + content directly from disk
+	 */
         FileTransfer(std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO, bool force_check_diskvshash=true, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, bool zerostate=false);
-
         /**    Close everything. */
         ~FileTransfer();
 
@@ -407,9 +410,9 @@ namespace swift {
         /** The binmap pointer for data already retrieved and checked. */
         binmap_t *      ack_out ()  { return hashtree_->ack_out(); }
         /** Piece picking strategy used by this transfer. */
-        size_t          chunk_size() { return hashtree_->chunk_size(); }
-		/** Check whether all components still in working state */
-		void 			UpdateOperational();
+        uint32_t 	chunk_size() { return hashtree_->chunk_size(); }
+	/** Check whether all components still in working state */
+	void 			UpdateOperational();
 
 		// FileTransfer specific methods
         /** Hash tree checked file; all the hashes and data are kept here. */
@@ -424,10 +427,9 @@ namespace swift {
          * meaning that the hash tree is not mmapped into memory but read
          * directly from disk, and other memory saving measures.
          */
-        bool 			IsZeroState() { return zerostate_; }
+        bool 		IsZeroState() { return zerostate_; }
 
-    protected:
-
+      protected:
         /** HashTree for transfer (either MmapHashTree or ZeroHashTree) */
         HashTree*       hashtree_;
 
@@ -437,15 +439,14 @@ namespace swift {
 
         //ZEROSTATE
         bool            zerostate_;
-
     };
 
     /** A class representing live transfer. */
-     class    LiveTransfer : public ContentTransfer {
+    class    LiveTransfer : public ContentTransfer {
        public:
 
         /** A constructor. */
-        LiveTransfer(std::string filename, const Sha1Hash& swarm_id=Sha1Hash::ZERO,bool amsource=false,size_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+        LiveTransfer(std::string filename, const Sha1Hash& swarm_id=Sha1Hash::ZERO,bool amsource=false,uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
         /**    Close everything. */
         ~LiveTransfer();
@@ -455,12 +456,12 @@ namespace swift {
         /** The binmap for data already retrieved and checked. */
         binmap_t *      ack_out ()  { return &ack_out_; }
         /** Returns the number of bytes in a chunk for this transmission */
-        size_t          chunk_size() { return chunk_size_; }
-		/** Check whether all components still in working state */
-		void 			UpdateOperational();
+        uint32_t        chunk_size() { return chunk_size_; }
+	/** Check whether all components still in working state */
+	void 		UpdateOperational();
 
 
-		// LiveTransfer specific methods
+	// LiveTransfer specific methods
         /** Returns the number of bytes that are complete sequentially, starting from the
              hookin offset, till the first not-yet-retrieved packet. */
         uint64_t        SeqComplete();
@@ -474,9 +475,9 @@ namespace swift {
         /** Returns the byte offset at which we hooked into the live stream */
         uint64_t        GetHookinOffset();
 
-       protected:
+      protected:
         /** Swarm Identifier */
-        Sha1Hash 		swarm_id_;
+        Sha1Hash 	swarm_id_;
         /**    Binmap of own chunk availability */
         binmap_t        ack_out_;
 
@@ -487,12 +488,12 @@ namespace swift {
         std::string     filename_;
          // CHUNKSIZE
          /** Arno: configurable fixed chunk size in bytes */
-         size_t         chunk_size_;
+        uint32_t        chunk_size_;
 
         /** Source: ID of last generated chunk */
         uint64_t        last_chunkid_;
         /** Source: Current write position in storage file */
-        size_t          offset_;
+        uint64_t        offset_;
      };
 
 
@@ -527,13 +528,6 @@ namespace swift {
     };
 
 
-    class PeerSelector { // Arno: partically unused
-    public:
-        virtual void    AddPeer (const Address& addr, const Sha1Hash& root) = 0;
-        virtual Address GetPeer (const Sha1Hash& for_root) = 0;
-    };
-
-
     /**    swift channel's "control block"; channels loosely correspond to TCP
        connections or FTP sessions; one channel is created for one file
        being transferred between two peers. As we don't need buffers and
@@ -541,7 +535,7 @@ namespace swift {
        Normally, API users do not deal with this class. */
     class Channel {
 
-    public:
+      public:
         Channel    (ContentTransfer* transfer, int socket=INVALID_SOCKET, Address peer=Address(), bool peerissource=false);
         ~Channel();
 
@@ -584,6 +578,39 @@ namespace swift {
         static void     Shutdown ();
         /** the current time */
         static tint     Time();
+        static tint 	last_tick;
+
+//ARNOTODO: remove peer tracking
+#if OPTION_INCLUDE_PEER_TRACKING
+        /** Management methods for the global peer list. **/
+        // The address of the peer and the timestamp it was added to the list of all peers.
+        class PeerListItem {
+        public:
+            PeerListItem() : peer(NULL), timestamp(0) {}
+            PeerListItem( const PeerListItem& pli ) : peer(pli.peer), timestamp(pli.timestamp) {}
+            PeerListItem( const Address& adr ) : peer(new Address(adr)), timestamp(usec_time()) {}
+        protected:
+            Address* peer;
+            tint timestamp;
+            friend class Channel;
+        };
+        // A reference to a peer, which is its index into the list and timestamp it was added.
+        class PeerReference {
+        public:
+            PeerReference( int index_, tint timestamp_ ) : index(index_), timestamp(timestamp_) {}
+        protected:
+            int index;
+            tint timestamp;
+            friend class Channel;
+        };
+        // Returned PeerReference is to be deleted by caller
+        static PeerReference* AddKnownPeer( const Address& adr );
+        static void RemoveKnownPeer( const Address& adr );
+        // Might very well return NULL, so check that
+        static const Address* LookupKnownPeer( const PeerReference& ref );
+        // May return NULL, check that; returned PeerReference is to be deleted by caller
+        static PeerReference* LookupKnownPeer( const Address& adr );
+#endif // OPTION_INCLUDE_PEER_TRACKING
 
         // Arno: Per instance methods
         void        Recv (struct evbuffer *evb);
@@ -680,10 +707,16 @@ namespace swift {
 
         void CloseOnError();
 
-    protected:
+      protected:
         struct event    *evsend_ptr_; // Arno: timer per channel // SAFECLOSE
         //LIVE
         struct event    *evsendlive_ptr_; // Arno: timer per channel
+
+#if OPTION_INCLUDE_PEER_TRACKING
+#define MAX_SIZE_PEER_LIST 16384
+        /** The list of all known peers. **/
+        static std::vector<PeerListItem> knownPeers_;
+#endif // OPTION_INCLUDE_PEER_TRACKING
 
         /** Channel id: index in the channel array. */
         uint32_t    id_;
@@ -785,9 +818,6 @@ namespace swift {
         void        Reschedule();
         void        UpdateDIP(bin_t pos); // RETRANSMIT
 
-        static tint     last_tick;
-        //static tbheap   send_queue;
-
         // Arno, 2012-06-14: Replace with hashtable (unsorted_map). This
         // currently grows for ever, filling with NULLs for old channels
         // and results in channel IDs with are not really random.
@@ -842,7 +872,7 @@ namespace swift {
      * pseudo filename META-INF-multifile-spec.txt) are the contents of the
      * swarm.
      */
-	class Storage : public Operational {
+    class Storage : public Operational {
 
       public:
 
@@ -865,7 +895,7 @@ namespace swift {
         static std::string os2specpn(std::string ospn);
 
         /** Create Storage from specified path and destination dir if content turns about to be a multi-file */
-        Storage(std::string ospathname, std::string destdir,int transferfd);
+        Storage(std::string ospathname, std::string destdir, int fdes);
         ~Storage();
 
         /** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
@@ -924,7 +954,7 @@ namespace swift {
         int64_t     total_size_from_spec_;
         StorageFile *last_sf_;
 
-        int         transfer_fd_;
+        int         transfer_id_;
         ProgressCallback alloc_cb_;
 
         int         WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
@@ -935,24 +965,23 @@ namespace swift {
 
     };
 
-	class ZeroState
-	{
-	  public:
+    class ZeroState
+    {
+      public:
     	ZeroState();
     	~ZeroState();
     	static ZeroState *GetInstance();
     	void SetContentDir(std::string contentdir);
     	void SetConnectTimeout(tint timeout);
-    	FileTransfer * Find(Sha1Hash &root_hash);
-
+    	int Find(Sha1Hash &root_hash);
 
         static void LibeventCleanCallback(int fd, short event, void *arg);
 
       protected:
         static ZeroState *__singleton;
 
-        struct event         evclean_;
-        std::string         contentdir_;
+        struct event	evclean_;
+        std::string     contentdir_;
 
         /* Arno, 2012-07-20: A very slow peer can keep a transfer alive
           for a long time (3 minute channel close timeout not reached).
@@ -960,8 +989,8 @@ namespace swift {
           descriptors per process and this problem causes all of them
           to be used.
         */
-        tint				connect_timeout_;
-	};
+        tint		connect_timeout_;
+    };
 
 
     /*************** The top-level API ****************/
@@ -986,8 +1015,8 @@ namespace swift {
     int     Open (std::string filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(), bool force_check_diskvshash=true, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** Get the root hash for the transmission. */
     const Sha1Hash& SwarmID (int file) ;
-    /** Close a file and a transmission. */
-    void    Close (int fd) ;
+    /** Close a file and a transmission, remove state or content if desired. */
+    void    Close (int transfer, bool removestate = false, bool removecontent = false) ;
     /** Add a possible peer which participares in a given transmission. In the case
         root hash is zero, the peer might be talked to regarding any transmission
         (likely, a tracker, cache or an archive). */
@@ -1000,7 +1029,7 @@ namespace swift {
     ssize_t  Write(int fd, const void *buf, size_t nbyte, int64_t offset);
 
     /** Seek, i.e., move start of interest window */
-    int Seek(int fd, int64_t offset, int whence);
+    int Seek(int transfer, int64_t offset, int whence);
 
     void    SetTracker(const Address& tracker);
     /** Set the default tracker that is used when Open is not passed a tracker
@@ -1008,15 +1037,15 @@ namespace swift {
 
     /** Returns size of the file in bytes, 0 if unknown. Might be rounded up to a kilobyte
         before the transmission is complete. */
-    uint64_t  Size (int fdes);
+    uint64_t  Size (int transfer);
     /** Returns the amount of retrieved and verified data, in bytes.
         A 100% complete transmission has Size()==Complete(). */
-    uint64_t  Complete (int fdes);
-    bool      IsComplete (int fdes);
+    uint64_t  Complete (int transfer);
+    bool      IsComplete (int transfer);
     /** Returns the number of bytes that are complete sequentially, starting from the
         beginning, till the first not-yet-retrieved packet.
         For LIVE beginning = GetHookinOffset() */
-    uint64_t  SeqComplete(int fdes, int64_t offset=0);
+    uint64_t  SeqComplete(int transfer, int64_t offset=0);
 
     uint64_t  GetHookinOffset(int fdes);
 
@@ -1030,11 +1059,11 @@ namespace swift {
 
     // LIVE
     /** To create a live stream as source */
-    LiveTransfer *LiveCreate(std::string filename, const Sha1Hash& swarmid, size_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    LiveTransfer *LiveCreate(std::string filename, const Sha1Hash& swarmid, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** To add chunks to a live stream as source */
     int LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte, long offset);
     /** To open a live stream as peer */
-    int LiveOpen(std::string filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(),  bool check_netwvshash=true, size_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int LiveOpen(std::string filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(),  bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
 
     void AddProgressCallback (int fdes,ProgressCallback cb,uint8_t agg);
@@ -1065,13 +1094,15 @@ namespace swift {
     void nat_test_update(void);
 
     // Arno: Save transfer's binmap for zero-hashcheck restart
-    int Checkpoint(int fdes);
+    int Checkpoint(int transfer);
 
     // SOCKTUNNEL
     void CmdGwTunnelUDPDataCameIn(Address srcaddr, uint32_t srcchan, struct evbuffer* evb);
     void CmdGwTunnelSendUDP(struct evbuffer *evb); // for friendship with Channel
 
 } // namespace end
+
+#include "swarmmanager.h"
 
 // #define SWIFT_MUTE
 

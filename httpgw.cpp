@@ -15,14 +15,14 @@
 
 using namespace swift;
 
-#define HTTPGW_VOD_PROGRESS_STEP_BYTES         (256*1024)
+#define HTTPGW_VOD_PROGRESS_STEP_BYTES	(256*1024)
 // For best performance make bigger than HTTPGW_PROGRESS_STEP_BYTES
-#define HTTPGW_VOD_MAX_WRITE_BYTES            (512*1024)
+#define HTTPGW_VOD_MAX_WRITE_BYTES	(512*1024)
 
 
-#define HTTPGW_LIVE_PROGRESS_STEP_BYTES     (16*1024)
+#define HTTPGW_LIVE_PROGRESS_STEP_BYTES	(16*1024)
 // For best performance make bigger than HTTPGW_PROGRESS_STEP_BYTES
-#define HTTPGW_LIVE_MAX_WRITE_BYTES            (32*1024)
+#define HTTPGW_LIVE_MAX_WRITE_BYTES	(32*1024)
 
 
 // Report swift download progress every 2^layer * chunksize bytes (so 0 = report every chunk)
@@ -37,10 +37,10 @@ using namespace swift;
 // Arno: libevent2 has a liberal understanding of socket writability,
 // that may result in tens of megabytes being cached in memory. Limit that
 // amount at app level.
-#define HTTPGW_MAX_OUTBUF_BYTES            (2*1024*1024)
+#define HTTPGW_MAX_OUTBUF_BYTES		(2*1024*1024)
 
 // Arno: Minium amout of content to have download before replying to HTTP
-#define HTTPGW_MIN_PREBUF_BYTES            (256*1024)
+#define HTTPGW_MIN_PREBUF_BYTES         (256*1024)
 
 
 #define HTTPGW_MAX_REQUEST 128
@@ -96,15 +96,14 @@ http_gw_t *HttpGwFindRequestByFD(int fdes) {
 }
 
 http_gw_t *HttpGwFindRequestBySwarmID(Sha1Hash &wanthash) {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( wanthash );
+    if (!swarm)
+        return NULL;
+    int id = swarm->Id();
     for (int httpc=0; httpc<http_gw_reqs_open; httpc++) {
-        http_gw_t *req = &http_requests[httpc];
-        if (req == NULL)
-            continue;
-        ContentTransfer *ct = ContentTransfer::transfer(req->fdes);
-        if (ct == NULL)
-            continue;
-        if (ct->swarm_id() == wanthash)
-            return req;
+	    http_gw_t *req = &http_requests[httpc];
+    if( req && req->transfer == id )
+	return req;
     }
     return NULL;
 }
@@ -213,7 +212,7 @@ void HttpGwWrite(int fdes) {
         relcomplete = req->endoff+1-req->startoff;
     int64_t avail = relcomplete-(req->offset-req->startoff);
 
-    dprintf("%s @%i http write: avail %lld relcomp %llu offset %llu start %llu end %llu tosend %llu\n",tintstr(),req->id, avail, relcomplete, req->offset, req->startoff, req->endoff,  req->tosend );
+    dprintf("%s @%d http write: avail %lld relcomp %llu offset %llu start %llu end %llu tosend %llu\n",tintstr(),req->id, avail, relcomplete, req->offset, req->startoff, req->endoff, req->tosend );
 
     struct evhttp_connection *evconn = evhttp_request_get_connection(req->sinkevreq);
     struct bufferevent* buffy = evhttp_connection_get_bufferevent(evconn);
@@ -269,7 +268,7 @@ void HttpGwWrite(int fdes) {
         free(buf);
 
         int wn = rd;
-        dprintf("%s @%i http write: sent %ib\n",tintstr(),req->id,(int)wn);
+        dprintf("%s @%i http write: sent %db\n",tintstr(),req->id,wn);
 
         req->offset += wn;
         req->tosend -= wn;
@@ -280,7 +279,6 @@ void HttpGwWrite(int fdes) {
 
     // Arno, 2010-11-30: tosend is set to fuzzy len, so need extra/other test.
     if (req->tosend==0 || req->offset == req->endoff+1) {
-
         // Done; wait for outbuffer to empty
         dprintf("%s @%i http write: done, wait for buffer empty\n",tintstr(),req->id);
         if (evbuffer_get_length(outbuf) == 0) {
@@ -573,10 +571,23 @@ void HttpGwFirstProgressCallback (int fdes, bin_t bin) {
         fprintf(stderr,"httpgw: Live: hook-in at %llu\n", swift::GetHookinOffset(fdes) );
 
 
+
     // MULTIFILE
     // Is storage ready?
-    ContentTransfer *ct = ContentTransfer::transfer(fdes);
-    if (ct == NULL) {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+    if (!swarm) {
+	dprintf("%s @%i http first: SwarmData not found\n",tintstr(), req->id);
+	evhttp_send_error(req->sinkevreq,500,"Internal error: Content not found although downloading it.");
+	req->replied = true;
+	return;
+    }
+    ContentTransfer *ct = swarm->GetTransfer();
+    if (!ct) {
+	swarm = SwarmManager::GetManager().ActivateSwarm( swarm->swarm_id() );
+	if (swarm)
+	    ct = swarm->GetTransfer();
+    }
+    if (!ct) {
         dprintf("%s @%i http first: ContentTransfer not found\n",tintstr(),req->id);
         evhttp_send_error(req->sinkevreq,500,"Internal error: Content not found although downloading it.");
         req->replied = true;
@@ -851,7 +862,6 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
         hashstr = hashstr.substr(0,40);
         durstr = "-1";
     }
-
     dprintf("%s @%i http get: demands %s mf %s dur %s\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str(),mfstr.c_str(),durstr.c_str() );
 
 
@@ -866,7 +876,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 
     // 4. Initiate transfer
     int fdes = swift::Find(swarm_id);
-    if (fdes==-1) {
+    if (fdes == -1) {
         // LIVE
         if (durstr != "-1") {
             fdes = swift::Open(hashstr,swarm_id,Address(),false,true,httpgw_chunk_size);
@@ -877,9 +887,11 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 
         // Arno, 2011-12-20: Only on new transfers, otherwise assume that CMD GW
         // controls speed
-        ContentTransfer *ct = ContentTransfer::transfer(fdes);
-        ct->SetMaxSpeed(DDIR_DOWNLOAD,httpgw_maxspeed[DDIR_DOWNLOAD]);
-        ct->SetMaxSpeed(DDIR_UPLOAD,httpgw_maxspeed[DDIR_UPLOAD]);
+        SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+        if (swarm) {
+            swarm->SetMaxSpeed(DDIR_DOWNLOAD,httpgw_maxspeed[DDIR_DOWNLOAD]);
+            swarm->SetMaxSpeed(DDIR_UPLOAD,httpgw_maxspeed[DDIR_UPLOAD]);
+        }
     }
 
     // 5. Record request
@@ -955,98 +967,23 @@ bool InstallHTTPGateway (struct event_base *evbase,Address bindaddr, uint32_t ch
 }
 
 
-uint64_t lastoffset=0;
-uint64_t lastcomplete=0;
-tint test_time = 0;
-
 /** For SwarmPlayer 3000's HTTP failover. We should exit if swift isn't
  * delivering such that the extension can start talking HTTP to the backup.
  */
 bool HTTPIsSending()
 {
-    return true;
-
-    //LIVETODO
-
     if (http_gw_reqs_open > 0)
     {
-        ContentTransfer *ct = ContentTransfer::transfer(http_requests[http_gw_reqs_open-1].fdes);
-        if (ct != NULL) {
-            fprintf(stderr,"httpgw: upload %lf\n",ct->GetCurrentSpeed(DDIR_UPLOAD)/1024.0);
-            fprintf(stderr,"httpgw: dwload %lf\n",ct->GetCurrentSpeed(DDIR_DOWNLOAD)/1024.0);
-            //fprintf(stderr,"httpgw: seqcmp %llu\n", swift::SeqComplete(http_requests[http_gw_reqs_open-1].transfer));
+	int fdes = http_requests[http_gw_reqs_open-1].fdes;
+        SwarmData* swarm = SwarmManager::GetManager().FindSwarm(fdes);
+        if( swarm ) {
+            ContentTransfer* ct = swarm->GetTransfer(false);
+            if (ct)) {
+                fprintf(stderr,"httpgw: upload %lf\n",ct->GetCurrentSpeed(DDIR_UPLOAD)/1024.0);
+                fprintf(stderr,"httpgw: dwload %lf\n",ct->GetCurrentSpeed(DDIR_DOWNLOAD)/1024.0);
+                //fprintf(stderr,"httpgw: seqcmp %llu\n", swift::SeqComplete(http_requests[http_gw_reqs_open-1].transfer));
+            }
         }
     }
     return true;
-
-    // TODO: reactivate when used in SwiftTransport / SwarmPlayer 3000.
-
-    if (test_time == 0)
-    {
-        test_time = NOW;
-        return true;
-    }
-
-    if (NOW > test_time+5*1000*1000)
-    {
-        fprintf(stderr,"http alive: httpc count is %d\n", http_gw_reqs_open );
-
-        if (http_gw_reqs_open == 0 && !sawhttpconn)
-        {
-            fprintf(stderr,"http alive: no HTTP activity ever, quiting\n");
-            return false;
-        }
-        else
-            sawhttpconn = true;
-
-        for (int httpc=0; httpc<http_gw_reqs_open; httpc++)
-        {
-
-            /*
-            if (http_requests[httpc].offset >= 100000)
-            {
-                fprintf(stderr,"http alive: 100K sent, quit\n");
-                return false;
-            }
-            else
-            {
-                fprintf(stderr,"http alive: sent %lli\n", http_requests[httpc].offset );
-                return true;
-            }
-            */
-
-            // If
-            // a. don't know anything about content (i.e., size still 0) or
-            // b. not sending to HTTP client and not at end, and
-            //    not downloading from P2P and not at end
-            // then stop.
-            if ( swift::Size(http_requests[httpc].fdes) == 0 || \
-                 (http_requests[httpc].offset == lastoffset &&
-                 http_requests[httpc].offset != swift::Size(http_requests[httpc].fdes) && \
-                 swift::Complete(http_requests[httpc].fdes) == lastcomplete && \
-                 swift::Complete(http_requests[httpc].fdes) != swift::Size(http_requests[httpc].fdes)))
-            {
-                fprintf(stderr,"http alive: no progress, quiting\n");
-                //getchar();
-                return false;
-            }
-
-            /*
-            if (http_requests[httpc].offset == swift::Size(http_requests[httpc].fdes))
-            {
-                // TODO: seed for a while.
-                fprintf(stderr,"http alive: data delivered to client, quiting\n");
-                return false;
-            }
-            */
-
-            lastoffset = http_requests[httpc].offset;
-            lastcomplete = swift::Complete(http_requests[httpc].fdes);
-        }
-        test_time = NOW;
-
-        return true;
-    }
-    else
-        return true;
 }

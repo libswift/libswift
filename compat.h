@@ -77,7 +77,9 @@ typedef void* setsockoptptr_t;
 
 // libevent2 assumes WIN32 is defined
 #ifdef _WIN32
+#ifndef WIN32
 #define WIN32	_WIN32
+#endif
 #endif
 #include <event2/util.h>
 
@@ -100,7 +102,7 @@ typedef void* setsockoptptr_t;
 #if SIZE_MAX > UINT_MAX
 #define PRISIZET	"%llu"
 #else
-#define PRISIZET	"%lu"
+#define PRISIZET	"%u"
 #endif
 
 #ifdef _WIN32
@@ -182,10 +184,6 @@ int file_exists_utf8(std::string pathname);
 // mkdir with filename in UTF-8
 int mkdir_utf8(std::string dirname);
 
-// remove with filename in UTF-8
-int remove_utf8(std::string pathname);
-
-
 // opendir() + readdir() UTF-8 versions
 class DirEntry
 {
@@ -259,9 +257,6 @@ int inline stringreplace(std::string& source, const std::string& find, const std
     }
     return num;
 }
-
-
-std::string hex2bin(std::string input);
 
 
 };

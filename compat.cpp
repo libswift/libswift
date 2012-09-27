@@ -23,7 +23,6 @@
 #include <sys/time.h>
 #endif
 #include <iostream>
-#include <sstream>
 
 namespace swift {
 
@@ -315,11 +314,6 @@ int mkdir_utf8(std::string dirname)
     return ret;
 }
 
-#if _DIR_ENT_HAVE_D_TYPE
-#define TEST_IS_DIR(unixde, st) ((bool)(unixde->d_type & DT_DIR))
-#else
-#define TEST_IS_DIR(unixde, st) ((bool)(S_ISDIR(st.st_mode)))
-#endif
 
 int remove_utf8(std::string pathname)
 {
@@ -332,7 +326,6 @@ int remove_utf8(std::string pathname)
 #endif
     return ret;
 }
-
 
 
 #if _DIR_ENT_HAVE_D_TYPE
@@ -547,7 +540,4 @@ std::string hex2bin(std::string input)
         res += static_cast<char>(temp);
     }
     return res;
-}
-
-
 }

@@ -11,7 +11,6 @@
 
 #include <cassert>
 #include "compat.h"
-//#include <glog/logging.h>
 #include "swift.h"
 
 using namespace std;
@@ -35,9 +34,12 @@ bool Channel::SELF_CONN_OK = false;
 swift::tint Channel::TIMEOUT = TINT_SEC*60;
 channels_t Channel::channels(1);
 Address Channel::tracker;
-//tbheap Channel::send_queue;
 FILE* Channel::debug_file = NULL;
 tint Channel::MIN_PEX_REQUEST_INTERVAL = TINT_SEC;
+
+#if OPTION_INCLUDE_PEER_TRACKING
+std::vector<Channel::PeerListItem> Channel::knownPeers_(32);
+#endif
 
 
 /*
@@ -52,6 +54,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     data_out_cap_(bin_t::ALL),hint_out_size_(0),
     // Gertjan fix 996e21e8abfc7d88db3f3f8158f2a2c4fc8a8d3f
     // "Changed PEX rate limiting to per channel limiting"
+    pex_requested_(false),  // Ric: init var that wasn't initialiazed
     last_pex_request_time_(0), next_pex_request_time_(0),
     pex_request_outstanding_(false), pex_requested_(false),  // Ric: init var that wasn't initialiazed
     useless_pex_count_(0),
@@ -280,6 +283,7 @@ int Channel::SendTo (evutil_socket_t sock, const Address& addr, struct evbuffer 
     int length = evbuffer_get_length(evb);
     int r = sendto(sock,(const char *)evbuffer_pullup(evb, length),length,0,
                    (struct sockaddr*)&(addr.addr),sizeof(struct sockaddr_in));
+    // SCHAAP: 2012-06-16 - How about EAGAIN and EWOULDBLOCK? Do we just drop the packet then as well?
     if (r<0) {
         print_error("can't send");
         evbuffer_drain(evb, length); // Arno: behaviour is to pretend the packet got lost
@@ -398,9 +402,64 @@ uint32_t Address::LOCALHOST = INADDR_LOOPBACK;
 
 
 /*
- * Utility methods 1
+ * Peer list management
  */
+#if OPTION_INCLUDE_PEER_TRACKING
+Channel::PeerReference* Channel::AddKnownPeer( const Address& adr ) {
+    int loc;
+    int oldloc = -1;
+    tint ts = usec_time();
+    for( loc = 0; loc < knownPeers_.size(); loc++ ) {
+        if( *(knownPeers_[loc].peer) == adr )
+            return new Channel::PeerReference( loc, knownPeers_[loc].timestamp );
+        if( knownPeers_[loc].timestamp < ts ) {
+            ts = knownPeers_[loc].timestamp;
+            oldloc = loc;
+        }
+    }
+    if( knownPeers_.size() >= MAX_SIZE_PEER_LIST ) {
+        ts = usec_time();
+        knownPeers_[oldloc].timestamp = ts;
+        knownPeers_[oldloc].peer = new Address(adr);
+        return new Channel::PeerReference( oldloc, ts );
+    }
+    else {
+        loc = knownPeers_.size();
+        struct PeerListItem pli( adr );
+        knownPeers_.push_back( pli );
+        return new Channel::PeerReference( loc, knownPeers_[loc].timestamp );
+    }
+}
 
+void Channel::RemoveKnownPeer( const Address& adr ) {
+    for( int loc = 0; loc < knownPeers_.size(); loc++ ) {
+        if( *(knownPeers_[loc].peer) == adr ) {
+            knownPeers_[loc].peer = NULL;
+            return;
+        }
+    }
+}
+
+const Address* Channel::LookupKnownPeer( const Channel::PeerReference& ref ) {
+    if( ref.index < knownPeers_.size() && knownPeers_[ref.index].timestamp == ref.timestamp )
+        return knownPeers_[ref.index].peer;
+    return NULL;
+}
+
+Channel::PeerReference* Channel::LookupKnownPeer( const Address& adr ) {
+    for( int loc = 0; loc < knownPeers_.size(); loc++ ) {
+        if( *(knownPeers_[loc].peer) == adr )
+            return new Channel::PeerReference( loc, knownPeers_[loc].timestamp );
+    }
+    return NULL;
+}
+#endif // OPTION_INCLUDE_PEER_TRACKING
+
+
+
+/*
+ * Utility methods
+ */
 
 const char* swift::tintstr (tint time) {
     if (time==0)
@@ -441,11 +500,6 @@ std::string swift::sock2str (struct sockaddr_in addr) {
     return std::string(ipch);
 }
 
-
-
-/*
- * Utility methods 2
- */
 
 int swift::evbuffer_add_string(struct evbuffer *evb, std::string str) {
     return evbuffer_add(evb, str.c_str(), str.size());

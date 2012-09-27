@@ -98,8 +98,8 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
     // Arno, 2012-01-23: Extra protection against channel loss, don't send DATA
     if (last_recv_time_ < NOW-(3*TINT_SEC))
     {
-        dprintf("%s #%u dequeued bad time %llu\n",tintstr(),id_, last_recv_time_ );
-        return bin_t::NONE;
+    	dprintf("%s #%u dequeued bad time %lld\n",tintstr(),id_, last_recv_time_ );
+    	return bin_t::NONE;
     }
 
     // Arno, 2012-07-27: Reenable Victor's retransmit, check for ACKs
@@ -145,7 +145,7 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
     //for(int i=0; i<hint_in_.size(); i++)
     //    mass += hint_in_[i].bin.base_length();
     char bin_name_buf[32];
-    dprintf("%s #%u dequeued %s [%lli]\n",tintstr(),id_,send.str(bin_name_buf),mass);
+    dprintf("%s #%u dequeued %s [%llu]\n",tintstr(),id_,send.str(bin_name_buf),mass);
     return send;
 }
 
@@ -274,6 +274,8 @@ void    Channel::AddHint (struct evbuffer *evb) {
 	// Actually allowed is max minus what we already asked for, globally (=all channels)
 	rate_allowed_hints = max(0,rate_hints_limit-(int)rough_global_hint_out_size);
     }
+    if (DEBUGTRAFFIC)
+    	fprintf(stderr,"hint c%u: %lf want %d allow %d chanout %llu globout %llu\n", id(), transfer().GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, allowed_hints, hint_out_size_, rough_global_hint_out_size );
 
     // 3. Take the smallest allowance from rate and queue limit
     uint64_t plan_pck = (uint64_t)min(rate_allowed_hints,queue_allowed_hints);
@@ -291,8 +293,8 @@ void    Channel::AddHint (struct evbuffer *evb) {
             evbuffer_add_8(evb, SWIFT_HINT);
             evbuffer_add_32be(evb, bin_toUInt32(hint));
             char bin_name_buf[32];
-            dprintf("%s #%u +hint %s [%lli]\n",tintstr(),id_,hint.str(bin_name_buf),hint_out_size_);
-            dprintf("%s #%u +hint base %s width %d\n",tintstr(),id_,hint.base_left().str(bin_name_buf), hint.base_length() );
+            dprintf("%s #%u +hint %s [%lld]\n",tintstr(),id_,hint.str(bin_name_buf),hint_out_size_);
+            dprintf("%s #%u +hint base %s width %d\n",tintstr(),id_,hint.base_left().str(bin_name_buf), (int)hint.base_length() );
             hint_out_.push_back(hint);
             hint_out_size_ += hint.base_length();
             //fprintf(stderr,"send c%d: HINTLEN %i\n", id(), hint.base_length());
@@ -511,13 +513,13 @@ void    Channel::Recv (struct evbuffer *evb) {
         rtt_avg_ = NOW - last_send_time_;
         dev_avg_ = rtt_avg_;
         dip_avg_ = rtt_avg_;
-        dprintf("%s #%u sendctrl rtt init %lli\n",tintstr(),id_,rtt_avg_);
+        dprintf("%s #%u sendctrl rtt init %lld\n",tintstr(),id_,rtt_avg_);
     }
 
     bin_t data = evbuffer_get_length(evb) ? bin_t::NONE : bin_t::ALL;
 
     if (DEBUGTRAFFIC)
-        fprintf(stderr,"recv c%d: size %d ", id(), evbuffer_get_length(evb));
+        fprintf(stderr,"recv c%u: size " PRISIZET "\n", id(), evbuffer_get_length(evb));
 
     while (evbuffer_get_length(evb)) {
         uint8_t type = evbuffer_remove_8(evb);
@@ -660,9 +662,9 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     bin_t pos = bin_fromUInt32(evbuffer_remove_32be(evb));
 
     // Arno: Assuming DATA last message in datagram
-    if (evbuffer_get_length(evb) > transfer()->chunk_size()) {
-        dprintf("%s #%u !data chunk size mismatch %s: exp %lu got " PRISIZET "\n",tintstr(),id_,pos.str(bin_name_buf), transfer()->chunk_size(), evbuffer_get_length(evb));
-        fprintf(stderr,"WARNING: chunk size mismatch: exp %lu got " PRISIZET "\n",transfer()->chunk_size(), evbuffer_get_length(evb));
+    if (evbuffer_get_length(evb) > hashtree()->chunk_size()) {
+    	dprintf("%s #%u !data chunk size mismatch %s: exp %u got " PRISIZET "\n",tintstr(),id_,pos.str(bin_name_buf), hashtree()->chunk_size(), evbuffer_get_length(evb));
+    	fprintf(stderr,"WARNING: chunk size mismatch: exp %u got " PRISIZET "\n",hashtree()->chunk_size(), evbuffer_get_length(evb));
     }
 
     int length = (evbuffer_get_length(evb) < transfer()->chunk_size()) ? evbuffer_get_length(evb) : transfer()->chunk_size();
@@ -712,10 +714,9 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     if (DEBUGTRAFFIC)
         fprintf(stderr,"$ ");
 
-    bin_t cover = transfer()->ack_out()->cover(pos);
-    for(int i=0; i<transfer()->cb_installed; i++)
-        if (cover.layer()>=transfer()->cb_agg[i])
-            transfer()->callbacks[i](transfer()->fd(),cover);  // FIXME
+
+    bin_t cover = transfer().ack_out()->cover(pos);
+    transfer().Progress(cover);
     if (cover.layer() >= 5) // Arno: tested with 32K, presently = 2 ** 5 * chunk_size CHUNKSIZE
         transfer()->OnRecvData( pow((double)2,(double)5)*((double)transfer()->chunk_size()) );
     data_in_.bin = pos;
@@ -766,7 +767,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
     while (  ri<data_out_tmo_.size() && !ackd_pos.contains(data_out_tmo_[ri].bin) )
         ri++;
     char bin_name_buf[32];
-    dprintf("%s #%u %cack %s %lli\n",tintstr(),id_,
+    dprintf("%s #%u %cack %s %lld\n",tintstr(),id_,
             di==data_out_.size()?'?':'-',ackd_pos.str(bin_name_buf),peer_time);
     if (di!=data_out_.size() && ri==data_out_tmo_.size()) { // not a retransmit
             // round trip time calculations
@@ -785,7 +786,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
         }
         if (owd_min_bins_[owd_min_bin_]>owd)
             owd_min_bins_[owd_min_bin_] = owd;
-        dprintf("%s #%u sendctrl rtt %lli dev %lli based on %s\n",
+        dprintf("%s #%u sendctrl rtt %lld dev %lld based on %s\n",
                 tintstr(),id_,rtt_avg_,dev_avg_,data_out_[di].bin.str(bin_name_buf));
         ack_rcvd_recent_++;
         // early loss detection by packet reordering
@@ -1078,21 +1079,28 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
             return_log ("%s #0 that is not the root hash %s\n",tintstr(),addr.str());
 
         hash = evbuffer_remove_hash(evb);
-        ContentTransfer* ct = ContentTransfer::Find(hash);
-        if (!ct)
-        {
+
+        // ARNOTODO: Hide zerostate stuff behind SwarmManager
+        SwarmData* swarm = SwarmManager::GetManager().FindSwarm(hash);
+        if (!swarm) {
             // See if available on disk, if so, activate
             ZeroState *zs = ZeroState::GetInstance();
-            ct = zs->Find(hash);
-            if (!ct)
+            int fdes = zs->Find(hash);
+            if (fdes == -1)
                 return_log ("%s #0 hash %s unknown, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
+            swarm = SwarmManager::GetManager().FindSwarm(fdes);
+            if (!swarm)
+                return_log( "%s #0 hash %s created by zero state, but not found?; requested by %s\n", tintstr(), hash.hex().c_str(), addr.str() );
+
         }
-        else if (ct->ttype() == FILE_TRANSFER)
-        {
-            // Active zerostate transfer, but broken
-            FileTransfer *ft = (FileTransfer *)ct;
-            if (ft->IsZeroState() && !ft->hashtree()->is_complete())
-                return_log ("%s #0 zero hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
+        ContentTransfer* ct = swarm->GetTransfer();
+        if (!ct) {
+            swarm = SwarmManager::GetManager().ActivateSwarm( hash );
+            if (!swarm)
+                return_log( "%s #0 hash %s known, but can't be activated; requested by %s\n", tintstr(), hash.hex().c_str(), addr.str() );
+            ct = swarm->GetTransfer();
+            if (!ct)
+                return_log( "%s #0 hash %s known, but can't be activated; requested by %s\n", tintstr(), hash.hex().c_str(), addr.str() );
         }
 
         if (!ct->IsOperational())
@@ -1183,6 +1191,9 @@ void Channel::CloseChannelByAddress(const Address &addr)
             break;
         }
     }
+#if OPTION_INCLUDE_PEER_TRACKING
+    Channel::RemoveKnownPeer(addr);
+#endif
 }
 
 void Channel::Close(bool sendclose) {
@@ -1238,7 +1249,8 @@ void Channel::Reschedule () {
             LibeventSendCallback(-1,EV_TIMEOUT,this);
             direct_sending_ = false;
         }
-        else {
+        else
+        {
             if (evsend_ptr_ != NULL) {
                 struct timeval duetv = *tint2tv(duein);
                 evtimer_add(evsend_ptr_,&duetv);

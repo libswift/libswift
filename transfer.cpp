@@ -36,7 +36,7 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
     }
 
     // MULTIFILE
-    storage_ = new Storage(filename,destdir,fd());
+    storage_ = new Storage(filename,destdir,transfer_id_);
 
     std::string hash_filename;
     hash_filename.assign(filename);
@@ -56,9 +56,8 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
             picker_ = new VodPiecePicker(this);
 	}
 	else
-		picker_ = new SeqPiecePicker(this);
-		picker_->Randomize(rand()&63);
-    }
+	    picker_ = new SeqPiecePicker(this);
+	picker_->Randomize(rand()&63);
     else
     {
 	// ZEROHASH
@@ -69,14 +68,13 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
 }
 
 
-
-
 void FileTransfer::UpdateOperational()
 {
-    if ((hashtree_ != NULL && !hashtree_->IsOperational()) || !storage_->IsOperational())
-    {
-        SetBroken();
-    }
+    if (!hashtree_->IsOperational()) || !storage_->IsOperational())
+	SetBroken();
+
+    if (zero_state_ && !hashtree_->is_complete())
+	SetBroken();
 }
 
 
@@ -94,5 +92,4 @@ FileTransfer::~FileTransfer ()
         availability_ = NULL;
     }
 }
-
 

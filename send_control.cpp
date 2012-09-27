@@ -142,8 +142,8 @@ tint    Channel::CwndRateNextSendTime () {
     if (send_interval_>max(rtt_avg_,TINT_SEC)*4)
         return SwitchSendControl(KEEP_ALIVE_CONTROL);
     if (data_out_.size()<cwnd_) {
-        dprintf("%s #%u sendctrl next in %llius (cwnd %.2f, data_out %i)\n",
-                tintstr(),id_,send_interval_,cwnd_,(int)data_out_.size());
+        dprintf("%s #%u sendctrl next in %lldus (cwnd %.2f, data_out %u)\n",
+	    tintstr(),id_,send_interval_,cwnd_,data_out_.size());
         return last_data_out_time_ + send_interval_;
     } else {
         assert(data_out_.front().time!=TINT_NEVER);
@@ -223,7 +223,7 @@ tint Channel::LedbatNextSendTime () {
         }
     }
 
-    dprintf("%s #%u sendctrl ledbat %lli-%lli => %3.2f\n",
+    dprintf("%s #%u sendctrl ledbat %lld-%lld => %3.2f\n",
             tintstr(),id_,owd_cur,owd_min,cwnd_);
     return CwndRateNextSendTime();
 }
