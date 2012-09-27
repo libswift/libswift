@@ -53,21 +53,22 @@ void swift::Close( int transfer, bool removestate, bool removecontent ) {
 	SwarmManager::GetManager().RemoveSwarm( swarm->RootHash(), removestate, removecontent );
 }
 
-int swift:: Find (Sha1Hash hash) {
+int swift::Find (Sha1Hash hash) {
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm(hash);
-    if( !swarm )
+    if (!swarm)
         return -1;
     return swarm->Id();
 }
 
+
 ssize_t swift::Read( int transfer, void *buf, size_t nbyte, int64_t offset )
 {
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if( !swarm )
+    if (!swarm)
 	return -1;
-    if( !swarm->Touch() ) {
+    if (!swarm->Touch()) {
 	swarm = SwarmManager::GetManager().ActivateSwarm( swarm->RootHash() );
-	if( !swarm->Touch() )
+	if (!swarm->Touch())
 	    return -1;
     }
     ContentTransfer* ct = swarm->GetTransfer();
@@ -79,11 +80,11 @@ ssize_t swift::Read( int transfer, void *buf, size_t nbyte, int64_t offset )
 ssize_t swift::Write( int transfer, const void *buf, size_t nbyte, int64_t offset )
 {
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if( !swarm )
+    if (!swarm)
 	return -1;
-    if( !swarm->Touch() ) {
+    if (!swarm->Touch()) {
 	swarm = SwarmManager::GetManager().ActivateSwarm( swarm->RootHash() );
-	if( !swarm->Touch() )
+	if (!swarm->Touch())
 	    return -1;
     }
     ContentTransfer* ct = swarm->GetTransfer();
@@ -92,6 +93,10 @@ ssize_t swift::Write( int transfer, const void *buf, size_t nbyte, int64_t offse
     return ct->GetStorage()->Write(buf, nbyte, offset);
 }
 
+
+/*
+ * Swarm Info
+ */
 
 uint64_t swift::Size( int transfer ) {
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
@@ -104,7 +109,7 @@ uint64_t swift::Size( int transfer ) {
 
 bool swift::IsComplete( int transfer ) {
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if( !swarm )
+    if (!swarm)
 	return false;
     return swarm->IsComplete();
 }
@@ -112,7 +117,7 @@ bool swift::IsComplete( int transfer ) {
 
 uint64_t swift::Complete( int transfer ) {
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if( !swarm )
+    if (!swarm)
 	return 0;
     return swarm->Complete();
 }
@@ -120,14 +125,15 @@ uint64_t swift::Complete( int transfer ) {
 
 uint64_t swift::SeqComplete( int transfer, int64_t offset ) {
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if( !swarm )
+    if (!swarm)
 	return 0;
 
     // ARNOTODO: why is this an activate? Could be cached
+    // SwarmMgr:SeqComplete already does activate in case offset != 0
 
-    if( !swarm->Touch() ) {
+    if (!swarm->Touch()) {
 	swarm = SwarmManager::GetManager().ActivateSwarm( swarm->RootHash() );
-	if( !swarm->Touch() )
+	if (!swarm->Touch())
 	    return 0;
     }
     ContentTransfer* ct = swarm->GetTransfer();
@@ -144,14 +150,12 @@ uint64_t swift::SeqComplete( int transfer, int64_t offset ) {
 }
 
 
-
 const Sha1Hash& swift::SwarmID(int fdes) {
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm( fdes );
     if (!swarm)
 	return Sha1Hash::ZERO;
     return swarm->swarm_id();
 }
-
 
 
 /** Returns the number of bytes in a chunk for this transmission */
@@ -162,6 +166,44 @@ uint32_t swift::ChunkSize( int fdes)
 	return 0;
     return swarm->ChunkSize();
 }
+
+
+
+tdlist_t swift::GetTransferDescriptors()
+{
+
+}
+
+void swift::SetMaxSpeed(int td, data_direction_t ddir, double m)
+{
+
+}
+
+double swift::GetCurrentSpeed(int td, data_direction_t ddir)
+{
+
+}
+
+
+transfer_t swift::ttype(int td)
+{
+
+}
+
+
+Storage *swift::GetStorage(int td)
+{
+}
+
+std::string swift::GetOSPathName(int td)
+{
+
+}
+
+bool swift::IsOperational(int td)
+{
+}
+
 
 
 
@@ -294,6 +336,10 @@ void swift::RemoveProgressCallback (int transfer, ProgressCallback cb) {
         return;
     swarm->RemoveProgressCallback( cb );
 }
+
+
+
+
 
 
 /*

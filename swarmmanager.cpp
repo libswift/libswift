@@ -307,6 +307,8 @@ void SwarmManager::BuildSwarm( SwarmData* swarm ) {
     // Refuse to seed a 0-byte file
     if( swarm->rootHash_ == Sha1Hash::ZERO && file_size_by_path_utf8( swarm->filename_ ) == 0 )
         return;
+
+    //ARNOTODO: check netw vs hash, LIVE?
     swarm->ft_ = new FileTransfer( swarm->id_, swarm->filename_, swarm->rootHash_, swarm->checkHashes_, swarm->chunkSize_, swarm->zerostate_ );
     if( !swarm->ft_ ) {
         exit( "buildswarm (1)" );

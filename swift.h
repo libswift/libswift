@@ -269,7 +269,8 @@ namespace swift {
     class PeerSelector;
     class Channel;
     typedef std::vector<Channel *>	channels_t;
-    typedef void (*ProgressCallback) (int fdes, bin_t bin);
+    typedef void (*ProgressCallback) (int td, bin_t bin);
+    typedef std::vector<int>		tdlist_t;
     class Storage;
 
     /** Superclass for live and vod */
@@ -282,7 +283,7 @@ namespace swift {
         /** Find transfer by the root hash. */
         static ContentTransfer* Find (const Sha1Hash& swarmid);
         /** Find transfer by the file descriptor. */
-        static ContentTransfer* transfer(int fdes) { return fdes<swarms.size() ? (ContentTransfer *)swarms[fdes] : NULL; }
+        static ContentTransfer* transfer(int td) { return td<swarms.size() ? (ContentTransfer *)swarms[td] : NULL; }
         void GlobalAdd();
         void GlobalDel();
 
@@ -895,7 +896,7 @@ namespace swift {
         static std::string os2specpn(std::string ospn);
 
         /** Create Storage from specified path and destination dir if content turns about to be a multi-file */
-        Storage(std::string ospathname, std::string destdir, int fdes);
+        Storage(std::string ospathname, std::string destdir, int td);
         ~Storage();
 
         /** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
@@ -1016,20 +1017,20 @@ namespace swift {
     /** Get the root hash for the transmission. */
     const Sha1Hash& SwarmID (int file) ;
     /** Close a file and a transmission, remove state or content if desired. */
-    void    Close (int transfer, bool removestate = false, bool removecontent = false) ;
+    void    Close(int td, bool removestate = false, bool removecontent = false) ;
     /** Add a possible peer which participares in a given transmission. In the case
         root hash is zero, the peer might be talked to regarding any transmission
         (likely, a tracker, cache or an archive). */
     void    AddPeer (Address address, const Sha1Hash& root=Sha1Hash::ZERO);
 
     /** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
-    ssize_t  Read(int fd, void *buf, size_t nbyte, int64_t offset); // off_t not 64-bit dynamically on Win32
+    ssize_t  Read(int td, void *buf, size_t nbyte, int64_t offset); // off_t not 64-bit dynamically on Win32
 
     /** UNIX pwrite approximation. Does change file pointer. Is not thread-safe */
-    ssize_t  Write(int fd, const void *buf, size_t nbyte, int64_t offset);
+    ssize_t  Write(int td, const void *buf, size_t nbyte, int64_t offset);
 
     /** Seek, i.e., move start of interest window */
-    int Seek(int transfer, int64_t offset, int whence);
+    int Seek(int td, int64_t offset, int whence);
 
     void    SetTracker(const Address& tracker);
     /** Set the default tracker that is used when Open is not passed a tracker
@@ -1037,22 +1038,22 @@ namespace swift {
 
     /** Returns size of the file in bytes, 0 if unknown. Might be rounded up to a kilobyte
         before the transmission is complete. */
-    uint64_t  Size (int transfer);
+    uint64_t  Size (int td);
     /** Returns the amount of retrieved and verified data, in bytes.
         A 100% complete transmission has Size()==Complete(). */
-    uint64_t  Complete (int transfer);
-    bool      IsComplete (int transfer);
+    uint64_t  Complete (int td);
+    bool      IsComplete (int td);
     /** Returns the number of bytes that are complete sequentially, starting from the
         beginning, till the first not-yet-retrieved packet.
         For LIVE beginning = GetHookinOffset() */
-    uint64_t  SeqComplete(int transfer, int64_t offset=0);
+    uint64_t  SeqComplete(int td, int64_t offset=0);
 
-    uint64_t  GetHookinOffset(int fdes);
+    uint64_t  GetHookinOffset(int td);
 
     /***/
     int       Find (Sha1Hash hash);
     /** Returns the number of bytes in a chunk for this transmission */
-    uint32_t      ChunkSize(int fdes);
+    uint32_t      ChunkSize(int td);
 
     /** Get the address bound to the socket descriptor returned by Listen() */
     Address BoundAddress(evutil_socket_t sock);
@@ -1066,10 +1067,17 @@ namespace swift {
     int LiveOpen(std::string filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(),  bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
 
-    void AddProgressCallback (int fdes,ProgressCallback cb,uint8_t agg);
-    void RemoveProgressCallback (int fdes,ProgressCallback cb);
-    void ExternallyRetrieved (int fdes,bin_t piece);
+    void AddProgressCallback (int td,ProgressCallback cb,uint8_t agg);
+    void RemoveProgressCallback (int td,ProgressCallback cb);
 
+
+    tdlist_t GetTransferDescriptors();
+    void SetMaxSpeed(int td, data_direction_t ddir, double m);
+    double GetCurrentSpeed(int td, data_direction_t ddir);
+    transfer_t ttype(int td);
+    Storage *GetStorage(int td);
+    std::string GetOSPathName(int td);
+    bool IsOperational(int td);
 
     /** Must be called by any client using the library */
     void LibraryInit(void);

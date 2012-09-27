@@ -52,7 +52,7 @@ using namespace swift;
 struct cmd_gw_t {
     int         id;
     evutil_socket_t   cmdsock;
-    int		fdes; // swift FD
+    int		td; // swift FD
     bool	moreinfo;   // whether to report detailed stats (see SETMOREINFO cmd)
     tint 	startt;	    // ARNOSMPTODO: debug speed measurements, remove
     std::string mfspecname; // MULTIFILE
@@ -108,7 +108,7 @@ void CmdGwFreeRequest(cmd_gw_t* req)
 {
     req->id = -1;
     req->cmdsock = -1;
-    req->fdes = -1;
+    req->td = -1;
     req->moreinfo = false;
     req->startt = 0;
     req->mfspecname = "";
@@ -136,8 +136,8 @@ void CmdGwCloseConnection(evutil_socket_t sock)
             cmd_gw_t* req = &cmd_requests[i];
             if (req->cmdsock==sock)
             {
-                dprintf("%s @%i stopping-on-close transfer %i\n",tintstr(),req->id,req->fdes);
-                swift::Close(req->fdes);
+                dprintf("%s @%i stopping-on-close transfer %i\n",tintstr(),req->id,req->td);
+                swift::Close(req->td);
 
                 // Remove from list and reiterate over it
                 CmdGwFreeRequest(req);
@@ -155,26 +155,21 @@ void CmdGwCloseConnection(evutil_socket_t sock)
 }
 
 
-cmd_gw_t* CmdGwFindRequestByFD(int fdes)
+cmd_gw_t* CmdGwFindRequestByFD(int td)
 {
     for(int i=0; i<cmd_gw_reqs_open; i++)
-        if (cmd_requests[i].fdes==fdes)
+        if (cmd_requests[i].td==td)
             return cmd_requests+i;
     return NULL;
 }
 
 cmd_gw_t* CmdGwFindRequestBySwarmID(Sha1Hash &want_hash)
 {
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( want_hash );
-    if( !swarm )
-        return NULL;
-    int id = swarm->Id();
-    for(int i=0; i<cmd_gw_reqs_open; i++) {
-    	cmd_gw_t* req = &cmd_requests[i];
-        if( req->fdes == id )
-            return req;
-    }
-    return NULL;
+    int td = swift::Find(want_hash);
+    if (td < 0)
+	return NULL;
+    else
+	return CmdGwFindRequestByFD(td);
 }
 
 
@@ -188,7 +183,7 @@ void CmdGwGotCHECKPOINT(Sha1Hash &want_hash)
     if (req == NULL)
         return;
 
-    swift::Checkpoint(req->fdes);
+    swift::Checkpoint(req->td);
 }
 
 
@@ -205,7 +200,7 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 	    fprintf(stderr,"cmd: GotREMOVE: %s not found, bad swarm?\n",want_hash.hex().c_str());
 	return;
     }
-    dprintf("%s @%i remove transfer %i\n",tintstr(),req->id,req->fdes);
+    dprintf("%s @%i remove transfer %i\n",tintstr(),req->id,req->td);
 
     // Arno: schaap moved cleanup to SwarmManager
     swift::Close(req->transfer, removestate, removecontent);
@@ -223,10 +218,7 @@ void CmdGwGotMAXSPEED(Sha1Hash &want_hash, data_direction_t ddir, double speed)
     cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
     if (req == NULL)
     	return;
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( req->fdes );
-    if( !swarm )
-        return;
-    swarm->SetMaxSpeed(ddir, speed);
+    swift::SetMaxSpeed(req->td, ddir, speed);
 }
 
 
@@ -264,40 +256,26 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 {
     // Send INFO message.
     //if (cmd_gw_debug)
-    //    fprintf(stderr,"cmd: SendINFO: F%d initdlstatus %d\n", req->fdes, dlstatus );
+    //    fprintf(stderr,"cmd: SendINFO: F%d initdlstatus %d\n", req->td, dlstatus );
 
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( req->transfer );
-    if( !swarm ) {
-        // Download was removed or closed somehow.
-        return;
-    }
-    Sha1Hash swarm_id = swarm->swarm_id();
+    Sha1Hash swarm_id = swift::SwarmID(req->td);
+    if (swarm_id == Sha1Hash::ZERO)
+	return; // ARNOTODO: send BAD_SWARM
 
-    ContentTransfer* ct = swarm->GetTransfer();
-    // ASHEEP: ct == NULL means swarm not active
-
-    uint64_t size = swift::Size(req->fdes);
-    uint64_t complete = swift::Complete(req->fdes);
+    uint64_t size = swift::Size(req->td);
+    uint64_t complete = swift::Complete(req->td);
     if (size > 0 && size == complete)
         dlstatus = DLSTATUS_SEEDING;
+    if (!swift::IsOperational(td))
+	    dlstatus = DLSTATUS_STOPPED_ON_ERROR;
 
     // schaap FIXME: Are those active leechers and seeders, or potential
     // leechers and seeders? In the latter case, get cached values when cached
     // peers have been implemented.
-    uint32_t numleech = 0;
-    uint32_t numseeds = 0;
-    double dlspeed = 0.0;
-    double ulspeed = 0.0;
-    if (ct)
-    {
-	if (!ct->IsOperational())
-	    dlstatus = DLSTATUS_STOPPED_ON_ERROR;
-
-        numleech = ct->GetNumLeechers();
-        numseeds = ct->GetNumSeeders();
-        dlspeed = ct->GetCurrentSpeed(DDIR_DOWNLOAD);
-        ulspeed = ct->GetCurrentSpeed(DDIR_UPLOAD);
-    }
+    uint32_t numleech = swift::GetNumLeechers(req->td);
+    uint32_t numseeds = swift::GetNumSeeders(req->td)
+    double dlspeed = swift::GetCurrentSpeed(req->td,DDIR_DOWNLOAD);
+    double ulspeed = swift::GetCurrentSpeed(req->td,DDIR_UPLOAD);
 
     char cmd[MAX_CMD_MESSAGE];
     sprintf(cmd,"INFO %s %d %llu/%llu %lf %lf %u %u\r\n",swarm_id.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds);
@@ -361,12 +339,9 @@ void CmdGwSendPLAY(cmd_gw_t *req)
 {
     // Send PLAY message to user
     if (cmd_gw_debug)
-        fprintf(stderr,"cmd: SendPLAY: %d\n", req->fdes);
+        fprintf(stderr,"cmd: SendPLAY: %d\n", req->td);
 
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( req->transfer );
-    if( !swarm )
-        return;
-    Sha1Hash swarm_id = swarm->swarm_id();
+    Sha1Hash swarm_id = swift::SwarmID(req->td);
 
     char cmd[MAX_CMD_MESSAGE];
     // Slightly diff format: roothash as ID after CMD
@@ -408,15 +383,15 @@ void CmdGwSendERRORBySocket(evutil_socket_t cmdsock, std::string msg, const Sha1
 /*
  * For VOD and Live, wait until PREBUF_BYTES are in before sending PLAY.
  */
-void CmdGwSwiftPrebufferProgressCallback (int fdes, bin_t bin)
+void CmdGwSwiftPrebufferProgressCallback (int td, bin_t bin)
 {
     //
     // Subsequent bytes of content downloaded
     //
     //if (cmd_gw_debug)
-    //    fprintf(stderr,"cmd: SwiftPrebuffProgress: %d\n", fdes );
+    //    fprintf(stderr,"cmd: SwiftPrebuffProgress: %d\n", td );
 
-    cmd_gw_t* req = CmdGwFindRequestByFD(fdes);
+    cmd_gw_t* req = CmdGwFindRequestByFD(td);
     if (req == NULL)
         return;
 
@@ -430,15 +405,15 @@ void CmdGwSwiftPrebufferProgressCallback (int fdes, bin_t bin)
     //    fprintf(stderr,"cmd: SwiftPrebuffProgress: want %llu got %llu\n", swift::SeqComplete(req->transfer,req->startoff), wantsize );
 
 
-    if (swift::SeqComplete(req->fdes,req->startoff) >= wantsize)
+    if (swift::SeqComplete(req->td,req->startoff) >= wantsize)
     {
         // First CMDGW_MAX_PREBUF_BYTES bytes received via swift,
         // tell user to PLAY
         // ARNOSMPTODO: bitrate-dependent prebuffering?
         //if (cmd_gw_debug)
-        //    fprintf(stderr,"cmd: SwiftPrebufferProgress: Prebuf done %d\n", fdes );
+        //    fprintf(stderr,"cmd: SwiftPrebufferProgress: Prebuf done %d\n", td );
 
-        swift::RemoveProgressCallback(fdes,&CmdGwSwiftPrebufferProgressCallback);
+        swift::RemoveProgressCallback(td,&CmdGwSwiftPrebufferProgressCallback);
 
         CmdGwSendPLAY(req);
     }
@@ -454,68 +429,52 @@ void CmdGwSwiftPrebufferProgressCallback (int fdes, bin_t bin)
  * prebuffered (via CmdGwSwiftPrebufferingProcessCallback).
  */
 
-void CmdGwSwiftVODFirstProgressCallback (int fdes, bin_t bin)
+void CmdGwSwiftVODFirstProgressCallback (int td, bin_t bin)
 {
     //
     // First bytes of content downloaded (first in absolute sense)
     //
     if (cmd_gw_debug)
-        fprintf(stderr,"cmd: SwiftFirstProgress: %d\n", fdes );
+        fprintf(stderr,"cmd: SwiftFirstProgress: %d\n", td );
 
-    cmd_gw_t* req = CmdGwFindRequestByFD(fdes);
+    cmd_gw_t* req = CmdGwFindRequestByFD(td);
     if (req == NULL)
         return;
 
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( fdes );
-    if (!swarm) {
-	CmdGwSendERRORBySocket(req->cmdsock,"Unknown transfer?!",ct->swarm_id());
-        return;
-    }
-    ContentTransfer *ct = swarm->GetTransfer();
-    if (!ct) {
-        // We're actively waiting for a multi-file to become ready. Make it active.
-        swarm = SwarmManager::GetManager().ActivateSwarm( swarm->swarm_id() );
-        if (!swarm)
-            return;
-        ct = swarm->GetTransfer();
-        if (!ct) {
-            // We tried
-            return;
-        }
-    }
-
-    if (ct->ttype() == LIVE_TRANSFER)
+    if (swift::ttype(td) == LIVE_TRANSFER)
     {
         // Shouldn't happen for LIVE
-        swift::RemoveProgressCallback(fdes,&CmdGwSwiftVODFirstProgressCallback);
+        swift::RemoveProgressCallback(td,&CmdGwSwiftVODFirstProgressCallback);
         return;
     }
 
     // VOD from here
-    FileTransfer *ft = (FileTransfer *)ct;
-    if (!ft->GetStorage()->IsReady()) {
+    Storage *storage = swift::GetStorage(td);
+    if (storage == NULL)
+	return;
+    if (!storage->IsReady()) {
         // Wait until (multi-file) storage is ready
         return;
     }
 
-    swift::RemoveProgressCallback(fdes,&CmdGwSwiftVODFirstProgressCallback);
+    swift::RemoveProgressCallback(td,&CmdGwSwiftVODFirstProgressCallback);
 
     if (req->mfspecname == "")
     {
         // Single file
         req->startoff = 0;
-        req->endoff = swift::Size(req->fdes)-1;
+        req->endoff = swift::Size(req->td)-1;
 
-        CmdGwSwiftPrebufferProgressCallback(req->fdes,bin_t(0,0)); // in case file on disk
+        CmdGwSwiftPrebufferProgressCallback(req->td,bin_t(0,0)); // in case file on disk
         if (!req->playsent)
-            swift::AddProgressCallback(fdes,&CmdGwSwiftPrebufferProgressCallback,CMDGW_PREBUF_PROGRESS_BYTE_INTERVAL_AS_LAYER);
+            swift::AddProgressCallback(td,&CmdGwSwiftPrebufferProgressCallback,CMDGW_PREBUF_PROGRESS_BYTE_INTERVAL_AS_LAYER);
     }
     else
     {
         // MULTIFILE
         // Have spec, seek to wanted file
 
-        storage_files_t sfs = ft->GetStorage()->GetStorageFiles();
+        storage_files_t sfs = storage->GetStorageFiles();
         storage_files_t::iterator iter;
         bool found = false;
         for (iter = sfs.begin(); iter < sfs.end(); iter++)
@@ -524,9 +483,9 @@ void CmdGwSwiftVODFirstProgressCallback (int fdes, bin_t bin)
             if (sf->GetSpecPathName() == req->mfspecname)
             {
                 if (cmd_gw_debug)
-                    fprintf(stderr,"cmd: SwiftFirstProgress: Seeking to multifile %s for %d\n", req->mfspecname.c_str(), fdes );
+                    fprintf(stderr,"cmd: SwiftFirstProgress: Seeking to multifile %s for %d\n", req->mfspecname.c_str(), td );
 
-                int ret = swift::Seek(req->fdes,sf->GetStart(),SEEK_SET);
+                int ret = swift::Seek(req->td,sf->GetStart(),SEEK_SET);
                 if (ret < 0)
                 {
                     CmdGwSendERRORBySocket(req->cmdsock,"Error seeking to file in multi-file content.");
@@ -535,15 +494,15 @@ void CmdGwSwiftVODFirstProgressCallback (int fdes, bin_t bin)
                 found = true;
                 req->startoff = sf->GetStart();
                 req->endoff = sf->GetEnd();
-                CmdGwSwiftPrebufferProgressCallback(req->fdes,bin_t(0,0)); // in case file on disk
-                swift::AddProgressCallback(fdes,&CmdGwSwiftPrebufferProgressCallback,CMDGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER);
+                CmdGwSwiftPrebufferProgressCallback(req->td,bin_t(0,0)); // in case file on disk
+                swift::AddProgressCallback(td,&CmdGwSwiftPrebufferProgressCallback,CMDGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER);
                 break;
             }
         }
         if (!found) 
         {
             if (cmd_gw_debug)
-                fprintf(stderr,"cmd: SwiftFirstProgress: Error file not found %d\n", fdes );
+                fprintf(stderr,"cmd: SwiftFirstProgress: Error file not found %d\n", td );
 
 	        CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.",ft->swarm_id());
 	        return;
@@ -563,13 +522,13 @@ void CmdGwSwiftErrorCallback (evutil_socket_t cmdsock)
     //swift::close_socket(sock);
 }
 
-void CmdGwSwiftAllocatingDiskspaceCallback (int fdes, bin_t bin)
+void CmdGwSwiftAllocatingDiskspaceCallback (int td, bin_t bin)
 {
     //if (cmd_gw_debug)
-    //    fprintf(stderr,"cmd: CmdGwSwiftAllocatingDiskspaceCallback: ENTER %d\n", fdes );
+    //    fprintf(stderr,"cmd: CmdGwSwiftAllocatingDiskspaceCallback: ENTER %d\n", td );
 
     // Called before swift starts reserving diskspace.
-    cmd_gw_t* req = CmdGwFindRequestByFD(fdes);
+    cmd_gw_t* req = CmdGwFindRequestByFD(td);
     if (req == NULL)
         return;
 
@@ -582,30 +541,6 @@ void CmdGwUpdateDLStateCallback(cmd_gw_t* req)
 {
     // Periodic callback, tell user INFO
     CmdGwSendINFO(req,DLSTATUS_DOWNLOADING);
-
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( req->fdes );
-    if( !swarm )
-        return;
-    ContentTransfer *ct = swarm->GetTransfer(false);
-    if( !ct )
-        return;
-
-    // Update speed measurements such that they decrease when DL/UL stops
-    ct->OnRecvData(0);
-    ct->OnSendData(0);
-
-    if (false)
-    {
-        // DEBUG download speed rate limit
-        double dlspeed = ct->GetCurrentSpeed(DDIR_DOWNLOAD);
-#ifdef WIN32
-        double dt = max(0.000001,(double)(usec_time() - req->startt)/TINT_SEC);
-#else
-        double dt = std::max(0.000001,(double)(usec_time() - req->startt)/TINT_SEC);
-#endif
-        double exspeed = (double)(swift::Complete(req->fdes)) / dt;
-        fprintf(stderr,"cmd: UpdateDLStateCallback: SPEED %lf == %lf\n", dlspeed, exspeed );
-    }
 }
 
 
@@ -863,16 +798,13 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             dprintf("cmd: START: request for given root hash already exists\n");
             return ERROR_BAD_ARG;
         }
-        req = cmd_requests + cmd_gw_reqs_open++;
-        req->id = ++cmd_gw_reqs_count;
-        req->cmdsock = cmdsock;
 
         // Send INFO DLSTATUS_HASHCHECKING
         CmdGwSendINFOHashChecking(cmdsock,swarm_id);
 
         // ARNOSMPTODO: disable/interleave hashchecking at startup
-        int fdes = swift::Find(swarm_id);
-        if (fdes==-1) {
+        int td = swift::Find(swarm_id);
+        if (td==-1) {
             std::string filename;
             if (storagepath != "")
                 filename = storagepath;
@@ -880,79 +812,68 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
                 filename = hashstr;
 
             if (duration != -1)
-                fdes = swift::Open(filename,swarm_id,trackaddr,false,chunksize);
+                td = swift::Open(filename,swarm_id,trackaddr,false,chunksize);
             else
-                fdes = swift::LiveOpen(filename,swarm_id,trackaddr,false,chunksize);
-            if (fdes == -1) {
+                td = swift::LiveOpen(filename,swarm_id,trackaddr,false,chunksize);
+            if (td == -1) {
             	CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarm_id);
             	return ERROR_BAD_SWARM;
             }
         }
+        // ARNOTODO: FORCE ACTIVATE, OR DO ONE AddCallBack
 
         // RATELIMIT
-        // SwarmData* swarm = SwarmManager::GetManager().FindSwarm(transfer);
-        // swarm->SetMaxSpeed(DDIR_DOWNLOAD,512*1024);
+        // swift::SetMaxSpeed(td,DDIR_DOWNLOAD,512*1024);
 
         // All is well, register req
         req = cmd_requests + cmd_gw_reqs_open++;
         req->id = ++cmd_gw_reqs_count;
         req->cmdsock = cmdsock;
-        req->fdes = fdes;
+        req->td = td;
         req->startt = usec_time();
         req->mfspecname = mfstr;
         req->playsent = false;
         req->xcontentdur = durationstr;
 
-        dprintf("%s @%i start transfer %i\n",tintstr(),req->id,req->fdes);
+        dprintf("%s @%i start transfer %i\n",tintstr(),req->id,req->td);
 
-        // Find swarm in admin
-        SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-        if (!swarm)
-            return ERROR_BAD_ARG;
-        ContentTransfer* ct = swarm->GetTransfer();
-        if (!ct) {
-            swarm = SwarmManager::GetManager().ActivateSwarm( swarm->swarm_id() );
-            if (swarm) {
-                ct = swarm->GetTransfer();
-                if (!ct)
-                    return ERROR_BAD_ARG;
-            }
-        }
 
         //if (cmd_gw_debug)
-	//    fprintf(stderr,"cmd: Already on disk is %llu/%llu\n", swift::Complete(fdes), swift::Size(fdes));
+	//    fprintf(stderr,"cmd: Already on disk is %llu/%llu\n", swift::Complete(td), swift::Size(td));
 
         // Set progress callbacks
-        if (ct->ttype() == FILE_TRANSFER)
+        if (swift::ttype(req->td) == FILE_TRANSFER)
         {
             // MULTIFILE
             int64_t minsize=CMDGW_MAX_PREBUF_BYTES;
 
-            FileTransfer *ft = (FileTransfer *)ct;
-            storage_files_t sfs = ft->GetStorage()->GetStorageFiles();
+            Storage *storage = swift::GetStorage(req->td)
+            if (storage == NULL)
+        	return ERROR_BAD_ARG;
+            storage_files_t sfs = storage->GetStorageFiles();
             if (sfs.size() > 0)
                 minsize = sfs[0]->GetSize();
 
             // Wait for first chunk, so we can handle MULTIFILE, then
             // wait for prebuffering and then send PLAY to user.
             // ARNOSMPTODO: OUTOFORDER: breaks with out-of-order download
-            if (swift::SeqComplete(fdes) >= minsize)
+            if (swift::SeqComplete(td) >= minsize)
             {
-                CmdGwSwiftVODFirstProgressCallback(fdes,bin_t(0,0));
+                CmdGwSwiftVODFirstProgressCallback(td,bin_t(0,0));
                 CmdGwSendINFO(req, DLSTATUS_DOWNLOADING);
             }
             else
             {
-                swift::AddProgressCallback(fdes,&CmdGwSwiftVODFirstProgressCallback,CMDGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER);
+                swift::AddProgressCallback(td,&CmdGwSwiftVODFirstProgressCallback,CMDGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER);
             }
 
-            ft->GetStorage()->AddOneTimeAllocationCallback(CmdGwSwiftAllocatingDiskspaceCallback);
+            storage->AddOneTimeAllocationCallback(CmdGwSwiftAllocatingDiskspaceCallback);
         }
         else
         {
             // LIVE
             // Wait for prebuffering and then send PLAY to user
-            swift::AddProgressCallback(fdes,&CmdGwSwiftPrebufferProgressCallback,CMDGW_PREBUF_PROGRESS_BYTE_INTERVAL_AS_LAYER);
+            swift::AddProgressCallback(td,&CmdGwSwiftPrebufferProgressCallback,CMDGW_PREBUF_PROGRESS_BYTE_INTERVAL_AS_LAYER);
         }
     }
     else if (!strcmp(method,"REMOVE"))

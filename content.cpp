@@ -19,6 +19,7 @@ std::vector<ContentTransfer*> ContentTransfer::swarms;
 /*
  * Local Constants
  */
+#define TRANSFER_MAINTENANCE_INTERVAL	TINT_SEC
 #define CHANNEL_GARBAGECOLLECT_INTERVAL	(5*TINT_SEC)
 
 #define TRACKER_RETRY_INTERVAL_START	(5*TINT_SEC)
@@ -40,7 +41,7 @@ ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), mychannels_
     max_speed_[DDIR_DOWNLOAD] = DBL_MAX;
 
     evtimer_assign(&evclean_,Channel::evbase,&ContentTransfer::LibeventCleanCallback,this);
-    evtimer_add(&evclean_,tint2tv(CHANNEL_GARBAGECOLLECT_INTERVAL));
+    evtimer_add(&evclean_,tint2tv(TRANSFER_MAINTENANCE_INTERVAL));
 }
 
 
@@ -105,11 +106,20 @@ void ContentTransfer::LibeventCleanCallback(int fd, short event, void *arg)
     if (ct == NULL)
         return;
 
+    // Update speed measurements such that they decrease when DL/UL stops
+    // Always. Must be done on 1 s interval
+    ct->OnRecvData(0);
+    ct->OnSendData(0);
+
+
+    // ARNOTODO: Call garage collect only once every CHANNEL_GARBAGECOLLECT_INTERVAL
+    // ARNOTODO: have one maintenance timer for all (activated) Transfers
+
     ct->GarbageCollectChannels();
 
     // Reschedule cleanup
     evtimer_assign(&(ct->evclean_),Channel::evbase,&ContentTransfer::LibeventCleanCallback,ct);
-    evtimer_add(&(ct->evclean_),tint2tv(CHANNEL_GARBAGECOLLECT_INTERVAL));
+    evtimer_add(&(ct->evclean_),tint2tv(TRANSFER_MAINTENANCE_INTERVAL));
 }
 
 
