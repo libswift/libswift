@@ -546,6 +546,7 @@ int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, b
     // that case, swift::Open() cheaply returns the same transfer descriptor.
 
     // Client mode: regular or live download
+    int td = -1;
     if (!livestream)
 	td = swift::Open(filename,hash,tracker,force_check_diskvshash,true,false,activate,chunk_size);
     else
@@ -568,7 +569,7 @@ int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_di
             std::string path = dirname;
             path.append(FILE_SEP);
             path.append(de->filename_);
-            int td = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,force_check_diskvshash,chunk_size,activate);
+            int td = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,force_check_diskvshash,chunk_size,false,activate);
             if (td >= 0)
                 Checkpoint(td);
         }
@@ -587,22 +588,24 @@ int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_di
 int CleanSwiftDirectory(std::string dirname)
 {
     tdlist_t delset;
-    tdlist_t tds = GetTransferDescriptors();
+    tdlist_t tds = swift::GetTransferDescriptors();
     tdlist_t::iterator iter;
-    for (iter = tds.begin(); it != tds.end(); it++)
+    for (iter = tds.begin(); iter != tds.end(); iter++)
     {
-	std::string filename = swift::GetOSPathName(*iter);
+	int td = *iter;
+	std::string filename = swift::GetOSPathName(td);
         fprintf(stderr,"swift: clean: Checking %s\n", filename.c_str() );
         int res = file_exists_utf8( filename );
         if (res == 0) {
             fprintf(stderr,"swift: clean: Missing %s\n", filename.c_str() );
-            delset.push_back(*iter);
+            delset.push_back(td);
 	}
     }
     for (iter=delset.begin(); iter!=delset.end(); iter++)
     {
-        fprintf(stderr,"swift: clean: Deleting transfer %d\n", *iter );
-        swift::Close(*iter);
+	int td = *iter;
+        fprintf(stderr,"swift: clean: Deleting transfer %d\n", td );
+        swift::Close(td);
     }
 
     return 1;
@@ -742,7 +745,7 @@ void ReportCallback(int fd, short event, void *arg) {
 
         tdlist_t tds = GetTransferDescriptors();
         tdlist_t::iterator iter;
-        for (iter = tds.begin(); it != tds.end(); it++)
+        for (iter = tds.begin(); iter != tds.end(); iter++)
         {
             int td = *iter;
             if (!swift::IsComplete(td))

@@ -254,9 +254,9 @@ void    Channel::AddHint (struct evbuffer *evb) {
     // RATELIMIT
     // 2. Calc max of what is allowed by the rate limiter
     int rate_allowed_hints = LONG_MAX;
+    uint64_t rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
     if (transfer()->GetMaxSpeed(DDIR_DOWNLOAD) < DBL_MAX)
     {
-	uint64_t rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
 	channels_t::iterator iter;
 	for (iter=transfer()->GetChannels()->begin(); iter!=transfer()->GetChannels()->end(); iter++)
 	{
@@ -275,7 +275,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
 	rate_allowed_hints = max(0,rate_hints_limit-(int)rough_global_hint_out_size);
     }
     if (DEBUGTRAFFIC)
-    	fprintf(stderr,"hint c%u: %lf want %d allow %d chanout %llu globout %llu\n", id(), transfer().GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, allowed_hints, hint_out_size_, rough_global_hint_out_size );
+    	fprintf(stderr,"hint c%u: %lf want %d qallow %d rallow %d chanout %llu globout %llu\n", id(), transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, queue_allowed_hints, rate_allowed_hints, hint_out_size_, rough_global_hint_out_size );
 
     // 3. Take the smallest allowance from rate and queue limit
     uint64_t plan_pck = (uint64_t)min(rate_allowed_hints,queue_allowed_hints);
@@ -499,7 +499,7 @@ void    Channel::Recv (struct evbuffer *evb) {
     dgrams_rcvd_++;
 
     if (!transfer()->IsOperational()) {
-    	dprintf("%s #%u recvd on broken transfer %d \n",tintstr(),id_, transfer()->fd() );
+    	dprintf("%s #%u recvd on broken transfer %d \n",tintstr(),id_, transfer()->td() );
 	CloseOnError();
     	return;
     }
@@ -594,7 +594,7 @@ void    Channel::Recv (struct evbuffer *evb) {
     // Arno: see if transfer still in working order
     transfer()->UpdateOperational();
     if (!transfer()->IsOperational()) {
-    	dprintf("%s #%u recvd broke transfer %d \n",tintstr(),id_, transfer()->fd() );
+    	dprintf("%s #%u recvd broke transfer %d \n",tintstr(),id_, transfer()->td() );
         CloseOnError();
         return;
     }
@@ -715,8 +715,8 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
         fprintf(stderr,"$ ");
 
 
-    bin_t cover = transfer().ack_out()->cover(pos);
-    transfer().Progress(cover);
+    bin_t cover = transfer()->ack_out()->cover(pos);
+    transfer()->Progress(cover);
     if (cover.layer() >= 5) // Arno: tested with 32K, presently = 2 ** 5 * chunk_size CHUNKSIZE
         transfer()->OnRecvData( pow((double)2,(double)5)*((double)transfer()->chunk_size()) );
     data_in_.bin = pos;
@@ -1091,7 +1091,9 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         }
         ContentTransfer *ct = swift::GetActivatedTransfer(td);
         if (ct == NULL)
-                return_log( "%s #0 hash %s known, couldn't be activated; requested by %s\n", tintstr(), hash.hex().c_str(), addr.str() );
+        {
+	    return_log( "%s #0 hash %s known, couldn't be activated; requested by %s\n", tintstr(), hash.hex().c_str(), addr.str() );
+        }
         else if (!ct->IsOperational())
         {
             // Activated, but broken

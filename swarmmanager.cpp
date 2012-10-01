@@ -13,6 +13,7 @@
 #define SWARMMANAGER_ASSERT_INVARIANTS 0
 
 #include "swift.h"
+#include "swarmmanager.h"
 
 #define SECONDS_UNTIL_INDEX_REUSE   120
 #define SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED   30
@@ -245,7 +246,7 @@ SwarmData* SwarmManager::AddSwarm( const std::string filename, const Sha1Hash& h
 {
     enter( "addswarm( many )" );
     invariant();
-    SwarmData sd( filename, hash, tracker, force_check_diskvshash, check_netwvshash, zerostate, chunksize );
+    SwarmData sd( filename, hash, tracker, force_check_diskvshash, check_netwvshash, zerostate, chunk_size );
 #if SWARMMANAGER_ASSERT_INVARIANTS
     SwarmData* res = AddSwarm( sd, activate );
     assert( hash == Sha1Hash::ZERO || res == FindSwarm( hash ) );
@@ -267,7 +268,7 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
     // Arno: create SwarmData from checkpoint
     if (swarm.rootHash_ == Sha1Hash::ZERO && !activate)
     {
-	std::string binmap_filename = swarm->filename_;
+	std::string binmap_filename = swarm.filename_;
 	binmap_filename.append(".mbinmap");
 
 	// Arno, 2012-01-03: Hack to discover root hash of a file on disk, such that
@@ -276,7 +277,7 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
 
 	//    fprintf(stderr,"swift: parsedir: File %s may have hash %s\n", filename, ht->root_hash().hex().c_str() );
 
-	std::string hash_filename = swarm->filename_;
+	std::string hash_filename = swarm.filename_;
 	hash_filename.append(".mhash");
 
 	bool mhash_exists=true;
@@ -293,7 +294,7 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
 	    newSwarm->cachedComplete_ = ht->complete();
 	    newSwarm->cachedSize_ = ht->size();
 	    newSwarm->cachedIsComplete_ = ht->is_complete();
-	    newSwarm->cachedOSPathName_ = swarm->filename_;
+	    newSwarm->cachedOSPathName_ = swarm.filename_;
 	    newSwarm->cachedStorageReady_ = ht->is_complete();
 
 
@@ -301,7 +302,7 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
 	}
     }
 
-    if (newSwarm.rootHash_ == Sha1Hash::ZERO) {
+    if (newSwarm->rootHash_ == Sha1Hash::ZERO) {
 	// FIXME: Handle a swarm that has no rootHash yet in a better way: queue it and build the rootHash in the background.
         BuildSwarm( newSwarm );
         if( !newSwarm->ft_ ) {
@@ -368,7 +369,7 @@ void SwarmManager::BuildSwarm( SwarmData* swarm ) {
         return;
     }
     if( swarm->rootHash_ == Sha1Hash::ZERO )
-        swarm->rootHash_ = swarm->ft_->root_hash();
+        swarm->rootHash_ = swarm->ft_->swarm_id();
     assert( swarm->RootHash() != Sha1Hash::ZERO );
     if( swarm->cached_ ) {
         swarm->cached_ = false;
@@ -659,8 +660,10 @@ void SwarmManager::DeactivateSwarm( SwarmData* swarm, int activeLoc ) {
         swarm->cachedComplete_ = swarm->Complete();
         swarm->cachedSeqComplete_ = swarm->SeqComplete();
         swarm->cachedOSPathName_ = swarm->OSPathName();
-        for( std::list< std::pair<ProgressCallback, uint8_t> >::iterator iter = swarm->ft_->callbacks_.begin(); iter != swarm->ft_->callbacks_.end(); iter++ )
-            swarm->cachedCallbacks_.push_back( std::pair<ProgressCallback, uint8_t>( (*iter).first, (*iter).second ) );
+        progcallbackregs_t pcs = swarm->ft_->GetProgressCallbackRegistrations();
+        progcallbackregs_t::iterator iter;
+        for (iter = pcs.begin(); iter != pcs.end(); iter++ )
+            swarm->cachedCallbacks_.push_back( progcallbackreg_t((*iter).first,(*iter).second ) );
         swarm->cached_ = true;
         delete swarm->ft_;
         swarm->ft_ = NULL;
@@ -797,7 +800,7 @@ SwarmManager& SwarmManager::GetManager() {
 tdlist_t SwarmManager::GetTransferDescriptors()
 {
     tdlist_t tdl;
-    for (int i=0 i<swarmList_.size(); i++)
+    for (int i=0; i<swarmList_.size(); i++)
     {
 	if (swarmList_[i] != NULL)
 	    tdl.push_back(i);

@@ -93,7 +93,7 @@ ContentTransfer *swift::GetActivatedTransfer(int td)
 
 
 // Local method
-static ContentTransfer *swift::FindActivateTransferByTD(int td)
+static ContentTransfer *FindActivateTransferByTD(int td)
 {
     ContentTransfer *ct = NULL;
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
@@ -105,7 +105,7 @@ static ContentTransfer *swift::FindActivateTransferByTD(int td)
 	if (!swarm->Touch()) {
 	    swarm = SwarmManager::GetManager().ActivateSwarm( swarm->RootHash() );
 	    if (!swarm->Touch())
-		return -1;
+		return NULL;
 	}
 	ct = swarm->GetTransfer();
     }
@@ -189,7 +189,7 @@ const Sha1Hash& swift::SwarmID(int td) {
 	    return lt->swarm_id();
     }
     else
-	return swarm->swarm_id();
+	return swarm->RootHash();
 }
 
 
@@ -201,7 +201,7 @@ uint32_t swift::ChunkSize( int td)
     {
 	LiveTransfer *lt = LiveTransfer::FindByTD(td);
 	if (lt == NULL)
-	    return Sha1Hash::ZERO;
+	    return 0;
 	else
 	    return lt->chunk_size();
     }
@@ -214,7 +214,7 @@ uint32_t swift::ChunkSize( int td)
 tdlist_t swift::GetTransferDescriptors()
 {
     tdlist_t filetdl = SwarmManager::GetManager().GetTransferDescriptors();
-    tdlist livetdl = LiveTransfer::GetTransferDescriptors();
+    tdlist_t livetdl = LiveTransfer::GetTransferDescriptors();
     filetdl.insert(filetdl.end(),livetdl.begin(),livetdl.end()); // append
     return filetdl;
 }
@@ -234,6 +234,7 @@ void swift::SetMaxSpeed(int td, data_direction_t ddir, double speed)
 	    // be careful here.
 	    if( lt->GetMaxSpeed( ddir ) != speed )
 		lt->SetMaxSpeed( ddir, speed );
+	}
     }
     else
 	swarm->SetMaxSpeed(ddir,speed); // checks current set speed beforehand
@@ -252,13 +253,58 @@ double swift::GetCurrentSpeed(int td, data_direction_t ddir)
     }
     else
     {
-	FileTransfer *ft = swarm->GetTransfer();
+	FileTransfer *ft = swarm->GetTransfer(false); // Arno: do not activate for this
 	if (!ft)
 	    return -1.0;
 	else
 	    return ft->GetCurrentSpeed(ddir);
     }
 }
+
+
+uint32_t swift::GetNumSeeders(int td)
+{
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( td );
+    if (swarm == NULL)
+    {
+	LiveTransfer *lt = LiveTransfer::FindByTD(td);
+	if (lt == NULL)
+	    return 0;
+	else
+	    return lt->GetNumSeeders();
+    }
+    else
+    {
+	FileTransfer *ft = swarm->GetTransfer(false); // Arno: do not activate for this
+	if (!ft)
+	    return 0;
+	else
+	    return ft->GetNumSeeders();
+    }
+}
+
+
+uint32_t swift::GetNumLeechers(int td)
+{
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( td );
+    if (swarm == NULL)
+    {
+	LiveTransfer *lt = LiveTransfer::FindByTD(td);
+	if (lt == NULL)
+	    return 0;
+	else
+	    return lt->GetNumLeechers();
+    }
+    else
+    {
+	FileTransfer *ft = swarm->GetTransfer(false); // Arno: do not activate for this
+	if (!ft)
+	    return 0;
+	else
+	    return ft->GetNumLeechers();
+    }
+}
+
 
 
 transfer_t swift::ttype(int td)
@@ -303,7 +349,7 @@ std::string swift::GetOSPathName(int td)
 	    return lt->GetStorage()->GetOSPathName();
     }
     else
-	return swarm->GetOSPathName();
+	return swarm->OSPathName();
 }
 
 bool swift::IsOperational(int td)
@@ -389,7 +435,7 @@ int swift::Seek(int td, int64_t offset, int whence)
 	return -1;
 
     if( !swarm->Touch() ) {
-	swarm = SwarmManager::GetManager().ActivateSwarm( swarm->swarm_id() );
+	swarm = SwarmManager::GetManager().ActivateSwarm( swarm->RootHash() );
 	if (!swarm->Touch())
 	    return -1;
     }
@@ -420,7 +466,7 @@ void swift::AddPeer(Address address, const Sha1Hash& swarmid) {
     else
     {
 	if (!swarm->Touch()) {
-	    swarm = SwarmManager::GetManager().ActivateSwarm( root );
+	    swarm = SwarmManager::GetManager().ActivateSwarm(swarmid);
 	    if (!swarm->Touch())
 		return;
 	}

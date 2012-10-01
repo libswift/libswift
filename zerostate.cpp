@@ -56,7 +56,7 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
     tdlist_t tds = GetTransferDescriptors();
     tdlist_t::iterator iter;
     tdlist_t delset;
-    for (iter = tds.begin(); it != tds.end(); it++)
+    for (iter = tds.begin(); iter != tds.end(); iter++)
     {
         int td = *iter;
         if (!swift::IsZeroState(td))
@@ -73,7 +73,7 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
     	// Arno, 2012-09-20: Work with copy of list, as "delete c" edits list.
     	channels_t copychans(*ct->GetChannels());
 	if (copychans.size() == 0)
-	    delset.push_back( swarm->swarm_id() );
+	    delset.push_back(td);
 	else if (zs->connect_timeout_ != TINT_NEVER)
 	{
 	    // Garbage collect really slow connections, essential on Mac.
@@ -88,7 +88,7 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 		    if ((NOW-c->GetOpenTime()) > zs->connect_timeout_)
 		    {
 			//fprintf(stderr,"%s F%u zero clean %s opentime %lld ulspeed %lf\n",tintstr(),ft->fd(), c->peer().str(), (NOW-c->GetOpenTime())/TINT_SEC, ft->GetCurrentSpeed(DDIR_UPLOAD) );
-			fprintf(stderr,"%s F%u zero clean %s close slow channel\n",tintstr(),ft->fd(), c->peer().str() );
+			fprintf(stderr,"%s F%u zero clean %s close slow channel\n",tintstr(),td, c->peer().str() );
 			c->Close();
 			delete c;
 		    }
@@ -165,7 +165,7 @@ int ZeroState::Find(Sha1Hash &root_hash)
         return -1;
 
     // Open as ZeroState
-    return swift::Open(filename, root_hash, Address(), false, true, true);
+    return swift::Open(file_name, root_hash, Address(), false, true, true);
 }
 
 

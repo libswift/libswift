@@ -129,22 +129,15 @@ void HttpGwCloseConnection (http_gw_t* req) {
     // Current close policy: checkpoint and DO NOT close transfer, keep on
     // seeding forever. More sophisticated clients should use CMD GW and issue
     // REMOVE.
-    ContentTransfer *ct = ContentTransfer::transfer(req->td);
-    if (ct != NULL)
-    {
-        if (ct->ttype() == FILE_TRANSFER)
-        {
-            swift::Checkpoint(req->td);
+    swift::Checkpoint(req->td);
 
-            // Arno, 2012-05-04: MULTIFILE: once the selected file has been downloaded
-            // swift will download all content that comes afterwards too. Poor man's
-            // fix to avoid this: seek to end of content when HTTP done. VOD PiecePicker
-            // will then no download anything. Better would be to seek to end when
-            // swift partial download is done, not the serving via HTTP.
-            //
-            swift::Seek(req->td,swift::Size(req->td)-1,SEEK_CUR);
-        }
-    }
+    // Arno, 2012-05-04: MULTIFILE: once the selected file has been downloaded
+    // swift will download all content that comes afterwards too. Poor man's
+    // fix to avoid this: seek to end of content when HTTP done. VOD PiecePicker
+    // will then no download anything. Better would be to seek to end when
+    // swift partial download is done, not the serving via HTTP.
+    //
+    swift::Seek(req->td,swift::Size(req->td)-1,SEEK_CUR);
 
     //swift::Close(req->td);
 
@@ -219,12 +212,8 @@ void HttpGwWrite(int td) {
     //
     if (avail > 0 && evbuffer_get_length(outbuf) < HTTPGW_MAX_OUTBUF_BYTES)
     {
-        ContentTransfer *ct = ContentTransfer::transfer(td);
-        if (ct == NULL)
-            return;
-
         int max_write_bytes = 0;
-        if (ct->ttype() == FILE_TRANSFER)
+        if (swift::ttype(req->td) == FILE_TRANSFER)
             max_write_bytes = HTTPGW_VOD_MAX_WRITE_BYTES;
         else
             max_write_bytes = HTTPGW_LIVE_MAX_WRITE_BYTES;
@@ -299,8 +288,7 @@ void HttpGwLibeventMayWriteCallback(evutil_socket_t fd, short events, void *evre
 
     HttpGwWrite(req->td);
 
-    ContentTransfer *ct = ContentTransfer::transfer(req->td);
-    if (ct->ttype() == FILE_TRANSFER) {
+    if (swift::ttype(req->td) == FILE_TRANSFER) {
 
         if (swift::Complete(req->td)+HTTPGW_VOD_MAX_WRITE_BYTES >= swift::Size(req->td)) {
 
@@ -393,9 +381,8 @@ void HttpGwSwiftPrebufferProgressCallback (int td, bin_t bin) {
     // First HTTPGW_MIN_PREBUF_BYTES bytes of request received.
     swift::RemoveProgressCallback(td,&HttpGwSwiftPrebufferProgressCallback);
 
-    ContentTransfer *ct = ContentTransfer::transfer(td);
     int stepbytes = 0;
-    if (ct->ttype() == FILE_TRANSFER)
+    if (swift::ttype(td) == FILE_TRANSFER)
         stepbytes = HTTPGW_VOD_PROGRESS_STEP_BYTES;
     else
         stepbytes = HTTPGW_LIVE_PROGRESS_STEP_BYTES;
@@ -574,7 +561,7 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
         dprintf("%s @%i http first: not storage object?\n",tintstr(),req->id);
         return;
     }
-    if (!storage->IsReady(td))
+    if (!storage->IsReady())
     {
 	dprintf("%s 2%i http first: Storage not ready, wait\n",tintstr(),req->id);
 	return; // wait for some more data
@@ -682,7 +669,7 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     swift::RemoveProgressCallback(td,&HttpGwFirstProgressCallback);
 
     int stepbytes = 0;
-    if (ct->ttype() == FILE_TRANSFER)
+    if (swift::ttype(td) == FILE_TRANSFER)
         stepbytes = HTTPGW_VOD_PROGRESS_STEP_BYTES;
     else
         stepbytes = HTTPGW_LIVE_PROGRESS_STEP_BYTES;
@@ -811,7 +798,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     evhttp_remove_header(reqheaders,"Connection"); // Remove Connection: keep-alive
 
     // 2. Parse swift URI
-    std::string hashstr = "", mfstr="", durstr="";
+    std::string hashstr = "", mfstr="", durstr="", chunksizestr = "";
     if (uri.length() <= 1)     {
         evhttp_send_error(evreq,400,"Path must be root hash in hex, 40 bytes.");
         return;

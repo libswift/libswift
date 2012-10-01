@@ -196,7 +196,7 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
     if (cmd_gw_debug)
         fprintf(stderr,"cmd: GotREMOVE: %s %d %d\n",want_hash.hex().c_str(),removestate,removecontent);
 
-    cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
     if (req == NULL)
     {
 	if (cmd_gw_debug)
@@ -206,7 +206,7 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
     dprintf("%s @%i remove transfer %i\n",tintstr(),req->id,req->td);
 
     // Arno: schaap moved cleanup to SwarmManager
-    swift::Close(req->transfer, removestate, removecontent);
+    swift::Close(req->td, removestate, removecontent);
 
     CmdGwFreeRequest(req);
     *req = cmd_requests[--cmd_gw_reqs_open];
@@ -218,7 +218,7 @@ void CmdGwGotMAXSPEED(Sha1Hash &want_hash, data_direction_t ddir, double speed)
     // Set maximum speed on the specified download
     //fprintf(stderr,"cmd: GotMAXSPEED: %s %d %lf\n",want_hash.hex().c_str(),ddir,speed);
 
-    cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
     if (req == NULL)
     	return;
     swift::SetMaxSpeed(req->td, ddir, speed);
@@ -235,7 +235,7 @@ void CmdGwGotSETMOREINFO(Sha1Hash &want_hash, bool enable)
 
 void CmdGwGotPEERADDR(Sha1Hash &want_hash, Address &peer)
 {
-    cmd_gw_t* req = CmdGwFindRequestByRootHash(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
     if (req == NULL)
     	return;
     swift::AddPeer(peer, want_hash);
@@ -251,7 +251,7 @@ void CmdGwSendINFOHashChecking(evutil_socket_t cmdsock, Sha1Hash swarm_id)
     sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",swarm_id.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,3.14,0,0);
 
     //fprintf(stderr,"cmd: SendINFO: %s", cmd);
-    send(req->cmdsock,cmd,strlen(cmd),0);
+    send(cmdsock,cmd,strlen(cmd),0);
 }
 
 
@@ -269,14 +269,14 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
     uint64_t complete = swift::Complete(req->td);
     if (size > 0 && size == complete)
         dlstatus = DLSTATUS_SEEDING;
-    if (!swift::IsOperational(td))
+    if (!swift::IsOperational(req->td))
 	    dlstatus = DLSTATUS_STOPPED_ON_ERROR;
 
     // schaap FIXME: Are those active leechers and seeders, or potential
     // leechers and seeders? In the latter case, get cached values when cached
     // peers have been implemented.
     uint32_t numleech = swift::GetNumLeechers(req->td);
-    uint32_t numseeds = swift::GetNumSeeders(req->td)
+    uint32_t numseeds = swift::GetNumSeeders(req->td);
     double dlspeed = swift::GetCurrentSpeed(req->td,DDIR_DOWNLOAD);
     double ulspeed = swift::GetCurrentSpeed(req->td,DDIR_UPLOAD);
 
@@ -294,6 +294,7 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
         oss.precision(5);
     	channels_t::iterator iter;
     	channels_t *peerchans = NULL;
+    	ContentTransfer *ct = swift::GetActivatedTransfer(req->td);
         if (ct)
             peerchans = ct->GetChannels();
 
@@ -350,7 +351,7 @@ void CmdGwSendPLAY(cmd_gw_t *req)
     oss << "PLAY ";
     oss << swarm_id.hex() << " ";
     oss << "http://";
-    oss << cmd_gw_httpaddr;
+    oss << cmd_gw_httpaddr.str();
     oss << "/";
     oss << swarm_id.hex();
     if (swift::ChunkSize(req->td) != SWIFT_DEFAULT_CHUNK_SIZE)
@@ -508,7 +509,7 @@ void CmdGwSwiftVODFirstProgressCallback (int td, bin_t bin)
             if (cmd_gw_debug)
                 fprintf(stderr,"cmd: SwiftFirstProgress: Error file not found %d\n", td );
 
-	        CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.",ft->swarm_id());
+	        CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.",SwarmID(req->td));
 	        return;
 	    }
     }
@@ -577,29 +578,6 @@ void CmdGwUpdateDLStatesCallback()
     else
         cmd_gw_last_open = NOW;
 
-    // MEMLEAK
-    icount++;
-    if ((icount % 10) == 0)
-    {
-        int counta=0,countz=0;
-        for(int i=0; i<ContentTransfer::swarms.size(); i++)
-        {
-            ContentTransfer *ct = ContentTransfer::swarms[i];
-            if (ct == NULL || ct->ttype() != FILE_TRANSFER)
-               continue;
-
-            FileTransfer *ft = (FileTransfer *)ct;
-            if (ft->IsZeroState())
-            	countz++;
-            else
-            	counta++;
-        }
-        fprintf(stderr,"cmd: active %d zero %d total %d\n", counta, countz, counta+countz );
-      
-#ifndef WIN32      
-        malloc_stats();
-#endif      
-    }
 }
 
 
@@ -849,7 +827,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             // MULTIFILE
             int64_t minsize=CMDGW_MAX_PREBUF_BYTES;
 
-            Storage *storage = swift::GetStorage(req->td)
+            Storage *storage = swift::GetStorage(req->td);
             if (storage == NULL)
         	return ERROR_BAD_ARG;
             storage_files_t sfs = storage->GetStorageFiles();

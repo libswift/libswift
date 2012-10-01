@@ -51,7 +51,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     // "Changed PEX rate limiting to per channel limiting"
     pex_requested_(false),  // Ric: init var that wasn't initialiazed
     last_pex_request_time_(0), next_pex_request_time_(0),
-    pex_request_outstanding_(false), pex_requested_(false),  // Ric: init var that wasn't initialiazed
+    pex_request_outstanding_(false),
     useless_pex_count_(0),
     rtt_avg_(TINT_SEC), dev_avg_(0), dip_avg_(TINT_SEC),
     last_send_time_(0), last_recv_time_(0), last_data_out_time_(0), last_data_in_time_(0),
@@ -87,7 +87,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     // RATELIMIT
     transfer_->GetChannels()->push_back(this);
 
-    dprintf("%s #%u init channel %s transfer %d\n",tintstr(),id_,peer_.str(), transfer_->fd() );
+    dprintf("%s #%u init channel %s transfer %d\n",tintstr(),id_,peer_.str(), transfer_->td() );
     //fprintf(stderr,"new Channel %d %s\n", id_, peer_.str() );
 }
 

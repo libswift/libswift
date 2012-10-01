@@ -9,6 +9,18 @@
  *  The activation/deactivation progress is hidden behind the swift API,
  *  one should not use the SwarmManager directly.
  *
+ *  ARNOTODO: tracker registration. The current implementation works if it
+ *  runs the primary seeder which is also the tracker for a swarm. Clients
+ *  that contact it will activate the swarm. Once a swarm no longer has
+ *  clients is can be deactivated (not currently implemented).
+ *
+ *  However, to be a non-primary seeder (i.e., not the tracker) a new
+ *  mechanism needs to be implemented that registers a swarm at a tracker
+ *  while being deactivated (activate only when clients come). In the present
+ *  swift design registration requires a Channel to be open to the tracker. This
+ *  design may need to be changed to allow for a BitTorrent register-for-30-mins
+ *  -and-disconnect style.
+ *
  *  Created by Thomas Schaap
  *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
@@ -49,7 +61,7 @@ namespace swift {
         uint64_t cachedSeqComplete_; // Only for offset = 0
         bool cached_;
     public:
-        SwarmData( const std::string filename, const Sha1Hash& rootHash, const Address& tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, bool activate, uint32_t chunk_size );
+        SwarmData( const std::string filename, const Sha1Hash& rootHash, const Address& tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, uint32_t chunk_size );
         SwarmData( const SwarmData& sd );
 
         ~SwarmData();

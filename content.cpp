@@ -13,17 +13,24 @@ using namespace swift;
 
 
 /*
+ * Class variables
+ */
+struct event ContentTransfer::evclean;
+uint64_t ContentTransfer::cleancounter = 0;
+
+
+/*
  * Local Constants
  */
-#define CHANNEL_GARBAGECOLLECT_INTERVAL	5 // seconds, or cleanup calls actually
+#define CHANNEL_GARBAGECOLLECT_INTERVAL	5 // seconds, or GlobalCleanCallback calls actually
 
 #define TRACKER_RETRY_INTERVAL_START	(5*TINT_SEC)
-#define TRACKER_RETRY_INTERVAL_EXP		1.1	// exponent used to increase INTERVAL_START
-#define TRACKER_RETRY_INTERVAL_MAX		(1800*TINT_SEC) // 30 minutes
+#define TRACKER_RETRY_INTERVAL_EXP	1.1	// exponent used to increase INTERVAL_START
+#define TRACKER_RETRY_INTERVAL_MAX	(1800*TINT_SEC) // 30 minutes
 
 
 
-ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), mychannels_(), cb_installed(0),
+ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), mychannels_(), callbacks_(),
     speedzerocount_(0), tracker_(),
     tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START),
     tracker_retry_time_(NOW)
@@ -319,6 +326,6 @@ void ContentTransfer::Progress(bin_t bin) {
     int minlayer = bin.layer();
     for( std::list< std::pair<ProgressCallback, uint8_t> >::iterator iter = callbacks_.begin(); iter != callbacks_.end(); iter++ ) {
 	if( minlayer >= (*iter).second )
-	    ((*iter).first)( transfer_id_, bin );
+	    ((*iter).first)( td_, bin );
     }
 }

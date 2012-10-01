@@ -22,12 +22,12 @@ using namespace swift;
 const std::string Storage::MULTIFILE_PATHNAME = "META-INF-multifilespec.txt";
 const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 
-Storage::Storage(std::string ospathname, std::string destdir, int transferfd) :
+Storage::Storage(std::string ospathname, std::string destdir, int td) :
 	Operational(),
 	state_(STOR_STATE_INIT),
         os_pathname_(ospathname), destdir_(destdir), ht_(NULL), spec_size_(0),
         single_fd_(-1), reserved_size_(-1), total_size_from_spec_(-1), last_sf_(NULL),
-        transfer_fd_(transferfd), alloc_cb_(NULL)
+        td_(td), alloc_cb_(NULL)
 {
 
     //fprintf(stderr,"Storage: ospathname %s destdir %s\n", ospathname.c_str(), destdir.c_str() );
@@ -550,7 +550,7 @@ int Storage::ResizeReserved(int64_t size)
     // make this detectable.
     if (alloc_cb_ != NULL)
     {
-        alloc_cb_(transfer_fd_,bin_t::NONE);
+        alloc_cb_(td_,bin_t::NONE);
         alloc_cb_ = NULL; // One time callback
     }
 

@@ -17,7 +17,7 @@ using namespace swift;
 /*
  * Global Variables
  */
-static std::vector<LiveTransfer*> LiveTransfer::liveswarms;
+std::vector<LiveTransfer*> LiveTransfer::liveswarms;
 
 
 /*
@@ -48,7 +48,7 @@ LiveTransfer::LiveTransfer(std::string filename, const Sha1Hash& swarm_id,bool a
     }
 
     // MULTIFILE
-    storage_ = new Storage(filename,destdir,fd());
+    storage_ = new Storage(filename,destdir,td_);
 }
 
 
@@ -74,11 +74,11 @@ void LiveTransfer::GlobalAdd() {
 
 void LiveTransfer::GlobalDel() {
     int idx = td_ - TRANSFER_DESCR_LIVE_OFFSET;
-    swarms[idx] = NULL;
+    liveswarms[idx] = NULL;
 }
 
 
-void LiveTransfer::FindByTD(int td)
+LiveTransfer *LiveTransfer::FindByTD(int td)
 {
     int idx = td - TRANSFER_DESCR_LIVE_OFFSET;
     return idx<liveswarms.size() ? (LiveTransfer *)liveswarms[idx] : NULL;
@@ -92,14 +92,13 @@ LiveTransfer* LiveTransfer::FindBySwarmID(const Sha1Hash& swarmid) {
 }
 
 
-tdlist_t LiveTransfer::GetTransportDescriptors() {
-    tdlist tds;
+tdlist_t LiveTransfer::GetTransferDescriptors() {
+    tdlist_t tds;
     for(int i=0; i<liveswarms.size(); i++)
-        if (liveswarms[i] && liveswarms[i]->swarm_id()==swarmid)
+        if (liveswarms[i] != NULL)
             tds.push_back(i+TRANSFER_DESCR_LIVE_OFFSET);
     return tds;
 }
-
 
 
 

@@ -8,6 +8,7 @@
  */
 
 #include "compat.h"
+#include "swift.h"
 #include <sys/stat.h>
 #include <stdio.h>
 #include <assert.h>
@@ -23,6 +24,8 @@
 #include <sys/time.h>
 #endif
 #include <iostream>
+#include <sstream>
+
 
 namespace swift {
 
@@ -545,3 +548,5 @@ std::string hex2bin(std::string input)
     }
     return res;
 }
+
+} //E-O-Swift

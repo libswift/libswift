@@ -20,9 +20,11 @@ using namespace swift;
 
 // FIXME: separate Bootstrap() and Download(), then Size(), Progress(), SeqProgress()
 
-FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size, bool zerostate) :
+FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_hash, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size, bool zerostate) :
     ContentTransfer(FILE_TRANSFER), zerostate_(zerostate)
 {
+    td_ = td;
+
     std::string destdir;
     int ret = file_exists_utf8(filename);
     if (ret == 2 && root_hash != Sha1Hash::ZERO) {
@@ -36,7 +38,7 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
     }
 
     // MULTIFILE
-    storage_ = new Storage(filename,destdir,transfer_id_);
+    storage_ = new Storage(filename,destdir,td_);
 
     std::string hash_filename;
     hash_filename.assign(filename);
@@ -58,6 +60,7 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
 	else
 	    picker_ = new SeqPiecePicker(this);
 	picker_->Randomize(rand()&63);
+    }
     else
     {
 	// ZEROHASH
@@ -70,10 +73,10 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
 
 void FileTransfer::UpdateOperational()
 {
-    if (!hashtree_->IsOperational()) || !storage_->IsOperational())
+    if (!hashtree_->IsOperational() || !storage_->IsOperational())
 	SetBroken();
 
-    if (zero_state_ && !hashtree_->is_complete())
+    if (zerostate_ && !hashtree_->is_complete())
 	SetBroken();
 }
 

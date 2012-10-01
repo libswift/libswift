@@ -353,7 +353,6 @@ int MmapHashTree::internal_deserialize(FILE *fp,bool contentavail) {
 
     char hexhashstr[256];
     uint64_t c,cc;
-    size_t cs;
     uint32_t cs;
     int version;
 
