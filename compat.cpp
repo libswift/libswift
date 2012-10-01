@@ -194,10 +194,6 @@ void LibraryInit(void)
     wVersionRequested = MAKEWORD(2, 2);
     WSAStartup(wVersionRequested, &_WSAData);
 #endif
-
-    // Arno, 2012-10-01: Per-library timer for cleanup on transfers
-    evtimer_assign(&ContentTransfer::evclean,Channel::evbase,&ContentTransfer::LibeventGlobalCleanCallback,NULL);
-    evtimer_add(&ContentTransfer::evclean,tint2tv(TINT_SEC));
 }
 
 

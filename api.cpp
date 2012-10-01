@@ -41,6 +41,15 @@ void    swift::Shutdown (int sock_des) {
 
 
 int swift::Open( std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, bool activate, uint32_t chunk_size) {
+
+    if (ContentTransfer::cleancounter == 0)
+    {
+	// Arno, 2012-10-01: Per-library timer for cleanup on transfers
+	evtimer_assign(&ContentTransfer::evclean,Channel::evbase,&ContentTransfer::LibeventGlobalCleanCallback,NULL);
+	evtimer_add(&ContentTransfer::evclean,tint2tv(TINT_SEC));
+	ContentTransfer::cleancounter = 481;
+    }
+
     SwarmData* swarm = SwarmManager::GetManager().AddSwarm( filename, hash, tracker, force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
     if (swarm)
 	return swarm->Id();

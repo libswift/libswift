@@ -480,7 +480,7 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
     if (root_hash!=Sha1Hash::ZERO && filename == "")
         filename = strdup(root_hash.hex().c_str());
 
-    single_td = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size,livestream,true);
+    single_td = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size,livestream,true); //activate always
     if (single_td < 0)
         quit("cannot open file %s",filename.c_str());
     if (printurl)
@@ -722,6 +722,9 @@ void ReportCallback(int fd, short event, void *arg) {
 		fprintf(stderr,"dwload %lf\n",swift::GetCurrentSpeed(single_td,DDIR_DOWNLOAD));
 		//fprintf(stderr,"npeers %d\n",ft->GetNumLeechers()+ft->GetNumSeeders() );
 	}
+
+        fprintf(stderr,"report: type %d do %d done %d complete %d\n", (int)swift::ttype(single_td), (int)file_enable_checkpoint, (int)file_checkpointed, (int)swift::IsComplete(single_td) );
+
 	if (swift::ttype(single_td) == FILE_TRANSFER && file_enable_checkpoint && !file_checkpointed && swift::IsComplete(single_td))
 	{
 	    std::string binmap_filename = swift::GetOSPathName(single_td);
@@ -742,9 +745,11 @@ void ReportCallback(int fd, short event, void *arg) {
         uint64_t complete = 0;
         uint64_t size = 0;
         uint64_t seqcomplete = 0;
+        int nactive=0,nloaded=0;
 
-        tdlist_t tds = GetTransferDescriptors();
+        tdlist_t tds = swift::GetTransferDescriptors();
         tdlist_t::iterator iter;
+        nloaded = tds.size();
         for (iter = tds.begin(); iter != tds.end(); iter++)
         {
             int td = *iter;
@@ -753,7 +758,12 @@ void ReportCallback(int fd, short event, void *arg) {
             complete += swift::Complete(td);
             seqcomplete += swift::SeqComplete(td);
             size += swift::Size(td);
+
+            ContentTransfer *ct = swift::GetActivatedTransfer(td);
+            if (ct != NULL)
+        	nactive++;
         }
+        /*
         fprintf(stderr,
             "%s %llu of %llu (seq %llu) %lld dgram %lld bytes up, " \
             "%lld dgram %lld bytes down\n",
@@ -761,6 +771,10 @@ void ReportCallback(int fd, short event, void *arg) {
             complete, size, seqcomplete,
             Channel::global_dgrams_up, Channel::global_raw_bytes_up,
             Channel::global_dgrams_down, Channel::global_raw_bytes_down );
+        */
+        fprintf(stderr,"swift: loaded %d active %d\n", nloaded, nactive );
+
+
     }
     if (httpgw_enabled)
     {

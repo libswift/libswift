@@ -120,8 +120,8 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
     ContentTransfer::cleancounter++;
 
 
-    // Arno, 2012-10-01: Reschedule cleanup, started in LibraryInit
-    evtimer_assign(&ContentTransfer::evclean,Channel::evbase,&ContentTransfer::LibeventGlobalCleanCallback,NULL);
+    // Arno, 2012-10-01: Reschedule cleanup, started in swift::Open
+    //evtimer_assign(&ContentTransfer::evclean,Channel::evbase,&ContentTransfer::LibeventGlobalCleanCallback,NULL);
     evtimer_add(&ContentTransfer::evclean,tint2tv(TINT_SEC));
 }
 
