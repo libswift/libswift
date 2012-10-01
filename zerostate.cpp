@@ -53,18 +53,22 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
         return;
 
     // See which zero state FileTransfers have no clients
-    std::list<Sha1Hash> delset;
-    for (SwarmManager::Iterator iter=SwarmManager::GetManager().begin(); iter != SwarmManager::GetManager().end(); iter++) {
+    tdlist_t tds = GetTransferDescriptors();
+    tdlist_t::iterator iter;
+    tdlist_t delset;
+    for (iter = tds.begin(); it != tds.end(); it++)
+    {
+        int td = *iter;
+        if (!swift::IsZeroState(td))
+            continue;
 
-	SwarmData *swarm = *iter;
-	if (!swarm->IsZeroState())
+	ContentTransfer *ct = swift::GetActivatedTransfer(td);
+	if (ct == NULL)
+	{
+	    // Not activated, so remove in any case
+	    delset.push_back(td);
 	    continue;
-
-	//ARNOTODO: LiveTransfers not under swarm management
-
-	ContentTransfer *ct = (*iter)->GetTransfer(false);
-	if (ct == NULL || ct->ttype() != FILE_TRANSFER)
-  	    continue;
+	}
 
     	// Arno, 2012-09-20: Work with copy of list, as "delete c" edits list.
     	channels_t copychans(*ct->GetChannels());
@@ -93,19 +97,20 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 	    if (ct->GetChannels()->size() == 0)
 	    {
 		// Ain't go no clients left, cleanup transfer.
-		delset.push_back(ct->swarm_id());
+		delset.push_back(td);
 	    }
 	}
     }
 
 
     // Delete 0-state FileTransfers sans peers
-    std::list<Sha1Hash>::iterator deliter;
+    tdlist_t::iterator deliter;
     for (deliter=delset.begin(); deliter!=delset.end(); deliter++)
     {
-	dprintf("%s hash %s zero clean close\n",tintstr(),(*deliter).hex().c_str() );
-	//fprintf(stderr,"%s F%u zero clean close\n",tintstr(),ft->transfer_id() );
-        SwarmManager::GetManager().DeactivateSwarm( *deliter );
+	int td = *iter;
+	dprintf("%s hash %s zero clean close\n",tintstr(),SwarmID(td).hex().c_str() );
+	//fprintf(stderr,"%s F%u zero clean close\n",tintstr(),td );
+        swift::Close(td);
     }
 
     // Reschedule cleanup
@@ -159,24 +164,8 @@ int ZeroState::Find(Sha1Hash &root_hash)
     if (ret < 0 || ret == 0 || ret == 2)
         return -1;
 
-    SwarmData* swarm = SwarmManager::GetManager().AddSwarm(file_name, root_hash, Address(), false, chunk_size, true);
-    if (!swarm)
-        return -1;
-    ContentTransfer* ct = swarm->GetTransfer();
-    if (!ct) {
-        SwarmData* newSwarm = SwarmManager::GetManager().ActivateSwarm(swarm->swarm_id());
-        if (!newSwarm)
-            return swarm->Id();
-        swarm = newSwarm;
-        ct = swarm->GetTransfer();
-        if (!ct)
-            return swarm->Id();
-    }
-
-    if (!ct->IsOperational())
-	return -1;
-    else
-	return swarm->Id();
+    // Open as ZeroState
+    return swift::Open(filename, root_hash, Address(), false, true, true);
 }
 
 

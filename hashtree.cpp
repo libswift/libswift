@@ -95,7 +95,7 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
     // Arno: if user doesn't want to check hashes but no .mhash, check hashes anyway
     bool actually_force_check_diskvshash = force_check_diskvshash;
     bool mhash_exists=true;
-    int64_t mhash_size = file_size_by_path_utf8( hash_filename.c_str());
+    int64_t mhash_size = file_size_by_path_utf8( hash_filename);
     if (mhash_size < 0)
         mhash_exists = false;
     // Arno, 2012-07-26: Quick fix against partial downloads without .mhash.
@@ -110,7 +110,7 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
     // Arno: if the remainder of the hashtree state is on disk we can
     // hashcheck very quickly
     bool binmap_exists=true;
-    int res = file_exists_utf8( binmap_filename.c_str() );
+    int res = file_exists_utf8( binmap_filename );
     if( res <= 0)
         binmap_exists = false;
     if (root_hash_==Sha1Hash::ZERO && !binmap_exists)

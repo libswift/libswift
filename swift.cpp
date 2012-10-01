@@ -69,8 +69,8 @@ void usage(void)
 }
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
 int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
-int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream);
-int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size);
+int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate);
+int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool activate);
 void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Hash root_hash);
 
 void ReportCallback(int fd, short event, void *arg);
@@ -381,7 +381,18 @@ int utf8main (int argc, char** argv)
                 ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,livestream,urlfilename,maxspeed);
             }
             else if (scan_dirname != "")
-                ret = OpenSwiftDirectory(scan_dirname,Address(),false,chunk_size);
+            {
+        	// Arno, 2012-10-01:
+        	// You can use this to make a directory of swarms available.
+        	// The swarms must be complete and checkpointed on disk,
+        	// otherwise the main thread will spend time hashchecking them.
+        	// You can open the swarms activated (fully loaded in memory)
+        	// or deactivated (will be loaded into memory when peers
+        	// arrive). When started deactivated but no checkpoint or
+        	// incomplete, then the swarm will be activated and hashchecked.
+        	//
+                ret = OpenSwiftDirectory(scan_dirname,Address(),false,chunk_size,false); // activate = false
+            }
             else
                 ret = -1;
         }
@@ -452,7 +463,7 @@ int utf8main (int argc, char** argv)
     // Arno, 2012-01-03: Close all transfers
     tdlist_t tds = GetTransferDescriptors();
     tdlist_t::iterator iter;
-    for (iter = tds.begin(); it != tds.end(); it++ )
+    for (iter = tds.begin(); iter != tds.end(); iter++ )
 	swift::Close(*iter);
 
     if (Channel::debug_file)
@@ -469,7 +480,7 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
     if (root_hash!=Sha1Hash::ZERO && filename == "")
         filename = strdup(root_hash.hex().c_str());
 
-    single_td = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size,livestream);
+    single_td = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size,livestream,true);
     if (single_td < 0)
         quit("cannot open file %s",filename.c_str());
     if (printurl)
@@ -526,36 +537,24 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
 }
 
 
-int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream)
+int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate)
 {
-    std::string binmap_filename = filename;
-    binmap_filename.append(".mbinmap");
+    if (!quiet)
+	fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
 
-    // Arno, 2012-01-03: Hack to discover root hash of a file on disk, such that
-    // we don't load it twice while rescanning a dir of content.
-    MmapHashTree *ht = new MmapHashTree(true,binmap_filename);
+    // When called by OpenSwiftDirectory, the swarm may already be open. In
+    // that case, swift::Open() cheaply returns the same transfer descriptor.
 
-    //    fprintf(stderr,"swift: parsedir: File %s may have hash %s\n", filename, ht->root_hash().hex().c_str() );
-
-    int fd = swift::Find(ht->root_hash());
-    delete ht;
-    if (td == -1) {
-        if (!quiet)
-            fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
-
-        // Client mode: regular or live download
-        if (!livestream)
-            td = Open(filename,hash,tracker,force_check_diskvshash,true,chunk_size);
-        else
-            td = LiveOpen(filename,hash,Address(),false,chunk_size);
-    }
-    else if (!quiet)
-        fprintf(stderr,"swift: parsedir: Ignoring loaded %s\n", filename.c_str() );
+    // Client mode: regular or live download
+    if (!livestream)
+	td = swift::Open(filename,hash,tracker,force_check_diskvshash,true,false,activate,chunk_size);
+    else
+	td = swift::LiveOpen(filename,hash,Address(),false,chunk_size);
     return td;
 }
 
 
-int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size)
+int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool activate)
 {
     DirEntry *de = opendir_utf8(dirname);
     if (de == NULL)
@@ -569,7 +568,7 @@ int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_di
             std::string path = dirname;
             path.append(FILE_SEP);
             path.append(de->filename_);
-            int td = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,force_check_diskvshash,chunk_size,false);
+            int td = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,force_check_diskvshash,chunk_size,activate);
             if (td >= 0)
                 Checkpoint(td);
         }
@@ -803,7 +802,7 @@ void RescanDirCallback(int fd, short event, void *arg) {
     // by running swift separately and then copy content + *.m* to scanned dir,
     // such that a fast restore from checkpoint is done.
     //
-    OpenSwiftDirectory(scan_dirname,tracker,false,chunk_size);
+    OpenSwiftDirectory(scan_dirname,tracker,false,chunk_size,false); // activate = false
 
     CleanSwiftDirectory(scan_dirname);
 

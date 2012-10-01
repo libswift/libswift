@@ -37,11 +37,6 @@ Address Channel::tracker;
 FILE* Channel::debug_file = NULL;
 tint Channel::MIN_PEX_REQUEST_INTERVAL = TINT_SEC;
 
-#if OPTION_INCLUDE_PEER_TRACKING
-std::vector<Channel::PeerListItem> Channel::knownPeers_(32);
-#endif
-
-
 /*
  * Instance methods
  */
@@ -399,62 +394,6 @@ Address::Address(const char* ip_port) {
 
 
 uint32_t Address::LOCALHOST = INADDR_LOOPBACK;
-
-
-/*
- * Peer list management
- */
-#if OPTION_INCLUDE_PEER_TRACKING
-Channel::PeerReference* Channel::AddKnownPeer( const Address& adr ) {
-    int loc;
-    int oldloc = -1;
-    tint ts = usec_time();
-    for( loc = 0; loc < knownPeers_.size(); loc++ ) {
-        if( *(knownPeers_[loc].peer) == adr )
-            return new Channel::PeerReference( loc, knownPeers_[loc].timestamp );
-        if( knownPeers_[loc].timestamp < ts ) {
-            ts = knownPeers_[loc].timestamp;
-            oldloc = loc;
-        }
-    }
-    if( knownPeers_.size() >= MAX_SIZE_PEER_LIST ) {
-        ts = usec_time();
-        knownPeers_[oldloc].timestamp = ts;
-        knownPeers_[oldloc].peer = new Address(adr);
-        return new Channel::PeerReference( oldloc, ts );
-    }
-    else {
-        loc = knownPeers_.size();
-        struct PeerListItem pli( adr );
-        knownPeers_.push_back( pli );
-        return new Channel::PeerReference( loc, knownPeers_[loc].timestamp );
-    }
-}
-
-void Channel::RemoveKnownPeer( const Address& adr ) {
-    for( int loc = 0; loc < knownPeers_.size(); loc++ ) {
-        if( *(knownPeers_[loc].peer) == adr ) {
-            knownPeers_[loc].peer = NULL;
-            return;
-        }
-    }
-}
-
-const Address* Channel::LookupKnownPeer( const Channel::PeerReference& ref ) {
-    if( ref.index < knownPeers_.size() && knownPeers_[ref.index].timestamp == ref.timestamp )
-        return knownPeers_[ref.index].peer;
-    return NULL;
-}
-
-Channel::PeerReference* Channel::LookupKnownPeer( const Address& adr ) {
-    for( int loc = 0; loc < knownPeers_.size(); loc++ ) {
-        if( *(knownPeers_[loc].peer) == adr )
-            return new Channel::PeerReference( loc, knownPeers_[loc].timestamp );
-    }
-    return NULL;
-}
-#endif // OPTION_INCLUDE_PEER_TRACKING
-
 
 
 /*

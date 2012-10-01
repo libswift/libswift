@@ -68,11 +68,6 @@
 // Arno, 2012-05-21: MacOS X has an Availability.h :-(
 #include "avail.h"
 
-// SCHAAP: swarmmanager.h is included at the end, since it depends on a alot and nothing depends on it
-#ifndef OPTION_INCLUDE_PEER_TRACKING
-#define OPTION_INCLUDE_PEER_TRACKING 0
-#endif
-
 namespace swift {
 
 #define SWIFT_MAX_UDP_OVER_ETH_PAYLOAD        (1500-20-8)
@@ -280,13 +275,6 @@ namespace swift {
         ContentTransfer(transfer_t ttype);
         virtual ~ContentTransfer();
 
-        /** Find transfer by the root hash. */
-        static ContentTransfer* Find (const Sha1Hash& swarmid);
-        /** Find transfer by the file descriptor. */
-        static ContentTransfer* transfer(int td) { return td<swarms.size() ? (ContentTransfer *)swarms[td] : NULL; }
-        void GlobalAdd();
-        void GlobalDel();
-
         /** Returns the type of transfer, FILE_TRANSFER or LIVE_TRANSFER */
         transfer_t      ttype() { return ttype_; }
 
@@ -303,7 +291,7 @@ namespace swift {
         /** Piece picking strategy used by this transfer. */
         PiecePicker *   picker() { return picker_; }
         /** Returns the local ID for this transfer. */
-        int             fd() const { return fd_; }
+        int             td() const { return td_; }
         // Gertjan fix: return bool
         bool            OnPexIn(const Address& addr);
         // Gertjan
@@ -354,12 +342,12 @@ namespace swift {
         void RemoveProgressCallback(ProgressCallback cb);
         void Progress(bin_t bin);  /** Called by channels when data comes in */
 
-        /** Arno: Callback to do maintenance for a transfer */
-        static void     LibeventCleanCallback(int fd, short event, void *arg);
+        /** Arno: Callback to do maintenance for all transfers */
+        static void     LibeventGlobalCleanCallback(int fd, short event, void *arg);
 
       protected:
         transfer_t      ttype_;
-        int             transfer_id_;
+        int             td_;	// transfer descriptor as used by swift API.
 
         /** Channels working for this transfer. */
         channels_t    	mychannels_;
@@ -375,8 +363,6 @@ namespace swift {
         double          max_speed_[2];
         int             speedzerocount_;
 
-        struct event    evclean_;
-
         // MULTIFILE
         Storage         *storage_;
 
@@ -385,6 +371,8 @@ namespace swift {
         tint            tracker_retry_time_;
 
 
+        static struct event evclean; // Global for all Transfers
+        static uint64_t	cleancounter;
     };
 
 
@@ -476,6 +464,16 @@ namespace swift {
         /** Returns the byte offset at which we hooked into the live stream */
         uint64_t        GetHookinOffset();
 
+        // Arno: FileTransfers are managed by the SwarmManager which
+        // activates/deactivates them as required. LiveTransfers are unmanaged.
+        /** Find transfer by the transfer descriptor. */
+        static LiveTransfer* FindByTD(int td);
+        /** Find transfer by the swarm ID. */
+        static LiveTransfer* FindBySwarmID(const Sha1Hash& swarmid);
+        static tdlist_t GetTransportDescriptors();
+        void GlobalAdd();
+        void GlobalDel();
+
       protected:
         /** Swarm Identifier */
         Sha1Hash 	swarm_id_;
@@ -495,7 +493,10 @@ namespace swift {
         uint64_t        last_chunkid_;
         /** Source: Current write position in storage file */
         uint64_t        offset_;
-     };
+
+        /** Arno: global list of LiveTransfers, which are not managed */
+        static std::vector<LiveTransfer*> liveswarms;
+    };
 
 
     /** PiecePicker implements some strategy of choosing (picking) what
@@ -581,37 +582,6 @@ namespace swift {
         static tint     Time();
         static tint 	last_tick;
 
-//ARNOTODO: remove peer tracking
-#if OPTION_INCLUDE_PEER_TRACKING
-        /** Management methods for the global peer list. **/
-        // The address of the peer and the timestamp it was added to the list of all peers.
-        class PeerListItem {
-        public:
-            PeerListItem() : peer(NULL), timestamp(0) {}
-            PeerListItem( const PeerListItem& pli ) : peer(pli.peer), timestamp(pli.timestamp) {}
-            PeerListItem( const Address& adr ) : peer(new Address(adr)), timestamp(usec_time()) {}
-        protected:
-            Address* peer;
-            tint timestamp;
-            friend class Channel;
-        };
-        // A reference to a peer, which is its index into the list and timestamp it was added.
-        class PeerReference {
-        public:
-            PeerReference( int index_, tint timestamp_ ) : index(index_), timestamp(timestamp_) {}
-        protected:
-            int index;
-            tint timestamp;
-            friend class Channel;
-        };
-        // Returned PeerReference is to be deleted by caller
-        static PeerReference* AddKnownPeer( const Address& adr );
-        static void RemoveKnownPeer( const Address& adr );
-        // Might very well return NULL, so check that
-        static const Address* LookupKnownPeer( const PeerReference& ref );
-        // May return NULL, check that; returned PeerReference is to be deleted by caller
-        static PeerReference* LookupKnownPeer( const Address& adr );
-#endif // OPTION_INCLUDE_PEER_TRACKING
 
         // Arno: Per instance methods
         void        Recv (struct evbuffer *evb);
@@ -712,12 +682,6 @@ namespace swift {
         struct event    *evsend_ptr_; // Arno: timer per channel // SAFECLOSE
         //LIVE
         struct event    *evsendlive_ptr_; // Arno: timer per channel
-
-#if OPTION_INCLUDE_PEER_TRACKING
-#define MAX_SIZE_PEER_LIST 16384
-        /** The list of all known peers. **/
-        static std::vector<PeerListItem> knownPeers_;
-#endif // OPTION_INCLUDE_PEER_TRACKING
 
         /** Channel id: index in the channel array. */
         uint32_t    id_;
@@ -1013,26 +977,26 @@ namespace swift {
         then on receipt. In this mode, checking disk contents against hashes
         no longer works on restarts, unless checkpoints are used.
         */
-    int     Open (std::string filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(), bool force_check_diskvshash=true, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     Open( std::string filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(), bool force_check_diskvshash=true, bool check_netwvshash=true, bool zerostate=false, bool activate, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** Get the root hash for the transmission. */
     const Sha1Hash& SwarmID (int file) ;
     /** Close a file and a transmission, remove state or content if desired. */
-    void    Close(int td, bool removestate = false, bool removecontent = false) ;
+    void    Close( int td, bool removestate = false, bool removecontent = false) ;
     /** Add a possible peer which participares in a given transmission. In the case
         root hash is zero, the peer might be talked to regarding any transmission
         (likely, a tracker, cache or an archive). */
-    void    AddPeer (Address address, const Sha1Hash& root=Sha1Hash::ZERO);
+    void    AddPeer( Address address, const Sha1Hash& root=Sha1Hash::ZERO);
 
     /** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
-    ssize_t  Read(int td, void *buf, size_t nbyte, int64_t offset); // off_t not 64-bit dynamically on Win32
+    ssize_t  Read( int td, void *buf, size_t nbyte, int64_t offset); // off_t not 64-bit dynamically on Win32
 
     /** UNIX pwrite approximation. Does change file pointer. Is not thread-safe */
-    ssize_t  Write(int td, const void *buf, size_t nbyte, int64_t offset);
+    ssize_t  Write( int td, const void *buf, size_t nbyte, int64_t offset);
 
     /** Seek, i.e., move start of interest window */
-    int Seek(int td, int64_t offset, int whence);
+    int Seek( int td, int64_t offset, int whence);
 
-    void    SetTracker(const Address& tracker);
+    void    SetTracker( const Address& tracker);
     /** Set the default tracker that is used when Open is not passed a tracker
         address. */
 
@@ -1050,8 +1014,8 @@ namespace swift {
 
     uint64_t  GetHookinOffset(int td);
 
-    /***/
-    int       Find (Sha1Hash hash);
+    /** Arno: See if swarm is known and activate if requested */
+    int       Find (Sha1Hash& swarmid, bool activate=false);
     /** Returns the number of bytes in a chunk for this transmission */
     uint32_t      ChunkSize(int td);
 
@@ -1078,6 +1042,9 @@ namespace swift {
     Storage *GetStorage(int td);
     std::string GetOSPathName(int td);
     bool IsOperational(int td);
+
+    /** For internal use only */
+    ContentTransfer *swift::GetActivatedTransfer(int td);
 
     /** Must be called by any client using the library */
     void LibraryInit(void);
@@ -1109,8 +1076,6 @@ namespace swift {
     void CmdGwTunnelSendUDP(struct evbuffer *evb); // for friendship with Channel
 
 } // namespace end
-
-#include "swarmmanager.h"
 
 // #define SWIFT_MUTE
 

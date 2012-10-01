@@ -1080,34 +1080,25 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
 
         hash = evbuffer_remove_hash(evb);
 
-        // ARNOTODO: Hide zerostate stuff behind SwarmManager
-        SwarmData* swarm = SwarmManager::GetManager().FindSwarm(hash);
-        if (!swarm) {
-            // See if available on disk, if so, activate
-            ZeroState *zs = ZeroState::GetInstance();
-            int fdes = zs->Find(hash);
-            if (fdes == -1)
-                return_log ("%s #0 hash %s unknown, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
-            swarm = SwarmManager::GetManager().FindSwarm(fdes);
-            if (!swarm)
-                return_log( "%s #0 hash %s created by zero state, but not found?; requested by %s\n", tintstr(), hash.hex().c_str(), addr.str() );
-
-        }
-        ContentTransfer* ct = swarm->GetTransfer();
-        if (!ct) {
-            swarm = SwarmManager::GetManager().ActivateSwarm( hash );
-            if (!swarm)
-                return_log( "%s #0 hash %s known, but can't be activated; requested by %s\n", tintstr(), hash.hex().c_str(), addr.str() );
-            ct = swarm->GetTransfer();
-            if (!ct)
-                return_log( "%s #0 hash %s known, but can't be activated; requested by %s\n", tintstr(), hash.hex().c_str(), addr.str() );
-        }
-
-        if (!ct->IsOperational())
+        int td = swift::Find(hash,true); // Activate
+        if (td < 0)
         {
-            // Active, but broken
+            // No known swarm, check if available as zero state
+            ZeroState *zs = ZeroState::GetInstance();
+            td = zs->Find(hash);
+            if (td == -1)
+                return_log ("%s #0 hash %s unknown, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
+        }
+        ContentTransfer *ct = swift::GetActivatedTransfer(td);
+        if (ct == NULL)
+                return_log( "%s #0 hash %s known, couldn't be activated; requested by %s\n", tintstr(), hash.hex().c_str(), addr.str() );
+        else if (!ct->IsOperational())
+        {
+            // Activated, but broken
             return_log ("%s #0 hash %s broken, requested by %s\n",tintstr(),hash.hex().c_str(),addr.str());
         }
+
+        //ARNOTODO: check if swarm kept activated if network traffic
 
         dprintf("%s #0 -hash ALL %s\n",tintstr(),hash.hex().c_str());
 
@@ -1191,9 +1182,6 @@ void Channel::CloseChannelByAddress(const Address &addr)
             break;
         }
     }
-#if OPTION_INCLUDE_PEER_TRACKING
-    Channel::RemoveKnownPeer(addr);
-#endif
 }
 
 void Channel::Close(bool sendclose) {

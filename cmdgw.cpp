@@ -148,6 +148,9 @@ void CmdGwCloseConnection(evutil_socket_t sock)
         }
     }
 
+    if (cmd_evbuffer != NULL)
+        evbuffer_free(cmd_evbuffer);
+
     // Arno, 2012-07-06: Close
     swift::close_socket(sock);
 
@@ -260,7 +263,7 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 
     Sha1Hash swarm_id = swift::SwarmID(req->td);
     if (swarm_id == Sha1Hash::ZERO)
-	return; // ARNOTODO: send BAD_SWARM
+	return; // Arno: swarm deleted, ignore
 
     uint64_t size = swift::Size(req->td);
     uint64_t complete = swift::Complete(req->td);
@@ -343,23 +346,24 @@ void CmdGwSendPLAY(cmd_gw_t *req)
 
     Sha1Hash swarm_id = swift::SwarmID(req->td);
 
-    char cmd[MAX_CMD_MESSAGE];
-    // Slightly diff format: roothash as ID after CMD
-    if (req->mfspecname == "")
-        sprintf(cmd,"PLAY %s http://%s/%s\r\n",swarm_id.hex().c_str(),cmd_gw_httpaddr.str(),swarm_id.hex().c_str());
-    else
-        sprintf(cmd,"PLAY %s http://%s/%s/%s\r\n",swarm_id.hex().c_str(),cmd_gw_httpaddr.str(),swarm_id.hex().c_str(),req->mfspecname.c_str());
-
+    std::ostringstream oss;
+    oss << "PLAY ";
+    oss << swarm_id.hex() << " ";
+    oss << "http://";
+    oss << cmd_gw_httpaddr;
+    oss << "/";
+    oss << swarm_id.hex();
+    if (swift::ChunkSize(req->td) != SWIFT_DEFAULT_CHUNK_SIZE)
+	oss << "$" <<  swift::ChunkSize(req->td);
     if (req->xcontentdur != "")
-    {
-        strcat(cmd,"@");
-        strcat(cmd,req->xcontentdur.c_str());
-    }
+	oss << "@" << req->xcontentdur;
+    oss << "\r\n";
 
+    std::stringbuf *pbuf=oss.rdbuf();
     if (cmd_gw_debug)
-        fprintf(stderr,"cmd: SendPlay: %s", cmd);
-
-    send(req->cmdsock,cmd,strlen(cmd),0);
+        fprintf(stderr,"cmd: SendPlay: %s", pbuf->str().c_str());
+    size_t slen = strlen(pbuf->str().c_str());
+    send(req->cmdsock,pbuf->str().c_str(),slen,0);
 }
 
 
@@ -694,18 +698,18 @@ void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line)
         dprintf("cmd: Error processing command %s\n", line );
         std::string msg = "";
         if (ret == ERROR_UNKNOWN_CMD)
-	        msg = "unknown command";
-	    else if (ret == ERROR_MISS_ARG)
-                msg = "missing parameter";
-	    else if (ret == ERROR_BAD_ARG)
-	        msg = "bad parameter";
-	    // BAD_SWARM already sent, and not fatal
+            msg = "unknown command";
+	else if (ret == ERROR_MISS_ARG)
+            msg = "missing parameter";
+	else if (ret == ERROR_BAD_ARG)
+	    msg = "bad parameter";
+	// BAD_SWARM already sent, and not fatal
 
-	    if (msg != "")
-	    {
-	        CmdGwSendERRORBySocket(cmdsock,msg);
-	        CmdGwCloseConnection(cmdsock);
-	    }
+	if (msg != "")
+	{
+	    CmdGwSendERRORBySocket(cmdsock,msg);
+	    CmdGwCloseConnection(cmdsock);
+	}
     }
 
     free(copyline);
@@ -777,8 +781,6 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
         dprintf("cmd: START: %s with tracker %s chunksize %i duration %d\n",hashstr.c_str(),trackerstr.c_str(),chunksize,duration);
 
-        // ARNOTODO: return duration in HTTPGW when in SwarmPlayer mode
-
         Address trackaddr;
         trackaddr = Address(trackerstr.c_str());
         if (trackaddr==Address())
@@ -803,7 +805,8 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         CmdGwSendINFOHashChecking(cmdsock,swarm_id);
 
         // ARNOSMPTODO: disable/interleave hashchecking at startup
-        int td = swift::Find(swarm_id);
+        bool activate=true;
+        int td = swift::Find(swarm_id,activate);
         if (td==-1) {
             std::string filename;
             if (storagepath != "")
@@ -812,7 +815,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
                 filename = hashstr;
 
             if (duration != -1)
-                td = swift::Open(filename,swarm_id,trackaddr,false,chunksize);
+                td = swift::Open(filename,swarm_id,trackaddr,false,true,false,activate,chunksize);
             else
                 td = swift::LiveOpen(filename,swarm_id,trackaddr,false,chunksize);
             if (td == -1) {
@@ -820,7 +823,6 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             	return ERROR_BAD_SWARM;
             }
         }
-        // ARNOTODO: FORCE ACTIVATE, OR DO ONE AddCallBack
 
         // RATELIMIT
         // swift::SetMaxSpeed(td,DDIR_DOWNLOAD,512*1024);
@@ -1028,8 +1030,6 @@ void CmdGwNewConnectionCallback(struct evconnlistener *listener,
 
     bufferevent_setcb(bev, CmdGwDataCameInCallback, NULL, CmdGwEventCameInCallback, NULL);
     bufferevent_enable(bev, EV_READ|EV_WRITE);
-
-    // ARNOTODO: free bufferevent when conn closes.
 
     // One buffer for all cmd connections, reset
     if (cmd_evbuffer != NULL)

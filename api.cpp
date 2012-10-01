@@ -9,6 +9,7 @@
 
 
 #include "swift.h"
+#include "swarmmanager.h"
 
 using namespace std;
 using namespace swift;
@@ -39,58 +40,95 @@ void    swift::Shutdown (int sock_des) {
  */
 
 
-int swift::Open( std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size) {
-    SwarmData* swarm = SwarmManager::GetManager().AddSwarm( filename, hash, tracker, force_check_diskvshash, check_netwvshash, chunk_size, false );
+int swift::Open( std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, bool activate, uint32_t chunk_size) {
+    SwarmData* swarm = SwarmManager::GetManager().AddSwarm( filename, hash, tracker, force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
     if (swarm)
 	return swarm->Id();
     return -1;
 }
 
 
-void swift::Close( int transfer, bool removestate, bool removecontent ) {
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
+void swift::Close( int td, bool removestate, bool removecontent ) {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( td );
     if (swarm)
 	SwarmManager::GetManager().RemoveSwarm( swarm->RootHash(), removestate, removecontent );
+
+    //LIVE
+    LiveTransfer *lt = LiveTransfer::FindByTD(td);
+    if (lt != NULL)
+	delete lt;
 }
 
-int swift::Find (Sha1Hash hash) {
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(hash);
-    if (!swarm)
-        return -1;
-    return swarm->Id();
-}
-
-
-ssize_t swift::Read( int transfer, void *buf, size_t nbyte, int64_t offset )
-{
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if (!swarm)
-	return -1;
-    if (!swarm->Touch()) {
-	swarm = SwarmManager::GetManager().ActivateSwarm( swarm->RootHash() );
-	if (!swarm->Touch())
+int swift::Find(Sha1Hash& swarmid, bool activate) {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(swarmid);
+    if (swarm==NULL)
+    {
+	//LIVE
+	LiveTransfer *lt = LiveTransfer::FindBySwarmID(swarmid);
+	if (lt == NULL)
 	    return -1;
+	else
+	    return lt->td();
     }
-    ContentTransfer* ct = swarm->GetTransfer();
-    if (!ct)
-	return -1;
-    return ct->GetStorage()->Read(buf, nbyte, offset);
+    else
+    {
+	if (activate)
+	    SwarmManager::GetManager().ActivateSwarm(swarm->RootHash());
+	return swarm->Id();
+    }
 }
 
-ssize_t swift::Write( int transfer, const void *buf, size_t nbyte, int64_t offset )
+
+ContentTransfer *swift::GetActivatedTransfer(int td)
 {
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if (!swarm)
-	return -1;
-    if (!swarm->Touch()) {
-	swarm = SwarmManager::GetManager().ActivateSwarm( swarm->RootHash() );
-	if (!swarm->Touch())
-	    return -1;
+    ContentTransfer *ct = NULL;
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
+    if (swarm == NULL)
+	ct = (ContentTransfer *)LiveTransfer::FindByTD(td);
+    else
+	ct = swarm->GetTransfer();
+    return ct;
+}
+
+
+
+// Local method
+static ContentTransfer *swift::FindActivateTransferByTD(int td)
+{
+    ContentTransfer *ct = NULL;
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
+    if (swarm == NULL)
+	//LIVE
+	ct = (ContentTransfer *)LiveTransfer::FindByTD(td);
+    else
+    {
+	if (!swarm->Touch()) {
+	    swarm = SwarmManager::GetManager().ActivateSwarm( swarm->RootHash() );
+	    if (!swarm->Touch())
+		return -1;
+	}
+	ct = swarm->GetTransfer();
     }
-    ContentTransfer* ct = swarm->GetTransfer();
-    if (!ct)
+    return ct;
+}
+
+
+ssize_t swift::Read( int td, void *buf, size_t nbyte, int64_t offset )
+{
+    ContentTransfer *ct = FindActivateTransferByTD(td);
+    if (ct == NULL)
 	return -1;
-    return ct->GetStorage()->Write(buf, nbyte, offset);
+    else
+	return ct->GetStorage()->Read(buf, nbyte, offset);
+}
+
+ssize_t swift::Write( int td, const void *buf, size_t nbyte, int64_t offset )
+{
+    ContentTransfer *ct = FindActivateTransferByTD(td);
+    if (ct == NULL)
+	return -1;
+    else
+	return ct->GetStorage()->Write(buf, nbyte, offset);
 }
 
 
@@ -98,126 +136,217 @@ ssize_t swift::Write( int transfer, const void *buf, size_t nbyte, int64_t offse
  * Swarm Info
  */
 
-uint64_t swift::Size( int transfer ) {
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if (!swarm)
-	return 0;
+uint64_t swift::Size(int td) {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
+    if (swarm == NULL)
+	return 0; //also for LIVE
     return swarm->Size();
 }
 
 
 
-bool swift::IsComplete( int transfer ) {
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if (!swarm)
-	return false;
+bool swift::IsComplete(int td) {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
+    if (swarm == NULL)
+	return false; //also for LIVE
     return swarm->IsComplete();
 }
 
 
-uint64_t swift::Complete( int transfer ) {
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if (!swarm)
-	return 0;
+uint64_t swift::Complete(int td) {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
+    if (swarm == NULL)
+	return 0; //also for LIVE
     return swarm->Complete();
 }
 
 
-uint64_t swift::SeqComplete( int transfer, int64_t offset ) {
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if (!swarm)
-	return 0;
-
-    // ARNOTODO: why is this an activate? Could be cached
-    // SwarmMgr:SeqComplete already does activate in case offset != 0
-
-    if (!swarm->Touch()) {
-	swarm = SwarmManager::GetManager().ActivateSwarm( swarm->RootHash() );
-	if (!swarm->Touch())
-	    return 0;
-    }
-    ContentTransfer* ct = swarm->GetTransfer();
-    if (!ct)
-	return 0;
-    if (ct->ttype() == FILE_TRANSFER)
+uint64_t swift::SeqComplete( int td, int64_t offset ) {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
+    if (swarm == NULL)
     {
-	FileTransfer *ft = (FileTransfer *)ct;
-        return ct->hashtree()->seq_complete(offset);
+	LiveTransfer *lt = LiveTransfer::FindByTD(td);
+	if (lt == NULL)
+	    return 0;
+	else
+	    return lt->SeqComplete(); // No range support for live
     }
     else
-	LiveTransfer *lt = (LiveTransfer *)ct;
-        return lt->SeqComplete(); // No range support for live
+    {
+	return swarm->SeqComplete(offset);
+    }
 }
 
 
-const Sha1Hash& swift::SwarmID(int fdes) {
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( fdes );
-    if (!swarm)
-	return Sha1Hash::ZERO;
-    return swarm->swarm_id();
+const Sha1Hash& swift::SwarmID(int td) {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( td );
+    if (swarm == NULL)
+    {
+	LiveTransfer *lt = LiveTransfer::FindByTD(td);
+	if (lt == NULL)
+	    return Sha1Hash::ZERO;
+	else
+	    return lt->swarm_id();
+    }
+    else
+	return swarm->swarm_id();
 }
 
 
 /** Returns the number of bytes in a chunk for this transmission */
-uint32_t swift::ChunkSize( int fdes)
+uint32_t swift::ChunkSize( int td)
 {
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if( !swarm )
-	return 0;
-    return swarm->ChunkSize();
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( td);
+    if (swarm == NULL)
+    {
+	LiveTransfer *lt = LiveTransfer::FindByTD(td);
+	if (lt == NULL)
+	    return Sha1Hash::ZERO;
+	else
+	    return lt->chunk_size();
+    }
+    else
+	return swarm->ChunkSize();
 }
 
 
 
 tdlist_t swift::GetTransferDescriptors()
 {
-
+    tdlist_t filetdl = SwarmManager::GetManager().GetTransferDescriptors();
+    tdlist livetdl = LiveTransfer::GetTransferDescriptors();
+    filetdl.insert(filetdl.end(),livetdl.begin(),livetdl.end()); // append
+    return filetdl;
 }
 
-void swift::SetMaxSpeed(int td, data_direction_t ddir, double m)
-{
 
+void swift::SetMaxSpeed(int td, data_direction_t ddir, double speed)
+{
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( td );
+    if (swarm == NULL)
+    {
+	LiveTransfer *lt = LiveTransfer::FindByTD(td);
+	if (lt == NULL)
+	    return;
+	else
+	{
+	    // Arno, 2012-05-25: SetMaxSpeed resets the current speed history, so
+	    // be careful here.
+	    if( lt->GetMaxSpeed( ddir ) != speed )
+		lt->SetMaxSpeed( ddir, speed );
+    }
+    else
+	swarm->SetMaxSpeed(ddir,speed); // checks current set speed beforehand
 }
 
 double swift::GetCurrentSpeed(int td, data_direction_t ddir)
 {
-
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( td );
+    if (swarm == NULL)
+    {
+	LiveTransfer *lt = LiveTransfer::FindByTD(td);
+	if (lt == NULL)
+	    return -1.0;
+	else
+	    return lt->GetCurrentSpeed(ddir);
+    }
+    else
+    {
+	FileTransfer *ft = swarm->GetTransfer();
+	if (!ft)
+	    return -1.0;
+	else
+	    return ft->GetCurrentSpeed(ddir);
+    }
 }
 
 
 transfer_t swift::ttype(int td)
 {
-
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( td );
+    if (swarm == NULL)
+	return LIVE_TRANSFER; // approx of truth
+    else
+	return FILE_TRANSFER;
 }
-
 
 Storage *swift::GetStorage(int td)
 {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( td );
+    if (swarm == NULL)
+    {
+	LiveTransfer *lt = LiveTransfer::FindByTD(td);
+	if (lt == NULL)
+	    return NULL;
+	else
+	    return lt->GetStorage();
+    }
+    else
+    {
+	FileTransfer *ft = swarm->GetTransfer();
+	if (!ft)
+	    return NULL;
+	else
+	    return ft->GetStorage();
+    }
 }
 
 std::string swift::GetOSPathName(int td)
 {
-
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( td );
+    if (swarm == NULL)
+    {
+	LiveTransfer *lt = LiveTransfer::FindByTD(td);
+	if (lt == NULL || lt->GetStorage() == NULL)
+	    return NULL;
+	else
+	    return lt->GetStorage()->GetOSPathName();
+    }
+    else
+	return swarm->GetOSPathName();
 }
 
 bool swift::IsOperational(int td)
 {
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( td );
+    if (swarm == NULL)
+    {
+	LiveTransfer *lt = LiveTransfer::FindByTD(td);
+	if (lt == NULL)
+	    return false;
+	else
+	    return lt->IsOperational();
+    }
+    else
+    {
+	FileTransfer *ft = swarm->GetTransfer();
+	if (!ft)
+	    return false;
+	else
+	    return ft->IsOperational();
+    }
 }
 
 
 
+bool swift::IsZeroState(int td)
+{
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( td );
+    if (swarm == NULL)
+	return false;
+    else
+	return swarm->IsZeroState();
+}
+
+
 
 //CHECKPOINT
-int swift::Checkpoint(int fdes) {
+int swift::Checkpoint(int td) {
     // If file, save transfer's binmap for zero-hashcheck restart
-
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if (!swarm)
-	return -1;
-    ContentTransfer* ct = swarm->GetTransfer(false);
-    if (!ct || ct->ttype() == LIVE_TRANSFER)
-        return -1;
-    FileTransfer *ft = (FileTransfer *)ct;
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
+    if (swarm == NULL)
+	return -1; // also for LIVE
+    FileTransfer *ft = swarm->GetTransfer(false);
     if (ft->IsZeroState())
         return -1;
 
@@ -230,7 +359,7 @@ int swift::Checkpoint(int fdes) {
 
     std::string binmap_filename = ft->GetStorage()->GetOSPathName();
     binmap_filename.append(".mbinmap");
-    //fprintf(stderr,"swift: HACK checkpointing %s at %lli\n", binmap_filename.c_str(), Complete(fdes));
+    //fprintf(stderr,"swift: HACK checkpointing %s at %lli\n", binmap_filename.c_str(), Complete(td));
     FILE *fp = fopen_utf8(binmap_filename.c_str(),"wb");
     if (!fp) {
         print_error("cannot open mbinmap for writing");
@@ -246,42 +375,34 @@ int swift::Checkpoint(int fdes) {
 
 
 // SEEK
-int swift::Seek(int fdes, int64_t offset, int whence)
+int swift::Seek(int td, int64_t offset, int whence)
 {
-    dprintf("%s F%i Seek: to %lld\n",tintstr(), fdes, offset );
+    dprintf("%s F%d Seek: to %lld\n",tintstr(), td, offset );
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
+    if (swarm == NULL)
+	return -1; // also for LIVE
 
     // Quick fail in order not to activate a swarm only to fail after activation
     if( whence != SEEK_SET ) // TODO other
 	return -1;
-    if( offset >= swift::Size(fdes) )
+    if( offset >= swift::Size(td) )
 	return -1;
 
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if (!swarm)
-	return -1;
     if( !swarm->Touch() ) {
 	swarm = SwarmManager::GetManager().ActivateSwarm( swarm->swarm_id() );
 	if (!swarm->Touch())
 	    return -1;
     }
-    ContentTransfer* ct = swarm->GetTransfer();
-    if (!ct))
-	return -1;
+    FileTransfer *ft = swarm->GetTransfer();
 
-    // ARNOTODO: no seek in live, so don't activate, or something
-    if (ct->ttype() == LIVE_TRANSFER)
-        return -1;
-
-    FileTransfer *ft = (FileTransfer *)ct;
-
-    // whence == SEEK_SET && offset < swift::Size(transfer)  - validated by quick fail above
+    // whence == SEEK_SET && offset < swift::Size(td)  - validated by quick fail above
 
     // Which bin to seek to?
     int64_t coff = offset - (offset % ft->hashtree()->chunk_size()); // ceil to chunk
     bin_t offbin = bin_t(0,coff/ft->hashtree()->chunk_size());
 
     char binstr[32];
-    dprintf("%s F%i Seek: to bin %s\n",tintstr(), fdes, offbin.str(binstr) );
+    dprintf("%s F%i Seek: to bin %s\n",tintstr(), td, offbin.str(binstr) );
 
     return ft->picker()->Seek(offbin,whence);
 }
@@ -290,18 +411,24 @@ int swift::Seek(int fdes, int64_t offset, int whence)
 
 
 
-void swift::AddPeer( Address address, const Sha1Hash& root ) {
+void swift::AddPeer(Address address, const Sha1Hash& swarmid) {
 
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( root );
-    if( !swarm )
-	return;
-    if( !swarm->Touch() ) {
-	swarm = SwarmManager::GetManager().ActivateSwarm( root );
-	if( !swarm->Touch() )
-	    return;
+    ContentTransfer *ct = NULL;
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(swarmid);
+    if (swarm == NULL)
+	ct = (ContentTransfer *)LiveTransfer::FindBySwarmID(swarmid);
+    else
+    {
+	if (!swarm->Touch()) {
+	    swarm = SwarmManager::GetManager().ActivateSwarm( root );
+	    if (!swarm->Touch())
+		return;
+	}
+	ct = (ContentTransfer *)swarm->GetTransfer();
     }
-    ContentTransfer* ct = swarm->GetTransfer();
-    if (ct)
+    if (ct == NULL)
+	return;
+    else
 	ct->AddPeer(address);
     // FIXME: When cached addresses are supported in swapped-out swarms, add the peer to that cache instead
 }
@@ -313,32 +440,45 @@ void swift::AddPeer( Address address, const Sha1Hash& root ) {
  */
 
 
-void swift::AddProgressCallback (int transfer,ProgressCallback cb,uint8_t agg) {
+void swift::AddProgressCallback(int td,ProgressCallback cb,uint8_t agg) {
 
-    //fprintf(stderr,"swift::AddProgressCallback: transfer %i\n", transfer );
+    //fprintf(stderr,"swift::AddProgressCallback: td %i\n", td);
 
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if( !swarm )
-        return;
-    swarm->AddProgressCallback( cb, agg );
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
+    if (swarm == NULL)
+    {
+	LiveTransfer *lt = LiveTransfer::FindByTD(td);
+	if (lt == NULL)
+	    return;
+	else
+	    lt->AddProgressCallback(cb,agg);
+	return;
+    }
+    else
+	swarm->AddProgressCallback( cb, agg );
 
     //fprintf(stderr,"swift::AddProgressCallback: swarm obj %p %p\n", swarm, cb );
 }
 
 
 
-void swift::RemoveProgressCallback (int transfer, ProgressCallback cb) {
+void swift::RemoveProgressCallback(int td, ProgressCallback cb) {
 
-    //fprintf(stderr,"swift::RemoveProgressCallback: transfer %i\n", transfer );
+    //fprintf(stderr,"swift::RemoveProgressCallback: td %i\n", td);
 
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm( transfer );
-    if( !swarm )
-        return;
-    swarm->RemoveProgressCallback( cb );
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
+    if (swarm == NULL)
+    {
+	LiveTransfer *lt = LiveTransfer::FindByTD(td);
+	if (lt == NULL)
+	    return;
+	else
+	    lt->RemoveProgressCallback(cb);
+	return;
+    }
+    else
+	swarm->RemoveProgressCallback(cb);
 }
-
-
-
 
 
 
@@ -349,11 +489,18 @@ void swift::RemoveProgressCallback (int transfer, ProgressCallback cb) {
 
 LiveTransfer *swift::LiveCreate(std::string filename, const Sha1Hash& swarmid, size_t chunk_size)
 {
-    // ARNOTODO: SwarmManager integration, or not.
-
-    fprintf(stderr,"live: swarmid: %s\n",swarmid.hex().c_str() );
+    // Arno: LIVE streams are not managed by SwarmManager
+    fprintf(stderr,"swift::LiveCreate: swarmid: %s\n",swarmid.hex().c_str() );
     LiveTransfer *lt = new LiveTransfer(filename,swarmid,true,chunk_size);
-    return lt;
+
+    if (lt->IsOperational())
+	return lt;
+    else
+    {
+	fprintf(stderr,"swift::LiveCreate: swarm created, but not operational\n",swarmid.hex().c_str() );
+	delete lt;
+	return NULL;
+    }
 }
 
 
@@ -371,20 +518,16 @@ int swift::LiveOpen(std::string filename, const Sha1Hash& hash,Address tracker, 
     // SWIFTPROC
     lt->SetTracker(tracker);
     lt->ConnectToTracker();
-    return lt->fd();
+    return lt->td();
 }
 
 
-uint64_t  swift::GetHookinOffset(int fdes)
+uint64_t  swift::GetHookinOffset(int td)
 {
-    if (ContentTransfer::swarms.size()>fdes && ContentTransfer::swarms[fdes]) {
-        if (ContentTransfer::swarms[fdes]->ttype() == FILE_TRANSFER)
-            return 0;
-        else
-            return ((LiveTransfer *)ContentTransfer::swarms[fdes])->GetHookinOffset();
-    }
+    LiveTransfer *lt = LiveTransfer::FindByTD(td);
+    if (lt == NULL)
+	return 0; // also for FileTransfer
     else
-       return 0;
+	return lt->GetHookinOffset();
 }
-
 

@@ -14,10 +14,24 @@
 using namespace swift;
 
 
+/*
+ * Global Variables
+ */
+static std::vector<LiveTransfer*> LiveTransfer::liveswarms;
+
+
+/*
+ * Local Constants
+ */
+#define TRANSFER_DESCR_LIVE_OFFSET	400000
+
+
 LiveTransfer::LiveTransfer(std::string filename, const Sha1Hash& swarm_id,bool amsource,size_t chunk_size) :
         ContentTransfer(LIVE_TRANSFER), swarm_id_(swarm_id), am_source_(amsource), filename_(filename),
         chunk_size_(chunk_size), last_chunkid_(0), offset_(0)
 {
+    GlobalAdd();
+
     picker_ = new SimpleLivePiecePicker(this);
     picker_->Randomize(rand()&63);
 
@@ -41,7 +55,53 @@ LiveTransfer::LiveTransfer(std::string filename, const Sha1Hash& swarm_id,bool a
 LiveTransfer::~LiveTransfer()
 {
     delete picker_;
+
+    GlobalDel();
 }
+
+
+
+void LiveTransfer::GlobalAdd() {
+
+    int idx = liveswarms.size();
+    td_ = idx + TRANSFER_DESCR_LIVE_OFFSET;
+
+    if (liveswarms.size()<idx+1)
+        liveswarms.resize(idx+1);
+    liveswarms[idx] = this;
+}
+
+
+void LiveTransfer::GlobalDel() {
+    int idx = td_ - TRANSFER_DESCR_LIVE_OFFSET;
+    swarms[idx] = NULL;
+}
+
+
+void LiveTransfer::FindByTD(int td)
+{
+    int idx = td - TRANSFER_DESCR_LIVE_OFFSET;
+    return idx<liveswarms.size() ? (LiveTransfer *)liveswarms[idx] : NULL;
+}
+
+LiveTransfer* LiveTransfer::FindBySwarmID(const Sha1Hash& swarmid) {
+    for(int i=0; i<liveswarms.size(); i++)
+        if (liveswarms[i] && liveswarms[i]->swarm_id()==swarmid)
+            return liveswarms[i];
+    return NULL;
+}
+
+
+tdlist_t LiveTransfer::GetTransportDescriptors() {
+    tdlist tds;
+    for(int i=0; i<liveswarms.size(); i++)
+        if (liveswarms[i] && liveswarms[i]->swarm_id()==swarmid)
+            tds.push_back(i+TRANSFER_DESCR_LIVE_OFFSET);
+    return tds;
+}
+
+
+
 
 
 uint64_t      LiveTransfer::SeqComplete() {

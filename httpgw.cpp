@@ -800,12 +800,9 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     }
     sawhttpconn = true;
 
-    // 1. Get URI
-    // Format: /roothash[/multi-file][@duration]
-    // ARNOTODO: allow for chunk size to be set via URL?
+    // 1. Get swift URI
     std::string uri = evhttp_request_get_uri(evreq);
-
-    struct evkeyvalq *reqheaders =    evhttp_request_get_input_headers(evreq);
+    struct evkeyvalq *reqheaders = evhttp_request_get_input_headers(evreq);
 
     // Arno, 2012-04-19: libevent adds "Connection: keep-alive" to reply headers
     // if there is one in the request headers, even if a different Connection
@@ -813,14 +810,12 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     //
     evhttp_remove_header(reqheaders,"Connection"); // Remove Connection: keep-alive
 
-    // 2. Parse URI
+    // 2. Parse swift URI
     std::string hashstr = "", mfstr="", durstr="";
-
     if (uri.length() <= 1)     {
         evhttp_send_error(evreq,400,"Path must be root hash in hex, 40 bytes.");
         return;
     }
-
     parseduri_t puri;
     if (!swift::ParseURI(uri,puri))
     {
@@ -830,6 +825,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     hashstr = puri["hash"];
     mfstr = puri["filename"];
     durstr = puri["durationstr"];
+    chunksizestr = puri["chunksizestr"];
 
     // Arno, 2012-06-15: LIVE: VLC can't take @-1 as in URL, so workaround
     if (hashstr.length() > 40 && hashstr.substr(hashstr.length()-2) == "-1")
@@ -838,6 +834,10 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
         durstr = "-1";
     }
     dprintf("%s @%i http get: demands %s mf %s dur %s\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str(),mfstr.c_str(),durstr.c_str() );
+
+    uint32_t chunksize=httpgw_chunk_size; // default externally configured
+    if (chunksizestr.length() > 0)
+        std::istringstream(chunksizestr) >> chunksize;
 
 
     // 3. Check for concurrent requests, currently not supported.
@@ -849,15 +849,16 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
         return;
     }
 
-    // 4. Initiate transfer
-    int td = swift::Find(swarm_id);
+    // 4. Initiate transfer, activating FileTransfer if needed
+    bool activate=true;
+    int td = swift::Find(swarm_id,activate);
     if (td == -1) {
         // LIVE
         if (durstr != "-1") {
-            td = swift::Open(hashstr,swarm_id,Address(),false,true,httpgw_chunk_size);
+            td = swift::Open(hashstr,swarm_id,Address(),false,true,false,activate,chunksize);
         }
         else {
-            td = swift::LiveOpen(hashstr,swarm_id,Address(),false,httpgw_chunk_size);
+            td = swift::LiveOpen(hashstr,swarm_id,Address(),false,chunksize);
         }
 
         // Arno, 2011-12-20: Only on new transfers, otherwise assume that CMD GW

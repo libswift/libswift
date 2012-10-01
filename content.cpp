@@ -11,16 +11,11 @@
 
 using namespace swift;
 
-/*
- * Global Variables
- */
-std::vector<ContentTransfer*> ContentTransfer::swarms;
 
 /*
  * Local Constants
  */
-#define TRANSFER_MAINTENANCE_INTERVAL	TINT_SEC
-#define CHANNEL_GARBAGECOLLECT_INTERVAL	(5*TINT_SEC)
+#define CHANNEL_GARBAGECOLLECT_INTERVAL	5 // seconds, or cleanup calls actually
 
 #define TRACKER_RETRY_INTERVAL_START	(5*TINT_SEC)
 #define TRACKER_RETRY_INTERVAL_EXP		1.1	// exponent used to increase INTERVAL_START
@@ -33,15 +28,12 @@ ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), mychannels_
     tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START),
     tracker_retry_time_(NOW)
 {
-    GlobalAdd();
+
 
     cur_speed_[DDIR_UPLOAD] = MovingAverageSpeed();
     cur_speed_[DDIR_DOWNLOAD] = MovingAverageSpeed();
     max_speed_[DDIR_UPLOAD] = DBL_MAX;
     max_speed_[DDIR_DOWNLOAD] = DBL_MAX;
-
-    evtimer_assign(&evclean_,Channel::evbase,&ContentTransfer::LibeventCleanCallback,this);
-    evtimer_add(&evclean_,tint2tv(TRANSFER_MAINTENANCE_INTERVAL));
 }
 
 
@@ -50,11 +42,6 @@ ContentTransfer::~ContentTransfer()
     CloseChannels(mychannels_);
     if (storage_ != NULL)
         delete storage_;
-
-    // Arno, 2012-02-06: Cancel cleanup timer, otherwise chaos!
-    evtimer_del(&evclean_);
-
-    GlobalDel();
 }
 
 
@@ -94,32 +81,41 @@ void ContentTransfer::GarbageCollectChannels()
     ReConnectToTrackerIfAllowed(hasestablishedpeers);
 }
 
-
-void ContentTransfer::LibeventCleanCallback(int fd, short event, void *arg)
+// Global method
+void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg)
 {
-    //fprintf(stderr,"ContentTransfer::CleanCallback\n");
+    fprintf(stderr,"ContentTransfer::GlobalCleanCallback\n");
 
     // Arno, 2012-02-24: Why-oh-why, update NOW
     Channel::Time();
 
-    ContentTransfer *ct = (ContentTransfer *)arg;
-    if (ct == NULL)
-        return;
+    tdlist_t tds = GetTransferDescriptors();
+    tdlist_t::iterator iter;
+    for (iter = tds.begin(); iter != tds.end(); iter++)
+    {
+	int td = *iter;
 
-    // Update speed measurements such that they decrease when DL/UL stops
-    // Always. Must be done on 1 s interval
-    ct->OnRecvData(0);
-    ct->OnSendData(0);
+	ContentTransfer *ct = swift::GetActivatedTransfer(td);
+	if (ct == NULL)
+	    return; // not activated, don't bother
+
+	// Update speed measurements such that they decrease when DL/UL stops
+	// Always. Must be done on 1 s interval
+	ct->OnRecvData(0);
+	ct->OnSendData(0);
 
 
-    // ARNOTODO: Call garage collect only once every CHANNEL_GARBAGECOLLECT_INTERVAL
-    // ARNOTODO: have one maintenance timer for all (activated) Transfers
+	// Arno: Call garage collect only once every CHANNEL_GARBAGECOLLECT_INTERVAL
+	if ((ContentTransfer::cleancounter % CHANNEL_GARBAGECOLLECT_INTERVAL) == 0)
+	    ct->GarbageCollectChannels();
+    }
 
-    ct->GarbageCollectChannels();
+    ContentTransfer::cleancounter++;
 
-    // Reschedule cleanup
-    evtimer_assign(&(ct->evclean_),Channel::evbase,&ContentTransfer::LibeventCleanCallback,ct);
-    evtimer_add(&(ct->evclean_),tint2tv(TRANSFER_MAINTENANCE_INTERVAL));
+
+    // Arno, 2012-10-01: Reschedule cleanup, started in LibraryInit
+    evtimer_assign(&ContentTransfer::evclean,Channel::evbase,&ContentTransfer::LibeventGlobalCleanCallback,NULL);
+    evtimer_add(&ContentTransfer::evclean,tint2tv(TINT_SEC));
 }
 
 
@@ -153,9 +149,7 @@ void ContentTransfer::ConnectToTracker()
     if (!IsOperational())
  	return;
 
-    // SWIFTPROC
     Channel *c = NULL;
-    // Arno, 2012-01-09: LIVE Old hack: the tracker is assumed to be the live source
     if (tracker_ != Address())
         c = new Channel(this,INVALID_SOCKET,tracker_,true);
     else if (Channel::tracker!=Address())
@@ -163,34 +157,8 @@ void ContentTransfer::ConnectToTracker()
 }
 
 
-
-
-void ContentTransfer::GlobalAdd() {
-
-    fd_ = swarms.size();
-
-    if (swarms.size()<fd_+1)
-        swarms.resize(fd_+1);
-    swarms[fd_] = this;
-}
-
-
-void ContentTransfer::GlobalDel() {
-    swarms[fd_] = NULL;
-}
-
-
-ContentTransfer* ContentTransfer::Find (const Sha1Hash& swarmid) {
-    for(int i=0; i<swarms.size(); i++)
-        if (swarms[i] && swarms[i]->swarm_id()==swarmid)
-            return swarms[i];
-    return NULL;
-}
-
-
-
-bool ContentTransfer::OnPexIn (const Address& addr) {
-
+bool ContentTransfer::OnPexIn (const Address& addr)
+{
     //fprintf(stderr,"ContentTransfer::OnPexIn: %s\n", addr.str() );
     // Arno: this brings safety, but prevents private swift installations.
     // TODO: detect public internet.
@@ -309,10 +277,6 @@ uint32_t   ContentTransfer::GetNumSeeders()
 void ContentTransfer::AddPeer(Address &peer)
 {
     Channel *c = new Channel(this,INVALID_SOCKET,peer);
-#if OPTION_INCLUDE_PEER_TRACKING
-    Channel::PeerReference* ref = Channel::AddKnownPeer(peer);
-    delete ref; // TODO
-#endif
 }
 
 

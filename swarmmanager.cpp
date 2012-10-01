@@ -1,3 +1,12 @@
+/*
+ *  swarmmanager.cpp
+ *
+ *  Created by Thomas Schaap
+ *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
+ *
+ */
+
+
 #include <string.h>
 #include <time.h>
 
@@ -23,6 +32,11 @@
 #define exit( x )
 #endif
 
+
+// Arno, 2012-10-01: Currently swarms are only deactivated when resources low,
+// not when idle. (with the exception of ZeroState swarms, see zerostate.cpp)
+// ARNOTODO
+
 namespace swift {
 
 // FIXME: Difference between seeds (complete) and downloads; allow setting minimum number of seeds?
@@ -32,15 +46,15 @@ namespace swift {
 
 SwarmManager SwarmManager::instance_;
 
-SwarmData::SwarmData( const std::string filename, const Sha1Hash& rootHash, const Address& tracker, bool check_hashes, uint32_t chunk_size, bool zerostate ) :
+SwarmData::SwarmData( const std::string filename, const Sha1Hash& rootHash, const Address& tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, uint32_t chunk_size ) :
     id_(-1), rootHash_( rootHash ), active_( false ), latestUse_(0), toBeRemoved_(false), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
-    filename_( filename ), tracker_( tracker ), checkHashes_( check_hashes ), chunkSize_( chunk_size ), zerostate_( zerostate ), cached_(false)
+    filename_( filename ), tracker_( tracker ), forceCheckDiskVSHash_(force_check_diskvshash), checkNetworkVSHash_(check_netwvshash),  chunkSize_( chunk_size ), zerostate_( zerostate ), cached_(false)
 {
 }
 
 SwarmData::SwarmData( const SwarmData& sd ) :
     id_(-1), rootHash_( sd.rootHash_ ), active_( false ), latestUse_(0), toBeRemoved_(false), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
-    filename_( sd.filename_ ), tracker_( sd.tracker_ ), checkHashes_( sd.checkHashes_ ), chunkSize_( sd.chunkSize_ ), zerostate_( sd.zerostate_ ), cached_(false)
+    filename_( sd.filename_ ), tracker_( sd.tracker_ ), forceCheckDiskVSHash_( sd.forceCheckDiskVSHash_ ), chunkSize_( sd.chunkSize_ ), zerostate_( sd.zerostate_ ), cached_(false)
 {
 }
 
@@ -142,8 +156,6 @@ void SwarmData::RemoveProgressCallback(ProgressCallback cb) {
 
 uint64_t SwarmData::Size() {
 
-    // ARNOTODO LIVE
-
     if( ft_ ) {
         assert( !cached_ );
         return ft_->hashtree()->size();
@@ -154,8 +166,6 @@ uint64_t SwarmData::Size() {
 }
 
 bool SwarmData::IsComplete() {
-
-    // ARNOTODO LIVE
 
     if( ft_ ) {
         assert( !cached_ );
@@ -169,8 +179,6 @@ bool SwarmData::IsComplete() {
 }
 
 uint64_t SwarmData::Complete() {
-
-    // ARNOTODO LIVE
 
     if( ft_ ) {
         assert( !cached_ );
@@ -233,12 +241,13 @@ SwarmManager::~SwarmManager() {
 
 #define rootHashToList( rootHash ) (knownSwarms_[rootHash.bits[0]&63])
 
-SwarmData* SwarmManager::AddSwarm( const std::string filename, const Sha1Hash& hash, const Address& tracker, bool check_hashes, uint32_t chunk_size, bool zerostate ) {
+SwarmData* SwarmManager::AddSwarm( const std::string filename, const Sha1Hash& hash, const Address& tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, bool activate, uint32_t chunk_size)
+{
     enter( "addswarm( many )" );
     invariant();
-    SwarmData sd( filename, hash, tracker, check_hashes, chunk_size, zerostate );
+    SwarmData sd( filename, hash, tracker, force_check_diskvshash, check_netwvshash, zerostate, chunksize );
 #if SWARMMANAGER_ASSERT_INVARIANTS
-    SwarmData* res = AddSwarm( sd );
+    SwarmData* res = AddSwarm( sd, activate );
     assert( hash == Sha1Hash::ZERO || res == FindSwarm( hash ) );
     assert( !res || res == FindSwarm( res->Id() ) );
     invariant();
@@ -250,12 +259,50 @@ SwarmData* SwarmManager::AddSwarm( const std::string filename, const Sha1Hash& h
 }
 
 // Can return NULL. Can also return a non-active swarm, even though it tries to activate by default.
-SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm ) {
+SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
     enter( "addswarm( swarm )" );
     invariant();
-    // FIXME: Handle a swarm that has no rootHash yet in a better way: queue it and build the rootHash in the background.
+
     SwarmData* newSwarm = new SwarmData( swarm );
-    if( swarm.rootHash_ == Sha1Hash::ZERO ) {
+    // Arno: create SwarmData from checkpoint
+    if (swarm.rootHash_ == Sha1Hash::ZERO && !activate)
+    {
+	std::string binmap_filename = swarm->filename_;
+	binmap_filename.append(".mbinmap");
+
+	// Arno, 2012-01-03: Hack to discover root hash of a file on disk, such that
+	// we don't load it twice.
+	MmapHashTree *ht = new MmapHashTree(true,binmap_filename);
+
+	//    fprintf(stderr,"swift: parsedir: File %s may have hash %s\n", filename, ht->root_hash().hex().c_str() );
+
+	std::string hash_filename = swarm->filename_;
+	hash_filename.append(".mhash");
+
+	bool mhash_exists=true;
+	int64_t mhash_size = file_size_by_path_utf8( hash_filename);
+	if (mhash_size <= 0)
+	    mhash_exists = false;
+
+	// ARNOTODO: sanity check if mhash = Sha1Hash-in-bytes * size-of-tree(ht)
+
+	if (mhash_exists && ht->is_complete())
+	{
+	    // Swarm is good on disk, create SwarmData without activation
+	    newSwarm->rootHash_ = ht->root_hash();
+	    newSwarm->cachedComplete_ = ht->complete();
+	    newSwarm->cachedSize_ = ht->size();
+	    newSwarm->cachedIsComplete_ = ht->is_complete();
+	    newSwarm->cachedOSPathName_ = swarm->filename_;
+	    newSwarm->cachedStorageReady_ = ht->is_complete();
+
+
+	    // ARNOTODO: REGISTER AT TRACKER!!!!
+	}
+    }
+
+    if (newSwarm.rootHash_ == Sha1Hash::ZERO) {
+	// FIXME: Handle a swarm that has no rootHash yet in a better way: queue it and build the rootHash in the background.
         BuildSwarm( newSwarm );
         if( !newSwarm->ft_ ) {
             delete newSwarm;
@@ -263,6 +310,8 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm ) {
             return NULL;
         }
     }
+
+    //Arno: check for duplicates
     std::vector<SwarmData*>& list = rootHashToList(newSwarm->rootHash_);
     int loc = GetSwarmLocation( list, newSwarm->rootHash_ );
     if( loc < list.size() && list[loc]->rootHash_ == newSwarm->rootHash_ ) {
@@ -289,9 +338,14 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm ) {
         newSwarm->id_ = swarmList_.size();
         swarmList_.push_back( newSwarm );
     }
-    if( !ActivateSwarm( newSwarm ) && newSwarm->ft_ ) {
-        delete newSwarm->ft_;
-        newSwarm->ft_ = NULL;
+
+    // Arno
+    if (activate)
+    {
+	if( !ActivateSwarm( newSwarm ) && newSwarm->ft_ ) {
+	    delete newSwarm->ft_;
+	    newSwarm->ft_ = NULL;
+	}
     }
     assert( swarm.rootHash_ == Sha1Hash::ZERO || newSwarm == FindSwarm( swarm.rootHash_ ) );
     assert( newSwarm == FindSwarm( newSwarm->Id() ) );
@@ -308,9 +362,8 @@ void SwarmManager::BuildSwarm( SwarmData* swarm ) {
     if( swarm->rootHash_ == Sha1Hash::ZERO && file_size_by_path_utf8( swarm->filename_ ) == 0 )
         return;
 
-    //ARNOTODO: check netw vs hash, LIVE?
-    swarm->ft_ = new FileTransfer( swarm->id_, swarm->filename_, swarm->rootHash_, swarm->checkHashes_, swarm->chunkSize_, swarm->zerostate_ );
-    if( !swarm->ft_ ) {
+    swarm->ft_ = new FileTransfer( swarm->id_, swarm->filename_, swarm->rootHash_, swarm->forceCheckDiskVSHash_, swarm->checkNetworkVSHash_, swarm->chunkSize_, swarm->zerostate_ );
+    if( !swarm->ft_ || !swarm->ft_->IsOperational()) { // Arno, 2012-10-01: Check if operational
         exit( "buildswarm (1)" );
         return;
     }
@@ -328,16 +381,13 @@ void SwarmManager::BuildSwarm( SwarmData* swarm ) {
         swarm->cachedOSPathName_ = std::string();
     }
     // Hashes have been checked, don't check again
-    swarm->checkHashes_ = false;
+    swarm->forceCheckDiskVSHash_ = false;
     if( swarm->tracker_ != Address() ) {
         // initiate tracker connections
         // SWIFTPROC
         swarm->ft_->SetTracker( swarm->tracker_ );
         swarm->ft_->ConnectToTracker();
     }
-
-
-    // ARNOTODO: !IsOperational()
 
     // Swarm just became active (because ->ft_), but still needs to be made ->active_, so invariant does not hold
     exit( "buildswarm" );
@@ -425,7 +475,7 @@ void SwarmManager::RemoveSwarm( const Sha1Hash& rootHash, bool removeState, bool
         }
     }
 
-    delete swarm;
+    delete swarm; // Arno, 2012-10-01: calls delete ft_ which causes storage layer to close files
 
     std::set<std::string>::iterator iter;
     for (iter=delset.begin(); iter!=delset.end(); iter++)
@@ -585,7 +635,7 @@ void SwarmManager::DeactivateSwarm( SwarmData* swarm, int activeLoc ) {
     // Checkpoint before deactivating
     if( Checkpoint( swarm->Id() ) == -1 && !swarm->zerostate_ ) {
         // Checkpoint failed and it's not due to not being needed in zerostate; better check the hashes next timey
-        swarm->checkHashes_ = true;
+        swarm->forceCheckDiskVSHash_ = true;
     }
 
     swarm->active_ = false;
@@ -644,6 +694,9 @@ void SwarmManager::DeactivateSwarm( const Sha1Hash& rootHash ) {
 bool SwarmManager::DeactivateSwarm() {
     // This can be called from ActivateSwarm(swarm), where the invariant need not hold
     enter( "deactivateswarm" );
+
+    // Arno, 2012-10-01: This is just a LRU policy, not even looking at #conns :-(
+
     tint old = usec_time() - SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED;
     SwarmData* oldest = NULL;
     int oldestloc = 0;
@@ -738,6 +791,21 @@ SwarmManager& SwarmManager::GetManager() {
     }
     return instance_;
 }
+
+
+//Arno
+tdlist_t SwarmManager::GetTransferDescriptors()
+{
+    tdlist_t tdl;
+    for (int i=0 i<swarmList_.size(); i++)
+    {
+	if (swarmList_[i] != NULL)
+	    tdl.push_back(i);
+    }
+    return tdl;
+}
+
+
 
 SwarmManager::Iterator::Iterator() {
     transfer_ = -1;
