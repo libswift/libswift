@@ -23,7 +23,7 @@ std::vector<LiveTransfer*> LiveTransfer::liveswarms;
 /*
  * Local Constants
  */
-#define TRANSFER_DESCR_LIVE_OFFSET	400000
+#define TRANSFER_DESCR_LIVE_OFFSET	4000000
 
 
 LiveTransfer::LiveTransfer(std::string filename, const Sha1Hash& swarm_id,bool amsource,size_t chunk_size) :
@@ -105,6 +105,11 @@ tdlist_t LiveTransfer::GetTransferDescriptors() {
 
 uint64_t      LiveTransfer::SeqComplete() {
 
+    if (am_source_)
+    {
+        uint64_t seqc = ack_out_.find_empty().base_offset();
+	return seqc*chunk_size_;
+    }
     bin_t hpos = ((LivePiecePicker *)picker())->GetHookinPos();
     bin_t cpos = ((LivePiecePicker *)picker())->GetCurrentPos();
     if (hpos == bin_t::NONE || cpos == bin_t::NONE)

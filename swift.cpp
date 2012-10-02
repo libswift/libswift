@@ -698,6 +698,10 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
         evhttp_make_request(cn, req, EVHTTP_REQ_GET,httppath.c_str());
         evhttp_add_header(req->output_headers, "Host", httpservname.c_str());
     }
+
+
+    report_progress = true;
+    single_td = livesource_lt->td();
 }
 
 
@@ -722,8 +726,6 @@ void ReportCallback(int fd, short event, void *arg) {
 		fprintf(stderr,"dwload %lf\n",swift::GetCurrentSpeed(single_td,DDIR_DOWNLOAD));
 		//fprintf(stderr,"npeers %d\n",ft->GetNumLeechers()+ft->GetNumSeeders() );
 	}
-
-        fprintf(stderr,"report: type %d do %d done %d complete %d\n", (int)swift::ttype(single_td), (int)file_enable_checkpoint, (int)file_checkpointed, (int)swift::IsComplete(single_td) );
 
 	if (swift::ttype(single_td) == FILE_TRANSFER && file_enable_checkpoint && !file_checkpointed && swift::IsComplete(single_td))
 	{
@@ -925,7 +927,6 @@ void LiveSourceFileTimerCallback(int fd, short event, void *arg) {
     }
 
     // Reschedule
-    evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
     evtimer_add(&evlivesource, tint2tv(LIVESOURCE_INTERVAL));
 }
 

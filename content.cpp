@@ -91,7 +91,7 @@ void ContentTransfer::GarbageCollectChannels()
 // Global method
 void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg)
 {
-    fprintf(stderr,"ContentTransfer::GlobalCleanCallback\n");
+    //fprintf(stderr,"ContentTransfer::GlobalCleanCallback\n");
 
     // Arno, 2012-02-24: Why-oh-why, update NOW
     Channel::Time();
@@ -102,9 +102,7 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
     {
 	int td = *iter;
 
-        fprintf(stderr,"content: GlobalClean: BEFORE GetActivated\n");
 	ContentTransfer *ct = swift::GetActivatedTransfer(td);
-        fprintf(stderr,"content: GlobalClean: AFTER GetActivated\n");
 	if (ct == NULL)
 	    return; // not activated, don't bother
 
@@ -311,12 +309,13 @@ Channel * ContentTransfer::FindChannel(const Address &addr, Channel *notc)
 
 
 void ContentTransfer::AddProgressCallback(ProgressCallback cb, uint8_t agg) {
-    callbacks_.push_back( std::pair<ProgressCallback, uint8_t>( cb, agg ) );
+    callbacks_.push_back( progcallbackreg_t( cb, agg ) );
 }
 
 void ContentTransfer::RemoveProgressCallback(ProgressCallback cb) {
-    for( std::list< std::pair<ProgressCallback, uint8_t> >::iterator iter = callbacks_.begin(); iter != callbacks_.end(); iter++ ) {
-	if( (*iter).first == cb ) {
+    progcallbackregs_t::iterator iter;
+    for (iter= callbacks_.begin(); iter != callbacks_.end(); iter++ ) {
+        if( (*iter).first == cb ) {
 	    callbacks_.erase( iter );
 	    return;
 	}
@@ -325,7 +324,11 @@ void ContentTransfer::RemoveProgressCallback(ProgressCallback cb) {
 
 void ContentTransfer::Progress(bin_t bin) {
     int minlayer = bin.layer();
-    for( std::list< std::pair<ProgressCallback, uint8_t> >::iterator iter = callbacks_.begin(); iter != callbacks_.end(); iter++ ) {
+    // Arno, 2012-10-02: Callback may call RemoveCallback and thus mess up iterator, so use copy    
+    progcallbackregs_t copycbs(callbacks_);
+    progcallbackregs_t::iterator iter;
+    fprintf(stderr,"ContentTransfer::Progress %d cbs %d\n", minlayer, callbacks_.size() );
+    for (iter=copycbs.begin(); iter != copycbs.end(); iter++ ) {
 	if( minlayer >= (*iter).second )
 	    ((*iter).first)( td_, bin );
     }

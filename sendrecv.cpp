@@ -267,7 +267,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
 	// Policy: this channel is allowed to hint at the limit - global_hinted_at
 	// Handle MaxSpeed = unlimited
-	double rate_hints_limit_float = transfer()->GetMaxSpeed(DDIR_DOWNLOAD)/((double)hashtree()->chunk_size());
+	double rate_hints_limit_float = transfer()->GetMaxSpeed(DDIR_DOWNLOAD)/((double)transfer()->chunk_size());
 
 	int rate_hints_limit = (int)min((double)LONG_MAX,rate_hints_limit_float);
 
@@ -662,9 +662,9 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     bin_t pos = bin_fromUInt32(evbuffer_remove_32be(evb));
 
     // Arno: Assuming DATA last message in datagram
-    if (evbuffer_get_length(evb) > hashtree()->chunk_size()) {
-    	dprintf("%s #%u !data chunk size mismatch %s: exp %u got " PRISIZET "\n",tintstr(),id_,pos.str(bin_name_buf), hashtree()->chunk_size(), evbuffer_get_length(evb));
-    	fprintf(stderr,"WARNING: chunk size mismatch: exp %u got " PRISIZET "\n",hashtree()->chunk_size(), evbuffer_get_length(evb));
+    if (evbuffer_get_length(evb) > transfer()->chunk_size()) {
+    	dprintf("%s #%u !data chunk size mismatch %s: exp %u got " PRISIZET "\n",tintstr(),id_,pos.str(bin_name_buf), transfer()->chunk_size(), evbuffer_get_length(evb));
+    	fprintf(stderr,"WARNING: chunk size mismatch: exp %u got " PRISIZET "\n",transfer()->chunk_size(), evbuffer_get_length(evb));
     }
 
     int length = (evbuffer_get_length(evb) < transfer()->chunk_size()) ? evbuffer_get_length(evb) : transfer()->chunk_size();

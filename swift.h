@@ -278,7 +278,7 @@ namespace swift {
     typedef std::vector<Channel *>	channels_t;
     typedef void (*ProgressCallback) (int td, bin_t bin);
     typedef std::pair<ProgressCallback,uint8_t>	progcallbackreg_t;
-    typedef std::list<progcallbackreg_t> progcallbackregs_t;
+    typedef std::vector<progcallbackreg_t> progcallbackregs_t;
     typedef std::vector<int>		tdlist_t;
     class Storage;
 

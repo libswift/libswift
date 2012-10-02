@@ -187,7 +187,7 @@ public:
     uint64_t        chunks_complete () const { return completec_; }
     uint64_t        seq_complete(int64_t offset); // SEEK
     bool            is_complete () { return size_ && complete_==size_; }
-    binmap_t *       ack_out () { return &ack_out_; }
+    binmap_t *      ack_out () { return &ack_out_; }
     uint32_t        chunk_size() { return chunk_size_; } // CHUNKSIZE
     ~MmapHashTree ();
 

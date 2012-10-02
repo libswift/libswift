@@ -1,0 +1,1 @@
+.\swift.exe -i seeder\Pioneer-base.ts -f storage.dat -l 0.0.0.0:6778
