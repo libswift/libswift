@@ -29,8 +29,9 @@ source = [ 'bin.cpp', 'binmap.cpp', 'sha1.cpp','hashtree.cpp',
 
 env = Environment()
 if sys.platform == "win32":
-    libevent2path = '\\build\\libevent-2.0.19-stable'
-    #libevent2path = '\\build\\ttuki\\libevent-2.0.15-arno-http'
+    #libevent2path = '\\build\\libevent-2.0.19-stable'
+    libevent2path = '\\build\\libevent-2.0.20-stable-debug'
+    
 
     # "MSVC works out of the box". Sure.
     # Make sure scons finds cl.exe, etc.

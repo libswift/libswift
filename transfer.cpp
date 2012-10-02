@@ -21,7 +21,7 @@ using namespace swift;
 // FIXME: separate Bootstrap() and Download(), then Size(), Progress(), SeqProgress()
 
 FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_hash, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size, bool zerostate) :
-    ContentTransfer(FILE_TRANSFER), zerostate_(zerostate)
+    ContentTransfer(FILE_TRANSFER), availability_(NULL), zerostate_(zerostate)
 {
     td_ = td;
 
