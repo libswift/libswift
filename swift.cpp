@@ -976,7 +976,7 @@ void LiveSourceAttemptCreate()
     {
         size_t nchunklen = livesource_lt->chunk_size() * (size_t)(evbuffer_get_length(livesource_evb)/livesource_lt->chunk_size());
         uint8_t *chunks = evbuffer_pullup(livesource_evb, nchunklen);
-        int nwrite = swift::LiveWrite(livesource_lt, chunks, nchunklen, -1);
+        int nwrite = swift::LiveWrite(livesource_lt, chunks, nchunklen);
         if (nwrite < -1)
             print_error("live: create: error");
 

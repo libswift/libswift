@@ -327,7 +327,6 @@ void ContentTransfer::Progress(bin_t bin) {
     // Arno, 2012-10-02: Callback may call RemoveCallback and thus mess up iterator, so use copy    
     progcallbackregs_t copycbs(callbacks_);
     progcallbackregs_t::iterator iter;
-    fprintf(stderr,"ContentTransfer::Progress %d cbs %d\n", minlayer, callbacks_.size() );
     for (iter=copycbs.begin(); iter != copycbs.end(); iter++ ) {
 	if( minlayer >= (*iter).second )
 	    ((*iter).first)( td_, bin );

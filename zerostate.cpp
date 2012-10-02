@@ -53,12 +53,13 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
         return;
 
     // See which zero state FileTransfers have no clients
-    tdlist_t tds = GetTransferDescriptors();
+    tdlist_t tds = swift::GetTransferDescriptors();
     tdlist_t::iterator iter;
     tdlist_t delset;
     for (iter = tds.begin(); iter != tds.end(); iter++)
     {
         int td = *iter;
+
         if (!swift::IsZeroState(td))
             continue;
 
@@ -104,8 +105,7 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 
 
     // Delete 0-state FileTransfers sans peers
-    tdlist_t::iterator deliter;
-    for (deliter=delset.begin(); deliter!=delset.end(); deliter++)
+    for (iter=delset.begin(); iter!=delset.end(); iter++)
     {
 	int td = *iter;
 	dprintf("%s hash %s zero clean close\n",tintstr(),SwarmID(td).hex().c_str() );

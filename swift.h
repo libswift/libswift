@@ -977,7 +977,7 @@ namespace swift {
     /** Start listening a port. Returns socket descriptor. */
     int     Listen (Address addr);
     /** Stop listening to a port. */
-    void    Shutdown (int sock_des=-1);
+    void    Shutdown();
 
     /** Open a file, start a transmission; fill it with content for a given
         root hash and tracker (optional). If "force_check_diskvshash" is true, the
@@ -1000,7 +1000,7 @@ namespace swift {
     /** Add a possible peer which participares in a given transmission. In the case
         root hash is zero, the peer might be talked to regarding any transmission
         (likely, a tracker, cache or an archive). */
-    void    AddPeer( Address address, const Sha1Hash& root=Sha1Hash::ZERO);
+    void    AddPeer( Address& address, const Sha1Hash& root=Sha1Hash::ZERO);
 
     /** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
     ssize_t Read( int td, void *buf, size_t nbyte, int64_t offset); // off_t not 64-bit dynamically on Win32
@@ -1041,9 +1041,9 @@ namespace swift {
     /** To create a live stream as source */
     LiveTransfer *LiveCreate(std::string filename, const Sha1Hash& swarmid, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** To add chunks to a live stream as source */
-    int LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte, long offset);
+    int LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte);
     /** To open a live stream as peer */
-    int LiveOpen(std::string filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(),  bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int LiveOpen(std::string filename, const Sha1Hash& swarmid=Sha1Hash::ZERO,Address tracker=Address(), bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
 
     void AddProgressCallback (int td,ProgressCallback cb,uint8_t agg);

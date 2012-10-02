@@ -92,7 +92,7 @@ evutil_socket_t cmd_tunnel_sock=INVALID_SOCKET;
 // HTTP gateway address for PLAY cmd
 Address cmd_gw_httpaddr;
 
-bool cmd_gw_debug=false;
+bool cmd_gw_debug=true;
 
 tint cmd_gw_last_open=0;
 
@@ -783,6 +783,8 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         CmdGwSendINFOHashChecking(cmdsock,swarm_id);
 
         // ARNOSMPTODO: disable/interleave hashchecking at startup
+
+        // ARNOTODO: Allow for deactivated swarms. Needs cheap tracker registration
         bool activate=true;
         int td = swift::Find(swarm_id,activate);
         if (td==-1) {

@@ -32,7 +32,7 @@ class Availability
 	    /**
 	     * Constructor
 	     */
-	    explicit Availability(int size)
+            explicit Availability(int size) : waiting_peers_()
 	    {
 	    	assert(size <= 0);
 	    	size_ = size;
