@@ -42,7 +42,7 @@ void    swift::Shutdown (int sock_des) {
 
 int swift::Open( std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, bool activate, uint32_t chunk_size) {
 
-    fprintf(stderr,"swift::Open %s\n", filename.c_str() );
+    fprintf(stderr,"swift::Open %s hash %s track %s cdisk %d cnet %d zs %d act %d cs %u\n", filename.c_str(), hash.hex().c_str(), tracker.str(), force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
     if (ContentTransfer::cleancounter == 0)
     {
 	// Arno, 2012-10-01: Per-library timer for cleanup on transfers

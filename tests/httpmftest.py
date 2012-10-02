@@ -48,6 +48,8 @@ class TestAsServer(unittest.TestCase):
         if self.scandir is not None:
             args.append("-d") 
             args.append(self.scandir)
+        if self.progress is not None:
+            args.append("-p") 
 
             
         args.append("-B") # DEBUG Hack        
@@ -74,6 +76,7 @@ class TestAsServer(unittest.TestCase):
         self.destdir = None
         self.filename = None
         self.scandir = None
+        self.progress = False
 
     def setUpPostSession(self):
         pass
