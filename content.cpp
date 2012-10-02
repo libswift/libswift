@@ -102,7 +102,9 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
     {
 	int td = *iter;
 
+        fprintf(stderr,"content: GlobalClean: BEFORE GetActivated\n");
 	ContentTransfer *ct = swift::GetActivatedTransfer(td);
+        fprintf(stderr,"content: GlobalClean: AFTER GetActivated\n");
 	if (ct == NULL)
 	    return; // not activated, don't bother
 
@@ -121,7 +123,6 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
 
 
     // Arno, 2012-10-01: Reschedule cleanup, started in swift::Open
-    //evtimer_assign(&ContentTransfer::evclean,Channel::evbase,&ContentTransfer::LibeventGlobalCleanCallback,NULL);
     evtimer_add(&ContentTransfer::evclean,tint2tv(TINT_SEC));
 }
 

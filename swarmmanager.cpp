@@ -10,7 +10,7 @@
 #include <string.h>
 #include <time.h>
 
-#define SWARMMANAGER_ASSERT_INVARIANTS 0
+#define SWARMMANAGER_ASSERT_INVARIANTS 1
 
 #include "swift.h"
 #include "swarmmanager.h"
@@ -20,11 +20,9 @@
 
 #if SWARMMANAGER_ASSERT_INVARIANTS
 #include <assert.h>
-//int levelcount = 0;
-#define enter( x )
-    //fprintf( stderr, "[%02d] Entered " x "\n", ++levelcount );
-#define exit( x )
-    //fprintf( stderr, "[%02d] Leaving " x "\n", levelcount-- );
+int levelcount = 0;
+#define enter( x )  fprintf( stderr, "[%02d] Entered " x "\n", ++levelcount );
+#define exit( x )   fprintf( stderr, "[%02d] Leaving " x "\n", levelcount-- );
 #else
 #undef assert
 #define assert( x )
@@ -268,6 +266,8 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
     // Arno: create SwarmData from checkpoint
     if (swarm.rootHash_ == Sha1Hash::ZERO && !activate)
     {
+	fprintf(stderr,"sm: AddSwarm: Unknown file and not activate, see if checkpointed %s\n", swarm.filename_.c_str() );
+
 	std::string binmap_filename = swarm.filename_;
 	binmap_filename.append(".mbinmap");
 
@@ -275,7 +275,7 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
 	// we don't load it twice.
 	MmapHashTree *ht = new MmapHashTree(true,binmap_filename);
 
-	//    fprintf(stderr,"swift: parsedir: File %s may have hash %s\n", filename, ht->root_hash().hex().c_str() );
+	fprintf(stderr,"sm: AddSwarm: File %s may have hash %s\n", swarm.filename_.c_str(), ht->root_hash().hex().c_str() );
 
 	std::string hash_filename = swarm.filename_;
 	hash_filename.append(".mhash");
@@ -284,21 +284,31 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
 	int64_t mhash_size = file_size_by_path_utf8( hash_filename);
 	if (mhash_size <= 0)
 	    mhash_exists = false;
-
 	// ARNOTODO: sanity check if mhash = Sha1Hash-in-bytes * size-of-tree(ht)
 
-	if (mhash_exists && ht->is_complete())
+	int64_t content_size = file_size_by_path_utf8(swarm.filename_);
+
+	if (mhash_exists && content_size >=0 && ht->complete() == content_size)
 	{
+	    fprintf(stderr,"sm: AddSwarm: Swarm good on disk, let sleep %s\n", swarm.filename_.c_str() );
+
 	    // Swarm is good on disk, create SwarmData without activation
+            newSwarm->cached_ = true;
 	    newSwarm->rootHash_ = ht->root_hash();
 	    newSwarm->cachedComplete_ = ht->complete();
-	    newSwarm->cachedSize_ = ht->size();
-	    newSwarm->cachedIsComplete_ = ht->is_complete();
+	    newSwarm->cachedSize_ = content_size;
+	    newSwarm->cachedIsComplete_ = true;
 	    newSwarm->cachedOSPathName_ = swarm.filename_;
-	    newSwarm->cachedStorageReady_ = ht->is_complete();
+	    newSwarm->cachedStorageReady_ = true;
 
 
 	    // ARNOTODO: REGISTER AT TRACKER!!!!
+	}
+	else
+	{
+	    fprintf(stderr,"sm: AddSwarm: Swarm incomplete, mhash %d complete %llu content %lld\n", (int)mhash_exists, ht->complete(), content_size );
+	    // Swarm incomplete, can't let sleep
+	    activate = true;
 	}
     }
 

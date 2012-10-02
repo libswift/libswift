@@ -366,6 +366,8 @@ int MmapHashTree::internal_deserialize(FILE *fp,bool contentavail) {
         return -1;
     root_hash_ = Sha1Hash(true, hexhashstr);
     chunk_size_ = cs;
+    complete_ = c;
+    completec_ = cc;
 
     // Arno, 2012-01-03: Hack to just get root hash
     if (!contentavail)

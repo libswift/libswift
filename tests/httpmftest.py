@@ -14,7 +14,7 @@ import urllib2
 import string
 from traceback import print_exc
 
-DEBUG=False
+DEBUG=True
 
 class TestAsServer(unittest.TestCase):
     """ 
@@ -45,6 +45,10 @@ class TestAsServer(unittest.TestCase):
         if self.filename is not None:
             args.append("-f") # filename
             args.append(self.filename)
+        if self.scandir is not None:
+            args.append("-d") 
+            args.append(self.scandir)
+
             
         args.append("-B") # DEBUG Hack        
         
@@ -69,6 +73,7 @@ class TestAsServer(unittest.TestCase):
         self.workdir = '.' 
         self.destdir = None
         self.filename = None
+        self.scandir = None
 
     def setUpPostSession(self):
         pass

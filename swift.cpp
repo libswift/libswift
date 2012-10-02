@@ -570,7 +570,7 @@ int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_di
             path.append(FILE_SEP);
             path.append(de->filename_);
             int td = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,force_check_diskvshash,chunk_size,false,activate);
-            if (td >= 0)
+            if (td >= 0) // Support case where dir of content has not been pre-hashchecked and checkpointed
                 Checkpoint(td);
         }
 
