@@ -32,10 +32,6 @@ int levelcount = 0;
 #endif
 
 
-// Arno, 2012-10-01: Currently swarms are only deactivated when resources low,
-// not when idle. (with the exception of ZeroState swarms, see zerostate.cpp)
-// ARNOTODO
-
 namespace swift {
 
 // FIXME: Difference between seeds (complete) and downloads; allow setting minimum number of seeds?

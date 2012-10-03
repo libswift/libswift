@@ -1,7 +1,7 @@
 /*
  *  swarmmanager.h
  *
- *  Classes for managing FileTransfers, that is, load them into memory or
+ *  Arno: Classes for managing FileTransfers, that is, load them into memory or
  *  release them when idle. This is called activation/deactivation.
  *  This manager only manages FileTransfers, LiveTransfers are unmanaged,
  *  i.e., always activated.
@@ -20,6 +20,15 @@
  *  swift design registration requires a Channel to be open to the tracker. This
  *  design may need to be changed to allow for a BitTorrent register-for-30-mins
  *  -and-disconnect style.
+ *
+ *  Current implementation will deactivate:
+ *  - when SetMaximumActiveSwarms() is exceeded
+ *  - when idle for more than SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED.
+ *    Idle is when no Read(), Write() or DATA send or receive (Arno).
+ *
+ *  Note that FileTransfers with the zero-state implementation are actually
+ *  unloaded (=no FileTransfer object and no admin in SwarmManager) when idle,
+ *  see zerostate.cpp. This is orthogonal to idle deactivation.
  *
  *  Created by Thomas Schaap
  *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
