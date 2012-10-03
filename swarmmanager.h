@@ -22,7 +22,7 @@
  *  -and-disconnect style.
  *
  *  Current implementation will deactivate:
- *  - when SetMaximumActiveSwarms() is exceeded
+ *  - when SetMaximumActiveSwarms() is exceeded (Thomas)
  *  - when idle for more than SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED.
  *    Idle is when no Read(), Write() or DATA send or receive (Arno).
  *
