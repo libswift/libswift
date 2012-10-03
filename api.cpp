@@ -453,7 +453,7 @@ bool swift::IsOperational(int td)
     }
     else
     {
-	FileTransfer *ft = swarm->GetTransfer(); 
+	FileTransfer *ft = swarm->GetTransfer(false);   // Arno: do not activate for this
 	if (!ft)
 	    return false;
 	else

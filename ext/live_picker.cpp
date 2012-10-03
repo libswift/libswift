@@ -33,11 +33,11 @@ class SimpleLivePiecePicker : public LivePiecePicker {
     LiveTransfer*   transfer_;
     uint64_t        twist_;
 
-	bool			hooking_in_;
-	PeerPosMapType	peer_pos_map_;
-	bool			source_seen_;
-	uint32_t		source_channel_id_;
-    bin_t			hookin_bin_;
+    bool	    hooking_in_;
+    PeerPosMapType  peer_pos_map_;
+    bool	    source_seen_;
+    uint32_t	    source_channel_id_;
+    bin_t	    hookin_bin_;
     bin_t           current_bin_;
 
 
@@ -52,7 +52,7 @@ public:
     virtual ~SimpleLivePiecePicker() {}
 
     HashTree * hashtree() {
-    		return NULL;
+	return NULL;
     }
 
     virtual void Randomize (uint64_t twist) {
@@ -64,7 +64,7 @@ public:
 
     virtual bin_t Pick (binmap_t& offer, uint64_t max_width, tint expires) {
     	if (hooking_in_)
-    		return bin_t::NONE;
+    	    return bin_t::NONE;
 
         while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*3/2) { // FIXME sec
             binmap_t::copy(ack_hint_out_, *(transfer_->ack_out()), hint_out_.front().bin);
@@ -73,21 +73,21 @@ public:
 
         // Advance ptr
         if (transfer_->ack_out()->is_filled(current_bin_))
-			current_bin_ = bin_t(0,current_bin_.layer_offset()+1);
+		current_bin_ = bin_t(0,current_bin_.layer_offset()+1);
 
         // Request next from this peer, if not already requested
         bin_t hint;
         if (offer.is_filled(current_bin_) &&  ack_hint_out_.is_empty(current_bin_))
-			hint = current_bin_;
-		else
-			return bin_t::NONE;
+            hint = current_bin_;
+	else
+	    return bin_t::NONE;
 
-		//while (hint.base_length()>max_width)
-		//	hint = hint.left();
-		assert(ack_hint_out_.is_empty(hint));
-		ack_hint_out_.set(hint);
-		hint_out_.push_back(tintbin(NOW,hint));
-		return hint;
+	//while (hint.base_length()>max_width)
+	//	hint = hint.left();
+	assert(ack_hint_out_.is_empty(hint));
+	ack_hint_out_.set(hint);
+	hint_out_.push_back(tintbin(NOW,hint));
+	return hint;
     }
 
 
@@ -111,21 +111,21 @@ public:
     	//fprintf(stderr,"live: pp: StartAddPeerPos: peerpos %s\n", peerpos.str(binstr));
     	if (hooking_in_) {
 
-    		if (peerissource) {
-    			source_seen_ = true;
-    			source_channel_id_ = channelid;
-    		}
+    	    if (peerissource) {
+    		source_seen_ = true;
+    		source_channel_id_ = channelid;
+    	    }
 
-    		bin_t peerbasepos(peerpos.base_right());
+    	    bin_t peerbasepos(peerpos.base_right());
 
-    		fprintf(stderr,"live: pp: StartAddPeerPos: peerbasepos %s\n", peerbasepos.str(binstr));
-    		bin_t cand;
+    	    fprintf(stderr,"live: pp: StartAddPeerPos: peerbasepos %s\n", peerbasepos.str(binstr));
+    	    bin_t cand;
 #ifdef _WIN32
-    		cand = bin_t(0,max(0,peerbasepos.layer_offset()-LIVE_PP_NUMBER_PREBUF_CHUNKS));
+    	    cand = bin_t(0,max(0,peerbasepos.layer_offset()-LIVE_PP_NUMBER_PREBUF_CHUNKS));
 #else
-    		cand = bin_t(0,std::max((bin_t::uint_t)0,peerbasepos.layer_offset()-LIVE_PP_NUMBER_PREBUF_CHUNKS));
+    	    cand = bin_t(0,std::max((bin_t::uint_t)0,peerbasepos.layer_offset()-LIVE_PP_NUMBER_PREBUF_CHUNKS));
 #endif
-    		PeerPosMapType::iterator iter = peer_pos_map_.find(channelid);
+    	    PeerPosMapType::iterator iter = peer_pos_map_.find(channelid);
     	    if (iter ==  peer_pos_map_.end())
     	    {
     	        // Unknown channel, just store
@@ -134,9 +134,9 @@ public:
     	    else
     	    {
     	    	// Update channelid's position, if newer
-				bin_t oldcand = peer_pos_map_[channelid];
-				if (cand.layer_offset() > oldcand.layer_offset())
-					peer_pos_map_[channelid] = cand;
+		bin_t oldcand = peer_pos_map_[channelid];
+		if (cand.layer_offset() > oldcand.layer_offset())
+		    peer_pos_map_[channelid] = cand;
     	    }
     	}
     }
@@ -147,21 +147,21 @@ public:
     	char binstr[32];
 
     	if (!hooking_in_)
-    		return;
+    	    return;
 
     	if (source_seen_) {
-	    	hookin_bin_ = peer_pos_map_[source_channel_id_];
-	    	current_bin_ = hookin_bin_;
-			hooking_in_ = false;
+	    hookin_bin_ = peer_pos_map_[source_channel_id_];
+	    current_bin_ = hookin_bin_;
+	    hooking_in_ = false;
 
-    		fprintf(stderr,"live: pp: EndAddPeerPos: hookin on source, pos %s\n", hookin_bin_.str(binstr));
+	    fprintf(stderr,"live: pp: EndAddPeerPos: hookin on source, pos %s\n", hookin_bin_.str(binstr));
     	}
     	else if (peer_pos_map_.size() > 0)
     	{
-    		fprintf(stderr,"live: pp: EndAddPeerPos: not connected to source, wait (peer hook-in TODO)\n");
-    		// See if there is a quorum for a certain position
-    		// LIVETODO
-    		/*PeerPosMapType::const_iterator iter;
+    	    fprintf(stderr,"live: pp: EndAddPeerPos: not connected to source, wait (peer hook-in TODO)\n");
+    	    // See if there is a quorum for a certain position
+    	    // LIVETODO
+    	    /*PeerPosMapType::const_iterator iter;
     	    for (iter=peer_pos_map_.begin(); iter!=peer_pos_map_.end(); iter++)
     	    {
     	    	hookin_pos_ = iter->second;
