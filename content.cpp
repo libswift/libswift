@@ -98,10 +98,8 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
     // Arno, 2012-02-24: Why-oh-why, update NOW
     Channel::Time();
 
-    if ((ContentTransfer::cleancounter % TRANSFER_IDLE_DEACTIVATE_INTERVAL) == 0)
-    {
+    if ((ContentTransfer::cleancounter % TRANSFER_IDLE_DEACTIVATE_INTERVAL) == 0) {
 	// Deactivate FileTransfer that have been idle too long
-	fprintf(stderr,"ContentTransfer::GlobalCleanCallback: Enter sandman");
 	SwarmManager::GetManager().DeactivateIdleSwarms();
     }
 
