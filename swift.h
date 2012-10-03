@@ -1017,10 +1017,10 @@ namespace swift {
         (likely, a tracker, cache or an archive). */
     void    AddPeer( Address& address, const Sha1Hash& root=Sha1Hash::ZERO);
 
-    /** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
+    /** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes. Autoactivates */
     ssize_t Read( int td, void *buf, size_t nbyte, int64_t offset); // off_t not 64-bit dynamically on Win32
 
-    /** UNIX pwrite approximation. Does change file pointer. Is not thread-safe */
+    /** UNIX pwrite approximation. Does change file pointer. Is not thread-safe. Autoactivates. */
     ssize_t Write( int td, const void *buf, size_t nbyte, int64_t offset);
 
     /** Seek, i.e., move start of interest window */
@@ -1063,17 +1063,17 @@ namespace swift {
 
     /** Return the transfer descriptors of all loaded transfers (incl. LIVE). */
     tdlist_t GetTransferDescriptors();
-    /** Set the maximum speed in bytes/s for this transfer */
+    /** Set the maximum speed in bytes/s for the transfer */
     void    SetMaxSpeed( int td, data_direction_t ddir, double speed);
-    /** Get the current speed in bytes/s for this transfer, if activated. */
+    /** Get the current speed in bytes/s for the transfer, if activated. */
     double  GetCurrentSpeed( int td, data_direction_t ddir);
-    /** Get the number of incomplete peers for this transfer, if activated. */
-    uint32_t        GetNumLeechers( int td);
-    /** Get the number of completed peers for this transfer, if activated. */
-    uint32_t        GetNumSeeders( int td);
+    /** Get the number of incomplete peers for the transfer, if activated. */
+    uint32_t  GetNumLeechers( int td);
+    /** Get the number of completed peers for the transfer, if activated. */
+    uint32_t  GetNumSeeders( int td);
     /** Return the type of this transfer */
     transfer_t ttype( int td);
-    /** Get Storage object for this transfer, if activated. */
+    /** Get Storage object for the transfer, if activated. */
     Storage *GetStorage( int td);
     /** Get Storage object's main storage filename. */
     std::string GetOSPathName( int td);
@@ -1081,10 +1081,10 @@ namespace swift {
     bool    IsOperational( int td);
     /** Whether this transfer uses the zero-state implementation. */
     bool    IsZeroState( int td);
-    /** Save the binmap for this transfer for restarts without from-disk hash checking */
+    /** Save the binmap for the transfer for restarts without from-disk hash checking */
     int Checkpoint(int transfer);
 
-    /** Return the ContentTransfer * for this transfer, if activated.
+    /** Return the ContentTransfer * for the transfer, if activated.
         For internal use only */
     ContentTransfer *GetActivatedTransfer(int td);
 
