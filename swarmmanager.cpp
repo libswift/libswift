@@ -10,12 +10,12 @@
 #include <string.h>
 #include <time.h>
 
-#define SWARMMANAGER_ASSERT_INVARIANTS 0
+#define SWARMMANAGER_ASSERT_INVARIANTS 			0
 
 #include "swift.h"
 #include "swarmmanager.h"
 
-#define SECONDS_UNTIL_INDEX_REUSE   120
+#define SECONDS_UNTIL_INDEX_REUSE   			120
 #define SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED   30
 
 #if SWARMMANAGER_ASSERT_INVARIANTS
@@ -306,7 +306,6 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
 	    newSwarm->cachedOSPathName_ = swarm.filename_;
 	    newSwarm->cachedStorageReady_ = true;
 
-
 	    // ARNOTODO: REGISTER AT TRACKER!!!!
 	}
 	else
@@ -331,10 +330,11 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
     std::vector<SwarmData*>& list = rootHashToList(newSwarm->rootHash_);
     int loc = GetSwarmLocation( list, newSwarm->rootHash_ );
     if( loc < list.size() && list[loc]->rootHash_ == newSwarm->rootHash_ ) {
+	Sha1Hash gotroothash = newSwarm->rootHash_;
         delete newSwarm;
         // Let's assume here that the rest of the data is, hence, also equal
-        assert( swarm.rootHash_ != Sha1Hash::ZERO );
-        assert( list[loc] == FindSwarm( swarm.rootHash_ ) );
+        assert( gotroothash != Sha1Hash::ZERO);
+        assert( list[loc] == FindSwarm( gotroothash ) );
         invariant();
         exit( "addswarm( swarm ) (2)" );
         return list[loc];
@@ -518,7 +518,7 @@ void SwarmManager::CheckSwarmsToBeRemoved() {
     enter( "checkswarms" );
     invariant();
     // Remove swarms that are scheduled to be removed
-    tint old = usec_time() - SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED;
+    tint old = usec_time() - SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED*TINT_SEC;
     std::list<int> dellist;
     bool hasMore = false;
     for( int i = 0; i < activeSwarms_.size(); i++ ) {
@@ -553,26 +553,26 @@ void SwarmManager::CheckSwarmsToBeRemoved() {
 
 // Called from invariant()
 SwarmData* SwarmManager::FindSwarm( int id ) {
-    enter( "findswarm( id )" );
+    //enter( "findswarm( id )" );
     if( id < 0 || id >= swarmList_.size() ) {
         exit( "findswarm( id ) (1)" );
         return NULL;
     }
     assert( !swarmList_[id] || swarmList_[id]->Id() == id );
-    exit( "findswarm( id )" );
+    //exit( "findswarm( id )" );
     return swarmList_[id];
 }
 
 // Called from invariant()
 SwarmData* SwarmManager::FindSwarm( const Sha1Hash& rootHash ) {
-    enter( "findswarm( hash )" );
+    //enter( "findswarm( hash )" );
     SwarmData* swarm = GetSwarmData( rootHash );
     if( swarm && swarm->rootHash_ == rootHash ) {
         assert( swarm->RootHash() == rootHash );
-        exit( "findswarm( hash ) (1)" );
+        //exit( "findswarm( hash ) (1)" );
         return swarm;
     }
-    exit( "findswarm( hash )" );
+    //exit( "findswarm( hash )" );
     return NULL;
 }
 
@@ -715,7 +715,7 @@ bool SwarmManager::DeactivateSwarm() {
 
     // Arno, 2012-10-01: This is just a LRU policy, not even looking at #conns :-(
 
-    tint old = usec_time() - SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED;
+    tint old = usec_time() - SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED*TINT_SEC;
     SwarmData* oldest = NULL;
     int oldestloc = 0;
     for( int i = 0; i < activeSwarms_.size(); i++ ) {
@@ -734,6 +734,15 @@ bool SwarmManager::DeactivateSwarm() {
     exit( "deactivateswarm" );
     return true;
 }
+
+
+// Arno: Called from ContentTransfer::GlobalCleanCallback
+void SwarmManager::DeactivateIdleSwarms()
+{
+    while(DeactivateSwarm())
+	;
+}
+
 
 int SwarmManager::GetMaximumActiveSwarms() {
     return maxActiveSwarms_;
@@ -758,20 +767,20 @@ void SwarmManager::SetMaximumActiveSwarms( int newMaxSwarms ) {
 
 // Called from invariant()
 SwarmData* SwarmManager::GetSwarmData( const Sha1Hash& rootHash ) {
-    enter( "getswarmdata" );
+    //enter( "getswarmdata" );
     std::vector<SwarmData*>& list = rootHashToList(rootHash);
     int loc = GetSwarmLocation( list, rootHash );
     if( loc >= list.size() ) {
-        exit( "getswarmdata (1)" );
+        //exit( "getswarmdata (1)" );
         return NULL;
     }
-    exit( "getswarmdata" );
+    //exit( "getswarmdata" );
     return list[loc];
 }
 
 // Called from invariant()
 int SwarmManager::GetSwarmLocation( const std::vector<SwarmData*>& list, const Sha1Hash& rootHash ) {
-    enter( "getswarmlocation" );
+    //enter( "getswarmlocation" );
     int low = 0;
     int high = list.size();
     int mid, c, res;
@@ -787,7 +796,7 @@ int SwarmManager::GetSwarmLocation( const std::vector<SwarmData*>& list, const S
             high = mid;
         else {
             assert( mid >= 0 && mid < list.size() );
-            exit( "getswarmlocation (1)" );
+            //exit( "getswarmlocation (1)" );
             return mid;
         }
     }
@@ -797,7 +806,7 @@ int SwarmManager::GetSwarmLocation( const std::vector<SwarmData*>& list, const S
         for( int i = 0; i < list.size(); i++ )
             assert( list[i]->rootHash_ != rootHash );
     }
-    exit( "getswarmlocation" );
+    //exit( "getswarmlocation" );
 #endif
     return low;
 }

@@ -7,6 +7,7 @@
  */
 #include "swift.h"
 #include <cfloat>
+#include "swarmmanager.h"
 
 
 using namespace swift;
@@ -23,6 +24,7 @@ uint64_t ContentTransfer::cleancounter = 0;
  * Local Constants
  */
 #define CHANNEL_GARBAGECOLLECT_INTERVAL	5 // seconds, or GlobalCleanCallback calls actually
+#define TRANSFER_IDLE_DEACTIVATE_INTERVAL  30 // seconds, or GlobalCleanCallback calls actually
 
 #define TRACKER_RETRY_INTERVAL_START	(5*TINT_SEC)
 #define TRACKER_RETRY_INTERVAL_EXP	1.1	// exponent used to increase INTERVAL_START
@@ -96,6 +98,13 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
     // Arno, 2012-02-24: Why-oh-why, update NOW
     Channel::Time();
 
+    if ((ContentTransfer::cleancounter % TRANSFER_IDLE_DEACTIVATE_INTERVAL) == 0)
+    {
+	// Deactivate FileTransfer that have been idle too long
+	fprintf(stderr,"ContentTransfer::GlobalCleanCallback: Enter sandman");
+	SwarmManager::GetManager().DeactivateIdleSwarms();
+    }
+
     tdlist_t tds = GetTransferDescriptors();
     tdlist_t::iterator iter;
     for (iter = tds.begin(); iter != tds.end(); iter++)
@@ -104,7 +113,7 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
 
 	ContentTransfer *ct = swift::GetActivatedTransfer(td);
 	if (ct == NULL)
-	    return; // not activated, don't bother
+	    continue; // not activated, don't bother
 
 	// Update speed measurements such that they decrease when DL/UL stops
 	// Always. Must be done on 1 s interval

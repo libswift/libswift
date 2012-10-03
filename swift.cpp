@@ -369,6 +369,7 @@ int utf8main (int argc, char** argv)
     zs->SetContentDir(zerostatedir);
     zs->SetConnectTimeout(zerostimeout);
 
+
     if (!cmdgw_enabled && livesource_input == "" && zerostatedir == "")
     {
         // Seed file or dir, or create multi-spec

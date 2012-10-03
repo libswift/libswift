@@ -317,6 +317,9 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     if (transfer()->ttype() == FILE_TRANSFER && !hashtree()->size()) // know nothing
         return bin_t::NONE;
 
+    // Arno: If we are serving content, keep activated
+    swift::Touch(transfer()->td());
+
     bin_t tosend = bin_t::NONE;
     bool isretransmit = false;
     tint luft = send_interval_>>4; // may wake up a bit earlier
@@ -693,6 +696,9 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
             dprintf("%s #%u !data %s\n",tintstr(),id_,pos.str(bin_name_buf));
             return bin_t::NONE;
         }
+
+        // Arno: If we are getting content, keep activated
+        swift::Touch(transfer()->td());
     }
     else
     {

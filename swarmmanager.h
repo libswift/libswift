@@ -162,6 +162,8 @@ namespace swift {
 
         // Arno
         tdlist_t GetTransferDescriptors();
+        // Arno: Called periodically to deactivate unused swarms, even if max not reached
+        void DeactivateIdleSwarms();
 
         class Iterator : public std::iterator<std::input_iterator_tag, SwarmData*> {
         protected:

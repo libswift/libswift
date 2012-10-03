@@ -692,3 +692,14 @@ uint64_t  swift::GetHookinOffset(int td)
 	return lt->GetHookinOffset();
 }
 
+
+// Called from sendrecv.cpp
+void swift::Touch(int td)
+{
+    if (api_debug)
+	fprintf(stderr,"swift::Touch: td %d\n", td);
+
+    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
+    if (swarm != NULL)
+	swarm->Touch();
+}

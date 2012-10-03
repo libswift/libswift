@@ -1056,7 +1056,7 @@ namespace swift {
     int     LiveOpen(std::string filename, const Sha1Hash& swarmid=Sha1Hash::ZERO,Address tracker=Address(), bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
     /** Register a callback for when the download of another pow(2,agg) chunks
-        is finished. So agg = 0 = 2^0 = 1 means every chunk. */
+        is finished. So agg = 0 = 2^0 = 1, means every chunk. */
     void    AddProgressCallback( int td, ProgressCallback cb, uint8_t agg);
     /** Deregister a previously added callback. */
     void    RemoveProgressCallback( int td, ProgressCallback cb );
@@ -1087,6 +1087,8 @@ namespace swift {
     /** Return the ContentTransfer * for the transfer, if activated.
         For internal use only */
     ContentTransfer *GetActivatedTransfer(int td);
+    /** Record use of this transfer. For internal use only. */
+    void Touch(int td);
 
     // Arno: helper functions for constructing datagrams */
     int evbuffer_add_string(struct evbuffer *evb, std::string str);
