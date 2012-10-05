@@ -706,7 +706,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         paramstr = token+1;
     }
     else
-        paramstr = "";
+        paramstr = (char*)"";
 
     method = copyline;
 
