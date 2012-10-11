@@ -146,6 +146,11 @@ void CmdGwCloseConnection(evutil_socket_t sock)
 	swift::close_socket(sock);
 
 	cmd_gw_conns_open--;
+
+	// Arno, 2012-10-11: New policy Immediate shutdown on connection close,
+	// see CmdGwUpdateDLStatesCallback()
+	fprintf(stderr,"cmd: Shutting down on CMD connection close\n");
+	event_base_loopexit(Channel::evbase, NULL);
 }
 
 
@@ -619,7 +624,9 @@ void CmdGwUpdateDLStatesCallback()
     }
 
     // Arno, 2012-05-24: Autoclose if CMD *connection* not *re*established soon
-    if (cmd_gw_conns_open == 0)
+    // Arno, 2012-10-11: Replaced with shutdown-on-connection error, such that
+    // external client can be fully responsible for restarting and process mgmt.
+    /*if (cmd_gw_conns_open == 0)
     {
     	if (cmd_gw_last_open > 0)
     	{
@@ -634,6 +641,7 @@ void CmdGwUpdateDLStatesCallback()
     }
     else
     	cmd_gw_last_open = NOW;
+    */
 
     // MEMLEAK
     icount++;
