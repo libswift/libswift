@@ -25,8 +25,8 @@ std::vector<LiveTransfer*> LiveTransfer::liveswarms;
  */
 #define TRANSFER_DESCR_LIVE_OFFSET	4000000
 
-
-LiveTransfer::LiveTransfer(std::string filename, const Sha1Hash& swarm_id,bool amsource,size_t chunk_size) :
+// Ric: tmp => changed from size_t to uint32_t to avoid compilation problems (otherwise change the def in swift.h)
+LiveTransfer::LiveTransfer(std::string filename, const Sha1Hash& swarm_id,bool amsource,uint32_t chunk_size) :
         ContentTransfer(LIVE_TRANSFER), swarm_id_(swarm_id), am_source_(amsource), filename_(filename),
         chunk_size_(chunk_size), last_chunkid_(0), offset_(0)
 {
