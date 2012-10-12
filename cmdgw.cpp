@@ -10,11 +10,6 @@
 #include <iostream>
 #include <sstream>
 
-//MEMLEAK
-#ifndef WIN32
-#include <malloc.h>
-#endif
-
 #include "swift.h"
 #include "compat.h"
 #include <event2/buffer.h>
@@ -642,29 +637,6 @@ void CmdGwUpdateDLStatesCallback()
     else
     	cmd_gw_last_open = NOW;
     */
-
-    // MEMLEAK
-    icount++;
-    if ((icount % 10) == 0)
-    {
-        int counta=0,countz=0;
-        for(int i=0; i<FileTransfer::files.size(); i++)
-        {
-            FileTransfer *ft = FileTransfer::files[i];
-            if (ft == NULL)
-               continue;
-      
-            if (ft->IsZeroState())
-	       countz++;
-            else
-	       counta++;
-        }
-        fprintf(stderr,"cmd: active %d zero %d total %d\n", counta, countz, counta+countz );
-      
-#ifndef WIN32      
-  	    malloc_stats();
-#endif      
-    }
 }
 
 
