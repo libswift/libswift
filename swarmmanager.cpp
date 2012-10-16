@@ -21,8 +21,11 @@
 #if SWARMMANAGER_ASSERT_INVARIANTS
 #include <assert.h>
 int levelcount = 0;
-#define enter( x )  fprintf( stderr, "[%02d] Entered " x "\n", ++levelcount );
-#define exit( x )   fprintf( stderr, "[%02d] Leaving " x "\n", levelcount-- );
+#define enter( x )
+// Arno, 2012-10-16: enter/leave disabled, asserts enabled
+//fprintf( stderr, "[%02d] Entered " x "\n", ++levelcount );
+#define exit( x )
+//fprintf( stderr, "[%02d] Leaving " x "\n", levelcount-- );
 #else
 #undef assert
 #define assert( x )
@@ -42,13 +45,13 @@ namespace swift {
 SwarmManager SwarmManager::instance_;
 
 SwarmData::SwarmData( const std::string filename, const Sha1Hash& rootHash, const Address& tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, uint32_t chunk_size ) :
-    id_(-1), rootHash_( rootHash ), active_( false ), latestUse_(0), toBeRemoved_(false), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
+    id_(-1), rootHash_( rootHash ), active_( false ), latestUse_(0), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
     filename_( filename ), tracker_( tracker ), forceCheckDiskVSHash_(force_check_diskvshash), checkNetworkVSHash_(check_netwvshash),  chunkSize_( chunk_size ), zerostate_( zerostate ), cached_(false)
 {
 }
 
 SwarmData::SwarmData( const SwarmData& sd ) :
-    id_(-1), rootHash_( sd.rootHash_ ), active_( false ), latestUse_(0), toBeRemoved_(false), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
+    id_(-1), rootHash_( sd.rootHash_ ), active_( false ), latestUse_(0), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
     filename_( sd.filename_ ), tracker_( sd.tracker_ ), forceCheckDiskVSHash_( sd.forceCheckDiskVSHash_ ), chunkSize_( sd.chunkSize_ ), zerostate_( sd.zerostate_ ), cached_(false)
 {
 }
@@ -77,9 +80,6 @@ int SwarmData::Id() {
     return id_;
 }
 
-bool SwarmData::ToBeRemoved() {
-    return toBeRemoved_;
-}
 
 // Can return NULL
 FileTransfer* SwarmData::GetTransfer(bool touch) {
@@ -167,7 +167,8 @@ bool SwarmData::IsComplete() {
         return ft_->hashtree()->is_complete();
     }
     else if( cached_ ) {
-        assert( ( cachedSize_ == cachedComplete_ ) == cachedIsComplete_ );
+	// Arno, 2012-10-16: Handle start-of-download case.
+        assert( cachedSize_ == 0 || ((cachedSize_ == cachedComplete_) == cachedIsComplete_) );
         return cachedIsComplete_;
     }
     return false;
@@ -405,7 +406,7 @@ void SwarmManager::BuildSwarm( SwarmData* swarm ) {
     exit( "buildswarm" );
 }
 
-// Refuses to remove an active swarm, but flags it for future removal
+// Arno: Removes the swarm, also if active
 void SwarmManager::RemoveSwarm( const Sha1Hash& rootHash, bool removeState, bool removeContent ) {
     enter( "removeswarm" );
     invariant();
@@ -418,16 +419,21 @@ void SwarmManager::RemoveSwarm( const Sha1Hash& rootHash, bool removeState, bool
     }
     SwarmData* swarm = list[loc];
 
-    if( swarm->active_) {
-        swarm->toBeRemoved_ = true;
-        swarm->stateToBeRemoved_ = removeState;
-        swarm->contentToBeRemoved_ = removeContent;
-        if( !evtimer_pending( eventCheckToBeRemoved_, NULL ) )
-            evtimer_add( eventCheckToBeRemoved_, tint2tv(5*TINT_SEC) );
-        invariant();
-        exit( "removeswarm (2)" );
-        return;
+    // Arno, 2012-10-16: Remove from active list
+    int activeLoc = -1;
+    for( int i = 0; i < activeSwarms_.size(); i++ ) {
+        if( activeSwarms_[i] == swarm ) {
+            activeLoc = i;
+            break;
+        }
     }
+    if (activeLoc != -1)  {
+	swarm->active_ = false;
+	activeSwarms_[activeLoc] = activeSwarms_[activeSwarms_.size()-1];
+	activeSwarms_.pop_back();
+	activeSwarmCount_--;
+    }
+
     if( swarm->rootHash_ == rootHash ) {
         for( int i = loc; i < list.size() - 1; i++ )
             list[i] = list[i+1];
@@ -514,32 +520,13 @@ void SwarmManager::CheckSwarmsToBeRemovedCallback(evutil_socket_t fd, short even
 void SwarmManager::CheckSwarmsToBeRemoved() {
     enter( "checkswarms" );
     invariant();
-    // Remove swarms that are scheduled to be removed
-    tint old = usec_time() - SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED*TINT_SEC;
-    std::list<int> dellist;
-    bool hasMore = false;
-    for( int i = 0; i < activeSwarms_.size(); i++ ) {
-        assert( activeSwarms_[i] );
-        if( activeSwarms_[i]->toBeRemoved_ ) {
-            if( activeSwarms_[i]->latestUse_ < old )
-                dellist.push_back( i );
-            else
-                hasMore = true;
-        }
-    }
-    while( dellist.size() > 0 ) {
-        int i = dellist.back();
-        SwarmData* swarm = activeSwarms_[i];
-        DeactivateSwarm( swarm, i ); // Arno: does complete remove since toBeRemoved_ = true
-        dellist.pop_back();
-    }
     
     // If we have too much swarms active, aggressively try to remove swarms
     while( activeSwarmCount_ > maxActiveSwarms_ )
         if( !DeactivateSwarm() )
             break;
 
-    if( hasMore || activeSwarmCount_ > maxActiveSwarms_ )
+    if ( activeSwarmCount_ > maxActiveSwarms_ )
         evtimer_add( eventCheckToBeRemoved_, tint2tv(5*TINT_SEC) );
     invariant();
     exit( "checkswarms" );
@@ -576,7 +563,7 @@ SwarmData* SwarmManager::ActivateSwarm( const Sha1Hash& rootHash ) {
     assert( rootHash != Sha1Hash::ZERO );
     invariant();
     SwarmData* sd = GetSwarmData( rootHash );
-    if( !sd || !(sd->rootHash_ == rootHash) || sd->toBeRemoved_ ) {
+    if( !sd || !(sd->rootHash_ == rootHash) ) {
         exit( "activateswarm( hash ) (1)" );
         return NULL;
     }
@@ -603,23 +590,29 @@ SwarmData* SwarmManager::ActivateSwarm( SwarmData* sd ) {
     }
 
     if( activeSwarmCount_ >= maxActiveSwarms_ ) {
-        if(! DeactivateSwarm() ) {
-            if( sd->ft_ )
+        if (!DeactivateSwarm()) {
+            if (sd->ft_) {
                 delete sd->ft_;
+                sd->ft_ = NULL; // Arno, 2012-10-16: clear var
+            }
             invariant();
             exit( "activateswarm( swarm ) (2)" );
             return NULL;
         }
     }
 
-    if( !sd->ft_ || !sd->ft_->IsOperational() ) {
-        if( sd->ft_ )
+    if (!sd->ft_ || !sd->ft_->IsOperational() ) {
+        if (sd->ft_ ) {
             delete sd->ft_;
+            sd->ft_ = NULL; // Arno, 2012-10-16: clear var
+        }
         BuildSwarm( sd );
 
-        if( !sd->ft_ || !sd->ft_->IsOperational() ) {
-            if( sd->ft_ )
+        if (!sd->ft_ || !sd->ft_->IsOperational() ) {
+            if (sd->ft_) {
                 delete sd->ft_;
+                sd->ft_ = NULL; // Arno, 2012-10-16: clear var
+            }
             invariant();
             exit( "activateswarm( swarm ) (3)" );
             return NULL;
@@ -652,13 +645,6 @@ void SwarmManager::DeactivateSwarm( SwarmData* swarm, int activeLoc ) {
     activeSwarms_[activeLoc] = activeSwarms_[activeSwarms_.size()-1];
     activeSwarms_.pop_back();
     activeSwarmCount_--;
-    if( swarm->toBeRemoved_ )
-    {
-        RemoveSwarm( swarm->rootHash_, swarm->stateToBeRemoved_, swarm->contentToBeRemoved_ );
-        // Arno: RemoveSwarm does "delete swarm", so cannot continue after this.
-        exit( "deactivateswarm(swarm,loc) (ab1)" );
-        return;
-    }
 
     if( swarm->ft_ ) {
         swarm->cachedMaxSpeeds_[DDIR_DOWNLOAD] = swarm->ft_->GetMaxSpeed(DDIR_DOWNLOAD);
@@ -911,7 +897,7 @@ void SwarmManager::invariant() {
             assert( GetSwarmData( (*iter)->RootHash() ) == (*iter) );
             c2++;
         }
-        assert( (((bool)(*iter)->ft_) ^ (!(*iter)->IsActive())) || (*iter)->toBeRemoved_ ); // Arno toBeRemoved also a state
+        assert( (((bool)(*iter)->ft_) ^ (!(*iter)->IsActive())));
     }
     assert( !FindSwarm( -1 ) );
     assert( !FindSwarm( Sha1Hash::ZERO ) );

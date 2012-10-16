@@ -188,7 +188,6 @@ bool            ZeroHashTree::OfferData (bin_t pos, const char* data, size_t len
 
 uint64_t      ZeroHashTree::seq_complete (int64_t offset)
 {
-    fprintf(stderr,"ZeroHashTree: seq_complete returns %llu\n", size_ ); 
     return size_;
 }
 

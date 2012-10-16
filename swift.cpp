@@ -453,10 +453,6 @@ int utf8main (int argc, char** argv)
         evtimer_assign(&evreport, Channel::evbase, ReportCallback, NULL);
         evtimer_add(&evreport, tint2tv(REPORT_INTERVAL*TINT_SEC));
 
-        // Arno:
-
-        fprintf(stderr,"swift: SCAN DIR %s\n", scan_dirname.c_str() );
-
         if (scan_dirname != "") {
             evtimer_assign(&evrescan, Channel::evbase, RescanDirCallback, NULL);
             evtimer_add(&evrescan, tint2tv(RESCAN_DIR_INTERVAL*TINT_SEC));
@@ -752,7 +748,8 @@ void ReportCallback(int fd, short event, void *arg) {
             // Download and stop mode
             event_base_loopexit(Channel::evbase, NULL);
     }
-    else if (report_progress) {
+    //else if (report_progress) {
+    if (true) {
         bool allComplete = true;
         uint64_t complete = 0;
         uint64_t size = 0;

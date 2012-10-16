@@ -49,7 +49,6 @@ namespace swift {
         Sha1Hash rootHash_;
         bool active_;
         tint latestUse_;
-        bool toBeRemoved_;
         bool stateToBeRemoved_;
         bool contentToBeRemoved_;
         FileTransfer* ft_;
@@ -79,7 +78,6 @@ namespace swift {
         bool IsActive();
         const Sha1Hash& RootHash();
         int Id();
-        bool ToBeRemoved();
         FileTransfer* GetTransfer(bool touch = true);
         std::string& Filename();
         Address& Tracker();
