@@ -743,8 +743,7 @@ void ReportCallback(int fd, short event, void *arg) {
             // Download and stop mode
             event_base_loopexit(Channel::evbase, NULL);
     }
-    //else if (report_progress) {
-    if (true) {
+    else if (report_progress) {
         bool allComplete = true;
         uint64_t complete = 0;
         uint64_t size = 0;

@@ -10,7 +10,7 @@
 #include <string.h>
 #include <time.h>
 
-#define SWARMMANAGER_ASSERT_INVARIANTS 			0
+#define SWARMMANAGER_ASSERT_INVARIANTS 			1
 
 #include "swift.h"
 #include "swarmmanager.h"
@@ -245,9 +245,7 @@ SwarmManager::~SwarmManager() {
 
 SwarmData* SwarmManager::AddSwarm( const std::string filename, const Sha1Hash& hash, const Address& tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, bool activate, uint32_t chunk_size)
 {
-#ifdef SWARMMANAGER_ASSERT_INVARIANTS
-    fprintf(stderr,"sm: AddSwarm %s hash %s track %s cdisk %d cnet %d zs %d act %d cs %u\n", filename.c_str(), hash.hex().c_str(), tracker.str(), force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
-#endif
+    //fprintf(stderr,"sm: AddSwarm %s hash %s track %s cdisk %d cnet %d zs %d act %d cs %u\n", filename.c_str(), hash.hex().c_str(), tracker.str(), force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
     enter( "addswarm( many )" );
     invariant();
     SwarmData sd( filename, hash, tracker, force_check_diskvshash, check_netwvshash, zerostate, chunk_size );
@@ -293,9 +291,7 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
 
 	if (mhash_exists && content_size >=0 && ht->complete() == content_size)
 	{
-#ifdef SWARMMANAGER_ASSERT_INVARIANTS
-	    fprintf(stderr,"sm: AddSwarm: Swarm good on disk, let sleep %s\n", swarm.filename_.c_str() );
-#endif
+	    //fprintf(stderr,"sm: AddSwarm: Swarm good on disk, let sleep %s\n", swarm.filename_.c_str() );
 	    // Swarm is good on disk, create SwarmData without activation
             newSwarm->cached_ = true;
 	    newSwarm->rootHash_ = ht->root_hash();
