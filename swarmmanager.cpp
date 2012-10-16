@@ -245,8 +245,9 @@ SwarmManager::~SwarmManager() {
 
 SwarmData* SwarmManager::AddSwarm( const std::string filename, const Sha1Hash& hash, const Address& tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, bool activate, uint32_t chunk_size)
 {
+#ifdef SWARMMANAGER_ASSERT_INVARIANTS
     fprintf(stderr,"sm: AddSwarm %s hash %s track %s cdisk %d cnet %d zs %d act %d cs %u\n", filename.c_str(), hash.hex().c_str(), tracker.str(), force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
-
+#endif
     enter( "addswarm( many )" );
     invariant();
     SwarmData sd( filename, hash, tracker, force_check_diskvshash, check_netwvshash, zerostate, chunk_size );
@@ -267,23 +268,17 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
     enter( "addswarm( swarm )" );
     invariant();
 
-
-    fprintf(stderr,"sm: AddSwarm: File %s swarmid %s act %d\n", swarm.filename_.c_str(), swarm.rootHash_.hex().c_str(), (int)activate );
-
     SwarmData* newSwarm = new SwarmData( swarm );
     // Arno: create SwarmData from checkpoint
     if (swarm.rootHash_ == Sha1Hash::ZERO && !activate)
     {
-	fprintf(stderr,"sm: AddSwarm: Unknown file and not activate, see if checkpointed %s\n", swarm.filename_.c_str() );
-
 	std::string binmap_filename = swarm.filename_;
 	binmap_filename.append(".mbinmap");
 
 	// Arno, 2012-01-03: Hack to discover root hash of a file on disk, such that
 	// we don't load it twice.
 	MmapHashTree *ht = new MmapHashTree(true,binmap_filename);
-
-	fprintf(stderr,"sm: AddSwarm: File %s may have hash %s\n", swarm.filename_.c_str(), ht->root_hash().hex().c_str() );
+	//fprintf(stderr,"sm: AddSwarm: File %s may have hash %s\n", swarm.filename_.c_str(), ht->root_hash().hex().c_str() );
 
 	std::string hash_filename = swarm.filename_;
 	hash_filename.append(".mhash");
@@ -298,8 +293,9 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
 
 	if (mhash_exists && content_size >=0 && ht->complete() == content_size)
 	{
+#ifdef SWARMMANAGER_ASSERT_INVARIANTS
 	    fprintf(stderr,"sm: AddSwarm: Swarm good on disk, let sleep %s\n", swarm.filename_.c_str() );
-
+#endif
 	    // Swarm is good on disk, create SwarmData without activation
             newSwarm->cached_ = true;
 	    newSwarm->rootHash_ = ht->root_hash();
@@ -313,7 +309,7 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
 	}
 	else
 	{
-	    fprintf(stderr,"sm: AddSwarm: Swarm incomplete, mhash %d complete %llu content %lld\n", (int)mhash_exists, ht->complete(), content_size );
+	    //fprintf(stderr,"sm: AddSwarm: Swarm incomplete, mhash %d complete %llu content %lld\n", (int)mhash_exists, ht->complete(), content_size );
 	    // Swarm incomplete, can't let sleep
 	    activate = true;
 	}
