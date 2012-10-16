@@ -17,6 +17,8 @@
 #include <event2/http.h>
 #include <event2/http_struct.h>
 
+#include "swarmmanager.h"
+
 using namespace swift;
 
 
@@ -370,6 +372,10 @@ int utf8main (int argc, char** argv)
     zs->SetConnectTimeout(zerostimeout);
 
 
+    // TEST
+    SwarmManager::GetManager().SetMaximumActiveSwarms(10);
+
+
     if (!cmdgw_enabled && livesource_input == "" && zerostatedir == "")
     {
         // Seed file or dir, or create multi-spec
@@ -448,6 +454,9 @@ int utf8main (int argc, char** argv)
         evtimer_add(&evreport, tint2tv(REPORT_INTERVAL*TINT_SEC));
 
         // Arno:
+
+        fprintf(stderr,"swift: SCAN DIR %s\n", scan_dirname.c_str() );
+
         if (scan_dirname != "") {
             evtimer_assign(&evrescan, Channel::evbase, RescanDirCallback, NULL);
             evtimer_add(&evrescan, tint2tv(RESCAN_DIR_INTERVAL*TINT_SEC));

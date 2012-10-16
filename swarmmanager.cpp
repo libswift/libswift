@@ -10,7 +10,7 @@
 #include <string.h>
 #include <time.h>
 
-#define SWARMMANAGER_ASSERT_INVARIANTS 			0
+#define SWARMMANAGER_ASSERT_INVARIANTS 			1
 
 #include "swift.h"
 #include "swarmmanager.h"
@@ -417,7 +417,8 @@ void SwarmManager::RemoveSwarm( const Sha1Hash& rootHash, bool removeState, bool
         return;
     }
     SwarmData* swarm = list[loc];
-    if( swarm->active_ ) {
+
+    if( swarm->active_) {
         swarm->toBeRemoved_ = true;
         swarm->stateToBeRemoved_ = removeState;
         swarm->contentToBeRemoved_ = removeContent;
@@ -529,11 +530,8 @@ void SwarmManager::CheckSwarmsToBeRemoved() {
     while( dellist.size() > 0 ) {
         int i = dellist.back();
         SwarmData* swarm = activeSwarms_[i];
-        activeSwarms_[i] = activeSwarms_[activeSwarms_.size()-1];
-        activeSwarms_.pop_back();
-        activeSwarmCount_--;
+        DeactivateSwarm( swarm, i ); // Arno: does complete remove since toBeRemoved_ = true
         dellist.pop_back();
-        RemoveSwarm( swarm->rootHash_, swarm->stateToBeRemoved_, swarm->contentToBeRemoved_ );
     }
     
     // If we have too much swarms active, aggressively try to remove swarms
@@ -655,7 +653,12 @@ void SwarmManager::DeactivateSwarm( SwarmData* swarm, int activeLoc ) {
     activeSwarms_.pop_back();
     activeSwarmCount_--;
     if( swarm->toBeRemoved_ )
+    {
         RemoveSwarm( swarm->rootHash_, swarm->stateToBeRemoved_, swarm->contentToBeRemoved_ );
+        // Arno: RemoveSwarm does "delete swarm", so cannot continue after this.
+        exit( "deactivateswarm(swarm,loc) (ab1)" );
+        return;
+    }
 
     if( swarm->ft_ ) {
         swarm->cachedMaxSpeeds_[DDIR_DOWNLOAD] = swarm->ft_->GetMaxSpeed(DDIR_DOWNLOAD);
@@ -810,6 +813,7 @@ int SwarmManager::GetSwarmLocation( const std::vector<SwarmData*>& list, const S
 SwarmManager& SwarmManager::GetManager() {
     // Deferred, since Channel::evbase is created later
     if( !instance_.eventCheckToBeRemoved_ ) {
+        //ARNOTODO: timer only runs when GetManager gets called regularly...
         instance_.eventCheckToBeRemoved_ = evtimer_new( Channel::evbase, CheckSwarmsToBeRemovedCallback, &instance_ );
     }
     return instance_;
@@ -907,7 +911,7 @@ void SwarmManager::invariant() {
             assert( GetSwarmData( (*iter)->RootHash() ) == (*iter) );
             c2++;
         }
-        assert( ((bool)(*iter)->ft_) ^ (!(*iter)->IsActive()) );
+        assert( (((bool)(*iter)->ft_) ^ (!(*iter)->IsActive())) || (*iter)->toBeRemoved_ ); // Arno toBeRemoved also a state
     }
     assert( !FindSwarm( -1 ) );
     assert( !FindSwarm( Sha1Hash::ZERO ) );
