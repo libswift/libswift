@@ -10,7 +10,7 @@
 #include <string.h>
 #include <time.h>
 
-#define SWARMMANAGER_ASSERT_INVARIANTS 			1
+#define SWARMMANAGER_ASSERT_INVARIANTS 			0
 
 #include "swift.h"
 #include "swarmmanager.h"
@@ -18,12 +18,18 @@
 #define SECONDS_UNTIL_INDEX_REUSE   			120
 #define SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED   30
 
+#ifdef __APPLE__
+#define DEFAULT_MAX_ACTIVE_SWARMS			224 // 2 file descriptors per swarm 256 max
+#else
+#define DEFAULT_MAX_ACTIVE_SWARMS			480 // 2 file descriptors per swarm
+#endif
+
 #if SWARMMANAGER_ASSERT_INVARIANTS
 #include <assert.h>
 int levelcount = 0;
 #define enter( x )
-// Arno, 2012-10-16: enter/leave disabled, asserts enabled
-//fprintf( stderr, "[%02d] Entered " x "\n", ++levelcount );
+// Arno: enter/leave prints disabled
+// fprintf( stderr, "[%02d] Entered " x "\n", ++levelcount );
 #define exit( x )
 //fprintf( stderr, "[%02d] Leaving " x "\n", levelcount-- );
 #else
@@ -217,7 +223,7 @@ std::string SwarmData::OSPathName() {
 SwarmManager::SwarmManager() :
     knownSwarms_( 64, std::vector<SwarmData*>() ), swarmList_(), unusedIndices_(),
     eventCheckToBeRemoved_(NULL),
-    maxActiveSwarms_( 256 ), activeSwarmCount_( 0 ), activeSwarms_()
+    maxActiveSwarms_( DEFAULT_MAX_ACTIVE_SWARMS ), activeSwarmCount_( 0 ), activeSwarms_()
 {
     enter( "cons" );
     // Do not call the invariant here, directly or indirectly: screws up event creation

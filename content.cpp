@@ -99,8 +99,8 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
     Channel::Time();
 
     if ((ContentTransfer::cleancounter % TRANSFER_IDLE_DEACTIVATE_INTERVAL) == 0) {
-	// Deactivate FileTransfer that have been idle too long
-	//SwarmManager::GetManager().DeactivateIdleSwarms();
+	// Deactivate FileTransfers that have been idle too long. Including zerostate
+	SwarmManager::GetManager().DeactivateIdleSwarms();
     }
 
     tdlist_t tds = GetTransferDescriptors();
