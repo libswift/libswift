@@ -58,7 +58,7 @@ SwarmData::SwarmData( const std::string filename, const Sha1Hash& rootHash, cons
 
 SwarmData::SwarmData( const SwarmData& sd ) :
     id_(-1), rootHash_( sd.rootHash_ ), active_( false ), latestUse_(0), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
-    filename_( sd.filename_ ), tracker_( sd.tracker_ ), forceCheckDiskVSHash_( sd.forceCheckDiskVSHash_ ), chunkSize_( sd.chunkSize_ ), zerostate_( sd.zerostate_ ), cached_(false)
+    filename_( sd.filename_ ), tracker_( sd.tracker_ ), forceCheckDiskVSHash_( sd.forceCheckDiskVSHash_ ), checkNetworkVSHash_(sd.checkNetworkVSHash_), chunkSize_( sd.chunkSize_ ), zerostate_( sd.zerostate_ ), cached_(false)
 {
 }
 
@@ -245,7 +245,7 @@ SwarmManager::~SwarmManager() {
 
 SwarmData* SwarmManager::AddSwarm( const std::string filename, const Sha1Hash& hash, const Address& tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, bool activate, uint32_t chunk_size)
 {
-    //fprintf(stderr,"sm: AddSwarm %s hash %s track %s cdisk %d cnet %d zs %d act %d cs %u\n", filename.c_str(), hash.hex().c_str(), tracker.str(), force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
+    fprintf(stderr,"sm: AddSwarm %s hash %s track %s cdisk %d cnet %d zs %d act %d cs %u\n", filename.c_str(), hash.hex().c_str(), tracker.str(), force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
     enter( "addswarm( many )" );
     invariant();
     SwarmData sd( filename, hash, tracker, force_check_diskvshash, check_netwvshash, zerostate, chunk_size );
