@@ -1,2 +1,2 @@
 rmdir ..\obj ..\libs\armeabi /s /q
-CALL c:\Progra~1\Android\android-ndk-r8\ndk-build.cmd
+CALL c:\Users\arno\AppData\Local\Android\android-ndk-r7\ndk-build.cmd

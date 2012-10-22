@@ -85,7 +85,7 @@ void LiveSourceHTTPResponseCallback(struct evhttp_request *req, void *arg);
 void LiveSourceHTTPDownloadChunkCallback(struct evhttp_request *req, void *arg);
 
 // Gateway stuff
-bool InstallHTTPGateway(struct event_base *evbase,Address addr,uint32_t chunk_size, double *maxspeed);
+bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf );
 bool InstallStatsGateway(struct event_base *evbase,Address addr);
 bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr);
 bool HTTPIsSending();
@@ -356,7 +356,7 @@ int utf8main (int argc, char** argv)
         SetTracker(tracker);
 
     if (httpgw_enabled)
-        InstallHTTPGateway(Channel::evbase,httpaddr,chunk_size,maxspeed);
+        InstallHTTPGateway(Channel::evbase,httpaddr,chunk_size,maxspeed,"",-1,-1);
     if (cmdgw_enabled)
         InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr);
 

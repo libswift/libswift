@@ -12,7 +12,7 @@ include $(PREBUILT_STATIC_LIBRARY)
 
 
 LOCAL_MODULE    := swift
-LOCAL_SRC_FILES := NativeLib.cpp sha1.cpp compat.cpp sendrecv.cpp send_control.cpp hashtree.cpp bin.cpp binmap.cpp binheap.cpp channel.cpp transfer.cpp httpgw.cpp statsgw.cpp cmdgw.cpp avgspeed.cpp availability.cpp	
+LOCAL_SRC_FILES := NativeLib.cpp sha1.cpp compat.cpp sendrecv.cpp send_control.cpp hashtree.cpp bin.cpp binmap.cpp channel.cpp transfer.cpp httpgw.cpp statsgw.cpp cmdgw.cpp avgspeed.cpp avail.cpp storage.cpp api.cpp live.cpp content.cpp zerostate.cpp zerohashtree.cpp swarmmanager.cpp	
 
 LOCAL_CFLAGS    += -D__NEW__ 
 

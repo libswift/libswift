@@ -15,7 +15,7 @@
 
 using namespace swift;
 
-#define HTTPGW_VOD_PROGRESS_STEP_BYTES	(256*1024)
+static uint32_t HTTPGW_VOD_PROGRESS_STEP_BYTES = (256*1024); // configurable
 // For best performance make bigger than HTTPGW_PROGRESS_STEP_BYTES
 #define HTTPGW_VOD_MAX_WRITE_BYTES	(512*1024)
 
@@ -40,7 +40,7 @@ using namespace swift;
 #define HTTPGW_MAX_OUTBUF_BYTES		(2*1024*1024)
 
 // Arno: Minium amout of content to have download before replying to HTTP
-#define HTTPGW_MIN_PREBUF_BYTES         (256*1024)
+static uint32_t HTTPGW_MIN_PREBUF_BYTES  = (256*1024); // configurable
 
 
 #define HTTPGW_MAX_REQUEST 128
@@ -73,6 +73,7 @@ struct evhttp *http_gw_event;
 struct evhttp_bound_socket *http_gw_handle;
 uint32_t httpgw_chunk_size = SWIFT_DEFAULT_CHUNK_SIZE; // Copy of cmdline param
 double *httpgw_maxspeed = NULL;                         // Copy of cmdline param
+std::string httpgw_storage_dir="";
 
 // Arno, 2010-11-30: for SwarmPlayer 3000 backend autoquit when no HTTP req is received
 bool sawhttpconn = false;
@@ -183,6 +184,9 @@ void HttpGwWrite(int td) {
     // When writing first data, send reply header
     if (req->offset == req->startoff) {
         // Not just for chunked encoding, see libevent2's http.c
+
+	dprintf("%s @%d http reply 2: %d\n",tintstr(),req->id, req->replycode );
+
         evhttp_send_reply_start(req->sinkevreq, req->replycode, "OK");
         req->replied = true;
     }
@@ -549,9 +553,10 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     }
 
     if (req->xcontentdur == "-1")
+    {
         fprintf(stderr,"httpgw: Live: hook-in at %llu\n", swift::GetHookinOffset(td) );
-
-
+        dprintf("%s @%i http first: hook-in at %llu\n",tintstr(),req->id, swift::GetHookinOffset(td) );
+    }
 
     // MULTIFILE
     // Is storage ready?
@@ -608,7 +613,10 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     // Handle HTTP GET Range request, i.e. additional offset within content
     // or file. Sets some headers or sends HTTP error.
     if (req->xcontentdur == "-1") //LIVE
-        req->rangefirst = -1; 
+    {
+        req->rangefirst = -1;
+        req->replycode = 200;
+    }
     else if (!HttpGwParseContentRangeHeader(req,filesize))
         return;
 
@@ -646,7 +654,8 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     evhttp_add_header(reqheaders, "Connection", "close" );
     if (req->xcontentdur != "-1")
     {
-        evhttp_add_header(reqheaders, "Content-Type", "video/ogg" );
+        //evhttp_add_header(reqheaders, "Content-Type", "video/ogg" );
+	evhttp_add_header(reqheaders, "Content-Type", "video/mp2t" );
         if (req->xcontentdur.length() > 0)
             evhttp_add_header(reqheaders, "X-Content-Duration", req->xcontentdur.c_str() );
 
@@ -836,16 +845,26 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
         return;
     }
 
+    // ANDROID
+    std::string filename = "";
+    if (httpgw_storage_dir == "") {
+    	filename = hashstr;
+    }
+    else {
+    	filename = httpgw_storage_dir;
+    	filename += hashstr;
+    }
+
     // 4. Initiate transfer, activating FileTransfer if needed
     bool activate=true;
     int td = swift::Find(swarm_id,activate);
     if (td == -1) {
         // LIVE
         if (durstr != "-1") {
-            td = swift::Open(hashstr,swarm_id,Address(),false,true,false,activate,chunksize);
+            td = swift::Open(filename,swarm_id,Address(),false,true,false,activate,chunksize);
         }
         else {
-            td = swift::LiveOpen(hashstr,swarm_id,Address(),false,chunksize);
+            td = swift::LiveOpen(filename,swarm_id,Address(),false,chunksize);
         }
 
         // Arno, 2011-12-20: Only on new transfers, otherwise assume that CMD GW
@@ -901,8 +920,15 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 }
 
 
-bool InstallHTTPGateway (struct event_base *evbase,Address bindaddr, uint32_t chunk_size, double *maxspeed) {
+bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf ) {
     // Arno, 2011-10-04: From libevent's http-server.c example
+
+    // Arno, 2012-10-16: Made configurable for ANDROID
+    httpgw_storage_dir = storage_dir;
+    if (vod_step != -1)
+	HTTPGW_VOD_PROGRESS_STEP_BYTES = vod_step;
+    if (min_prebuf != -1)
+	HTTPGW_MIN_PREBUF_BYTES = min_prebuf;
 
     /* Create a new evhttp object to handle requests. */
     http_gw_event = evhttp_new(evbase);
@@ -925,6 +951,74 @@ bool InstallHTTPGateway (struct event_base *evbase,Address bindaddr, uint32_t ch
     httpgw_maxspeed = maxspeed;
     return true;
 }
+
+
+/*
+ * ANDROID
+ * Return progress info in "x/y" format. This is returned to the Java Activity
+ * which uses it to update the progress bar. Currently x is not the number of
+ * bytes downloaded, but the number of bytes written to the HTTP connection.
+ */
+std::string HTTPGetProgressString(Sha1Hash root_hash)
+{
+    std::stringstream rets;
+    //rets << "httpgw: ";
+
+    int td = swift::Find(root_hash);
+    if (td==-1)
+	rets << "0/0";
+    else
+    {
+	http_gw_t* req = HttpGwFindRequestByTD(td);
+	if (req == NULL)
+	    rets << "0/0";
+	else
+	{
+	    //rets << swift::SeqComplete(td);
+	    rets << req->offset;
+	    rets << "/";
+	    rets << swift::Size(req->td);
+	}
+    }
+
+    return rets.str();
+}
+
+// Arno: dummy place holder
+std::string StatsGetSpeedCallback()
+{
+    int dspeed = 2, uspeed = 0;
+    uint32_t nleech=0,nseed=0;
+    int statsgw_last_down=0, statsgw_last_up=0;
+
+    if (http_gw_reqs_open > 0)
+    {
+	int td = http_requests[http_gw_reqs_open-1].td;
+	http_gw_t* req = HttpGwFindRequestByTD(td);
+	if (req != NULL)
+	{
+	    statsgw_last_down = req->offset;
+	    statsgw_last_up = swift::SeqComplete(td);
+	}
+    }
+
+    std::stringstream ss;
+    ss << dspeed;
+    ss << "/";
+    ss << uspeed;
+    ss << "/";
+    ss << nleech;
+    ss << "/";
+    ss << nseed;
+    ss << "/";
+    //ss << statsgw_last_down;
+    ss << statsgw_last_down;
+    ss << "/";
+    ss << statsgw_last_up;
+
+    return ss.str();
+}
+
 
 
 /** For SwarmPlayer 3000's HTTP failover. We should exit if swift isn't

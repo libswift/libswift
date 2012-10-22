@@ -71,19 +71,39 @@ public:
             hint_out_.pop_front();
         }
 
+        char binstr[32];
+
         // Advance ptr
-        if (transfer_->ack_out()->is_filled(current_bin_))
-		current_bin_ = bin_t(0,current_bin_.layer_offset()+1);
+        fprintf(stderr,"live: pp: new cur start\n" );
+        while (transfer_->ack_out()->is_filled(current_bin_))
+        {
+            current_bin_ = bin_t(0,current_bin_.layer_offset()+1);
+            fprintf(stderr,"live: pp: new cur is %s\n", current_bin_.str(binstr) );
+        }
+        fprintf(stderr,"live: pp: new cur end\n" );
+
 
         // Request next from this peer, if not already requested
         bin_t hint;
-        if (offer.is_filled(current_bin_) &&  ack_hint_out_.is_empty(current_bin_))
+        if (offer.is_filled(current_bin_) && ack_hint_out_.is_empty(current_bin_))
+        {
+            bin_t goodhint = current_bin_;
             hint = current_bin_;
+            fprintf(stderr,"live: pp: new hint is %s\n", hint.str(binstr) );
+
+	    while (hint.is_left() && offer.is_filled(hint.sibling()) && ack_hint_out_.is_empty(hint.sibling()))
+	    {
+		goodhint = hint;
+	        hint = hint.parent();
+	        fprintf(stderr,"live: pp: Going to parent %s\n", hint.str(binstr) );
+	    }
+	    // Previous one was the max.
+	    hint = goodhint;
+	    fprintf(stderr,"live: pp: Picked %s\n", hint.str(binstr) );
+        }
 	else
 	    return bin_t::NONE;
 
-	//while (hint.base_length()>max_width)
-	//	hint = hint.left();
 	assert(ack_hint_out_.is_empty(hint));
 	ack_hint_out_.set(hint);
 	hint_out_.push_back(tintbin(NOW,hint));
