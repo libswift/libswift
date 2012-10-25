@@ -161,6 +161,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
     }
 
     fprintf(stderr,"live: AddData: added till chunkid %lli\n", last_chunkid_);
+    dprintf("%s %%0 live: AddData: added till chunkid %lli\n", tintstr(), last_chunkid_);
 
     // Announce chunks to peers
     //fprintf(stderr,"live: AddData: announcing to %d channel\n", mychannels_.size() );
@@ -170,6 +171,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
     {
         Channel *c = *iter;
         fprintf(stderr,"live: AddData: announce to channel %d\n", c->id() );
+        dprintf("%s %%0 live: AddData: announce to channel %d\n", tintstr(), c->id() );
         //DDOS
         if (c->is_established())
             c->LiveSend();

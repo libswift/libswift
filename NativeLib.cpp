@@ -1,8 +1,8 @@
 /*
- *  swift.cpp
- *  swift the multiparty transport protocol
+ *  NativeLib.cpp
+ *  Java interface to swift for use in Android
  *
- *  Created by Victor Grishchenko on 2/15/10.
+ *  Created by Victor Grishchenko, Arno Bakker
  *  Copyright 2010 Delft University of Technology. All rights reserved.
  *
  */
@@ -11,7 +11,7 @@
 #include "compat.h"
 #include "swift.h"
 // jni header file
-#include "com_tudelft_triblerdroid_live_NativeLib.h"
+#include "com_tudelft_triblerdroid_swift_NativeLib.h"
 #include <sstream>
 
 
@@ -25,11 +25,18 @@ std::string StatsGetSpeedCallback();
 
 // Local functions
 void ReportCallback(int fd, short event, void *arg);
-struct event evreport;
+void LiveSourceCameraCallback(char *data, int datalen);
+void LiveSourceAttemptCreate();
 
+// Global variables
+struct event evreport;
 int single_td = -1;
 int attempts = 0;
 bool enginestarted = false;
+
+LiveTransfer *livesource_lt = NULL;
+struct evbuffer *livesource_evb = NULL;
+
 
 /*
  * Class:     com_tudelft_swift_NativeLib
@@ -41,7 +48,7 @@ bool enginestarted = false;
 #define STREAM_MODE		1
 
 
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_live_NativeLib_start (JNIEnv * env, jobject obj, jstring hash, jstring INtracker, jstring destination) {
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_start (JNIEnv * env, jobject obj, jstring hash, jstring INtracker, jstring destination) {
 
     dprintf("NativeLib::start called\n");
 
@@ -148,7 +155,7 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_live_NativeLib_start (JN
  * Method:    progress
  * Signature: ()I
  */
-JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_live_NativeLib_mainloop(JNIEnv * env, jobject obj) {
+JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_mainloop(JNIEnv * env, jobject obj) {
 
     // Enter libevent mainloop
     event_base_dispatch(Channel::evbase);
@@ -165,7 +172,7 @@ JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_live_NativeLib_mainloop(JNI
  *
  * Arno, 2012-01-30: Now only called on Application shutdown.
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_live_NativeLib_stop(JNIEnv * env, jobject obj) {
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_stop(JNIEnv * env, jobject obj) {
 
     if (!enginestarted)
 	return env->NewStringUTF("stopped");
@@ -184,7 +191,7 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_live_NativeLib_stop(JNIE
  * Method:    httpprogress
  * Signature: ()Ljava/lang/String;
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_live_NativeLib_httpprogress(JNIEnv * env, jobject obj, jstring hash) {
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_httpprogress(JNIEnv * env, jobject obj, jstring hash) {
 
     std::stringstream rets;
     jboolean blnIsCopy;
@@ -236,7 +243,7 @@ void ReportCallback(int fd, short event, void *arg) {
  * Method:    stats
  * Signature: ()Ljava/lang/String;
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_live_NativeLib_stats(JNIEnv * env, jobject obj) {
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_stats(JNIEnv * env, jobject obj) {
 
     std::string ret = StatsGetSpeedCallback();
     return env->NewStringUTF( ret.c_str() );
@@ -249,8 +256,118 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_live_NativeLib_stats(JNI
  * Method:    hello
  * Signature: ()Ljava/lang/String;
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_live_NativeLib_hello(JNIEnv * env, jobject obj) {
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_hello(JNIEnv * env, jobject obj) {
 
     return env->NewStringUTF("Hallo from Swift.. Library is working :-)");
 }
+
+
+/*
+ * Create live swarm
+ */
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_livecreate(JNIEnv *env, jobject obj)
+{
+    if (!enginestarted)
+    {
+	// Libevent2 initialization
+	LibraryInit();
+	Channel::evbase = event_base_new();
+
+	std::string s = "/sdcard/swift/debug.txt";
+	//char pidstr[32];
+	//sprintf(pidstr,"%d", getpid() );
+	//s += pidstr;
+
+	// Debug file saved on SD
+	Channel::debug_file = fopen (s.c_str(),"w+");
+
+	// Bind to UDP port
+	Address bindaddr("0.0.0.0:6778");
+	int sock = swift::Listen(bindaddr);
+	if (sock<=0)
+	    return env->NewStringUTF("live cant listen");
+
+	// NAT
+	/*const char *msg = "Hello World!";
+	Address destaddr("192.168.0.102:4433");
+	int r = sendto(sock,msg,strlen(msg),0,(struct sockaddr*)&(destaddr.addr),sizeof(struct sockaddr_in));
+	if (r < 0)
+	    dprintf("%s NAT ping failed %d\n", tintstr(), r );
+	else
+	    dprintf("%s NAT ping OK %d\n", tintstr(), r );
+	 */
+
+	// Buffer for H.264 from cam, with startcode 00000001 added
+	livesource_evb = evbuffer_new();
+
+	// Start live source
+        std::string swarmidstr = "ArnosFirstSwarm";
+        Sha1Hash swarmid = Sha1Hash(swarmidstr.c_str(), swarmidstr.length());
+
+        // Create swarm
+	std::string filename = "/sdcard/swift/storage.dat";
+        livesource_lt = swift::LiveCreate(filename,swarmid);
+
+	enginestarted = true;
+    }
+
+    return env->NewStringUTF("livecreate end");
+}
+
+
+/*
+ * Add data to live swarm, to be turned into chunks when >=chunk_size has been
+ * added.
+ */
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_liveadd(JNIEnv *env, jobject obj, jbyteArray dataArray, jint dataOffset, jint dataLength )
+{
+
+    // http://stackoverflow.com/questions/8439233/how-to-convert-jbytearray-to-native-char-in-jni
+    jboolean isCopy;
+
+    jbyte* b = env->GetByteArrayElements(dataArray, &isCopy);
+    //jsize dataArrayLen = env->GetArrayLength(dataArray);
+
+    char *data = (char *)b;
+    int datalen = (int)dataLength;
+    dprintf("live: cam: Got %p bytes %d from java\n", data, datalen );
+
+    if (data != NULL && datalen > 0)
+    	LiveSourceCameraCallback(data,datalen);
+
+    env->ReleaseByteArrayElements(dataArray, b, JNI_ABORT);
+
+    return env->NewStringUTF("liveadd end");
+}
+
+
+void LiveSourceCameraCallback(char *data, int datalen)
+{
+    fprintf(stderr,"live: cam: read %d bytes\n", datalen );
+
+    // Create chunks of chunk_size()
+    int ret = evbuffer_add(livesource_evb,data,datalen);
+    if (ret < 0)
+        print_error("live: cam: error evbuffer_add");
+
+    LiveSourceAttemptCreate();
+}
+
+
+void LiveSourceAttemptCreate()
+{
+    if (evbuffer_get_length(livesource_evb) > livesource_lt->chunk_size())
+    {
+        size_t nchunklen = livesource_lt->chunk_size() * (size_t)(evbuffer_get_length(livesource_evb)/livesource_lt->chunk_size());
+        uint8_t *chunks = evbuffer_pullup(livesource_evb, nchunklen);
+        int nwrite = swift::LiveWrite(livesource_lt, chunks, nchunklen);
+        if (nwrite < -1)
+            print_error("live: create: error");
+
+        int ret = evbuffer_drain(livesource_evb, nchunklen);
+        if (ret < 0)
+            print_error("live: create: error evbuffer_drain");
+    }
+}
+
 
