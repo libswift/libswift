@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include "compat.h"
 #include "swift.h"
+#include "svn-revision.h"
 #include <cfloat>
 #include <sstream>
 
@@ -357,6 +358,7 @@ int utf8main (int argc, char** argv)
 			fprintf(stderr,"  -z, --chunksize\tchunk size in bytes (default: %d)\n", SWIFT_DEFAULT_CHUNK_SIZE);
 			fprintf(stderr,"  -m, --printurl\tcompose URL from tracker, file and chunksize\n");
 			fprintf(stderr,"  -M, --multifile\tcreate multi-file spec with given files\n");
+			fprintf(stderr, "%s\n", SubversionRevisionString.c_str() );
 			return 1;
 		}
     }
