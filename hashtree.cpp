@@ -251,7 +251,7 @@ void            MmapHashTree::Submit () {
     	SetBroken();
     	return;
     }
-    root_hash_ = DeriveRoot();
+    root_hash_ = calcroothash;
 }
 
 
