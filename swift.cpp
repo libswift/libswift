@@ -17,6 +17,7 @@
 #include <event2/http.h>
 #include <event2/http_struct.h>
 
+#include "svn-revision.h"
 #include "swarmmanager.h"
 
 using namespace swift;
@@ -67,7 +68,7 @@ void usage(void)
     fprintf(stderr,"  -2 urlfilename-in-hex, a win32 workaround for non UTF-16 popen\n");
     fprintf(stderr,"  -3 zerosdir-in-hex, a win32 workaround for non UTF-16 popen\n");
     fprintf(stderr,"  -T time-out in seconds for slow zero state connections\n");
-    fprintf(stderr, "$Revision$\n");
+    fprintf(stderr, "%s\n", SubversionRevisionString.c_str() );
 
 }
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
