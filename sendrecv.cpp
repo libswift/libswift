@@ -187,6 +187,7 @@ void    Channel::Send () {
             //LIVE
             if (hashtree() == NULL || !hashtree()->is_complete()) {
                 AddHint(evb);
+                AddHint(evb); // Arno, 2012-10-30: Aggressive requesting
                 /* Gertjan fix: 7aeea65f3efbb9013f601b22a57ee4a423f1a94d
                 "Only call Reschedule for 'reverse PEX' if the channel is in keep-alive mode"
                  */
@@ -281,7 +282,8 @@ void    Channel::AddHint (struct evbuffer *evb) {
     uint64_t plan_pck = (uint64_t)min(rate_allowed_hints,queue_allowed_hints);
 
     // 4. Ask allowance in blocks of chunks to get pipelining going from serving peer.
-    if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY)
+    // Arno, 2012-10-30: not HINT_GRANULARITY for LIVE
+    if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY || transfer()->ttype() == LIVE_TRANSFER)
     {
         bin_t hint = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2);
         if (!hint.is_none()) {
@@ -654,8 +656,17 @@ void    Channel::CleanHintOut (bin_t pos) {
         hint_out_.front().bin = f.bin.sibling();
         hint_out_.push_front(f);
     }
+    // Arno, 2012-10-30: update RTT when talking to live source
+    tintbin timepos = hint_out_.front();
     hint_out_.pop_front();
     hint_out_size_--;
+
+    if (transfer()->ttype() == LIVE_TRANSFER && send_control_== KEEP_ALIVE_CONTROL)
+    {
+	tint difft = NOW-timepos.time;
+	dprintf("%s #%u newrtt %lld rttavg %lld\n",tintstr(),id_,difft,rtt_avg_);
+	rtt_avg_ = (rtt_avg_ + difft)/2;
+    }
 }
 
 
@@ -860,10 +871,22 @@ void Channel::OnHave (struct evbuffer *evb) {
     //fprintf(stderr,"OnHave: got bin %s is_complete %d\n", ackd_pos.str(), IsComplete() );
 
     // Arno, 2012-01-09: Provide PP with info needed for hook-in.
-    if (transfer()->ttype() == LIVE_TRANSFER) {
+    if (transfer()->ttype() == LIVE_TRANSFER)
+    {
         LiveTransfer *lt = (LiveTransfer *)transfer();
         if (!lt->am_source())
+        {
             ((LivePiecePicker *)lt->picker())->StartAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_);
+
+	    // Arno: it can happen receive a HAVE and have no hints outstanding.
+	    // In that case we should not wait till next_send_time_ but request
+	    // directly. See send_control.cpp
+	    if (hint_out_.size() == 0)
+	    {
+		live_have_no_hint_ = true;
+		dprintf("%s #%u have but no hints\n",tintstr(),id_);
+	    }
+        }
     }
 }
 

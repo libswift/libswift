@@ -287,24 +287,14 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_livecrea
 	if (sock<=0)
 	    return env->NewStringUTF("live cant listen");
 
-	// NAT
-	/*const char *msg = "Hello World!";
-	Address destaddr("192.168.0.102:4433");
-	int r = sendto(sock,msg,strlen(msg),0,(struct sockaddr*)&(destaddr.addr),sizeof(struct sockaddr_in));
-	if (r < 0)
-	    dprintf("%s NAT ping failed %d\n", tintstr(), r );
-	else
-	    dprintf("%s NAT ping OK %d\n", tintstr(), r );
-	 */
-
-	// Buffer for H.264 from cam, with startcode 00000001 added
+	// Buffer for H.264 NALUs from cam, with startcode 00000001 added
 	livesource_evb = evbuffer_new();
 
-	// Start live source
+	// Create live source
         std::string swarmidstr = "ArnosFirstSwarm";
         Sha1Hash swarmid = Sha1Hash(swarmidstr.c_str(), swarmidstr.length());
 
-        // Create swarm
+        // Start swarm
 	std::string filename = "/sdcard/swift/storage.dat";
         livesource_lt = swift::LiveCreate(filename,swarmid);
 
@@ -340,6 +330,10 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_liveadd(
     return env->NewStringUTF("liveadd end");
 }
 
+/*
+ * Add live data to libevent evbuffer, to be turned into chunks when >=chunk_size
+ * has been added.
+ */
 
 void LiveSourceCameraCallback(char *data, int datalen)
 {
@@ -354,12 +348,17 @@ void LiveSourceCameraCallback(char *data, int datalen)
 }
 
 
+/*
+ * See if there is enough data to create a live chunk
+ */
 void LiveSourceAttemptCreate()
 {
     if (evbuffer_get_length(livesource_evb) > livesource_lt->chunk_size())
     {
+	// Sufficient data to create a chunk, perhaps even multiple
         size_t nchunklen = livesource_lt->chunk_size() * (size_t)(evbuffer_get_length(livesource_evb)/livesource_lt->chunk_size());
         uint8_t *chunks = evbuffer_pullup(livesource_evb, nchunklen);
+
         int nwrite = swift::LiveWrite(livesource_lt, chunks, nchunklen);
         if (nwrite < -1)
             print_error("live: create: error");

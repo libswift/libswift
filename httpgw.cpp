@@ -20,7 +20,7 @@ static uint32_t HTTPGW_VOD_PROGRESS_STEP_BYTES = (256*1024); // configurable
 #define HTTPGW_VOD_MAX_WRITE_BYTES	(512*1024)
 
 
-#define HTTPGW_LIVE_PROGRESS_STEP_BYTES	(16*1024)
+#define HTTPGW_LIVE_PROGRESS_STEP_BYTES	(8*1024)
 // For best performance make bigger than HTTPGW_PROGRESS_STEP_BYTES
 #define HTTPGW_LIVE_MAX_WRITE_BYTES	(32*1024)
 
@@ -212,9 +212,9 @@ void HttpGwWrite(int td) {
     struct evbuffer *outbuf = bufferevent_get_output(buffy);
 
     // Arno: If sufficient data to write (avoid small increments) and out buffer
-    // not filled. libevent2 has a liberal understanding of socket writability,
-    // that may result in tens of megabytes being cached in memory. Limit that
-    // amount at app level.
+    // not filled then write to socket. Unfortunately, libevent2 has a liberal
+    // understanding of socket writability that may result in tens of megabytes
+    // being cached in memory. Limit that amount at app level.
     //
     if (avail > 0 && evbuffer_get_length(outbuf) < HTTPGW_MAX_OUTBUF_BYTES)
     {
@@ -277,6 +277,7 @@ void HttpGwWrite(int td) {
 	else
 	    req->foundH264NALU = true; // Other MIME type
 
+        // Find first H.264 NALU
         size_t naluoffset = 0;
         if (!req->foundH264NALU && rd >= 5)
         {
@@ -299,9 +300,10 @@ void HttpGwWrite(int td) {
             }
         }
 
+        // Live tuned-in or VOD:
         if (req->foundH264NALU)
         {
-	    // Arno, 2012-10-24: LIVE Don't update rd here, as that should be a multiple of chunks
+	    // Arno, 2012-10-24: LIVE Don't change rd here, as that should be a multiple of chunks
 	    ret = evbuffer_add(evb,buf+naluoffset,rd-naluoffset);
 	    if (ret < 0) {
 		print_error("httpgw: MayWrite: error evbuffer_add");

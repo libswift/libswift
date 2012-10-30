@@ -791,6 +791,7 @@ bin_t binmap_t::find_empty(bin_t start) const
 	// Move down
 	do
 	{
+		// Arno, 2012-10-30: TODO make sure we don't go left of start
 		if (!is_filled(cur_bin.left()))
 		{
 			cur_bin.to_left();

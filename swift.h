@@ -762,6 +762,7 @@ namespace swift {
         /** Arno: Fix for KEEP_ALIVE_CONTROL */
         bool        lastrecvwaskeepalive_;
         bool        lastsendwaskeepalive_;
+        bool	    live_have_no_hint_;
 
         /** Recent acknowlegements for data previously sent.    */
         int         ack_rcvd_recent_;
