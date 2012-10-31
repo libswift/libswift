@@ -22,7 +22,7 @@ else:
 cpppath.append('..')
 libpath.append('..')
 
-libpath.append("../build/gtest-1.6.0")
+libpath.append(".")
 
 cpppath.append("../build/gtest-1.6.0")
 cpppath.append("../build/gtest-1.6.0/include")
@@ -36,7 +36,7 @@ env.StaticLibrary(
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath)
-    
+
 env.Program( 
     target='binstest2',
     source=['binstest2.cpp'],
