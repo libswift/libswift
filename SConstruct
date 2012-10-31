@@ -22,7 +22,7 @@ TestDir='tests'
 target = 'swift'
 source = [ 'bin.cpp', 'binmap.cpp', 'sha1.cpp','hashtree.cpp',
     	   'transfer.cpp', 'channel.cpp', 'sendrecv.cpp', 'send_control.cpp', 
-    	   'compat.cpp','avgspeed.cpp', 'avail.cpp', 'cmdgw.cpp', 
+    	   'compat.cpp','avgspeed.cpp', 'avail.cpp', 'cmdgw.cpp', 'httpgw.cpp',
            'storage.cpp', 'zerostate.cpp', 'zerohashtree.cpp',
            'api.cpp', 'content.cpp', 'live.cpp', 'swarmmanager.cpp']
 # cmdgw.cpp now in there for SOCKTUNNEL
@@ -85,7 +85,7 @@ if sys.platform == "win32":
     if not DEBUG:
     	env.Append(LINKFLAGS="/SUBSYSTEM:WINDOWS")
     
-    APPSOURCE=['swift.cpp','httpgw.cpp','statsgw.cpp','getopt.c','getopt_long.c']
+    APPSOURCE=['swift.cpp','statsgw.cpp','getopt.c','getopt_long.c']
     
 else:
     libevent2path = '/arno/pkgs/libevent-2.0.15-arno-http'
@@ -115,12 +115,15 @@ else:
         print "To use external libs, set LIBPATH environment variable to list of colon-separated lib dirs"
     libpath += libevent2path+'/lib:'
 
+
     linkflags = '-Wl,-rpath,'+libevent2path+'/lib'
     env.Append(LINKFLAGS=linkflags);
 
 
-    APPSOURCE=['swift.cpp','httpgw.cpp','statsgw.cpp']
+    APPSOURCE=['swift.cpp','statsgw.cpp']
 
+env.Append(LIBPATH=libpath);
+    
 if DEBUG:
     env.Append(CXXFLAGS="-DDEBUG")
 

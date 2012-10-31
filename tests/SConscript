@@ -12,13 +12,31 @@ if DEBUG and sys.platform == "win32":
 else:
 	libs = ['libswift','gtest'] + libs  # order is important, crypto needs to be last
 
-cpppath = env["CPPPATH"]
 if sys.platform == "win32":
-	cpppath += '..;'
+    cpppath = env["CPPPATH"].split(';')
+    libpath = env["LIBPATH"].split(';')
 else:
-	cpppath += '..:'
-env.Append(CPPPATH=cpppath)
+    cpppath = env["CPPPATH"].split(':')
+    libpath = env["LIBPATH"].split(':')
 
+cpppath.append('..')
+libpath.append('..')
+
+libpath.append("../build/gtest-1.6.0")
+
+cpppath.append("../build/gtest-1.6.0")
+cpppath.append("../build/gtest-1.6.0/include")
+
+env.Append(CPPPATH=cpppath)
+env.Append(LIBPATH=libpath)
+
+env.StaticLibrary(
+    target="gtest",
+    source=["../build/gtest-1.6.0/src/gtest-all.cc"],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath)
+    
 env.Program( 
     target='binstest2',
     source=['binstest2.cpp'],
@@ -99,10 +117,11 @@ env.Program(
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )
-
+'''
 env.Program( 
     target='storagetest',
     source=['storagetest.cpp'],
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )
+'''

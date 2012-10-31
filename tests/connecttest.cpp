@@ -42,12 +42,12 @@ TEST(Connection,CwndTest) {
     ASSERT_TRUE(sock1>=0);
 
     int file = swift::Open("test_file0.dat");
-    FileTransfer* fileobj = FileTransfer::file(file);
+    FileTransfer fileobj = FileTransfer(file, "test_file0.dat");
     //FileTransfer::instance++;
 
     swift::SetTracker(Address("127.0.0.1",7001));
 
-    copy = swift::Open("test_file0-copy.dat",fileobj->root_hash());
+    copy = swift::Open("test_file0-copy.dat",fileobj.swarm_id());
 
     evtimer_assign(&evcompl, Channel::evbase, IsCompleteCallback, NULL);
     evtimer_add(&evcompl, tint2tv(TINT_SEC));
@@ -63,7 +63,7 @@ TEST(Connection,CwndTest) {
     swift::Close(file);
     swift::Close(copy);
 
-    swift::Shutdown(sock1);
+    swift::Shutdown();
 
 }
 
