@@ -202,10 +202,6 @@ public:
     	    //LIVESOURCE=ANDROID TEST
     	    hookin_bin_ = peer_pos_map_[source_channel_id_];
 	    current_bin_ = hookin_bin_;
-
-    	    //hookin_bin_ = bin_t(0,0);
-	    //current_bin_ = bin_t(0,0);
-
 	    hooking_in_ = false;
 
 	    fprintf(stderr,"live: pp: EndAddPeerPos: hookin on source, pos %s\n", hookin_bin_.str(binstr));
@@ -222,8 +218,8 @@ public:
     	    	current_pos_ = hookin_pos_;
     	    	fprintf(stderr,"live: pp: EndAddPeerPos: cand pos %s\n", hookin_pos_.str(binstr));
     	    }
-    		fprintf(stderr,"live: pp: EndAddPeerPos: hookin on peers, pos %s\n", hookin_pos_.str(binstr));
-    		hooking_in_ = false;*/
+	    fprintf(stderr,"live: pp: EndAddPeerPos: hookin on peers, pos %s\n", hookin_pos_.str(binstr));
+	    hooking_in_ = false;*/
     	}
     }
 
