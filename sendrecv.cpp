@@ -516,6 +516,10 @@ void    Channel::Recv (struct evbuffer *evb) {
 
     if (last_send_time_ && rtt_avg_==TINT_SEC && dev_avg_==0) {
         rtt_avg_ = NOW - last_send_time_;
+
+        // ARNO: DEMO
+        rtt_avg_ = 10*TINT_MSEC; // hardcoded 10 ms
+
         dev_avg_ = rtt_avg_;
         dip_avg_ = rtt_avg_;
         dprintf("%s #%u sendctrl rtt init %lld\n",tintstr(),id_,rtt_avg_);
@@ -660,13 +664,6 @@ void    Channel::CleanHintOut (bin_t pos) {
     tintbin timepos = hint_out_.front();
     hint_out_.pop_front();
     hint_out_size_--;
-
-    if (transfer()->ttype() == LIVE_TRANSFER && send_control_== KEEP_ALIVE_CONTROL)
-    {
-	tint difft = NOW-timepos.time;
-	dprintf("%s #%u newrtt %lld rttavg %lld\n",tintstr(),id_,difft,rtt_avg_);
-	rtt_avg_ = (rtt_avg_ + difft)/2;
-    }
 }
 
 
