@@ -9,67 +9,83 @@ extern "C" {
 #endif
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
- * Method:    start
- * Signature: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+ * Method:    Init
+ * Signature: (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_start
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Init
+  (JNIEnv *, jobject, jstring, jstring);
+
+/*
+ * Class:     com_tudelft_triblerdroid_swift_NativeLib
+ * Method:    Mainloop
+ * Signature: ()V
+ */
+JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Mainloop
+  (JNIEnv *, jobject);
+
+/*
+ * Class:     com_tudelft_triblerdroid_swift_NativeLib
+ * Method:    Shutdown
+ * Signature: ()V
+ */
+JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Shutdown
+  (JNIEnv *, jobject);
+
+/*
+ * Class:     com_tudelft_triblerdroid_swift_NativeLib
+ * Method:    asyncGetResult
+ * Signature: (I)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetResult
+  (JNIEnv *, jobject, jint);
+
+/*
+ * Class:     com_tudelft_triblerdroid_swift_NativeLib
+ * Method:    asyncOpen
+ * Signature: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I
+ */
+JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncOpen
   (JNIEnv *, jobject, jstring, jstring, jstring);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
- * Method:    mainloop
- * Signature: ()I
+ * Method:    SetTracker
+ * Signature: (Ljava/lang/String;)V
  */
-JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_mainloop
-  (JNIEnv *, jobject);
-
-/*
- * Class:     com_tudelft_triblerdroid_swift_NativeLib
- * Method:    stop
- * Signature: ()Ljava/lang/String;
- */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_stop
-  (JNIEnv *, jobject);
-
-/*
- * Class:     com_tudelft_triblerdroid_swift_NativeLib
- * Method:    httpprogress
- * Signature: (Ljava/lang/String;)Ljava/lang/String;
- */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_httpprogress
+JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_SetTracker
   (JNIEnv *, jobject, jstring);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
- * Method:    hello
- * Signature: ()Ljava/lang/String;
+ * Method:    asyncGetHTTPProgress
+ * Signature: (Ljava/lang/String;)I
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_hello
-  (JNIEnv *, jobject);
+JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetHTTPProgress
+  (JNIEnv *, jobject, jstring);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
- * Method:    stats
- * Signature: ()Ljava/lang/String;
+ * Method:    asyncGetStats
+ * Signature: (Ljava/lang/String;)I
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_stats
-  (JNIEnv *, jobject);
+JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetStats
+  (JNIEnv *, jobject, jstring);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
- * Method:    livecreate
- * Signature: ()Ljava/lang/String;
+ * Method:    LiveCreate
+ * Signature: (Ljava/lang/String;)Ljava/lang/String;
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_livecreate
-  (JNIEnv *, jobject);
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_LiveCreate
+  (JNIEnv *, jobject, jstring);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
- * Method:    liveadd
- * Signature: ([BII)Ljava/lang/String;
+ * Method:    LiveAdd
+ * Signature: (Ljava/lang/String;[BII)Ljava/lang/String;
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_liveadd
-  (JNIEnv *, jobject, jbyteArray, jint, jint);
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_LiveAdd
+  (JNIEnv *, jobject, jstring, jbyteArray, jint, jint);
 
 #ifdef __cplusplus
 }

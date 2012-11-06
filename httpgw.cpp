@@ -1033,7 +1033,10 @@ bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint32_t ch
     }
 
     httpgw_chunk_size = chunk_size;
-    httpgw_maxspeed = maxspeed;
+    // Arno, 2012-11-1: Make copy.
+    httpgw_maxspeed = new double[2];
+    for (int d=0; d<2; d++)
+	httpgw_maxspeed[d] = maxspeed[d];
     httpgw_bindaddr = bindaddr;
     return true;
 }
@@ -1045,12 +1048,12 @@ bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint32_t ch
  * which uses it to update the progress bar. Currently x is not the number of
  * bytes downloaded, but the number of bytes written to the HTTP connection.
  */
-std::string HTTPGetProgressString(Sha1Hash root_hash)
+std::string HttpGwGetProgressString(Sha1Hash swarmid)
 {
     std::stringstream rets;
     //rets << "httpgw: ";
 
-    int td = swift::Find(root_hash);
+    int td = swift::Find(swarmid);
     if (td==-1)
 	rets << "0/0";
     else
@@ -1070,24 +1073,27 @@ std::string HTTPGetProgressString(Sha1Hash root_hash)
     return rets.str();
 }
 
+// ANDROID
 // Arno: dummy place holder
-std::string StatsGetSpeedCallback()
+std::string HttpGwStatsGetSpeedCallback(Sha1Hash swarmid)
 {
-    int dspeed = 2, uspeed = 0;
+    int dspeed = 0, uspeed = 0;
     uint32_t nleech=0,nseed=0;
     int statsgw_last_down=0, statsgw_last_up=0;
 
-    if (http_gw_reqs_open > 0)
+    int td = swift::Find(swarmid);
+    if (td !=-1)
     {
-	int td = http_requests[http_gw_reqs_open-1].td;
 	http_gw_t* req = HttpGwFindRequestByTD(td);
 	if (req != NULL)
 	{
 	    statsgw_last_down = req->offset;
-	    statsgw_last_up = swift::SeqComplete(td);
+	    dspeed = (int)(GetCurrentSpeed(td,DDIR_DOWNLOAD)/1024.0);
+	    uspeed = (int)(GetCurrentSpeed(td,DDIR_UPLOAD)/1024.0);
 	}
-    }
 
+	statsgw_last_up = swift::SeqComplete(td);
+    }
     std::stringstream ss;
     ss << dspeed;
     ss << "/";

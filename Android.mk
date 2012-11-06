@@ -16,6 +16,8 @@ LOCAL_SRC_FILES := NativeLib.cpp sha1.cpp compat.cpp sendrecv.cpp send_control.c
 
 LOCAL_CFLAGS    += -D__NEW__ 
 
-LOCAL_STATIC_LIBRARIES := libevent2
+LOCAL_STATIC_LIBRARIES := libevent2 
+
+# LOCAL_LDLIBS := -llog
 
 include $(BUILD_SHARED_LIBRARY)

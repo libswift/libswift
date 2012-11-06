@@ -1,316 +1,500 @@
 /*
  *  NativeLib.cpp
- *  Java interface to swift for use in Android
+ *  Java interface to swift for use in Android.
  *
- *  Created by Victor Grishchenko, Arno Bakker
- *  Copyright 2010 Delft University of Technology. All rights reserved.
+ *  Arno: Because the swift:: interface is not thread safe, some calls are
+ *  rescheduled on the thread calling NativeLib.Mainloop() and their results
+ *  are asynchronously retrievable via NativeLib.asyncGetResult().
+ *
+ *  Created by Riccardo Petrocco, Arno Bakker
+ *  Copyright 2010-2014 Delft University of Technology. All rights reserved.
  *
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
 #include "compat.h"
 #include "swift.h"
 // jni header file
 #include "com_tudelft_triblerdroid_swift_NativeLib.h"
 #include <sstream>
-
+#include <map>
 
 using namespace swift;
 
 // httpgw.cpp functions
 bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf );
 bool HTTPIsSending();
-std::string HTTPGetProgressString(Sha1Hash root_hash);
-std::string StatsGetSpeedCallback();
+std::string HttpGwGetProgressString(Sha1Hash swarmid);
+std::string HttpGwStatsGetSpeedCallback(Sha1Hash swarmid);
 
 // Local functions
-void ReportCallback(int fd, short event, void *arg);
-void LiveSourceCameraCallback(char *data, int datalen);
-void LiveSourceAttemptCreate();
+// Libevent* functions are executed by Mainloop thread,
+void LibeventKeepaliveCallback(int fd, short event, void *arg);
+void LibeventOpenCallback(int fd, short event, void *arg);
+void LibeventGetHTTPProgressCallback(int fd, short event, void *arg);
+void LibeventGetStatsCallback(int fd, short event, void *arg);
+void LibeventLiveAddCallback(int fd, short event, void *arg);
 
 // Global variables
-struct event evreport;
-int single_td = -1;
-int attempts = 0;
 bool enginestarted = false;
+uint32_t chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;
+double maxspeed[2] = {DBL_MAX,DBL_MAX};
+struct event evkeepalive;
 
+// for Live
 LiveTransfer *livesource_lt = NULL;
 struct evbuffer *livesource_evb = NULL;
 
 
-/*
- * Class:     com_tudelft_swift_NativeLib
- * Method:    start
- * Signature: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
- *
- * Arno, 2012-01-30: Modified to use HTTP gateway to get streaming playback.
- */
-#define STREAM_MODE		1
+// for async calls
+class AsyncParams
+{
+  public:
+    int      	callid_;
+    Sha1Hash 	swarmid_;
+    Address 	tracker_;
+    std::string filename_;
+    char 	*data_;
+    int		datalen_;
+
+    AsyncParams(Sha1Hash &swarmid, Address &tracker, std::string filename) :
+	callid_(-1), swarmid_(swarmid), tracker_(tracker), filename_(filename),
+	data_(NULL), datalen_(-1)
+    {
+    }
+
+    AsyncParams(Sha1Hash &swarmid) :
+	callid_(-1), swarmid_(swarmid), tracker_(""), filename_(""),
+	data_(NULL), datalen_(-1)
+    {
+    }
+
+    AsyncParams(char *data, int datalen) :
+	callid_(-1), swarmid_(Sha1Hash::ZERO), tracker_(""), filename_(""),
+	data_(data), datalen_(datalen)
+    {
+    }
+
+    ~AsyncParams()
+    {
+	if (data_ != NULL)
+	    delete data_;
+    }
+};
 
 
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_start (JNIEnv * env, jobject obj, jstring hash, jstring INtracker, jstring destination) {
+typedef std::map<int,std::string>  intstringmap_t;
 
-    dprintf("NativeLib::start called\n");
+pthread_mutex_t         asyncMutex = PTHREAD_MUTEX_INITIALIZER;
+int 			asyncCallID=481; // protected by mutex
+intstringmap_t		asyncResMap;    // protected by mutex
 
-    uint32_t chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;
-    double maxspeed[2] = {DBL_MAX,DBL_MAX};
 
-    // Ric: added 4 android
+
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Init(JNIEnv * env, jobject obj, jstring jlistenaddr, jstring jhttpgwaddr ) {
+
+    dprintf("NativeLib::Init called\n");
+    if (enginestarted)
+	return env->NewStringUTF("Engine already initialized");
+
+    std::string errorstr = "";
     jboolean blnIsCopy;
 
-    // Arno: Needs to be done currently for every new download
-    const char * tmpCstr = (env)->GetStringUTFChars(INtracker, &blnIsCopy);
-    Address tracker = Address(tmpCstr);
-    if (tracker==Address())
-        return env->NewStringUTF("address must be hostname:port, ip:port or just port");
-    SetTracker(tracker);
+    const char * listenaddrcstr = (env)->GetStringUTFChars(jlistenaddr, &blnIsCopy);
+    Address listenaddr = Address(listenaddrcstr);
 
-    (env)->ReleaseStringUTFChars(INtracker , tmpCstr); // release jstring
+    const char * httpgwaddrcstr = (env)->GetStringUTFChars(jhttpgwaddr, &blnIsCopy);
+    Address httpgwaddr = Address(httpgwaddrcstr);
 
-    if (enginestarted)
-    	return env->NewStringUTF("started");
+
+    // Libevent2 initialization
+    LibraryInit();
+    Channel::evbase = event_base_new();
+
+    std::string s = "/sdcard/swift/debug.txt";
+    //char pidstr[32];
+    //sprintf(pidstr,"%d", getpid() );
+    //s += pidstr;
+
+    // Debug file saved on SD
+    Channel::debug_file = fopen (s.c_str(),"w+");
+
+    dprintf("NativeLib::Init: Log opened\n");
+
+    // Bind to UDP port
+    if (listenaddr != Address())
+    {
+	// seeding
+	if (Listen(listenaddr)<=0)
+	    errorstr = "can't listen";
+    }
     else
     {
-	// Libevent2 initialization
-	// TODO: don't when in DOWNLOADMODE
-	LibraryInit();
-	Channel::evbase = event_base_new();
-
-	std::string s = "/sdcard/swift/debug.txt";
-	//char pidstr[32];
-	//sprintf(pidstr,"%d", getpid() );
-	//s += pidstr;
-
-	// Debug file saved on SD
-	Channel::debug_file = fopen (s.c_str(),"w+");
-
-	// Bind to UDP port
-	Address bindaddr;
-	if (bindaddr!=Address()) { // seeding
-	    if (Listen(bindaddr)<=0)
-		return env->NewStringUTF("cant listen");
-	} else if (tracker!=Address()) { // leeching
-		for (int i=0; i<=10; i++) {
-		    bindaddr = Address((uint32_t)INADDR_ANY,0);
-		    if (Listen(bindaddr)>0)
-			break;
-		    if (i==10)
-			return env->NewStringUTF("cant listen");
-		}
+	// leeching
+	for (int i=0; i<=10; i++) {
+	    listenaddr = Address((uint32_t)INADDR_ANY,0);
+	    if (Listen(listenaddr)>0)
+		break;
+	    if (i==10)
+		errorstr = "can't listen on ANY";
 	}
-
-	if (STREAM_MODE) {
-	    // Playback via HTTP GW: Client should contact 127.0.0.1:8082/roothash-in-hex and
-	    // that will call swift::(Live)Open to start the actual download
-	    Address httpgwaddr("0.0.0.0:8082");
-	    // 32 K steps and no minimal prebuf for Android
-	    bool ret = InstallHTTPGateway(Channel::evbase,httpgwaddr,chunk_size,maxspeed,"/sdcard/swift/", 32*1024, 0);
-	    if (ret == false)
-		return env->NewStringUTF("cannot start HTTP gateway");
-	}
-
-	// Arno: always, for statsgw, rate control, etc.
-	//evtimer_assign(&evreport, Channel::evbase, ReportCallback, NULL);
-	//evtimer_add(&evreport, tint2tv(TINT_SEC));
-
-	enginestarted = true;
     }
 
-    if (!STREAM_MODE)
+    // Arno: always have some timer running. Otherwise in some cases libevent
+    // won't execute any evtimer events added later.
+    evtimer_assign(&evkeepalive, Channel::evbase, LibeventKeepaliveCallback, NULL);
+    evtimer_add(&evkeepalive, tint2tv(TINT_SEC));
+
+    // Start HTTP gateway, if requested
+    if (errorstr == "" && httpgwaddr!=Address())
     {
-    	if (single_td != -1)
-    	    swift::Close(single_td);
+	dprintf("NativeLib::Init: Installing HTTP gateway\n");
 
-	tmpCstr = (env)->GetStringUTFChars(hash, &blnIsCopy);
-	Sha1Hash root_hash = Sha1Hash(true,tmpCstr); // FIXME ambiguity
-	if (root_hash==Sha1Hash::ZERO)
-	    return env->NewStringUTF("SHA1 hash must be 40 hex symbols");
-
-	(env)->ReleaseStringUTFChars(hash , tmpCstr); // release jstring
-
-	char * filename = (char *)(env)->GetStringUTFChars(destination , &blnIsCopy);
-
-        // Download then play
-        if (root_hash!=Sha1Hash::ZERO && !filename)
-            filename = strdup(root_hash.hex().c_str());
-
-        if (filename)
-        {
-            dprintf("Opening %s writing to %s\n", root_hash.hex().c_str(), filename );
-	    single_td = swift::Open(filename,root_hash);
-	    if (single_td < 0)
-        	return env->NewStringUTF("cannot open destination file");
-	    printf("Root hash: %s\n", SwarmID(single_td).hex().c_str());
-        }
-        else
-            dprintf("Not Opening %s, no dest \n", root_hash.hex().c_str() );
+	// Playback via HTTP GW: Client should contact 127.0.0.1:8082/roothash-in-hex and
+	// that will call swift::(Live)Open to start the actual download
+	// 32 K steps and no minimal prebuf for Android
+	bool ret = InstallHTTPGateway(Channel::evbase,httpgwaddr,chunk_size,maxspeed,"/sdcard/swift/", 32*1024, 0);
+	if (ret == false)
+	    errorstr = "cannot start HTTP gateway";
     }
 
-    return env->NewStringUTF("started");
+    (env)->ReleaseStringUTFChars(jlistenaddr, listenaddrcstr); // release jstring
+    (env)->ReleaseStringUTFChars(jhttpgwaddr, httpgwaddrcstr); // release jstring
+
+    enginestarted = true;
+
+    return env->NewStringUTF(errorstr.c_str());
 }
 
 
-/*
- * Class:     com_tudelft_swift_NativeLib
- * Method:    progress
- * Signature: ()I
- */
-JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_mainloop(JNIEnv * env, jobject obj) {
 
+void LibeventKeepaliveCallback(int fd, short event, void *arg)
+{
+    // Called every second to keep libevent timer processing alive?!
+    evtimer_add(&evkeepalive, tint2tv(TINT_SEC));
+}
+
+
+
+JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Mainloop(JNIEnv * env, jobject obj)
+{
     // Enter libevent mainloop
     event_base_dispatch(Channel::evbase);
 
-    // Never reached
-    return 100;
+    // Only reached after Shutdown
 }
 
 
-/*
- * Class:     com_tudelft_swift_NativeLib
- * Method:    stop
- * Signature: ()Ljava/lang/Boolean;
- *
- * Arno, 2012-01-30: Now only called on Application shutdown.
- */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_stop(JNIEnv * env, jobject obj) {
+JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Shutdown(JNIEnv * env, jobject obj) {
 
     if (!enginestarted)
-	return env->NewStringUTF("stopped");
+	return;
 
     // Tell mainloop to exit, will release call to progress()
     event_base_loopexit(Channel::evbase, NULL);
 
     enginestarted = false;
-
-    return env->NewStringUTF("stopped");
 }
 
 
-/*
- * Class:     com_tudelft_swift_NativeLib
- * Method:    httpprogress
- * Signature: ()Ljava/lang/String;
+/**
+ * Allocates a callid for an asynchronous call and schedules it.
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_httpprogress(JNIEnv * env, jobject obj, jstring hash) {
+int AsyncRegisterCallback(event_callback_fn func, AsyncParams *aptr)
+{
+    int prc = pthread_mutex_lock(&asyncMutex);
+    if (prc != 0)
+    {
+	dprintf("NativeLib::AsyncRegisterCallback: mutex_lock failed\n");
+	return -1;
+    }
 
-    std::stringstream rets;
+    aptr->callid_ = asyncCallID;
+    asyncCallID++;
+
+    prc = pthread_mutex_unlock(&asyncMutex);
+    if (prc != 0)
+    {
+	dprintf("NativeLib::AsyncRegisterCallback: mutex_unlock failed\n");
+	return -1;
+    }
+
+    // Call timer
+    struct event *evtimerptr = new struct event;
+    evtimer_assign(evtimerptr,Channel::evbase,func,aptr);
+    evtimer_add(evtimerptr,tint2tv(0));
+
+    return aptr->callid_;
+}
+
+/**
+ * Sets the result of the asynchronous call identified by callid
+ */
+void AsyncSetResult(int callid, std::string result)
+{
+    int prc = pthread_mutex_lock(&asyncMutex);
+    if (prc != 0)
+    {
+	dprintf("NativeLib::AsyncSetResult: mutex_lock failed\n");
+	return;
+    }
+
+    asyncResMap[callid] = result;
+
+    prc = pthread_mutex_unlock(&asyncMutex);
+    if (prc != 0)
+    {
+	dprintf("NativeLib::AsyncSetResult: mutex_unlock failed\n");
+	return;
+    }
+}
+
+
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetResult(JNIEnv *env, jobject obj, jint jcallid)
+{
+    int callid = (int)jcallid;
+
+    std::string result = "";
+    int prc = pthread_mutex_lock(&asyncMutex);
+    if (prc != 0)
+    {
+	dprintf("NativeLib::asyncGetResult: mutex_lock failed\n");
+	return env->NewStringUTF("mutex_lock failed");
+    }
+
+    intstringmap_t::iterator iter;
+    iter = asyncResMap.find(callid);
+    if (iter == asyncResMap.end())
+	result = "n/a";
+    else
+	result = iter->second;
+
+    prc = pthread_mutex_unlock(&asyncMutex);
+    if (prc != 0)
+    {
+	dprintf("NativeLib::asyncGetResult: mutex_unlock failed\n");
+	return env->NewStringUTF("mutex_lock failed");
+    }
+
+    return env->NewStringUTF(result.c_str());
+}
+
+
+
+
+
+JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncOpen( JNIEnv * env, jobject obj, jstring jswarmid, jstring jtracker, jstring jfilename)
+{
+    dprintf("NativeLib::Open called\n");
+
+    if (!enginestarted)
+	return -1; // "Engine not yet initialized"
+
     jboolean blnIsCopy;
 
-    const char * tmpCstr = (env)->GetStringUTFChars(hash, &blnIsCopy);
+    const char *swarmidcstr = (env)->GetStringUTFChars(jswarmid, &blnIsCopy);
+    const char *trackercstr = (env)->GetStringUTFChars(jtracker, &blnIsCopy);
+    const char *filenamecstr = (env)->GetStringUTFChars(jfilename, &blnIsCopy);
 
-    if (single_td != -1)
-    {
-	rets << swift::SeqComplete(single_td);
-	rets << "/";
-	rets << swift::Size(single_td);
+    Sha1Hash swarmid = Sha1Hash(true,swarmidcstr);
+    std::string dest = "";
 
-	(env)->ReleaseStringUTFChars(hash , tmpCstr); // release jstring
-	return env->NewStringUTF( rets.str().c_str() );
-    }
+    // If no filename, use roothash-in-hex as default
+    if (swarmid != Sha1Hash::ZERO && filenamecstr == "")
+	dest = swarmid.hex();
+    else
+	dest = filenamecstr;
+
+    if (dest == "")
+	return -1; // "No destination could be determined"
+
+    Address tracker(trackercstr);
+    AsyncParams *aptr = new AsyncParams(swarmid,tracker,dest);
+
+    // Register callback
+    int callid = AsyncRegisterCallback(&LibeventOpenCallback,aptr);
+
+    (env)->ReleaseStringUTFChars(jswarmid, swarmidcstr); // release jstring
+    (env)->ReleaseStringUTFChars(jtracker, trackercstr); // release jstring
+    (env)->ReleaseStringUTFChars(jfilename, filenamecstr); // release jstring
+
+    return callid;
+}
+
+
+/**
+ * Called by thread that called Mainloop which is the only thread active in
+ * swift, so all swift:: calls are now thread-safe.
+ */
+void LibeventOpenCallback(int fd, short event, void *arg)
+{
+    AsyncParams *aptr = (AsyncParams *) arg;
+
+    std::string errorstr="";
+    dprintf("NativeLib::Open: %s writing to %s\n", aptr->swarmid_.hex().c_str(), aptr->filename_.c_str() );
+    int td = swift::Open(aptr->filename_,aptr->swarmid_,aptr->tracker_);
+    if (td < 0)
+	errorstr = "cannot open destination file";
     else
     {
-	Sha1Hash root_hash = Sha1Hash(true,tmpCstr);
-	std::string ret = HTTPGetProgressString(root_hash);
-
-	(env)->ReleaseStringUTFChars(hash , tmpCstr); // release jstring
-	return env->NewStringUTF(ret.c_str());
-    }
-}
-
-
-
-
-void ReportCallback(int fd, short event, void *arg) {
-    // Called every second to print/calc some stats
-
-    dprintf("report callback\n");
-    if (true)
-    {
-        // ARNOSMPTODO: Restore fail behaviour when used in SwarmPlayer 3000.
-        if (!HTTPIsSending()) {
-            // TODO
-            //event_base_loopexit(Channel::evbase, NULL);
-            return;
-        }
+	errorstr = swift::SwarmID(td).hex();
+	dprintf("NativeLib::Open: swarmid: %s\n", errorstr.c_str());
     }
 
-	evtimer_add(&evreport, tint2tv(TINT_SEC));
+    // Register result
+    AsyncSetResult(aptr->callid_,errorstr);
+
+    delete aptr;
 }
 
 
-/*
- * Class:     com_tudelft_swift_NativeLib
- * Method:    stats
- * Signature: ()Ljava/lang/String;
+
+JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_SetTracker(JNIEnv * env, jobject obj, jstring jtracker)
+{
+    if (!enginestarted)
+	return; // "Engine not yet initialized";
+
+    std::string errorstr = "";
+    jboolean blnIsCopy;
+
+    const char * trackercstr = (env)->GetStringUTFChars(jtracker, &blnIsCopy);
+    Address tracker = Address(trackercstr);
+    if (tracker==Address())
+        dprintf("NativeLib::SetTracker: Tracker address must be hostname:port, ip:port or just port\n");
+    else
+	SetTracker(tracker);
+
+    (env)->ReleaseStringUTFChars(jtracker , trackercstr); // release jstring
+}
+
+
+
+JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetHTTPProgress(JNIEnv * env, jobject obj, jstring jswarmid)
+{
+    if (!enginestarted)
+	return -1;  // "Engine not yet initialized"
+
+    jboolean blnIsCopy;
+
+    const char * swarmidcstr = (env)->GetStringUTFChars(jswarmid, &blnIsCopy);
+    Sha1Hash swarmid = Sha1Hash(true,swarmidcstr);
+
+    AsyncParams *aptr = new AsyncParams(swarmid);
+
+    // Register callback
+    int callid = AsyncRegisterCallback(&LibeventGetHTTPProgressCallback,aptr);
+
+    (env)->ReleaseStringUTFChars(jswarmid , swarmidcstr); // release jstring
+
+    return callid;
+}
+
+
+/**
+ * Called by thread that called Mainloop which is the only thread active in
+ * swift, so all swift:: calls are now thread-safe.
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_stats(JNIEnv * env, jobject obj) {
+void LibeventGetHTTPProgressCallback(int fd, short event, void *arg)
+{
+    AsyncParams *aptr = (AsyncParams *) arg;
 
-    std::string ret = StatsGetSpeedCallback();
-    return env->NewStringUTF( ret.c_str() );
+    std::string errorstr = HttpGwGetProgressString(aptr->swarmid_);
+
+    // Register result
+    AsyncSetResult(aptr->callid_,errorstr);
+
+    delete aptr;
 }
 
 
 
-/*
- * Class:     com_tudelft_swift_NativeLib
- * Method:    hello
- * Signature: ()Ljava/lang/String;
+JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetStats(JNIEnv * env, jobject obj, jstring jswarmid)
+{
+    if (!enginestarted)
+	return -1;  // "Engine not yet initialized"
+
+    jboolean blnIsCopy;
+
+    const char * swarmidcstr = (env)->GetStringUTFChars(jswarmid, &blnIsCopy);
+    Sha1Hash swarmid = Sha1Hash(true,swarmidcstr);
+
+    AsyncParams *aptr = new AsyncParams(swarmid);
+
+    // Register callback
+    int callid = AsyncRegisterCallback(&LibeventGetStatsCallback,aptr);
+
+    (env)->ReleaseStringUTFChars(jswarmid , swarmidcstr); // release jstring
+
+    return callid;
+}
+
+
+
+/**
+ * Called by thread that called Mainloop which is the only thread active in
+ * swift, so all swift:: calls are now thread-safe.
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_hello(JNIEnv * env, jobject obj) {
+void LibeventGetStatsCallback(int fd, short event, void *arg)
+{
+    AsyncParams *aptr = (AsyncParams *) arg;
 
-    return env->NewStringUTF("Hallo from Swift.. Library is working :-)");
+    std::string errorstr = HttpGwStatsGetSpeedCallback(aptr->swarmid_);
+
+    // Register result
+    AsyncSetResult(aptr->callid_,errorstr);
+
+    delete aptr;
 }
+
 
 
 /*
  * Create live swarm
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_livecreate(JNIEnv *env, jobject obj)
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_LiveCreate(JNIEnv *env, jobject obj, jstring jswarmid)
 {
     if (!enginestarted)
-    {
-	// Libevent2 initialization
-	LibraryInit();
-	Channel::evbase = event_base_new();
+	return env->NewStringUTF("Engine not yet initialized");
 
-	std::string s = "/sdcard/swift/debug.txt";
-	//char pidstr[32];
-	//sprintf(pidstr,"%d", getpid() );
-	//s += pidstr;
+    // Clean old live swarm
+    if (livesource_lt != NULL)
+	delete livesource_lt;
 
-	// Debug file saved on SD
-	Channel::debug_file = fopen (s.c_str(),"w+");
+    if (livesource_evb != NULL)
+	evbuffer_free(livesource_evb);
 
-	// Bind to UDP port
-	Address bindaddr("0.0.0.0:6778");
-	int sock = swift::Listen(bindaddr);
-	if (sock<=0)
-	    return env->NewStringUTF("live cant listen");
+    // Buffer for H.264 NALUs from cam, with startcode 00000001 added
+    livesource_evb = evbuffer_new();
 
-	// Buffer for H.264 NALUs from cam, with startcode 00000001 added
-	livesource_evb = evbuffer_new();
+    // Create live source TODO: use jswarmid parameter
+    jboolean blnIsCopy;
 
-	// Create live source
-        std::string swarmidstr = "ArnosFirstSwarm";
-        Sha1Hash swarmid = Sha1Hash(swarmidstr.c_str(), swarmidstr.length());
+    const char * swarmidcstr = (env)->GetStringUTFChars(jswarmid, &blnIsCopy);
+    // std::string swarmidstr = "ArnosFirstSwarm";
+    Sha1Hash swarmid = Sha1Hash(true,swarmidcstr);
 
-        // Start swarm
-	std::string filename = "/sdcard/swift/storage.dat";
-        livesource_lt = swift::LiveCreate(filename,swarmid);
+    // Start swarm
+    std::string filename = "/sdcard/swift/storage.dat";
+    livesource_lt = swift::LiveCreate(filename,swarmid);
 
-	enginestarted = true;
-    }
+    (env)->ReleaseStringUTFChars(jswarmid , swarmidcstr); // release jstring
 
-    return env->NewStringUTF("livecreate end");
+    return env->NewStringUTF("");
 }
 
 
 /*
  * Add data to live swarm, to be turned into chunks when >=chunk_size has been
- * added.
+ * added. Thread-safe because swift::LiveWrite uses an evtimer
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_liveadd(JNIEnv *env, jobject obj, jbyteArray dataArray, jint dataOffset, jint dataLength )
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_LiveAdd(JNIEnv *env, jobject obj, jstring jswarmid, jbyteArray dataArray, jint dataOffset, jint dataLength )
 {
+    if (!enginestarted)
+	return env->NewStringUTF("Engine not yet initialized");
+
+    if (livesource_lt == NULL)
+	return env->NewStringUTF("Live swarm not created");
 
     // http://stackoverflow.com/questions/8439233/how-to-convert-jbytearray-to-native-char-in-jni
     jboolean isCopy;
@@ -320,39 +504,39 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_liveadd(
 
     char *data = (char *)b;
     int datalen = (int)dataLength;
-    dprintf("live: cam: Got %p bytes %d from java\n", data, datalen );
+    dprintf("NativeLib::LiveAdd: Got %p bytes %d from java\n", data, datalen );
 
     if (data != NULL && datalen > 0)
-    	LiveSourceCameraCallback(data,datalen);
+    {
+	// Must copy data, as the actual swift::LiveWrite call will be done on Mainloop thread
+	// Data deallocated via AsyncParams deconstructor.
+	char *copydata = new char[datalen];
+	memcpy(data,copydata,datalen);
+
+	AsyncParams *aptr = new AsyncParams(copydata,datalen);
+
+	// Register callback
+	(void)AsyncRegisterCallback(&LibeventLiveAddCallback,aptr);
+    }
 
     env->ReleaseByteArrayElements(dataArray, b, JNI_ABORT);
 
-    return env->NewStringUTF("liveadd end");
+    return env->NewStringUTF("");
 }
 
 /*
  * Add live data to libevent evbuffer, to be turned into chunks when >=chunk_size
  * has been added.
  */
-
-void LiveSourceCameraCallback(char *data, int datalen)
+void LibeventLiveAddCallback(int fd, short event, void *arg)
 {
-    fprintf(stderr,"live: cam: read %d bytes\n", datalen );
+    AsyncParams *aptr = (AsyncParams *) arg;
 
     // Create chunks of chunk_size()
-    int ret = evbuffer_add(livesource_evb,data,datalen);
+    int ret = evbuffer_add(livesource_evb,aptr->data_,aptr->datalen_);
     if (ret < 0)
         print_error("live: cam: error evbuffer_add");
 
-    LiveSourceAttemptCreate();
-}
-
-
-/*
- * See if there is enough data to create a live chunk
- */
-void LiveSourceAttemptCreate()
-{
     if (evbuffer_get_length(livesource_evb) > livesource_lt->chunk_size())
     {
 	// Sufficient data to create a chunk, perhaps even multiple
@@ -367,6 +551,8 @@ void LiveSourceAttemptCreate()
         if (ret < 0)
             print_error("live: create: error evbuffer_drain");
     }
+
+    delete aptr;
 }
 
 
