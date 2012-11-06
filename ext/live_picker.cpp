@@ -18,29 +18,34 @@
 using namespace swift;
 
 
-#define LIVE_PP_NUMBER_PREBUF_CHUNKS	10 // chunks
+#define FALLBACK_LIVE_PP_NUMBER_PREBUF_CHUNKS	10 // chunks
+
+// Set this to a few seconds worth of data to get a decent prebuffer. Should
+// work when content is MPEG-TS. With LIVESOURCE=ANDROID and H.264 prebuffering
+// does *not* work, as video player (VLC) will play super-realtime and catch up
+// with source. Probably due to lack of timing codes in raw H.264?!
+//
+#define LIVE_PP_NUMBER_PREBUF_CHUNKS		10 // chunks
 
 
+// Map to store the highest chunk each peer has, used for hooking in.
 typedef std::map<uint32_t, bin_t> PeerPosMapType;
 
 
-/** Picks pieces nearly sequentialy; some local randomization (twisting)
-    is introduced to prevent synchronization among multiple channels. */
+/** Picks pieces nearly sequentially after hook-in point */
 class SimpleLivePiecePicker : public LivePiecePicker {
 
-    binmap_t        ack_hint_out_;
-    tbqueue         hint_out_;
-    LiveTransfer*   transfer_;
-    uint64_t        twist_;
+    binmap_t        ack_hint_out_;	// Legacy, not sure why copy used.
+    tbqueue         hint_out_;		// Chunks picked
+    LiveTransfer*   transfer_;		// Pointer to container
+    uint64_t        twist_;		// Unused
 
-    bool	    hooking_in_;
-    PeerPosMapType  peer_pos_map_;
-    bool	    source_seen_;
-    uint32_t	    source_channel_id_;
-    bin_t	    hookin_bin_;
-    bin_t           current_bin_;
-
-
+    bool	    hooking_in_;	// Finding hook-in point y/n?
+    PeerPosMapType  peer_pos_map_;	// Highest HAVEs for each peer
+    bool	    source_seen_;	// Whether connected to source
+    uint32_t	    source_channel_id_;	// Channel ID of the source
+    bin_t	    hookin_bin_;	// Chosen hook-in point when hooking_in_ = false
+    bin_t           current_bin_;	// Current pos, not yet received
 
 
 public:
@@ -168,11 +173,8 @@ public:
 
     	    fprintf(stderr,"live: pp: StartAddPeerPos: peerbasepos %s\n", peerbasepos.str(binstr));
     	    bin_t cand;
-#ifdef _WIN32
-    	    cand = bin_t(0,max(0,peerbasepos.layer_offset()-LIVE_PP_NUMBER_PREBUF_CHUNKS));
-#else
-    	    cand = bin_t(0,std::max((bin_t::uint_t)0,peerbasepos.layer_offset()-LIVE_PP_NUMBER_PREBUF_CHUNKS));
-#endif
+    	    cand = bin_t(0,peerbasepos.layer_offset());
+
     	    PeerPosMapType::iterator iter = peer_pos_map_.find(channelid);
     	    if (iter ==  peer_pos_map_.end())
     	    {
@@ -199,12 +201,39 @@ public:
 
     	if (source_seen_) {
 
-    	    //LIVESOURCE=ANDROID TEST
-    	    hookin_bin_ = peer_pos_map_[source_channel_id_];
+    	    bin_t cand = peer_pos_map_[source_channel_id_];
+    	    Channel *c = Channel::channel(source_channel_id_);
+    	    if (c == NULL)
+    	    {
+    		// Source left building, fallback to old prebuf method (just 10
+    		// chunks from source). Perhaps there are still some peers around.
+#ifdef _WIN32
+    		hookin_bin_ = bin_t(0,max(0,cand.layer_offset()-FALLBACK_LIVE_PP_NUMBER_PREBUF_CHUNKS));
+#else
+    		hookin_bin_ = bin_t(0,std::max((bin_t::uint_t)0,cand.layer_offset()-FALLBACK_LIVE_PP_NUMBER_PREBUF_CHUNKS));
+#endif
+    	    }
+    	    else
+    	    {
+    		// More prebuffer, try to find a few seconds before source.
+#ifdef _WIN32
+    		bin_t::uint_t m = max(LIVE_PP_NUMBER_PREBUF_CHUNKS,cand.layer_offset());
+#else
+    		bin_t::uint_t m = std::max((bin_t::uint_t)LIVE_PP_NUMBER_PREBUF_CHUNKS,cand.layer_offset());
+#endif
+    		m -= LIVE_PP_NUMBER_PREBUF_CHUNKS;
+    		bin_t iterbin = bin_t(0,m);
+
+    		// Check what is actually first available chunk
+    		while(!c->ack_in().is_filled(iterbin) && iterbin < cand)
+    		    iterbin.to_right();
+
+    		hookin_bin_ = iterbin;
+    	    }
 	    current_bin_ = hookin_bin_;
 	    hooking_in_ = false;
 
-	    fprintf(stderr,"live: pp: EndAddPeerPos: hookin on source, pos %s\n", hookin_bin_.str(binstr));
+	    fprintf(stderr,"live: pp: EndAddPeerPos: hookin on source, pos %s diff %llu\n", hookin_bin_.str(binstr), cand.base_offset() - hookin_bin_.base_offset() );
     	}
     	else if (peer_pos_map_.size() > 0)
     	{

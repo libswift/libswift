@@ -665,6 +665,7 @@ namespace swift {
             return tmo < 30*TINT_SEC ? tmo : 30*TINT_SEC;
         }
         uint32_t    id () const { return id_; }
+        const binmap_t& ack_in() const { return ack_in_; }
 
         // MORESTATS
         uint64_t    raw_bytes_up() { return raw_bytes_up_; }
