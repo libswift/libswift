@@ -333,7 +333,7 @@ void LibeventOpenCallback(int fd, short event, void *arg)
 
     std::string errorstr="";
     dprintf("NativeLib::Open: %s writing to %s\n", aptr->swarmid_.hex().c_str(), aptr->filename_.c_str() );
-    int td = swift::Open(aptr->filename_,aptr->swarmid_,aptr->tracker_);
+    int td = swift::Open(aptr->filename_,aptr->swarmid_,aptr->tracker_,false);
     if (td < 0)
 	errorstr = "cannot open destination file";
     else
@@ -346,6 +346,28 @@ void LibeventOpenCallback(int fd, short event, void *arg)
     AsyncSetResult(aptr->callid_,errorstr);
 
     delete aptr;
+}
+
+
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_hashCheckOffline(JNIEnv *env, jobject obj, jstring jfilename )
+{
+    dprintf("NativeLib::hashCheckOffline called\n");
+
+    jboolean blnIsCopy;
+
+    const char *filenamecstr = (env)->GetStringUTFChars(jfilename, &blnIsCopy);
+
+    std::string errorstr = "";
+    Sha1Hash swarmid;
+    int ret = swift::HashCheckOffline(filenamecstr,&swarmid);
+    if (ret < 0)
+	errorstr = "Error hash check offline";
+    else
+	errorstr = swarmid.hex();
+
+    (env)->ReleaseStringUTFChars(jfilename, filenamecstr); // release jstring
+
+    return env->NewStringUTF(errorstr.c_str());
 }
 
 

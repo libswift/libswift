@@ -49,7 +49,7 @@ SwarmData::SwarmData( const std::string filename, const Sha1Hash& rootHash, cons
 
 SwarmData::SwarmData( const SwarmData& sd ) :
     id_(-1), rootHash_( sd.rootHash_ ), active_( false ), latestUse_(0), toBeRemoved_(false), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
-    filename_( sd.filename_ ), tracker_( sd.tracker_ ), forceCheckDiskVSHash_( sd.forceCheckDiskVSHash_ ), chunkSize_( sd.chunkSize_ ), zerostate_( sd.zerostate_ ), cached_(false)
+    filename_( sd.filename_ ), tracker_( sd.tracker_ ), forceCheckDiskVSHash_( sd.forceCheckDiskVSHash_ ), checkNetworkVSHash_(sd.checkNetworkVSHash_), chunkSize_( sd.chunkSize_ ), zerostate_( sd.zerostate_ ), cached_(false)
 {
 }
 

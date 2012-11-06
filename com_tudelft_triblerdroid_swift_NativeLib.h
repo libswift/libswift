@@ -49,6 +49,14 @@ JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncOpen
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
+ * Method:    hashCheckOffline
+ * Signature: (Ljava/lang/String;)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_hashCheckOffline
+  (JNIEnv *, jobject, jstring);
+
+/*
+ * Class:     com_tudelft_triblerdroid_swift_NativeLib
  * Method:    SetTracker
  * Signature: (Ljava/lang/String;)V
  */

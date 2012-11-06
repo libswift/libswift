@@ -1091,6 +1091,9 @@ namespace swift {
     ContentTransfer *GetActivatedTransfer(int td);
     /** Record use of this transfer. For internal use only. */
     void Touch(int td);
+    /** Write a checkpoint for filename in .mhash and .mbinmap files without
+     * creating a FileTransfer object */
+    int HashCheckOffline( std::string filename, Sha1Hash *calchashptr, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
     // Arno: helper functions for constructing datagrams */
     int evbuffer_add_string(struct evbuffer *evb, std::string str);

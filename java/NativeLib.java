@@ -53,12 +53,15 @@ public class NativeLib {
    * call this method, just do a HTTP GET /roothash-in-hex on the HTTPGW 
    * address configured via Init(). Append "@-1" to the path for live streams.
    * 
-   * If the swarmid is all 0, the swift engine will hash check the content in
-   * filename. This may take a while, so the asyncGetResult will not yield
-   * a result quickly. Moreover, all network traffic will also be halted during 
-   * this period. Normally this is solved by running a separate swift engine
-   * to calculate the root hash and create a checkpoint, which we cannot easily 
-   * do here. FIXME. 
+   * If content is already on disk (e.g. starting a seed) and the swift engine 
+   * finds a checkpoint for this content (i.e., a filename.mhash and 
+   * filename.mbinmap) it will not hash check. 
+   * 
+   * If the swarmid is all 0 and no checkpoint is found, the swift engine 
+   * will hash check the content in filename. This may take a while, so the 
+   * asyncGetResult will not yield a result quickly. Moreover, all network 
+   * traffic will also be halted during this period. To prevent this situation 
+   * you should call hashCheckOffline(filename) beforehand, see below.
    * 
    * Thread-safe.
    * 
@@ -69,6 +72,18 @@ public class NativeLib {
    * asyncGetResult(callid) will return swarmid (=OK) or error string.
    */
   public native int asyncOpen( String swarmid, String tracker, String filename );
+
+
+  
+  /** 
+   * Write a swift checkpoint for the specified file.
+   * 
+   * Thread-safe.
+   * 
+   * @param filename Location where content is stored.
+   * @return swarmid (=OK) or error string.
+   */
+  public native String hashCheckOffline( String filename );
 
   
   /** 
