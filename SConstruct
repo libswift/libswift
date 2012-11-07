@@ -4,10 +4,10 @@
 # Requirements:
 #  - scons: Cross-platform build system    http://www.scons.org/
 #  - libevent2: Event driven network I/O   http://www.libevent.org/
-#    * Install in \build\libevent-2.0.14-stable
-# For debugging:
+#    * Set install path below
+# For unittests:
 #  - googletest: Google C++ Test Framework http://code.google.com/p/googletest/
-#       * Install in \build\gtest-1.4.0
+#       * Set install path in tests/SConscript
 #
 
 
@@ -31,7 +31,6 @@ env = Environment()
 if sys.platform == "win32":
     #libevent2path = '\\build\\libevent-2.0.19-stable'
     libevent2path = '\\build\\libevent-2.0.20-stable-debug'
-    
 
     # "MSVC works out of the box". Sure.
     # Make sure scons finds cl.exe, etc.
@@ -45,9 +44,6 @@ if sys.platform == "win32":
     include = os.environ['INCLUDE']
     include += libevent2path+'\\include;'
     include += libevent2path+'\\WIN32-Code;'
-    if DEBUG:
-        include += '\\build\\gtest-1.4.0\\include;'
-    
     env.Append ( ENV = { 'INCLUDE' : include } )
     
     if 'CXXPATH' in os.environ:
@@ -69,14 +65,10 @@ if sys.platform == "win32":
      # Set libs to link to
      # Advapi32.lib for CryptGenRandom in evutil_rand.obj
     libs = ['ws2_32','libevent','Advapi32'] 
-    if DEBUG:
-        libs += ['gtestd']
         
     # Update lib search path
     libpath = os.environ['LIBPATH']
     libpath += libevent2path+';'
-    if DEBUG:
-        libpath += '\\build\\gtest-1.4.0\\msvc\\gtest\\Debug;'
 
     # Somehow linker can't find uuid.lib
     libpath += 'C:\\Program Files\\Microsoft SDKs\\Windows\\v6.0A\\Lib;'
@@ -143,7 +135,6 @@ env.Program(
    
 Export("env")
 Export("libs")
-Export("libpath")
 Export("DEBUG")
 # Arno: uncomment to build tests
 #SConscript('tests/SConscript')

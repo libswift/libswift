@@ -1,11 +1,18 @@
+# Written by Victor Grishchenko, Arno Bakker, Elric Milon 
+# see LICENSE.txt for license information
+
 import sys
 import os
 
 Import("DEBUG")
 Import("env")
 Import("libs")
-Import("libpath")
 
+
+if sys.platform == "win32":
+	gtestpath = "\\build\\gtest-1.6.0"
+else:
+	gtestpath = "../build/gtest-1.6.0"
 
 if DEBUG and sys.platform == "win32":
 	libs = ['libswift','gtestd'] + libs  # order is important, crypto needs to be last
@@ -13,22 +20,26 @@ else:
 	libs = ['libswift','gtest'] + libs  # order is important, crypto needs to be last
 
 cpppath = env["CPPPATH"].split(os.pathsep)
-libpath = env["LIBPATH"].split(os.pathsep)
-
 cpppath.append('..')
-libpath.append('..')
+cpppath.append(gtestpath)
+cpppath.append(os.path.join(gtestpath,"include"))
 
+libpath = env["LIBPATH"].split(os.pathsep)
+libpath.append('..')
 libpath.append(".")
 
-cpppath.append(os.sep.join("../build/gtest-1.6.0".split('/')))
-cpppath.append(os.sep.join("../build/gtest-1.6.0/include".split('/')))
+if sys.platform == "win32":
+	libpath.append( gtestpath+'\\msvc\\gtest\\Debug' )
+else:
+	libpath.append( gtestpath+'/lib' )
+
 
 env.Append(CPPPATH=cpppath)
 env.Append(LIBPATH=libpath)
 
 env.StaticLibrary(
     target="gtest",
-    source=[os.sep.join("../build/gtest-1.6.0/src/gtest-all.cc".split('/'))],
+    source=[os.path.join(gtestpath,"src","gtest-all.cc")],
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath)
