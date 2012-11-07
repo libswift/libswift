@@ -387,6 +387,7 @@ void HttpGwSwiftPrebufferProgressCallback (int td, bin_t bin) {
     else
         stepbytes = HTTPGW_LIVE_PROGRESS_STEP_BYTES;
     int progresslayer = bytes2layer(stepbytes,swift::ChunkSize(td));
+
     swift::AddProgressCallback(td,&HttpGwSwiftPlayingProgressCallback,progresslayer);
 
     //

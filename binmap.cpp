@@ -8,6 +8,7 @@
 
 
 #include "binmap.h"
+#include "bin_utils.h"
 
 using namespace swift;
 
@@ -762,53 +763,77 @@ bin_t binmap_t::find_filled() const
 
 /**
  * Arno: Find first empty bin right of start (start inclusive)
- * assumes startbin is base bin
- * BUG: assumes all before startbin is filled
+ * assumes start_bin is base bin
+ *
+ * BUG: Current binmap_t constructor creates a tree with a minimum height of
+ * 6. If the user assumes binmap_t dynamically determines the height of the
+ * three and it is smaller than 6, this method may return values out of the
+ * user's expected range. At this point I don't want to touch the minimum height
+ * to avoid breaking something.
  */
-bin_t binmap_t::find_empty(bin_t start) const
+bin_t binmap_t::find_empty(bin_t start_bin) const
 {
-	bin_t cur_bin = start;
+    if (is_empty(start_bin))
+	return start_bin;
 
-	if (is_empty(cur_bin))
-		return cur_bin;
-	do
+    // Arno, 2012-11-07:
+    // The code below mistakenly assumes the left part of the tree is filled.
+    // A simple solution is to just create a copy of the binmap that indeed
+    // has that property :-(
+
+    // Create copy and fill till start_bin
+    binmap_t hackmap;
+    binmap_t::copy(hackmap,*this);
+    uint64_t sizec = start_bin.base_right().layer_offset(); // do not set start_bin itself
+
+    bin_t peaks[64];
+    int peak_count = gen_peaks(sizec,peaks);
+    for (int i=0; i<peak_count; i++)
+	hackmap.set(peaks[i]);
+
+    // Original code to look for hole starting with start_bin
+    bin_t cur_bin = start_bin;
+    do
+    {
+	// Move up till we find ancestor that is not filled.
+	cur_bin = cur_bin.parent();
+	if (!hackmap.is_filled(cur_bin))
 	{
-		// Move up till we find ancestor that is not filled.
-		cur_bin = cur_bin.parent();
-		if (!is_filled(cur_bin))
-		{
-			// Ancestor is not filled
-			break;
-		}
-		if (cur_bin == root_bin_)
-		{
-			// Hit top, full tree, sort of. For some reason root_bin_ not
-			// set to real top (but to ALL), so we may actually return a
-			// bin that is outside the size of the content here.
-			return bin_t::NONE;
-		}
+	    // Ancestor is not filled
+	    break;
 	}
-	while (true);
-
-	// Move down
-	do
+	if (cur_bin == hackmap.root_bin_)
 	{
-		if (!is_filled(cur_bin.left()))
-		{
-			cur_bin.to_left();
-		}
-		else if (!is_filled(cur_bin.right()))
-		{
-			cur_bin.to_right();
-		}
-		if (cur_bin.is_base())
-		{
-			// Found empty bin
-			return cur_bin;
-		}
-	} while(!cur_bin.is_base()); // safety catch
+	    // Hit top, full tree, sort of. For some reason root_bin_ not
+	    // set to real top (but to ALL), so we may actually return a
+	    // bin that is outside the size of the content here.
+	    //
+	    // MAY NOT work for trees with height < 6 as that is the default
+	    // minimum height.
+	    return bin_t::NONE;
+	}
+    }
+    while (true);
 
-	return bin_t::NONE;
+    // Move down
+    do
+    {
+	if (!hackmap.is_filled(cur_bin.left()))
+	{
+		cur_bin.to_left();
+	}
+	else if (!hackmap.is_filled(cur_bin.right()))
+	{
+		cur_bin.to_right();
+	}
+	if (cur_bin.is_base())
+	{
+		// Found empty bin
+		return cur_bin;
+	}
+    } while(!cur_bin.is_base()); // safety catch
+
+    return bin_t::NONE;
 }
 
 
