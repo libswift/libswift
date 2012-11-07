@@ -7,7 +7,7 @@ import os
 Import("DEBUG")
 Import("env")
 Import("libs")
-
+Import("linkflags")
 
 if sys.platform == "win32":
 	gtestpath = "\\build\\gtest-1.6.0"
@@ -27,6 +27,12 @@ cpppath.append(os.path.join(gtestpath,"include"))
 libpath = env["LIBPATH"].split(os.pathsep)
 libpath.append('..')
 libpath.append(".")
+
+if DEBUG and sys.platform == "linux2":
+    #Enable profiling
+    env.Append(CXXFLAGS="-fprofile-arcs -ftest-coverage")
+    linkflags += "-lgcov -fprofile-arcs"
+    env.Append(LINKFLAGS=linkflags);
 
 if sys.platform == "win32":
 	libpath.append( gtestpath+'\\msvc\\gtest\\Debug' )

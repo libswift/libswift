@@ -135,6 +135,7 @@ env.Program(
    
 Export("env")
 Export("libs")
+Export("linkflags")
 Export("DEBUG")
 # Arno: uncomment to build tests
 #SConscript('tests/SConscript')
