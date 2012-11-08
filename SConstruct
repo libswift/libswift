@@ -118,6 +118,13 @@ env.Append(LIBPATH=libpath);
     
 if DEBUG:
     env.Append(CXXFLAGS="-DDEBUG")
+   
+Export("env")
+Export("libs")
+Export("linkflags")
+Export("DEBUG")
+# Arno: uncomment to build tests
+#SConscript('tests/SConscript')
 
 env.StaticLibrary (
     target='libswift',
@@ -131,11 +138,3 @@ env.Program(
    #CPPPATH=cpppath,
    LIBS=[libs,'libswift'],
    LIBPATH=libpath+':.')
-
-   
-Export("env")
-Export("libs")
-Export("linkflags")
-Export("DEBUG")
-# Arno: uncomment to build tests
-#SConscript('tests/SConscript')
