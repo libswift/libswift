@@ -60,7 +60,7 @@ void ContentTransfer::CloseChannels(channels_t delset)
     for (iter=delset.begin(); iter!=delset.end(); iter++)
     {
         Channel *c = *iter;
-        c->Close();
+        c->Close(CLOSE_SEND_IF_ESTABLISHED);
         delete c;
         // ~Channel removes it from Channel::channels and mychannels_.erase(c);
     }

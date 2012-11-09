@@ -12,6 +12,7 @@
 #include <cassert>
 #include "compat.h"
 #include "swift.h"
+#include "bin_utils.h"
 
 using namespace std;
 using namespace swift;
@@ -44,7 +45,7 @@ tint Channel::MIN_PEX_REQUEST_INTERVAL = TINT_SEC;
 Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool peerissource) :
     // Arno, 2011-10-03: Reordered to avoid g++ Wall warning
     peer_(peer_addr), socket_(socket==INVALID_SOCKET?default_socket():socket), // FIXME
-    transfer_(transfer), peer_channel_id_(0), own_id_mentioned_(false),
+    transfer_(transfer), own_id_mentioned_(false),
     data_in_(TINT_NEVER,bin_t::NONE), data_in_dbl_(bin_t::NONE),
     data_out_cap_(bin_t::ALL),hint_out_size_(0),
     // Gertjan fix 996e21e8abfc7d88db3f3f8158f2a2c4fc8a8d3f
@@ -483,10 +484,10 @@ int swift::evbuffer_add_hash(struct evbuffer *evb, const Sha1Hash& hash)  {
 }
 
 // PPSP
-int swift::evbuffer_add_chunkaddr(struct evbuffer *evb, bin_t &b, popt_chunk_addr_t chunk_addr);
+int swift::evbuffer_add_chunkaddr(struct evbuffer *evb, bin_t &b, popt_chunk_addr_t chunk_addr)
 {
     int ret = -1;
-    if (chunk_addr_ == POPT_CHUNK_ADDR_BIN32)
+    if (chunk_addr == POPT_CHUNK_ADDR_BIN32)
 	ret = evbuffer_add_32be(evb, bin_toUInt32(b));
     else if (chunk_addr == POPT_CHUNK_ADDR_CHUNK32)
     {
@@ -532,7 +533,7 @@ uint64_t swift::evbuffer_remove_64be(struct evbuffer *evb) {
 Sha1Hash swift::evbuffer_remove_hash(struct evbuffer* evb)  {
     char bits[Sha1Hash::SIZE];
     if (evbuffer_remove(evb, bits, Sha1Hash::SIZE) < Sha1Hash::SIZE)
-    return Sha1Hash::ZERO;
+	return Sha1Hash::ZERO;
     return Sha1Hash(false, bits);
 }
 
@@ -549,8 +550,8 @@ binvector swift::evbuffer_remove_chunkaddr(struct evbuffer *evb, popt_chunk_addr
     {
 	uint32_t schunk = evbuffer_remove_32be(evb);
 	uint32_t echunk = evbuffer_remove_32be(evb);
-	if (schunk <= eschunk) // Bad input protection
-	    swift::chunk32_to_bin32(schunk,eschunk,&bv);
+	if (schunk <= echunk) // Bad input protection
+	    swift::chunk32_to_bin32(schunk,echunk,&bv);
     }
     return bv;
 }

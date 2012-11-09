@@ -90,7 +90,7 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 		    {
 			//fprintf(stderr,"%s F%u zero clean %s opentime %lld ulspeed %lf\n",tintstr(),ft->fd(), c->peer().str(), (NOW-c->GetOpenTime())/TINT_SEC, ft->GetCurrentSpeed(DDIR_UPLOAD) );
 			fprintf(stderr,"%s F%u zero clean %s close slow channel\n",tintstr(),td, c->peer().str() );
-			c->Close();
+			c->Close(CLOSE_SEND_IF_ESTABLISHED);
 			delete c;
 		    }
 		}
@@ -141,7 +141,7 @@ void ZeroState::SetConnectTimeout(tint timeout)
     connect_timeout_ = timeout;
 }
 
-int ZeroState::Find(Sha1Hash &root_hash)
+int ZeroState::Find(const Sha1Hash &root_hash)
 {
     //fprintf(stderr,"swift: zero: Got request for %s\n",root_hash.hex().c_str() );
 

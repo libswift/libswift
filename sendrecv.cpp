@@ -151,6 +151,7 @@ void    Channel::AddHandshake (struct evbuffer *evb)
     int encoded = -1;
     if (hs_out_->version_ == VER_SWIFT_LEGACY)
     {
+	dprintf("%s #%u +hs swift legacy\n",tintstr(),id_ );
 	if (hs_in_ == NULL) { // initiating
 	    evbuffer_add_8(evb, SWIFT_INTEGRITY);
 	    evbuffer_add_32be(evb, bin_toUInt32(bin_t::ALL));
@@ -171,6 +172,7 @@ void    Channel::AddHandshake (struct evbuffer *evb)
     }
     else // IETF PPSP compliant
     {
+	dprintf("%s #%u +hs ietf ppsp\n",tintstr(),id_ );
 	evbuffer_add_8(evb, SWIFT_HANDSHAKE);
 	if (send_control_==CLOSE_CONTROL) {
 	    encoded = 0;
@@ -227,7 +229,7 @@ void    Channel::Send () {
     evbuffer_add_32be(evb,pcid);
     bin_t data = bin_t::NONE;
     int evbnonadplen = 0;
-    if ( is_established() ) {
+    if (is_established()) {
         if (send_control_!=CLOSE_CONTROL) {
             // FIXME: seeder check
             AddHave(evb);
@@ -532,6 +534,12 @@ void    Channel::Recv (struct evbuffer *evb) {
     dprintf("%s #%u recvd %ib\n",tintstr(),id_,(int)evbuffer_get_length(evb)+4);
     dgrams_rcvd_++;
 
+    int s = evbuffer_get_length(evb);
+    uint8_t *peek = evbuffer_pullup(evb,s);
+    for (int i=0; i<s; i++)
+	dprintf("%02x ", peek[i]);
+    dprintf("\n");
+
     if (!transfer()->IsOperational()) {
     	dprintf("%s #%u recvd on broken transfer %d \n",tintstr(),id_, transfer()->td() );
 	CloseOnError();
@@ -555,6 +563,14 @@ void    Channel::Recv (struct evbuffer *evb) {
     if (DEBUGTRAFFIC)
         fprintf(stderr,"recv c%u: size " PRISIZET "\n", id(), evbuffer_get_length(evb));
 
+    Handshake *hishs = NULL;
+    if (hs_in_ == NULL) { // first reply from client
+	hishs = StaticOnHandshake(peer_,id(),evb);
+	if (hishs == NULL)
+	    return;
+	else
+	    OnHandshake(hishs);
+    }
     while (evbuffer_get_length(evb)) {
         uint8_t type = evbuffer_remove_8(evb);
 
@@ -562,6 +578,10 @@ void    Channel::Recv (struct evbuffer *evb) {
             fprintf(stderr," %d", type);
 
         switch (type) {
+	    case SWIFT_HANDSHAKE: // explicit close
+		if (hishs != NULL)
+		    OnHandshake(hishs);
+		break;
             case SWIFT_DATA:
                 if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
                     OnDataZeroState(evb);
@@ -699,7 +719,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 	// Chunk spec must denote single chunk
 	dprintf("%s #%u ?data bad chunk spec\n",tintstr(),id_);
 	Close(CLOSE_DO_NOT_SEND);
-	return;
+	return bin_t::NONE;
     }
     bin_t pos = bv.front();
 
@@ -795,69 +815,72 @@ void    Channel::OnAck (struct evbuffer *evb) {
 	Close(CLOSE_DO_NOT_SEND);
 	return;
     }
-    bin_t ackd_pos = bv.front(); //PPSPTODO expect multiple bins. What do do with RTT calc?
-
-
     tint peer_time = evbuffer_remove_64be(evb); // FIXME 32
 
-    // FIXME FIXME: wrap around here
-    if (ackd_pos.is_none())
-        return; // likely, broken chunk/ insufficient hashes
-    //LIVE
-    if (transfer()->ttype() == FILE_TRANSFER && hashtree()->size() && ackd_pos.base_offset()>=hashtree()->size_in_chunks()) {
-        char bin_name_buf[32];
-        eprintf("invalid ack: %s\n",ackd_pos.str(bin_name_buf));
-        return;
-    }
-    ack_in_.set(ackd_pos);
+    binvector::iterator iter;
+    for (iter=bv.begin(); iter != bv.end(); iter++)
+    {
+	bin_t ackd_pos = *iter;
 
-    //fprintf(stderr,"OnAck: got bin %s is_complete %d\n", ackd_pos.str(), (int)ack_in_.is_complete_arno( transfer()->ack_out()->get_height() ));
+	// FIXME FIXME: wrap around here
+	if (ackd_pos.is_none()) // PPSPTODO does this still occur?
+	    return; // likely, broken chunk/ insufficient hashes
+	//LIVE
+	if (transfer()->ttype() == FILE_TRANSFER && hashtree()->size() && ackd_pos.base_offset()>=hashtree()->size_in_chunks()) {
+	    char bin_name_buf[32];
+	    eprintf("invalid ack: %s\n",ackd_pos.str(bin_name_buf));
+	    return;
+	}
+	ack_in_.set(ackd_pos);
 
-    int di = 0, ri = 0;
-    // find an entry for the send (data out) event
-    while (  di<data_out_.size() && ( data_out_[di]==tintbin() ||
-           !ackd_pos.contains(data_out_[di].bin) )  )
-        di++;
-    // FUTURE: delayed acks
-    // rule out retransmits
-    while (  ri<data_out_tmo_.size() && !ackd_pos.contains(data_out_tmo_[ri].bin) )
-        ri++;
-    char bin_name_buf[32];
-    dprintf("%s #%u %cack %s %lld\n",tintstr(),id_,
-            di==data_out_.size()?'?':'-',ackd_pos.str(bin_name_buf),peer_time);
-    if (di!=data_out_.size() && ri==data_out_tmo_.size()) { // not a retransmit
-            // round trip time calculations
-        tint rtt = NOW-data_out_[di].time;
-        rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
-        dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
-        assert(data_out_[di].time!=TINT_NEVER);
-            // one-way delay calculations
-        tint owd = peer_time - data_out_[di].time;
-        owd_cur_bin_ = 0;//(owd_cur_bin_+1) & 3;
-        owd_current_[owd_cur_bin_] = owd;
-        if ( owd_min_bin_start_+TINT_SEC*30 < NOW ) {
-            owd_min_bin_start_ = NOW;
-            owd_min_bin_ = (owd_min_bin_+1) & 3;
-            owd_min_bins_[owd_min_bin_] = TINT_NEVER;
-        }
-        if (owd_min_bins_[owd_min_bin_]>owd)
-            owd_min_bins_[owd_min_bin_] = owd;
-        dprintf("%s #%u sendctrl rtt %lld dev %lld based on %s\n",
-                tintstr(),id_,rtt_avg_,dev_avg_,data_out_[di].bin.str(bin_name_buf));
-        ack_rcvd_recent_++;
-        // early loss detection by packet reordering
-        for (int re=0; re<di-MAX_REORDERING; re++) {
-            if (data_out_[re]==tintbin())
-                continue;
-            ack_not_rcvd_recent_++;
-            data_out_tmo_.push_back(data_out_[re].bin);
-            dprintf("%s #%u Rdata %s\n",tintstr(),id_,data_out_.front().bin.str(bin_name_buf));
-            data_out_cap_ = bin_t::ALL;
-            data_out_[re] = tintbin();
-        }
+	//fprintf(stderr,"OnAck: got bin %s is_complete %d\n", ackd_pos.str(), (int)ack_in_.is_complete_arno( transfer()->ack_out()->get_height() ));
+
+	int di = 0, ri = 0;
+	// find an entry for the send (data out) event
+	while (di<data_out_.size() && (data_out_[di]==tintbin() || !ackd_pos.contains(data_out_[di].bin))  )
+	    di++;
+	// FUTURE: delayed acks
+	// rule out retransmits
+	while (ri<data_out_tmo_.size() && !ackd_pos.contains(data_out_tmo_[ri].bin) )
+	    ri++;
+	char bin_name_buf[32];
+	dprintf("%s #%u %cack %s %lld\n",tintstr(),id_,
+		di==data_out_.size()?'?':'-',ackd_pos.str(bin_name_buf),peer_time);
+	if (di!=data_out_.size() && ri==data_out_tmo_.size()) { // not a retransmit
+	    // round trip time calculations
+	    tint rtt = NOW-data_out_[di].time;
+	    rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
+	    dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
+	    assert(data_out_[di].time!=TINT_NEVER);
+	    // one-way delay calculations
+	    tint owd = peer_time - data_out_[di].time;
+	    owd_cur_bin_ = 0;//(owd_cur_bin_+1) & 3;
+	    owd_current_[owd_cur_bin_] = owd;
+	    if ( owd_min_bin_start_+TINT_SEC*30 < NOW ) {
+		owd_min_bin_start_ = NOW;
+		owd_min_bin_ = (owd_min_bin_+1) & 3;
+		owd_min_bins_[owd_min_bin_] = TINT_NEVER;
+	    }
+	    if (owd_min_bins_[owd_min_bin_]>owd)
+		owd_min_bins_[owd_min_bin_] = owd;
+	    dprintf("%s #%u sendctrl rtt %lld dev %lld based on %s\n",
+		    tintstr(),id_,rtt_avg_,dev_avg_,data_out_[di].bin.str(bin_name_buf));
+	    ack_rcvd_recent_++;
+	    // early loss detection by packet reordering
+	    for (int re=0; re<di-MAX_REORDERING; re++) {
+		if (data_out_[re]==tintbin())
+		    continue;
+		ack_not_rcvd_recent_++;
+		data_out_tmo_.push_back(data_out_[re].bin);
+		dprintf("%s #%u Rdata %s\n",tintstr(),id_,data_out_.front().bin.str(bin_name_buf));
+		data_out_cap_ = bin_t::ALL;
+		data_out_[re] = tintbin();
+	    }
+	}
+	if (di!=data_out_.size())
+	    data_out_[di]=tintbin();
     }
-    if (di!=data_out_.size())
-        data_out_[di]=tintbin();
+
     // clear zeroed items
     while (!data_out_.empty() && ( data_out_.front()==tintbin() ||
             ack_in_.is_filled(data_out_.front().bin) ) )
@@ -956,68 +979,77 @@ void    Channel::OnHint (struct evbuffer *evb) {
 /*
  * Read full HANDSHAKE message from evb outside of a Channel context.
  */
-Handshake *Channel::StaticOnHandshake(Address &addr, struct evbuffer *evb)
+Handshake *Channel::StaticOnHandshake(Address &addr, uint32_t cid, struct evbuffer *evb)
 {
     Handshake *hs = new Handshake();
 
     uint8_t msgid = evbuffer_remove_8(evb);
     if (msgid == SWIFT_INTEGRITY)
     {
+	dprintf("%s #%u -hs swift legacy\n", tintstr(), cid );
 	hs->version_ = VER_SWIFT_LEGACY;
 	if (evbuffer_get_length(evb) < 4+1+4+Sha1Hash::SIZE) {
-	   dprintf("%s #0 incorrect size %i initial handshake packet %s\n", tintstr(),(int)evbuffer_get_length(evb),addr.str());
+	   dprintf("%s #%u incorrect size %i initial handshake packet %s\n", tintstr(),cid,(int)evbuffer_get_length(evb),addr.str());
 	   delete hs;
 	   return NULL;
 	}
 	bin_t pos = bin_fromUInt32(evbuffer_remove_32be(evb));
 	if (!pos.is_all()) {
-	    dprintf("%s #0 that is not the root hash %s\n",tintstr(),addr.str());
+	    dprintf("%s #%u that is not the root hash %s\n",tintstr(), cid, addr.str());
 	   delete hs;
 	   return NULL;
 	}
-	Sha1Hash swarmid = evbuffer_remove_hash(evb)
+	Sha1Hash swarmid = evbuffer_remove_hash(evb);
 	hs->SetSwarmID(swarmid);
-	dprintf("%s #0 -hash ALL %s\n",tintstr(),swarmid.hex().c_str());
+	dprintf("%s #%u -hash ALL %s\n",tintstr(),cid,swarmid.hex().c_str());
 
 	hs->peer_channel_id_ = evbuffer_remove_32be(evb);
 
 	hs->cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
 	hs->merkle_func_ = POPT_MERKLE_HASH_FUNC_SHA1;
 	hs->live_sig_alg_ = 0; // PPSPTODO
-	hs->chunk_addr_ = POPT_CHUNK_ADDR_BIN32
-	hs->live_disc_wnd_ = (unint32_t)POPT_LIVE_DISC_WND_ALL;
+	hs->chunk_addr_ = POPT_CHUNK_ADDR_BIN32;
+	hs->live_disc_wnd_ = (uint32_t)POPT_LIVE_DISC_WND_ALL;
     }
     else if (msgid == SWIFT_HANDSHAKE)
     {
 	// IETF PPSP compliant
+	dprintf("%s #%u -hs ietf ppsp\n", tintstr(),cid );
 	hs->peer_channel_id_ = evbuffer_remove_32be(evb);
 	bool end=false;
+	uint8_t size8 = 0;
+	uint16_t size = 0;
+	uint8_t *swarmidbytes = NULL;
+	uint8_t *msgbitmapbytes = NULL;
+	Sha1Hash swarmid;
 	while (!end)
 	{
-	    popt_t poid = evbuffer_remove_8(evb);
+	    popt_t poid = (popt_t)evbuffer_remove_8(evb);
+	    dprintf("%s #%u -hs popt %d\n", tintstr(), cid, (int)poid );
 	    switch (poid) {
 		case POPT_VERSION:
-		    hs->version_ = evbuffer_remove_8(evb);
+		    hs->version_ = (popt_version_t)evbuffer_remove_8(evb);
 		    break;
 		case POPT_SWARMID:
-		    uint16_t size = evbuffer_remove_16be(evb);
-		    uint8_t *swarmidbytes = evbuffer_pullup(evb,size);
-		    Sha1Hash swarmid(swarmidbytes,size);
+		    size = evbuffer_remove_16be(evb);
+		    dprintf("%s #%u -hs swarm id size %d\n", tintstr(),cid, size );
+		    swarmidbytes = evbuffer_pullup(evb,size);
+		    swarmid = Sha1Hash(false,(const char *)swarmidbytes);
 		    hs->SetSwarmID(swarmid);
-		    dprintf("%s #0 -hash ALL %s\n",tintstr(),swarmid.hex().c_str());
+		    dprintf("%s #%u -hs swarmid %s\n",tintstr(),cid,swarmid.hex().c_str());
 		    evbuffer_drain(evb, size);
 		    break;
 		case POPT_CONT_INT_PROT:
-		    hs->cont_int_prot_ = evbuffer_remove_8(evb);
+		    hs->cont_int_prot_ = (popt_cont_int_prot_t)evbuffer_remove_8(evb);
 		    break;
 		case POPT_MERKLE_HASH_FUNC:
-		    hs->merkle_func_ = evbuffer_remove_8(evb);
+		    hs->merkle_func_ = (popt_merkle_func_t)evbuffer_remove_8(evb);
 		    break;
 		case POPT_LIVE_SIG_ALG:
 		    hs->live_sig_alg_ = evbuffer_remove_8(evb);
 		    break;
 		case POPT_CHUNK_ADDR:
-		    hs->chunk_addr_ = evbuffer_remove_8(evb);
+		    hs->chunk_addr_ = (popt_chunk_addr_t)evbuffer_remove_8(evb);
 		    break;
 		case POPT_LIVE_DISC_WND:
 		    if (hs->chunk_addr_ == POPT_CHUNK_ADDR_BIN32 || hs->chunk_addr_ == POPT_CHUNK_ADDR_CHUNK32)
@@ -1026,15 +1058,15 @@ Handshake *Channel::StaticOnHandshake(Address &addr, struct evbuffer *evb)
 			hs->live_disc_wnd_ = evbuffer_remove_64be(evb);
 		    break;
 		case POPT_SUPP_MSGS:
-		    uint8_t size = evbuffer_remove_8(evb);
-		    uint8_t *msgbitmapbytes = evbuffer_pullup(evb,size);
+		    size8 = evbuffer_remove_8(evb);
+		    msgbitmapbytes = evbuffer_pullup(evb,size8);
 		    evbuffer_drain(evb, size);
 		    break;
 		case POPT_END:
 		    end = true;
 		    break;
 		default:
-		    dprintf("%s #0 ?popt id unknown %i\n",tintstr(),id_,(int)poid);
+		    dprintf("%s #%u ?hs popt id unknown %i\n",tintstr(),cid,(int)poid);
 		    delete hs;
 		    return NULL;
 	    }
@@ -1042,7 +1074,7 @@ Handshake *Channel::StaticOnHandshake(Address &addr, struct evbuffer *evb)
     }
     else
     {
-	dprintf("%s #0 initial handshake with unknown protocol %s\n", tintstr(),addr.str());
+	dprintf("%s #%u ?hs unknown protocol %d %s\n", tintstr(),cid,msgid,addr.str());
 	delete hs;
 	return NULL;
     }
@@ -1057,12 +1089,14 @@ void Channel::OnHandshake(Handshake *hishs) {
     if (is_established() && hishs->peer_channel_id_ == 0) {
         // Arno: Got explicit close from peer, close channel and don't send reply
         Close(CLOSE_DO_NOT_SEND);
+        delete hishs;
         return;
     }
 
     if (!hishs->IsSupported())
     {
 	Close(CLOSE_SEND);
+	delete hishs;
 	return;
     }
 
@@ -1073,6 +1107,7 @@ void Channel::OnHandshake(Handshake *hishs) {
         if (channel(try_id) == this) {
             // this is a self-connection
             Close(CLOSE_SEND);
+            delete hishs;
             return;
         }
     }
@@ -1228,7 +1263,7 @@ void Channel::LibeventReceiveCallback(evutil_socket_t fd, short event, void *arg
 void    Channel::RecvDatagram (evutil_socket_t socket) {
     struct evbuffer *evb = evbuffer_new();
     Address addr;
-    Handshake *hs = NULL;
+    Handshake *hishs = NULL;
 
     RecvFrom(socket, addr, evb);
     size_t evboriglen = evbuffer_get_length(evb);
@@ -1236,7 +1271,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
     dprintf("%s recvdgram %d\n",tintstr(),evboriglen );
 
 //#define return_log(...) { fprintf(stderr,__VA_ARGS__); evbuffer_free(evb); return; }
-#define return_log(...) { dprintf(__VA_ARGS__); evbuffer_free(evb); if (hs != NULL) { delete hs; } return; }
+#define return_log(...) { dprintf(__VA_ARGS__); evbuffer_free(evb); if (hishs != NULL) { delete hishs; } return; }
     if (evbuffer_get_length(evb)<4)
         return_log("socket layer weird: datagram < 4 bytes from %s (prob ICMP unreach)\n",addr.str());
     uint32_t mych = evbuffer_remove_32be(evb);
@@ -1244,7 +1279,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
     Channel* channel = NULL;
     if (mych==0) { // peer initiates handshake
 
-	Handshake *hishs = StaticOnHandshake(addr,evb);
+	hishs = StaticOnHandshake(addr,0,evb);
 	if (hishs == NULL) // dprintf already called
 	    return_log ("%s #0 ?hs bad\n",tintstr());
 
@@ -1259,7 +1294,9 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         }
         ContentTransfer *ct = swift::GetActivatedTransfer(td);
         if (ct == NULL)
+        {
 	    return_log( "%s #0 hash %s known, couldn't be activated; requested by %s\n", tintstr(), hishs->GetSwarmID().hex().c_str(), addr.str() );
+        }
         else if (!ct->IsOperational())
         {
             // Activated, but broken
@@ -1304,7 +1341,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         if (!channel)
             return_log ("%s #%u is already closed\n",tintstr(),mych);
         if (channel->IsDiffSenderOrDuplicate(addr,mych)) {
-            channel->Close();
+            channel->Close(CLOSE_SEND_IF_ESTABLISHED);
             delete channel; // safe, not in a channel event
             return_log ("%s #%u is duplicate\n",tintstr(),mych);
         }

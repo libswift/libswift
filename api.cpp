@@ -85,7 +85,7 @@ void swift::Close( int td, bool removestate, bool removecontent ) {
 	delete lt;
 }
 
-int swift::Find(Sha1Hash& swarmid, bool activate)
+int swift::Find(const Sha1Hash& swarmid, bool activate)
 {
     if (api_debug)
 	fprintf(stderr,"swift::Find %s act %d\n", swarmid.hex().c_str(), (int)activate );

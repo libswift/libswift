@@ -77,6 +77,8 @@ if sys.platform == "win32":
     if not DEBUG:
     	env.Append(LINKFLAGS="/SUBSYSTEM:WINDOWS")
     
+    linkflags = ''
+    
     APPSOURCE=['swift.cpp','statsgw.cpp','getopt.c','getopt_long.c']
     
 else:

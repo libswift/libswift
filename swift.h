@@ -333,9 +333,9 @@ namespace swift {
 	Handshake() : version_(VER_PPSP_v1), swarm_id_ptr_(NULL), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL) {}
 	~Handshake() { ReleaseSwarmID(); }
 	void SetSwarmID(Sha1Hash &swarmid) { swarm_id_ptr_ = new Sha1Hash(swarmid); }
-	Sha1Hash &GetSwarmID() { (swarm_id_ptr_ == NULL) ? Sha1Hash::ZERO : *swarm_id_ptr_; }
+	const Sha1Hash &GetSwarmID() { return (swarm_id_ptr_ == NULL) ? Sha1Hash::ZERO : *swarm_id_ptr_; }
 	void ReleaseSwarmID() { if (swarm_id_ptr_ != NULL) delete swarm_id_ptr_; swarm_id_ptr_ = NULL; }
-	void IsSupported()
+	bool IsSupported()
 	{
 	    if (cont_int_prot_ == POPT_CONT_INT_PROT_SIGNALL)
 		return false;
@@ -701,7 +701,7 @@ namespace swift {
         void        OnHint (struct evbuffer *evb);
         void        OnHash (struct evbuffer *evb);
         void        OnPexAdd (struct evbuffer *evb);
-        static Handshake StaticOnHandshake (struct evbuffer *evb);
+        static Handshake *StaticOnHandshake (Address &addr, uint32_t cid, struct evbuffer *evb);
         void        OnHandshake (Handshake *hishs);
         void        AddHandshake (struct evbuffer *evb);
         bin_t       AddData (struct evbuffer *evb);
@@ -1055,7 +1055,7 @@ namespace swift {
     	static ZeroState *GetInstance();
     	void SetContentDir(std::string contentdir);
     	void SetConnectTimeout(tint timeout);
-    	int Find(Sha1Hash &root_hash);
+    	int Find(const Sha1Hash &root_hash);
 
         static void LibeventCleanCallback(int fd, short event, void *arg);
 
@@ -1135,7 +1135,7 @@ namespace swift {
     uint64_t GetHookinOffset( int td);
 
     /** Arno: See if swarm is known and activate if requested */
-    int     Find( Sha1Hash& swarmid, bool activate=false);
+    int     Find( const Sha1Hash& swarmid, bool activate=false);
     /** Returns the number of bytes in a chunk for this transmission */
     uint32_t ChunkSize(int td);
 
