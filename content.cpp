@@ -48,6 +48,7 @@ ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), mychannels_
 
 ContentTransfer::~ContentTransfer()
 {
+    dprintf("%s F%d content deconstructor\n",tintstr(),td_);
     CloseChannels(mychannels_);
     if (storage_ != NULL)
         delete storage_;
@@ -60,6 +61,7 @@ void ContentTransfer::CloseChannels(channels_t delset)
     for (iter=delset.begin(); iter!=delset.end(); iter++)
     {
         Channel *c = *iter;
+        dprintf("%s F%d content close chans\n",tintstr(),td_);
         c->Close(CLOSE_SEND_IF_ESTABLISHED);
         delete c;
         // ~Channel removes it from Channel::channels and mychannels_.erase(c);
@@ -84,6 +86,7 @@ void ContentTransfer::GarbageCollectChannels()
                 hasestablishedpeers = true;
         }
     }
+    dprintf("%s F%d content gc chans\n",tintstr(),td_);
     CloseChannels(delset);
 
     // Arno, 2012-02-24: Check for liveliness.
@@ -338,4 +341,12 @@ void ContentTransfer::Progress(bin_t bin) {
 	if( minlayer >= (*iter).second )
 	    ((*iter).first)( td_, bin );
     }
+}
+
+
+void ContentTransfer::SetTD(int td)
+{
+    td_ = td;
+    if (storage_ != NULL)
+	storage_->SetTD(td);
 }

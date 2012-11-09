@@ -393,6 +393,7 @@ namespace swift {
         PiecePicker *   picker() { return picker_; }
         /** Returns the local ID for this transfer. */
         int             td() const { return td_; }
+        void		SetTD(int td);  // Arno: for SwarmManager
         // Gertjan fix: return bool
         bool            OnPexIn(const Address& addr);
         // Gertjan
@@ -701,7 +702,7 @@ namespace swift {
         void        OnHint (struct evbuffer *evb);
         void        OnHash (struct evbuffer *evb);
         void        OnPexAdd (struct evbuffer *evb);
-        static Handshake *StaticOnHandshake (Address &addr, uint32_t cid, struct evbuffer *evb);
+        static Handshake *StaticOnHandshake( Address &addr, uint32_t cid, bool ver_known, popt_version_t ver, struct evbuffer *evb);
         void        OnHandshake (Handshake *hishs);
         void        AddHandshake (struct evbuffer *evb);
         bin_t       AddData (struct evbuffer *evb);
@@ -1012,6 +1013,9 @@ namespace swift {
 
         /** Return a one-time callback when swift starts allocating disk space */
         void AddOneTimeAllocationCallback(ProgressCallback cb) { alloc_cb_ = cb; }
+
+        /** Set transfer ID post constructor time */
+        void SetTD(int td) { td_ = td; } // Arno: for SwarmManager
 
       protected:
         storage_state_t    state_;

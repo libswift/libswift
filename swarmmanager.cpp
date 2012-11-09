@@ -27,11 +27,9 @@
 #if SWARMMANAGER_ASSERT_INVARIANTS
 #include <assert.h>
 int levelcount = 0;
-#define enter( x )
 // Arno: enter/leave prints disabled
-// fprintf( stderr, "[%02d] Entered " x "\n", ++levelcount );
-#define exit( x )
-//fprintf( stderr, "[%02d] Leaving " x "\n", levelcount-- );
+#define enter( x )	fprintf( stderr, "[%02d] Entered " x "\n", ++levelcount );
+#define exit( x )	fprintf( stderr, "[%02d] Leaving " x "\n", levelcount-- );
 #else
 #undef assert
 #define assert( x )
@@ -69,8 +67,12 @@ SwarmData::~SwarmData() {
 
 bool SwarmData::Touch() {
     if( !active_ )
+    {
+	fprintf(stderr,"Touch false\n");
         return false;
+    }
     latestUse_ = usec_time();
+    fprintf(stderr,"Touch true\n");
     return true;
 }
 
@@ -349,6 +351,10 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
         newSwarm->id_ = swarmList_.size();
         swarmList_.push_back( newSwarm );
     }
+
+    // Arno: transfer id as assigned by SwarmManager not known at constructor time :-(
+    if (newSwarm->ft_)
+	newSwarm->ft_->SetTD(newSwarm->id_);
 
     // Arno
     if (activate)
@@ -722,8 +728,10 @@ bool SwarmManager::DeactivateSwarm() {
 // Arno: Called from ContentTransfer::GlobalCleanCallback
 void SwarmManager::DeactivateIdleSwarms()
 {
+    enter( "deactivateidleswarms" );
     while(DeactivateSwarm())
 	;
+    exit( "deactivateidleswarms" );
 }
 
 

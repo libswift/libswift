@@ -183,33 +183,35 @@ void    Channel::AddHandshake (struct evbuffer *evb)
 	dprintf("%s #%u +hs %x\n",tintstr(),id_,encoded );
 
 	// Send protocol options
-	evbuffer_add_8(evb, POPT_VERSION);
-	evbuffer_add_8(evb, hs_out_->version_);
+	if (send_control_ !=CLOSE_CONTROL) {
+	    evbuffer_add_8(evb, POPT_VERSION);
+	    evbuffer_add_8(evb, hs_out_->version_);
 
-	if (hs_in_ == NULL) { // initiating, send swarm ID
-	    evbuffer_add_8(evb, POPT_SWARMID);
-	    evbuffer_add_16be(evb, Sha1Hash::SIZE); // PPSPTODO LIVE
-	    evbuffer_add_hash(evb, transfer()->swarm_id() );
-	    dprintf("%s #%u +hs %s\n", tintstr(),id_,transfer()->swarm_id().hex().c_str());
-	}
-	evbuffer_add_8(evb, POPT_CONT_INT_PROT);
-	evbuffer_add_8(evb, hs_out_->cont_int_prot_);
-	if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE)
-	{
-	    evbuffer_add_8(evb, POPT_MERKLE_HASH_FUNC);
-	    evbuffer_add_8(evb, hs_out_->merkle_func_);
-	}
-	evbuffer_add_8(evb, POPT_CHUNK_ADDR);
-	evbuffer_add_8(evb, hs_out_->chunk_addr_);
-	if (transfer()->ttype() == LIVE_TRANSFER)
-	{
-	    evbuffer_add_8(evb, POPT_LIVE_DISC_WND);
-	    // For POPT_CHUNK_ADDR_CHUNK32, saves all chunks
-	    // PPSPTODO forget
-	    if (hs_out_->chunk_addr_ == POPT_CHUNK_ADDR_BIN32 || hs_out_->chunk_addr_ == POPT_CHUNK_ADDR_CHUNK32)
-		evbuffer_add_32be(evb, (uint32_t)hs_out_->live_disc_wnd_);
-	    else
-		evbuffer_add_64be(evb, hs_out_->live_disc_wnd_);
+	    if (hs_in_ == NULL) { // initiating, send swarm ID
+		evbuffer_add_8(evb, POPT_SWARMID);
+		evbuffer_add_16be(evb, Sha1Hash::SIZE); // PPSPTODO LIVE
+		evbuffer_add_hash(evb, transfer()->swarm_id() );
+		dprintf("%s #%u +hs %s\n", tintstr(),id_,transfer()->swarm_id().hex().c_str());
+	    }
+	    evbuffer_add_8(evb, POPT_CONT_INT_PROT);
+	    evbuffer_add_8(evb, hs_out_->cont_int_prot_);
+	    if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE)
+	    {
+		evbuffer_add_8(evb, POPT_MERKLE_HASH_FUNC);
+		evbuffer_add_8(evb, hs_out_->merkle_func_);
+	    }
+	    evbuffer_add_8(evb, POPT_CHUNK_ADDR);
+	    evbuffer_add_8(evb, hs_out_->chunk_addr_);
+	    if (transfer()->ttype() == LIVE_TRANSFER)
+	    {
+		evbuffer_add_8(evb, POPT_LIVE_DISC_WND);
+		// For POPT_CHUNK_ADDR_CHUNK32, saves all chunks
+		// PPSPTODO forget
+		if (hs_out_->chunk_addr_ == POPT_CHUNK_ADDR_BIN32 || hs_out_->chunk_addr_ == POPT_CHUNK_ADDR_CHUNK32)
+		    evbuffer_add_32be(evb, (uint32_t)hs_out_->live_disc_wnd_);
+		else
+		    evbuffer_add_64be(evb, hs_out_->live_disc_wnd_);
+	    }
 	}
 	evbuffer_add_8(evb, POPT_END);
     }
@@ -534,12 +536,6 @@ void    Channel::Recv (struct evbuffer *evb) {
     dprintf("%s #%u recvd %ib\n",tintstr(),id_,(int)evbuffer_get_length(evb)+4);
     dgrams_rcvd_++;
 
-    int s = evbuffer_get_length(evb);
-    uint8_t *peek = evbuffer_pullup(evb,s);
-    for (int i=0; i<s; i++)
-	dprintf("%02x ", peek[i]);
-    dprintf("\n");
-
     if (!transfer()->IsOperational()) {
     	dprintf("%s #%u recvd on broken transfer %d \n",tintstr(),id_, transfer()->td() );
 	CloseOnError();
@@ -565,7 +561,7 @@ void    Channel::Recv (struct evbuffer *evb) {
 
     Handshake *hishs = NULL;
     if (hs_in_ == NULL) { // first reply from client
-	hishs = StaticOnHandshake(peer_,id(),evb);
+	hishs = StaticOnHandshake(peer_,id(),false,VER_PPSP_v1,evb);
 	if (hishs == NULL)
 	    return;
 	else
@@ -579,8 +575,8 @@ void    Channel::Recv (struct evbuffer *evb) {
 
         switch (type) {
 	    case SWIFT_HANDSHAKE: // explicit close
-		if (hishs != NULL)
-		    OnHandshake(hishs);
+		hishs = StaticOnHandshake(peer_,id(),true,hs_in_->version_,evb);
+		OnHandshake(hishs);
 		break;
             case SWIFT_DATA:
                 if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
@@ -979,12 +975,26 @@ void    Channel::OnHint (struct evbuffer *evb) {
 /*
  * Read full HANDSHAKE message from evb outside of a Channel context.
  */
-Handshake *Channel::StaticOnHandshake(Address &addr, uint32_t cid, struct evbuffer *evb)
+Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_known, popt_version_t ver, struct evbuffer *evb)
 {
     Handshake *hs = new Handshake();
 
-    uint8_t msgid = evbuffer_remove_8(evb);
-    if (msgid == SWIFT_INTEGRITY)
+    if (!ver_known)
+    {
+	uint8_t msgid = evbuffer_remove_8(evb);
+	if (msgid == SWIFT_INTEGRITY)
+	    ver = VER_SWIFT_LEGACY;
+	else if (msgid == SWIFT_HANDSHAKE)
+	    ver = VER_PPSP_v1;
+	else
+	{
+	    dprintf("%s #%u ?hs unknown protocol %d %s\n", tintstr(),cid,msgid,addr.str());
+	    delete hs;
+	    return NULL;
+	}
+    }
+
+    if (ver == VER_SWIFT_LEGACY)
     {
 	dprintf("%s #%u -hs swift legacy\n", tintstr(), cid );
 	hs->version_ = VER_SWIFT_LEGACY;
@@ -1011,7 +1021,7 @@ Handshake *Channel::StaticOnHandshake(Address &addr, uint32_t cid, struct evbuff
 	hs->chunk_addr_ = POPT_CHUNK_ADDR_BIN32;
 	hs->live_disc_wnd_ = (uint32_t)POPT_LIVE_DISC_WND_ALL;
     }
-    else if (msgid == SWIFT_HANDSHAKE)
+    else if (ver == VER_PPSP_v1)
     {
 	// IETF PPSP compliant
 	dprintf("%s #%u -hs ietf ppsp\n", tintstr(),cid );
@@ -1072,12 +1082,6 @@ Handshake *Channel::StaticOnHandshake(Address &addr, uint32_t cid, struct evbuff
 	    }
 	}
     }
-    else
-    {
-	dprintf("%s #%u ?hs unknown protocol %d %s\n", tintstr(),cid,msgid,addr.str());
-	delete hs;
-	return NULL;
-    }
 
     return hs;
 }
@@ -1086,15 +1090,21 @@ void Channel::OnHandshake(Handshake *hishs) {
 
     dprintf("%s #%u -hs %x\n",tintstr(),id_,hishs->peer_channel_id_);
 
-    if (is_established() && hishs->peer_channel_id_ == 0) {
+    if (hishs->peer_channel_id_ == 0) {
         // Arno: Got explicit close from peer, close channel and don't send reply
+	dprintf("%s #%u -hs close\n",tintstr(),id_);
         Close(CLOSE_DO_NOT_SEND);
         delete hishs;
+
+
+        exit(0);
+
         return;
     }
 
     if (!hishs->IsSupported())
     {
+	dprintf("%s #%u -hs unsupported\n",tintstr(),id_);
 	Close(CLOSE_SEND);
 	delete hishs;
 	return;
@@ -1106,6 +1116,7 @@ void Channel::OnHandshake(Handshake *hishs) {
         // Arno, 2012-05-29: Fixed duplicate test
         if (channel(try_id) == this) {
             // this is a self-connection
+            dprintf("%s #%u -hs closing self\n",tintstr(),id_);
             Close(CLOSE_SEND);
             delete hishs;
             return;
@@ -1279,7 +1290,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
     Channel* channel = NULL;
     if (mych==0) { // peer initiates handshake
 
-	hishs = StaticOnHandshake(addr,0,evb);
+	hishs = StaticOnHandshake(addr,0,false,VER_PPSP_v1,evb);
 	if (hishs == NULL) // dprintf already called
 	    return_log ("%s #0 ?hs bad\n",tintstr());
 
@@ -1341,6 +1352,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         if (!channel)
             return_log ("%s #%u is already closed\n",tintstr(),mych);
         if (channel->IsDiffSenderOrDuplicate(addr,mych)) {
+            dprintf("%s #%u ?channel diff or dup\n",tintstr(),mych);
             channel->Close(CLOSE_SEND_IF_ESTABLISHED);
             delete channel; // safe, not in a channel event
             return_log ("%s #%u is duplicate\n",tintstr(),mych);
@@ -1380,6 +1392,7 @@ void Channel::CloseChannelByAddress(const Address &addr)
     {
         Channel *c = *iter;
         if (c != NULL && c->peer_ == addr) {
+            dprintf("%s #%u close by addr\n",tintstr(),c->id());
             c->Close(CLOSE_DO_NOT_SEND);
             delete c; // safe, not in a send event, and doesn't modify channels
             break;
