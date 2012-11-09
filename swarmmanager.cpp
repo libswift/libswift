@@ -237,7 +237,8 @@ SwarmManager::~SwarmManager() {
         dellist.push_back( *iter );
     for( std::list<SwarmData*>::iterator deliter = dellist.begin(); deliter != dellist.end(); deliter++ )
         delete (*deliter);
-    event_free( eventCheckToBeRemoved_ );
+    if (eventCheckToBeRemoved_ != NULL)
+	event_free( eventCheckToBeRemoved_ );
     exit( "dest" );
 }
 
