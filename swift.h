@@ -96,7 +96,9 @@ namespace swift {
 // Arno, 2011-12-22: Enable Riccardo's VodPiecePicker
 #define ENABLE_VOD_PIECEPICKER        1
 
-#define SWIFT_URI_SCHEME            "tswift"
+#define SWIFT_URI_SCHEME              "tswift"
+
+#define POPT_LIVE_DISC_WND_ALL	      0xFFFFFFFF	// automatically truncated for 32-bit
 
 
 /** IPv4 address, just a nice wrapping around struct sockaddr_in. */
@@ -215,7 +217,9 @@ namespace swift {
 
     typedef std::deque<tintbin> tbqueue;
     typedef std::deque<bin_t> binqueue;
+    typedef std::vector<bin_t> binvector;
     typedef Address   Address;
+
 
     /** A heap (priority queue) for timestamped bin numbers (tintbins). */
     class tbheap {
@@ -243,20 +247,23 @@ namespace swift {
     bool ParseURI(std::string uri,parseduri_t &map);
 
     /** swift protocol message types; these are used on the wire. */
+    //PPSPTODO rename
     typedef enum {
         SWIFT_HANDSHAKE = 0,
         SWIFT_DATA = 1,
         SWIFT_ACK = 2,
         SWIFT_HAVE = 3,
-        SWIFT_HASH = 4,
-        SWIFT_PEX_ADD = 5,
+        SWIFT_INTEGRITY = 4,  // previously SWIFT_HASH
+        SWIFT_PEX_RES = 5,    // previously SWIFT_PEX_ADD
         SWIFT_PEX_REQ = 6,
-        SWIFT_SIGNED_HASH = 7,
-        SWIFT_HINT = 8,
-        SWIFT_MSGTYPE_RCVD = 9,
-        SWIFT_RANDOMIZE = 10, //FRAGRAND
-        SWIFT_VERSION = 11, // Arno, 2011-10-19: TODO to match RFC-rev-03
-        SWIFT_MESSAGE_COUNT = 12
+        SWIFT_SIGNED_INTEGRITY = 7, // previously SWIFT_SIGNED_HASH
+        SWIFT_REQUEST = 8,    // previously SWIFT_HINT
+        SWIFT_CANCEL = 9,
+        SWIFT_CHOKE = 10,
+        // SWIFT_RANDOMIZE = 10, //FRAGRAND disabled
+        SWIFT_UNCHOKE = 11,
+        SWIFT_PEX_RESv6 = 12,
+        SWIFT_MESSAGE_COUNT = 13
     } messageid_t;
 
     typedef enum {
@@ -270,6 +277,87 @@ namespace swift {
         LIVE_TRANSFER
     } transfer_t;
 
+    typedef enum {
+	CLOSE_DO_NOT_SEND,
+	CLOSE_SEND,
+	CLOSE_SEND_IF_ESTABLISHED,
+    } close_send_t;
+
+
+    typedef enum {
+        VER_SWIFT_LEGACY=0, //legacy swift
+        VER_PPSP_v1=1  // IETF PPSPP -03 compliant
+    } popt_version_t;
+
+    typedef enum {
+	POPT_VERSION = 0,
+	POPT_SWARMID = 1,
+	POPT_CONT_INT_PROT = 2,    // content integrity protection method
+	POPT_MERKLE_HASH_FUNC = 3,
+	POPT_LIVE_SIG_ALG = 4,
+	POPT_CHUNK_ADDR = 5,
+	POPT_LIVE_DISC_WND = 6,
+	POPT_SUPP_MSGS = 7,
+	POPT_END = 255
+    } popt_t;
+
+    typedef enum {
+	POPT_CONT_INT_PROT_NONE = 0,
+	POPT_CONT_INT_PROT_MERKLE = 1,
+	POPT_CONT_INT_PROT_SIGNALL = 2,
+	POPT_CONT_INT_PROT_UNIFIED_MERKLE = 3
+    } popt_cont_int_prot_t;
+
+    typedef enum {
+	POPT_MERKLE_HASH_FUNC_SHA1 = 0,
+	POPT_MERKLE_HASH_FUNC_SHA224 = 1,
+	POPT_MERKLE_HASH_FUNC_SHA256 = 2,
+	POPT_MERKLE_HASH_FUNC_SHA384 = 3,
+	POPT_MERKLE_HASH_FUNC_SHA512 = 4
+    } popt_merkle_func_t;
+
+    typedef enum {
+	POPT_CHUNK_ADDR_BIN32 = 0,
+	POPT_CHUNK_ADDR_BYTE64 = 1,
+	POPT_CHUNK_ADDR_CHUNK32 = 2,
+	POPT_CHUNK_ADDR_BIN64 = 3,
+	POPT_CHUNK_ADDR_CHUNK64 = 4
+    } popt_chunk_addr_t;
+
+
+    class Handshake
+    {
+      public:
+	//Handshake() : version_(VER_PPSP_v1), swarm_id_ptr_(NULL), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL) {}
+	// TESTING: BINS32 as default
+	Handshake() : version_(VER_PPSP_v1), swarm_id_ptr_(NULL), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL) {}
+	~Handshake() { ReleaseSwarmID(); }
+	void SetSwarmID(Sha1Hash &swarmid) { swarm_id_ptr_ = new Sha1Hash(swarmid); }
+	Sha1Hash &GetSwarmID() { (swarm_id_ptr_ == NULL) ? Sha1Hash::ZERO : *swarm_id_ptr_; }
+	void ReleaseSwarmID() { if (swarm_id_ptr_ != NULL) delete swarm_id_ptr_; swarm_id_ptr_ = NULL; }
+	void IsSupported()
+	{
+	    if (cont_int_prot_ == POPT_CONT_INT_PROT_SIGNALL)
+		return false;
+	    else if (merkle_func_ >= POPT_MERKLE_HASH_FUNC_SHA224)
+		return false;
+	    else if (chunk_addr_ == POPT_CHUNK_ADDR_BYTE64 || chunk_addr_ == POPT_CHUNK_ADDR_BIN64 || chunk_addr_ == POPT_CHUNK_ADDR_CHUNK64)
+		return false;
+	    return true;
+	}
+
+        /**    Peer channel id; zero if we are trying to open a channel. */
+        uint32_t    		peer_channel_id_;
+	popt_version_t   	version_;
+	popt_cont_int_prot_t  	cont_int_prot_;
+	popt_merkle_func_t	merkle_func_;
+	uint8_t			live_sig_alg_; // PPSPTODO
+	popt_chunk_addr_t	chunk_addr_;
+	uint64_t		live_disc_wnd_;
+      protected:
+	/** Dynamically allocated such that we can deallocate it and save Sha1Hash::SIZE bytes per channel */
+	Sha1Hash 		*swarm_id_ptr_;
+    };
 
     class PiecePicker;
     //class CongestionController; // Arno: Currently part of Channel. See ::NextSendTime
@@ -605,7 +693,7 @@ namespace swift {
         // Arno: Per instance methods
         void        Recv (struct evbuffer *evb);
         void        Send ();  // Called by LibeventSendCallback
-        void        Close (bool sendclose=true);
+        void        Close (close_send_t closesend);
 
         void        OnAck (struct evbuffer *evb);
         void        OnHave (struct evbuffer *evb);
@@ -613,8 +701,8 @@ namespace swift {
         void        OnHint (struct evbuffer *evb);
         void        OnHash (struct evbuffer *evb);
         void        OnPexAdd (struct evbuffer *evb);
-        void        OnHandshake (struct evbuffer *evb);
-        void        OnRandomize (struct evbuffer *evb); //FRAGRAND
+        static Handshake StaticOnHandshake (struct evbuffer *evb);
+        void        OnHandshake (Handshake *hishs);
         void        AddHandshake (struct evbuffer *evb);
         bin_t       AddData (struct evbuffer *evb);
         void        AddAck (struct evbuffer *evb);
@@ -654,7 +742,7 @@ namespace swift {
 
         const std::string id_string () const;
         /** A channel is "established" if had already sent and received packets. */
-        bool        is_established () { return peer_channel_id_ && own_id_mentioned_; }
+        bool        is_established () { return (hs_in_ == NULL) ? false  : hs_in_->peer_channel_id_ && own_id_mentioned_; }
         HashTree *  hashtree();
         ContentTransfer *transfer() { return transfer_; }
         const Address& peer() const { return peer_; }
@@ -711,8 +799,6 @@ namespace swift {
         evutil_socket_t      socket_;
         /**    Descriptor of the file in question. */
         ContentTransfer*    transfer_;
-        /**    Peer channel id; zero if we are trying to open a channel. */
-        uint32_t    peer_channel_id_;
         bool        own_id_mentioned_;
         /**    Peer's progress, based on acknowledgements. */
         binmap_t    ack_in_;
@@ -790,6 +876,12 @@ namespace swift {
 
         //LIVE
         bool        peer_is_source_;
+
+        // PPSP
+        /** Handshake I sent to peer. swarmid not set. */
+        Handshake   *hs_out_;
+        /** Handshake I got from peer. */
+        Handshake   *hs_in_;
 
         int         PeerBPS() const { return TINT_SEC / dip_avg_ * 1024; }
         /** Get a request for one packet from the queue of peer's requests. */
@@ -1097,12 +1189,15 @@ namespace swift {
     int evbuffer_add_32be(struct evbuffer *evb, uint32_t i);
     int evbuffer_add_64be(struct evbuffer *evb, uint64_t l);
     int evbuffer_add_hash(struct evbuffer *evb, const Sha1Hash& hash);
+    int evbuffer_add_chunkaddr(struct evbuffer *evb, bin_t &b, popt_chunk_addr_t chunk_addr); // PPSP
 
     uint8_t evbuffer_remove_8(struct evbuffer *evb);
     uint16_t evbuffer_remove_16be(struct evbuffer *evb);
     uint32_t evbuffer_remove_32be(struct evbuffer *evb);
     uint64_t evbuffer_remove_64be(struct evbuffer *evb);
     Sha1Hash evbuffer_remove_hash(struct evbuffer* evb);
+    binvector evbuffer_remove_chunkaddr(struct evbuffer *evb, popt_chunk_addr_t chunk_addr); // PPSP
+    void chunk32_to_bin32(uint32_t schunk, uint32_t echunk, binvector *bvptr);
 
     const char* tintstr(tint t=0);
     std::string sock2str (struct sockaddr_in addr);

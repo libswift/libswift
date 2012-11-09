@@ -65,7 +65,9 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     raw_bytes_up_(0), raw_bytes_down_(0), bytes_up_(0), bytes_down_(0),
     scheduled4del_(false),
     direct_sending_(false),
-    peer_is_source_(peerissource)
+    peer_is_source_(peerissource),
+    hs_in_(NULL),
+    hs_out_(NULL)
 {
     if (peer_==Address())
         peer_ = tracker;
@@ -86,6 +88,12 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
 
     // RATELIMIT
     transfer_->GetChannels()->push_back(this);
+
+    hs_out_ = new Handshake();
+    if (transfer_->ttype() == FILE_TRANSFER)
+	hs_out_->cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
+    else
+	hs_out_->cont_int_prot_ = POPT_CONT_INT_PROT_NONE; // PPSPTODO implement live schemes
 
     dprintf("%s #%u init channel %s transfer %d\n",tintstr(),id_,peer_.str(), transfer_->td() );
     //fprintf(stderr,"new Channel %d %s\n", id_, peer_.str() );
@@ -109,6 +117,11 @@ Channel::~Channel () {
         }
         channels->erase(iter);
     }
+
+    if (hs_in_ != NULL)
+	delete hs_in_;
+    if (hs_out_ != NULL)
+	delete hs_out_;
 }
 
 
@@ -469,6 +482,22 @@ int swift::evbuffer_add_hash(struct evbuffer *evb, const Sha1Hash& hash)  {
     return evbuffer_add(evb, hash.bits, Sha1Hash::SIZE);
 }
 
+// PPSP
+int swift::evbuffer_add_chunkaddr(struct evbuffer *evb, bin_t &b, popt_chunk_addr_t chunk_addr);
+{
+    int ret = -1;
+    if (chunk_addr_ == POPT_CHUNK_ADDR_BIN32)
+	ret = evbuffer_add_32be(evb, bin_toUInt32(b));
+    else if (chunk_addr == POPT_CHUNK_ADDR_CHUNK32)
+    {
+	ret = evbuffer_add_32be(evb, bin_toUInt32(b.base_left()));
+	ret = evbuffer_add_32be(evb, bin_toUInt32(b.base_right()));
+    }
+    return ret;
+}
+
+
+
 uint8_t swift::evbuffer_remove_8(struct evbuffer *evb) {
     uint8_t b;
     if (evbuffer_remove(evb, &b, 1) < 1)
@@ -507,3 +536,73 @@ Sha1Hash swift::evbuffer_remove_hash(struct evbuffer* evb)  {
     return Sha1Hash(false, bits);
 }
 
+// PPSP
+binvector swift::evbuffer_remove_chunkaddr(struct evbuffer *evb, popt_chunk_addr_t chunk_addr)
+{
+    binvector bv;
+    if (chunk_addr == POPT_CHUNK_ADDR_BIN32)
+    {
+	bin_t pos = bin_fromUInt32(evbuffer_remove_32be(evb));
+	bv.push_back(pos);
+    }
+    else if (chunk_addr == POPT_CHUNK_ADDR_CHUNK32)
+    {
+	uint32_t schunk = evbuffer_remove_32be(evb);
+	uint32_t echunk = evbuffer_remove_32be(evb);
+	if (schunk <= eschunk) // Bad input protection
+	    swift::chunk32_to_bin32(schunk,eschunk,&bv);
+    }
+    return bv;
+}
+
+
+
+/** Convert a chunk32 chunk specification to a list of bins. A chunk32 spec is
+ * a (start chunk ID, end chunk ID) pair, where chunk ID is just a numbering
+ * from 0 to N of all chunks, equivalent to the leaves in a bin tree. This
+ * method finds which bins describe this range.
+ */
+void swift::chunk32_to_bin32(uint32_t schunk, uint32_t echunk, binvector *bvptr)
+{
+    bin_t s(0,schunk);
+    bin_t e(0,echunk);
+
+    bin_t cur = s;
+    //char binstr[32],binstr2[32], binstr3[32];
+    while (true)
+    {
+	// Move up in tree till we exceed either start or end. If so, the
+	// previous node belongs to the range description. Next, we start at
+	// the left most chunk in the subtree next to the previous node, and see
+	// how far up we can go there.
+	//fprintf(stderr,"\ncur %s par left %s par right %s\n", cur.str(binstr), cur.parent().base_left().str(binstr2), cur.parent().base_right().str(binstr3));
+	if (cur.parent().base_left() < s || cur.parent().base_right() > e)
+	{
+	    /*if (cur.parent().base_left() < s)
+		fprintf(stderr,"parent %s left %s before s, add %s\n", cur.parent().str(binstr2), cur.parent().base_left().str(binstr3), cur.str(binstr) );
+	    if (cur.parent().base_right() > e)
+		fprintf(stderr,"parent %s right %s exceeds e, add %s\n", cur.parent().str(binstr2), cur.parent().base_right().str(binstr3), cur.str(binstr) );
+	     */
+	    bvptr->push_back(cur);
+
+	    if (cur.parent().base_left() < s)
+		cur = bin_t(0,cur.parent().base_right().layer_offset()+1);
+	    else
+		cur = bin_t(0,cur.base_right().layer_offset()+1);
+
+	    //fprintf(stderr,"newcur %s\n", cur.str(binstr) );
+
+	    if (cur >= e)
+	    {
+		if (cur == e)
+		{
+		    // fprintf(stderr,"adding e %s\n", cur.str(binstr) );
+		    bvptr->push_back(e);
+		}
+		break;
+	    }
+	}
+	else
+	    cur = cur.parent();
+    }
+}
