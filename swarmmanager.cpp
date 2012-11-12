@@ -28,8 +28,10 @@
 #include <assert.h>
 int levelcount = 0;
 // Arno: enter/leave prints disabled
-#define enter( x ) fprintf( stderr, "[%02d] Entered " x "\n", ++levelcount );
-#define exit( x )  fprintf( stderr, "[%02d] Leaving " x "\n", levelcount-- );
+#define enter( x )
+//fprintf( stderr, "[%02d] Entered " x "\n", ++levelcount );
+#define exit( x )
+//fprintf( stderr, "[%02d] Leaving " x "\n", levelcount-- );
 #else
 #undef assert
 #define assert( x )

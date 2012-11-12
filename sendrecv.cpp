@@ -12,6 +12,7 @@
 #include <cassert>
 #include <math.h>
 #include <cfloat>
+#include <sstream>
 #include "compat.h"
 
 using namespace swift;
@@ -148,14 +149,14 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
 
 void    Channel::AddHandshake (struct evbuffer *evb)
 {
-    // If peer not responding, try legacy
+    // If peer not responding, try legacy swift protocol
     if (sent_since_recv_ >= 3 && last_recv_time_ == 0)
 	hs_out_->ResetToLegacy();
 
     int encoded = -1;
     if (hs_out_->version_ == VER_SWIFT_LEGACY)
     {
-	dprintf("%s #%u +hs swift legacy\n",tintstr(),id_ );
+	//dprintf("%s #%u +hs swift legacy\n",tintstr(),id_ );
 	if (hs_in_ == NULL) { // initiating
 	    evbuffer_add_8(evb, SWIFT_INTEGRITY);
 	    evbuffer_add_32be(evb, bin_toUInt32(bin_t::ALL));
@@ -172,11 +173,11 @@ void    Channel::AddHandshake (struct evbuffer *evb)
 	    encoded = EncodeID(id_);
 	evbuffer_add_32be(evb, encoded);
 
-	dprintf("%s #%u +hs %x\n",tintstr(),id_,encoded);
+	dprintf("%s #%u +hs %x swift\n",tintstr(),id_,encoded);
     }
     else // IETF PPSP compliant
     {
-	dprintf("%s #%u +hs ietf ppsp\n",tintstr(),id_ );
+	//dprintf("%s #%u +hs ppsp\n",tintstr(),id_ );
 	evbuffer_add_8(evb, SWIFT_HANDSHAKE);
 	if (send_control_==CLOSE_CONTROL) {
 	    encoded = 0;
@@ -184,28 +185,32 @@ void    Channel::AddHandshake (struct evbuffer *evb)
 	else
 	    encoded = EncodeID(id_);
 	evbuffer_add_32be(evb, encoded);
-	dprintf("%s #%u +hs %x\n",tintstr(),id_,encoded );
 
 	// Send protocol options
 	if (send_control_ !=CLOSE_CONTROL) {
+	    std::ostringstream cross;
 	    evbuffer_add_8(evb, POPT_VERSION);
 	    evbuffer_add_8(evb, hs_out_->version_);
+	    cross << "v" << hs_out_->version_ << " ";
 
 	    if (hs_in_ == NULL) { // initiating, send swarm ID
 		evbuffer_add_8(evb, POPT_SWARMID);
 		evbuffer_add_16be(evb, Sha1Hash::SIZE); // PPSPTODO LIVE
 		evbuffer_add_hash(evb, transfer()->swarm_id() );
-		dprintf("%s #%u +hs %s\n", tintstr(),id_,transfer()->swarm_id().hex().c_str());
+		cross << "sid " << transfer()->swarm_id().hex() << " ";
 	    }
 	    evbuffer_add_8(evb, POPT_CONT_INT_PROT);
 	    evbuffer_add_8(evb, hs_out_->cont_int_prot_);
+	    cross << "cipm " << hs_out_->cont_int_prot_ << " ";
 	    if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE)
 	    {
 		evbuffer_add_8(evb, POPT_MERKLE_HASH_FUNC);
 		evbuffer_add_8(evb, hs_out_->merkle_func_);
+		cross << "mhf " << hs_out_->merkle_func_ << " ";
 	    }
 	    evbuffer_add_8(evb, POPT_CHUNK_ADDR);
 	    evbuffer_add_8(evb, hs_out_->chunk_addr_);
+	    cross << "cam " << hs_out_->chunk_addr_ << " ";
 	    if (transfer()->ttype() == LIVE_TRANSFER)
 	    {
 		evbuffer_add_8(evb, POPT_LIVE_DISC_WND);
@@ -215,7 +220,9 @@ void    Channel::AddHandshake (struct evbuffer *evb)
 		    evbuffer_add_32be(evb, (uint32_t)hs_out_->live_disc_wnd_);
 		else
 		    evbuffer_add_64be(evb, hs_out_->live_disc_wnd_);
+		cross << "ldw " << std::hex << hs_out_->live_disc_wnd_ << std::dec << " ";
 	    }
+	    dprintf("%s #%u +hs %x ppsp %s\n",tintstr(),id_,encoded, cross.str().c_str() );
 	}
 	evbuffer_add_8(evb, POPT_END);
     }
@@ -837,7 +844,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
 	bin_t ackd_pos = *iter;
 
 	// FIXME FIXME: wrap around here
-	if (ackd_pos.is_none()) // PPSPTODO does this still occur?
+	if (ackd_pos.is_none()) // safety catch
 	    return; // likely, broken chunk/ insufficient hashes
 	//LIVE
 	if (transfer()->ttype() == FILE_TRANSFER && hashtree()->size() && ackd_pos.base_offset()>=hashtree()->size_in_chunks()) {
@@ -937,7 +944,7 @@ void Channel::OnHave (struct evbuffer *evb) {
     {
 	bin_t ackd_pos = *iter;
 
-	if (ackd_pos.is_none()) // PPSPTODO does this still occur?
+	if (ackd_pos.is_none()) // safety catch
 	    return; // wow, peer has hashes
 
 	// PPPLUG
@@ -1016,7 +1023,7 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
 
     if (ver == VER_SWIFT_LEGACY)
     {
-	dprintf("%s #%u -hs swift legacy\n", tintstr(), cid );
+	//dprintf("%s #%u -hs swift legacy\n", tintstr(), cid );
 	hs->version_ = VER_SWIFT_LEGACY;
 	if (cid == 0)
 	{
@@ -1029,7 +1036,7 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
 	    }
 	    bin_t pos = bin_fromUInt32(evbuffer_remove_32be(evb));
 	    if (!pos.is_all()) {
-		dprintf("%s #%u that is not the root hash %s\n",tintstr(), cid, addr.str());
+		dprintf("%s #%u ?hs that is not the root hash %s\n",tintstr(), cid, addr.str());
 	       delete hs;
 	       return NULL;
 	    }
@@ -1041,62 +1048,73 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
 	// Read SWIFT_HANDSHAKE
 	uint8_t msgid = evbuffer_remove_8(evb);
 	hs->peer_channel_id_ = evbuffer_remove_32be(evb);
-
 	hs->ResetToLegacy();
+
+	dprintf("%s #%u -hs swift %x\n",tintstr(),cid,hs->peer_channel_id_);
     }
     else if (ver == VER_PPSPP_v1)
     {
 	// IETF PPSP compliant
-	dprintf("%s #%u -hs ietf ppsp\n", tintstr(),cid );
+	//dprintf("%s #%u -hs ietf ppsp\n", tintstr(),cid );
 	hs->peer_channel_id_ = evbuffer_remove_32be(evb);
 	bool end=false;
-	uint8_t size8 = 0;
+	uint8_t size8 = 0, i8=0;
 	uint16_t size = 0;
 	uint8_t *swarmidbytes = NULL;
 	uint8_t *msgbitmapbytes = NULL;
 	Sha1Hash swarmid;
+	std::ostringstream cross;
 	while (!end)
 	{
 	    popt_t poid = (popt_t)evbuffer_remove_8(evb);
-	    dprintf("%s #%u -hs popt %d\n", tintstr(), cid, (int)poid );
 	    switch (poid) {
 		case POPT_VERSION:
 		    hs->version_ = (popt_version_t)evbuffer_remove_8(evb);
+		    cross << "v" << hs->version_ << " ";
 		    break;
 		case POPT_SWARMID:
 		    size = evbuffer_remove_16be(evb);
-		    dprintf("%s #%u -hs swarm id size %d\n", tintstr(),cid, size );
 		    swarmidbytes = evbuffer_pullup(evb,size);
 		    swarmid = Sha1Hash(false,(const char *)swarmidbytes);
 		    hs->SetSwarmID(swarmid);
-		    dprintf("%s #%u -hs swarmid %s\n",tintstr(),cid,swarmid.hex().c_str());
+		    cross << "sid " << swarmid.hex() << " ";
 		    evbuffer_drain(evb, size);
 		    break;
 		case POPT_CONT_INT_PROT:
 		    hs->cont_int_prot_ = (popt_cont_int_prot_t)evbuffer_remove_8(evb);
+		    cross << "cipm " << hs->cont_int_prot_ << " ";
 		    break;
 		case POPT_MERKLE_HASH_FUNC:
 		    hs->merkle_func_ = (popt_merkle_func_t)evbuffer_remove_8(evb);
+		    cross << "mhf " << hs->merkle_func_ << " ";
 		    break;
 		case POPT_LIVE_SIG_ALG:
 		    hs->live_sig_alg_ = evbuffer_remove_8(evb);
+		    cross << "lsa " << hs->live_sig_alg_ << " ";
 		    break;
 		case POPT_CHUNK_ADDR:
 		    hs->chunk_addr_ = (popt_chunk_addr_t)evbuffer_remove_8(evb);
+		    cross << "cam " << hs->chunk_addr_ << " ";
 		    break;
 		case POPT_LIVE_DISC_WND:
 		    if (hs->chunk_addr_ == POPT_CHUNK_ADDR_BIN32 || hs->chunk_addr_ == POPT_CHUNK_ADDR_CHUNK32)
 			hs->live_disc_wnd_ = evbuffer_remove_32be(evb);
 		    else
 			hs->live_disc_wnd_ = evbuffer_remove_64be(evb);
+		    cross << "ldw " << std::hex << hs->live_disc_wnd_ << std::dec << " ";
 		    break;
 		case POPT_SUPP_MSGS:
 		    size8 = evbuffer_remove_8(evb);
 		    msgbitmapbytes = evbuffer_pullup(evb,size8);
 		    evbuffer_drain(evb, size);
+		    cross << "msgs " << std::hex;
+		    for (i8=0; i8<size8; i8++)
+			cross << (int)msgbitmapbytes[i8];
+		    cross << std::dec;
 		    break;
 		case POPT_END:
 		    end = true;
+		    dprintf("%s #%u -hs %x ppsp %s\n", tintstr(), cid, hs->peer_channel_id_, cross.str().c_str() );
 		    break;
 		default:
 		    dprintf("%s #%u ?hs popt id unknown %i\n",tintstr(),cid,(int)poid);
@@ -1112,7 +1130,7 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
 void Channel::OnHandshake(Handshake *hishs) {
 
     dprintf("OnHandshake\n");
-    dprintf("%s #%u -hs %x\n",tintstr(),id_,hishs->peer_channel_id_);
+    dprintf("%s #%u -hs %x %s opened as channel %u\n",tintstr(),id_,hishs->peer_channel_id_,(hishs->version_ == VER_SWIFT_LEGACY) ? "swift" : "ppsp", id_);
 
     if (hishs->peer_channel_id_ == 0) {
         // Arno: Got explicit close from peer, close channel and don't send reply
