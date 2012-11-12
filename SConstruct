@@ -4,10 +4,10 @@
 # Requirements:
 #  - scons: Cross-platform build system    http://www.scons.org/
 #  - libevent2: Event driven network I/O   http://www.libevent.org/
-#    * Install in \build\libevent-2.0.14-stable
-# For debugging:
+#    * Set install path below
+# For unittests:
 #  - googletest: Google C++ Test Framework http://code.google.com/p/googletest/
-#       * Install in \build\gtest-1.4.0
+#       * Set install path in tests/SConscript
 #
 
 
@@ -22,7 +22,7 @@ TestDir='tests'
 target = 'swift'
 source = [ 'bin.cpp', 'binmap.cpp', 'sha1.cpp','hashtree.cpp',
     	   'transfer.cpp', 'channel.cpp', 'sendrecv.cpp', 'send_control.cpp', 
-    	   'compat.cpp','avgspeed.cpp', 'avail.cpp', 'cmdgw.cpp', 
+    	   'compat.cpp','avgspeed.cpp', 'avail.cpp', 'cmdgw.cpp', 'httpgw.cpp',
            'storage.cpp', 'zerostate.cpp', 'zerohashtree.cpp',
            'api.cpp', 'content.cpp', 'live.cpp', 'swarmmanager.cpp']
 # cmdgw.cpp now in there for SOCKTUNNEL
@@ -31,7 +31,6 @@ env = Environment()
 if sys.platform == "win32":
     #libevent2path = '\\build\\libevent-2.0.19-stable'
     libevent2path = '\\build\\libevent-2.0.20-stable-debug'
-    
 
     # "MSVC works out of the box". Sure.
     # Make sure scons finds cl.exe, etc.
@@ -45,9 +44,6 @@ if sys.platform == "win32":
     include = os.environ['INCLUDE']
     include += libevent2path+'\\include;'
     include += libevent2path+'\\WIN32-Code;'
-    if DEBUG:
-        include += '\\build\\gtest-1.4.0\\include;'
-    
     env.Append ( ENV = { 'INCLUDE' : include } )
     
     if 'CXXPATH' in os.environ:
@@ -69,14 +65,10 @@ if sys.platform == "win32":
      # Set libs to link to
      # Advapi32.lib for CryptGenRandom in evutil_rand.obj
     libs = ['ws2_32','libevent','Advapi32'] 
-    if DEBUG:
-        libs += ['gtestd']
         
     # Update lib search path
     libpath = os.environ['LIBPATH']
     libpath += libevent2path+';'
-    if DEBUG:
-        libpath += '\\build\\gtest-1.4.0\\msvc\\gtest\\Debug;'
 
     # Somehow linker can't find uuid.lib
     libpath += 'C:\\Program Files\\Microsoft SDKs\\Windows\\v6.0A\\Lib;'
@@ -85,7 +77,7 @@ if sys.platform == "win32":
     if not DEBUG:
     	env.Append(LINKFLAGS="/SUBSYSTEM:WINDOWS")
     
-    APPSOURCE=['swift.cpp','httpgw.cpp','statsgw.cpp','getopt.c','getopt_long.c']
+    APPSOURCE=['swift.cpp','statsgw.cpp','getopt.c','getopt_long.c']
     
 else:
     libevent2path = '/arno/pkgs/libevent-2.0.15-arno-http'
@@ -115,15 +107,18 @@ else:
         print "To use external libs, set LIBPATH environment variable to list of colon-separated lib dirs"
     libpath += libevent2path+'/lib:'
 
+
     linkflags = '-Wl,-rpath,'+libevent2path+'/lib'
     env.Append(LINKFLAGS=linkflags);
 
 
-    APPSOURCE=['swift.cpp','httpgw.cpp','statsgw.cpp']
+    APPSOURCE=['swift.cpp','statsgw.cpp']
 
+env.Append(LIBPATH=libpath);
+    
 if DEBUG:
     env.Append(CXXFLAGS="-DDEBUG")
-
+   
 env.StaticLibrary (
     target='libswift',
     source = source,
@@ -137,10 +132,10 @@ env.Program(
    LIBS=[libs,'libswift'],
    LIBPATH=libpath+':.')
 
-   
 Export("env")
 Export("libs")
-Export("libpath")
+Export("linkflags")
 Export("DEBUG")
 # Arno: uncomment to build tests
 #SConscript('tests/SConscript')
+

@@ -17,6 +17,9 @@
 #include <event2/http.h>
 #include <event2/http_struct.h>
 
+#include "svn-revision.h"
+#include "swarmmanager.h"
+
 using namespace swift;
 
 
@@ -65,6 +68,7 @@ void usage(void)
     fprintf(stderr,"  -2 urlfilename-in-hex, a win32 workaround for non UTF-16 popen\n");
     fprintf(stderr,"  -3 zerosdir-in-hex, a win32 workaround for non UTF-16 popen\n");
     fprintf(stderr,"  -T time-out in seconds for slow zero state connections\n");
+    fprintf(stderr, "%s\n", SubversionRevisionString.c_str() );
 
 }
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
@@ -369,7 +373,6 @@ int utf8main (int argc, char** argv)
     zs->SetContentDir(zerostatedir);
     zs->SetConnectTimeout(zerostimeout);
 
-
     if (!cmdgw_enabled && livesource_input == "" && zerostatedir == "")
     {
         // Seed file or dir, or create multi-spec
@@ -447,7 +450,6 @@ int utf8main (int argc, char** argv)
         evtimer_assign(&evreport, Channel::evbase, ReportCallback, NULL);
         evtimer_add(&evreport, tint2tv(REPORT_INTERVAL*TINT_SEC));
 
-        // Arno:
         if (scan_dirname != "") {
             evtimer_assign(&evrescan, Channel::evbase, RescanDirCallback, NULL);
             evtimer_add(&evrescan, tint2tv(RESCAN_DIR_INTERVAL*TINT_SEC));

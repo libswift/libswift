@@ -137,6 +137,8 @@ static ContentTransfer *FindActivateTransferByTD(int td)
     {
 	if (!swarm->Touch()) {
 	    swarm = SwarmManager::GetManager().ActivateSwarm( swarm->RootHash() );
+            if (swarm == NULL)
+                return NULL;
 	    if (!swarm->Touch())
 		return NULL;
 	}
@@ -536,6 +538,8 @@ int swift::Seek(int td, int64_t offset, int whence)
 
     if( !swarm->Touch() ) {
 	swarm = SwarmManager::GetManager().ActivateSwarm( swarm->RootHash() );
+        if (swarm == NULL)
+           return -1;
 	if (!swarm->Touch())
 	    return -1;
     }
@@ -568,6 +572,8 @@ void swift::AddPeer(Address& addr, const Sha1Hash& swarmid)
     {
 	if (!swarm->Touch()) {
 	    swarm = SwarmManager::GetManager().ActivateSwarm(swarmid);
+            if (swarm == NULL)
+                return;
 	    if (!swarm->Touch())
 		return;
 	}

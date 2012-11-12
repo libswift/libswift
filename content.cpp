@@ -99,7 +99,7 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
     Channel::Time();
 
     if ((ContentTransfer::cleancounter % TRANSFER_IDLE_DEACTIVATE_INTERVAL) == 0) {
-	// Deactivate FileTransfer that have been idle too long
+	// Deactivate FileTransfers that have been idle too long. Including zerostate
 	SwarmManager::GetManager().DeactivateIdleSwarms();
     }
 
@@ -338,4 +338,11 @@ void ContentTransfer::Progress(bin_t bin) {
 	if( minlayer >= (*iter).second )
 	    ((*iter).first)( td_, bin );
     }
+}
+
+void ContentTransfer::SetTD(int td)
+{
+    td_ = td;
+    if (storage_ != NULL)
+	storage_->SetTD(td);
 }

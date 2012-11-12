@@ -10,7 +10,6 @@
  *  a range parameter.
  */
 #include "binmap.h"
-#include "binheap.h"
 
 #include <time.h>
 #include <set>

@@ -24,7 +24,8 @@
  *  Current implementation will deactivate:
  *  - when SetMaximumActiveSwarms() is exceeded (Thomas)
  *  - when idle for more than SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED.
- *    Idle is when no Read(), Write() or DATA send or receive (Arno).
+ *    Idle is when no Read(), Write() or DATA send or receive (Arno)
+ *    (see ContentTransfer::GlobalCleanCallback).
  *
  *  Note that FileTransfers with the zero-state implementation are actually
  *  unloaded (=no FileTransfer object and no admin in SwarmManager) when idle,
@@ -49,7 +50,6 @@ namespace swift {
         Sha1Hash rootHash_;
         bool active_;
         tint latestUse_;
-        bool toBeRemoved_;
         bool stateToBeRemoved_;
         bool contentToBeRemoved_;
         FileTransfer* ft_;
@@ -79,7 +79,6 @@ namespace swift {
         bool IsActive();
         const Sha1Hash& RootHash();
         int Id();
-        bool ToBeRemoved();
         FileTransfer* GetTransfer(bool touch = true);
         std::string& Filename();
         Address& Tracker();

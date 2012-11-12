@@ -48,9 +48,10 @@ TEST(TransferTest,TransferFile) {
     //}
     
     // now, submit a new file
-    
-    FileTransfer* seed_transfer = new FileTransfer(BTF);
-    MmapHashTree* seed = seed_transfer->hashtree();
+
+    int file = swift::Open(BTF);
+    FileTransfer* seed_transfer = new FileTransfer(file, BTF);
+    HashTree* seed = seed_transfer->hashtree();
     EXPECT_TRUE(A==seed->hash(bin_t(0,0)));
     EXPECT_TRUE(E==seed->hash(bin_t(0,4)));
     EXPECT_TRUE(ABCD==seed->hash(bin_t(2,0)));
@@ -61,14 +62,16 @@ TEST(TransferTest,TransferFile) {
     EXPECT_EQ(4100,seed->size());
     EXPECT_EQ(5,seed->size_in_chunks());
     EXPECT_EQ(4100,seed->complete());
-    EXPECT_EQ(4100,seed->seq_complete());
+    //Elric: Is this function still doing the same?
+    EXPECT_EQ(4100,seed->seq_complete(0));
     EXPECT_EQ(bin_t(2,0),seed->peak(0));
 
     // retrieve it
     unlink("copy");
-    FileTransfer* leech_transfer = new FileTransfer("copy",seed->root_hash());
-    MmapHashTree* leech = leech_transfer->hashtree();
-    leech_transfer->picker().Randomize(0);
+    int copy = swift::Open("copy");
+    FileTransfer* leech_transfer = new FileTransfer(copy, "copy",seed->root_hash());
+    HashTree* leech = leech_transfer->hashtree();
+    leech_transfer->picker()->Randomize(0);
     // transfer peak hashes
     for(int i=0; i<seed->peak_count(); i++)
         leech->OfferHash(seed->peak(i),seed->peak_hash(i));
@@ -85,13 +88,13 @@ TEST(TransferTest,TransferFile) {
     for (int i=0; i<5; i++) {
         if (i==2) { // now: stop, save, start
             delete leech_transfer;
-            leech_transfer = new FileTransfer("copy",seed->root_hash(),false);
+            leech_transfer = new FileTransfer(copy, "copy",seed->root_hash(),false);
             leech = leech_transfer->hashtree();
-            leech_transfer->picker().Randomize(0);
+            leech_transfer->picker()->Randomize(0);
             EXPECT_EQ(2,leech->chunks_complete());
             EXPECT_EQ(bin_t(2,0),leech->peak(0));
         }
-        bin_t next = leech_transfer->picker().Pick(seed->ack_out(),1,TINT_NEVER);
+        bin_t next = leech_transfer->picker()->Pick(*seed->ack_out(),1,TINT_NEVER);
         ASSERT_NE(bin_t::NONE,next);
         ASSERT_TRUE(next.base_offset()<5);
         uint8_t buf[1024];         //size_t len = seed->storer->ReadData(next,&buf);
@@ -109,7 +112,8 @@ TEST(TransferTest,TransferFile) {
     EXPECT_EQ(4100,leech->size());
     EXPECT_EQ(5,leech->size_in_chunks());
     EXPECT_EQ(4100,leech->complete());
-    EXPECT_EQ(4100,leech->seq_complete());
+    //TODO: Is this function still doing the same?
+    EXPECT_EQ(4100,leech->seq_complete(0));
 
 }
 /*

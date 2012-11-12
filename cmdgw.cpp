@@ -92,7 +92,7 @@ evutil_socket_t cmd_tunnel_sock=INVALID_SOCKET;
 // HTTP gateway address for PLAY cmd
 Address cmd_gw_httpaddr;
 
-bool cmd_gw_debug=true;
+bool cmd_gw_debug=false;
 
 tint cmd_gw_last_open=0;
 
@@ -738,7 +738,10 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         // Parse URL
         parseduri_t puri;
         if (!swift::ParseURI(url,puri))
+        {
+            dprintf("cmd: START: cannot parse uri %s\n", url.c_str() );
             return ERROR_BAD_ARG;
+        }
 
         std::string trackerstr = puri["server"];
         std::string hashstr = puri["hash"];
@@ -817,7 +820,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         req->playsent = false;
         req->xcontentdur = durationstr;
 
-        dprintf("%s @%i start transfer %i\n",tintstr(),req->id,req->td);
+        dprintf("%s @%i start transfer %d\n",tintstr(),req->id,req->td);
 
 
         //if (cmd_gw_debug)
@@ -831,7 +834,11 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
             Storage *storage = swift::GetStorage(req->td);
             if (storage == NULL)
-        	return ERROR_BAD_ARG;
+            {
+                dprintf("cmd: START: cannot get storage td %d\n", req->td );
+                CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarm_id);
+        	return ERROR_BAD_SWARM;
+            }
             storage_files_t sfs = storage->GetStorageFiles();
             if (sfs.size() > 0)
                 minsize = sfs[0]->GetSize();
