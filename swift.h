@@ -330,7 +330,7 @@ namespace swift {
       public:
 	//Handshake() : version_(VER_PPSP_v1), swarm_id_ptr_(NULL), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL) {}
 	// TESTING: BINS32 as default
-	Handshake() : version_(VER_PPSP_v1), swarm_id_ptr_(NULL), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL) {}
+	Handshake() : version_(VER_PPSP_v1), swarm_id_ptr_(NULL), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL) {}
 	~Handshake() { ReleaseSwarmID(); }
 	void SetSwarmID(Sha1Hash &swarmid) { swarm_id_ptr_ = new Sha1Hash(swarmid); }
 	const Sha1Hash &GetSwarmID() { return (swarm_id_ptr_ == NULL) ? Sha1Hash::ZERO : *swarm_id_ptr_; }

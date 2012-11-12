@@ -16,7 +16,7 @@
 #include "swarmmanager.h"
 
 #define SECONDS_UNTIL_INDEX_REUSE   			120
-#define SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED   30
+#define SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED   300
 
 #ifdef __APPLE__
 #define DEFAULT_MAX_ACTIVE_SWARMS			224 // 2 file descriptors per swarm 256 max
@@ -28,8 +28,10 @@
 #include <assert.h>
 int levelcount = 0;
 // Arno: enter/leave prints disabled
-#define enter( x )	fprintf( stderr, "[%02d] Entered " x "\n", ++levelcount );
-#define exit( x )	fprintf( stderr, "[%02d] Leaving " x "\n", levelcount-- );
+#define enter( x )
+//fprintf( stderr, "[%02d] Entered " x "\n", ++levelcount );
+#define exit( x )
+//fprintf( stderr, "[%02d] Leaving " x "\n", levelcount-- );
 #else
 #undef assert
 #define assert( x )
@@ -67,12 +69,8 @@ SwarmData::~SwarmData() {
 
 bool SwarmData::Touch() {
     if( !active_ )
-    {
-	fprintf(stderr,"Touch false\n");
         return false;
-    }
     latestUse_ = usec_time();
-    fprintf(stderr,"Touch true\n");
     return true;
 }
 

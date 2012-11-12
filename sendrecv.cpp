@@ -417,8 +417,16 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         evbuffer_add_32be(evb, hs_in_->peer_channel_id_);
     }
     evbuffer_add_8(evb, SWIFT_DATA);
-    // PPSPTODO LEDBAT current system time 64-bit
     evbuffer_add_chunkaddr(evb,tosend,hs_out_->chunk_addr_);
+    // PPSPTODO LEDBAT current system time 64-bit
+    if (hs_in_ != NULL && hs_in_->version_ == VER_PPSP_v1)
+    {
+	// NOTE: Time updates NOW, so customary behaviour where NOW is not
+	// updated during the handling of a message (just at start) is no longer
+	// there. Not sure if this matters.
+        evbuffer_add_64be(evb, Time() );
+    }
+
 
     struct evbuffer_iovec vec;
     if (evbuffer_reserve_space(evb, transfer()->chunk_size(), &vec, 1) < 0) {
@@ -718,6 +726,9 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 	return bin_t::NONE;
     }
     bin_t pos = bv.front();
+    tint peer_time = TINT_NEVER;
+    if (hs_out_->version_ == VER_PPSP_v1)
+	peer_time = evbuffer_remove_64be(evb);
 
     // Arno: Assuming DATA last message in datagram
     if (evbuffer_get_length(evb) > transfer()->chunk_size()) {
@@ -811,7 +822,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
 	Close(CLOSE_DO_NOT_SEND);
 	return;
     }
-    tint peer_time = evbuffer_remove_64be(evb); // FIXME 32
+    tint peer_time = evbuffer_remove_64be(evb);
 
     binvector::iterator iter;
     for (iter=bv.begin(); iter != bv.end(); iter++)

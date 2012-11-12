@@ -491,8 +491,8 @@ int swift::evbuffer_add_chunkaddr(struct evbuffer *evb, bin_t &b, popt_chunk_add
 	ret = evbuffer_add_32be(evb, bin_toUInt32(b));
     else if (chunk_addr == POPT_CHUNK_ADDR_CHUNK32)
     {
-	ret = evbuffer_add_32be(evb, bin_toUInt32(b.base_left()));
-	ret = evbuffer_add_32be(evb, bin_toUInt32(b.base_right()));
+	ret = evbuffer_add_32be(evb, (uint32_t)b.base_offset() );
+	ret = evbuffer_add_32be(evb, (uint32_t)(b.base_offset()+b.base_length()-1) ); // end is inclusive
     }
     return ret;
 }
