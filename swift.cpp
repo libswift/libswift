@@ -72,7 +72,7 @@ void usage(void)
 
 }
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
-int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
+int HandleSwiftFile(std::string filename, Sha1Hash root_hash, Address &tracker, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
 int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate);
 int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool activate);
 void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Hash root_hash);
@@ -382,7 +382,7 @@ int utf8main (int argc, char** argv)
             if (filename != "" || root_hash != Sha1Hash::ZERO) {
 
                 // Single file
-                ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,livestream,urlfilename,maxspeed);
+                ret = HandleSwiftFile(filename,root_hash,tracker,trackerargstr,printurl,livestream,urlfilename,maxspeed);
             }
             else if (scan_dirname != "")
             {
@@ -409,7 +409,7 @@ int utf8main (int argc, char** argv)
                 quit("Cannot generate multi-file spec")
             else
                 // Calc roothash
-                ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,false,urlfilename,maxspeed);
+                ret = HandleSwiftFile(filename,root_hash,tracker,trackerargstr,printurl,false,urlfilename,maxspeed);
         }
 
     // For testing
@@ -478,12 +478,12 @@ int utf8main (int argc, char** argv)
 }
 
 
-int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed)
+int HandleSwiftFile(std::string filename, Sha1Hash root_hash, Address &tracker, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed)
 {
     if (root_hash!=Sha1Hash::ZERO && filename == "")
         filename = strdup(root_hash.hex().c_str());
 
-    single_td = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size,livestream,true); //activate always
+    single_td = OpenSwiftFile(filename,root_hash,tracker,false,chunk_size,livestream,true); //activate always
     if (single_td < 0)
         quit("cannot open file %s",filename.c_str());
     if (printurl)
@@ -505,7 +505,7 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
         std::ostringstream oss;
         oss << "tswift:";
         if (trackerargstr != "")
-           oss << "//" << trackerargstr;
+           oss << "//" << trackerargstr; // use unresolved tracker hostname here as specified on cmd line
         oss << "/" << swift::SwarmID(single_td).hex();
         if (chunk_size != SWIFT_DEFAULT_CHUNK_SIZE)
            oss << "$" << chunk_size;
