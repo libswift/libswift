@@ -30,7 +30,7 @@ libpath.append(".")
 
 if DEBUG and sys.platform == "linux2":
     #Enable profiling
-    env.Append(CXXFLAGS="-fprofile-arcs -ftest-coverage")
+    env.Append(CXXFLAGS="-fprofile-arcs -ftest-coverage -g")
     linkflags += "-lgcov -fprofile-arcs"
     env.Append(LINKFLAGS=linkflags);
 
