@@ -1,6 +1,10 @@
 /*
  *  swift.h
- *  the main header file for libswift, normally you should only read this one
+ *  the main header file for libswift, normally you should only read this one.
+ *
+ *  This implementation supports 2 versions of swift:
+ *  - the original (legacy version)
+ *  - the IETF Peer-to-Peer Streaming Peer Protocol -03 compliant one.
  *
  *  Arno: libswift clients should call the swift top-level API which consists of
  *  swift::Listen, Open, Read, etc. The *Transfer interfaces are internal
@@ -20,7 +24,7 @@
  */
 /*
 
-  The swift protocol
+  The swift protocol (legacy)
 
   Messages
 
@@ -32,12 +36,12 @@
   DATA        01, bin_32, buffer
   1K of data.
 
-  ACK        02, bin_32, timestamp_32
-  HAVE       03, bin_32
+  ACK         02, bin_32, timestamp_64
+  HAVE        03, bin_32
   Confirms successfull delivery of data. Used for congestion control, as well.
 
-  HINT        08, bin_32
-  Practical value of "hints" is to avoid overlap, mostly.
+  REQUEST     08, bin_32
+  Practical value of requests aka "hints" is to avoid overlap, mostly.
   Hints might be lost in the network or ignored.
   Peer might send out data without a hint.
   Hint which was not responded (by DATA) in some RTTs
@@ -45,15 +49,15 @@
   As peers cant pick randomly kilobyte here and there,
   they send out "long hints" for non-base bins.
 
-  HASH        04, bin_32, sha1hash
+  INTEGRITY   04, bin_32, sha1hash
   SHA1 hash tree hashes for data verification. The
   connection to a fresh peer starts with bootstrapping
   him with peak hashes. Later, before sending out
   any data, a peer sends the necessary uncle hashes.
 
-  PEX+/PEX-    05/06, ipv4 addr, port
+  PEX+/PEX-   05/06, ipv4 addr, port
   Peer exchange messages; reports all connected and
-  disconected peers. Might has special meaning (as
+  disconnected peers. Might has special meaning (as
   in the case with swarm supervisors).
 
 */
@@ -98,6 +102,7 @@ namespace swift {
 
 #define SWIFT_URI_SCHEME              "tswift"
 
+// Value for protocol option: Live Discard Window
 #define POPT_LIVE_DISC_WND_ALL	      0xFFFFFFFF	// automatically truncated for 32-bit
 
 
@@ -247,7 +252,6 @@ namespace swift {
     bool ParseURI(std::string uri,parseduri_t &map);
 
     /** swift protocol message types; these are used on the wire. */
-    //PPSPTODO rename
     typedef enum {
         SWIFT_HANDSHAKE = 0,
         SWIFT_DATA = 1,
@@ -277,6 +281,9 @@ namespace swift {
         LIVE_TRANSFER
     } transfer_t;
 
+    /** Arno: enum to indicate when to send an explicit close to the peer when
+     * doing a local close.
+     */
     typedef enum {
 	CLOSE_DO_NOT_SEND,
 	CLOSE_SEND,
@@ -286,9 +293,10 @@ namespace swift {
 
     typedef enum {
         VER_SWIFT_LEGACY=0, //legacy swift
-        VER_PPSP_v1=1  // IETF PPSPP -03 compliant
+        VER_PPSPP_v1=1      // IETF PPSPP compliant
     } popt_version_t;
 
+    // Protocol options defined by IETF PPSPP
     typedef enum {
 	POPT_VERSION = 0,
 	POPT_SWARMID = 1,
@@ -328,9 +336,9 @@ namespace swift {
     class Handshake
     {
       public:
-	//Handshake() : version_(VER_PPSP_v1), swarm_id_ptr_(NULL), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL) {}
+	//Handshake() : version_(VER_PPSPP_v1), swarm_id_ptr_(NULL), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL) {}
 	// TESTING: BINS32 as default
-	Handshake() : version_(VER_PPSP_v1), swarm_id_ptr_(NULL), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL) {}
+	Handshake() : version_(VER_PPSPP_v1), swarm_id_ptr_(NULL), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL) {}
 	~Handshake() { ReleaseSwarmID(); }
 	void SetSwarmID(Sha1Hash &swarmid) { swarm_id_ptr_ = new Sha1Hash(swarmid); }
 	const Sha1Hash &GetSwarmID() { return (swarm_id_ptr_ == NULL) ? Sha1Hash::ZERO : *swarm_id_ptr_; }
@@ -338,11 +346,11 @@ namespace swift {
 	bool IsSupported()
 	{
 	    if (cont_int_prot_ == POPT_CONT_INT_PROT_SIGNALL)
-		return false;
+		return false; // PPSPTODO
 	    else if (merkle_func_ >= POPT_MERKLE_HASH_FUNC_SHA224)
-		return false;
+		return false; // PPSPTODO
 	    else if (chunk_addr_ == POPT_CHUNK_ADDR_BYTE64 || chunk_addr_ == POPT_CHUNK_ADDR_BIN64 || chunk_addr_ == POPT_CHUNK_ADDR_CHUNK64)
-		return false;
+		return false; // PPSPTODO
 	    return true;
 	}
 
@@ -355,12 +363,13 @@ namespace swift {
 	popt_chunk_addr_t	chunk_addr_;
 	uint64_t		live_disc_wnd_;
       protected:
-	/** Dynamically allocated such that we can deallocate it and save Sha1Hash::SIZE bytes per channel */
+	/** Dynamically allocated such that we can deallocate it and
+	 * save Sha1Hash::SIZE bytes per channel */
 	Sha1Hash 		*swarm_id_ptr_;
     };
 
     class PiecePicker;
-    //class CongestionController; // Arno: Currently part of Channel. See ::NextSendTime
+    //class CongestionController; // Arno: Currently part of Channel. See ::NextSendTime()
     class Channel;
     typedef std::vector<Channel *>	channels_t;
     typedef void (*ProgressCallback) (int td, bin_t bin);
@@ -531,7 +540,7 @@ namespace swift {
         bool            zerostate_;
     };
 
-    /** A class representing live transfer. */
+    /** A class representing a live transfer. */
     class    LiveTransfer : public ContentTransfer {
        public:
 
@@ -646,7 +655,7 @@ namespace swift {
     class Channel {
 
       public:
-        Channel    (ContentTransfer* transfer, int socket=INVALID_SOCKET, Address peer=Address(), bool peerissource=false);
+        Channel( ContentTransfer* transfer, int socket=INVALID_SOCKET, Address peer=Address(), bool peerissource=false);
         ~Channel();
 
         typedef enum {
@@ -668,7 +677,7 @@ namespace swift {
 
         static tint     epoch, start;
         static uint64_t global_dgrams_up, global_dgrams_down, global_raw_bytes_up, global_raw_bytes_down, global_bytes_up, global_bytes_down;
-        static void CloseChannelByAddress(const Address &addr);
+        static void 	CloseChannelByAddress(const Address &addr);
 
         // SOCKMGMT
         // Arno: channel is also a "singleton" class that manages all sockets

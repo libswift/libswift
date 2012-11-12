@@ -419,7 +419,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     evbuffer_add_8(evb, SWIFT_DATA);
     evbuffer_add_chunkaddr(evb,tosend,hs_out_->chunk_addr_);
     // PPSPTODO LEDBAT current system time 64-bit
-    if (hs_in_ != NULL && hs_in_->version_ == VER_PPSP_v1)
+    if (hs_in_ != NULL && hs_in_->version_ == VER_PPSPP_v1)
     {
 	// NOTE: Time updates NOW, so customary behaviour where NOW is not
 	// updated during the handling of a message (just at start) is no longer
@@ -569,7 +569,7 @@ void    Channel::Recv (struct evbuffer *evb) {
 
     Handshake *hishs = NULL;
     if (hs_in_ == NULL) { // first reply from client
-	hishs = StaticOnHandshake(peer_,id(),false,VER_PPSP_v1,evb);
+	hishs = StaticOnHandshake(peer_,id(),false,VER_PPSPP_v1,evb);
 	if (hishs == NULL)
 	    return;
 	else
@@ -727,7 +727,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     }
     bin_t pos = bv.front();
     tint peer_time = TINT_NEVER;
-    if (hs_out_->version_ == VER_PPSP_v1)
+    if (hs_out_->version_ == VER_PPSPP_v1)
 	peer_time = evbuffer_remove_64be(evb);
 
     // Arno: Assuming DATA last message in datagram
@@ -996,7 +996,7 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
 	if (msgid == SWIFT_INTEGRITY)
 	    ver = VER_SWIFT_LEGACY;
 	else if (msgid == SWIFT_HANDSHAKE)
-	    ver = VER_PPSP_v1;
+	    ver = VER_PPSPP_v1;
 	else
 	{
 	    dprintf("%s #%u ?hs unknown protocol %d %s\n", tintstr(),cid,msgid,addr.str());
@@ -1032,7 +1032,7 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
 	hs->chunk_addr_ = POPT_CHUNK_ADDR_BIN32;
 	hs->live_disc_wnd_ = (uint32_t)POPT_LIVE_DISC_WND_ALL;
     }
-    else if (ver == VER_PPSP_v1)
+    else if (ver == VER_PPSPP_v1)
     {
 	// IETF PPSP compliant
 	dprintf("%s #%u -hs ietf ppsp\n", tintstr(),cid );
@@ -1301,7 +1301,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
     Channel* channel = NULL;
     if (mych==0) { // peer initiates handshake
 
-	hishs = StaticOnHandshake(addr,0,false,VER_PPSP_v1,evb);
+	hishs = StaticOnHandshake(addr,0,false,VER_PPSPP_v1,evb);
 	if (hishs == NULL) // dprintf already called
 	    return_log ("%s #0 ?hs bad\n",tintstr());
 
