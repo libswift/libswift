@@ -134,26 +134,4 @@ static void printAddresses(void) {
 }
 
 
-void nat_test_update(void) {
-    static bool initialized;
-    if (!initialized) {
-        initialized = true;
-        printAddresses();
-    }
-
-    if (tries < MAX_TRIES && NOW - test_start > 30 * TINT_SEC) {
-        if (tries == 0) {
-            Address any;
-            SOCKET sock = Datagram::Bind(any, callbacks);
-            callbacks.sock = sock;
-        } else if (packets_since_last_try == 0) {
-            // Keep on trying if we didn't receive _any_ packet in response to our last request
-            tries--;
-        }
-        tries++;
-        callbacks.may_write = on_may_send;
-        Datagram::Listen3rdPartySocket(callbacks);
-    }
-}
-
 }

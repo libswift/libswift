@@ -84,7 +84,7 @@ void ContentTransfer::GarbageCollectChannels()
                 hasestablishedpeers = true;
         }
     }
-    dprintf("%s F%d content gc chans\n",tintstr(),td_);
+    //dprintf("%s F%d content gc chans\n",tintstr(),td_);
     CloseChannels(delset);
 
     // Arno, 2012-02-24: Check for liveliness.
@@ -160,6 +160,8 @@ void ContentTransfer::ReConnectToTrackerIfAllowed(bool hasestablishedpeers)
 
 void ContentTransfer::ConnectToTracker()
 {
+    // dprintf("%s F%d content contact tracker\n",tintstr(),td_);
+
     if (!IsOperational())
  	return;
 

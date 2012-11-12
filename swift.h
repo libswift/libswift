@@ -1216,8 +1216,6 @@ namespace swift {
     std::string sock2str (struct sockaddr_in addr);
  #define SWIFT_MAX_CONNECTIONS 20
 
-    void nat_test_update(void);
-
     // SOCKTUNNEL
     void CmdGwTunnelUDPDataCameIn(Address srcaddr, uint32_t srcchan, struct evbuffer* evb);
     void CmdGwTunnelSendUDP(struct evbuffer *evb); // for friendship with Channel
