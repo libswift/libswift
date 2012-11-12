@@ -353,6 +353,16 @@ namespace swift {
 		return false; // PPSPTODO
 	    return true;
 	}
+	void ResetToLegacy()
+	{
+	    // Do not reset peer_channel_id
+	    version_ = VER_SWIFT_LEGACY;
+	    cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
+	    merkle_func_ = POPT_MERKLE_HASH_FUNC_SHA1;
+	    live_sig_alg_ = 0; // PPSPTODO
+	    chunk_addr_ = POPT_CHUNK_ADDR_BIN32;
+	    live_disc_wnd_ = (uint32_t)POPT_LIVE_DISC_WND_ALL;
+	}
 
         /**    Peer channel id; zero if we are trying to open a channel. */
         uint32_t    		peer_channel_id_;

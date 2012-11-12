@@ -148,6 +148,10 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
 
 void    Channel::AddHandshake (struct evbuffer *evb)
 {
+    // If peer not responding, try legacy
+    if (sent_since_recv_ >= 3 && last_recv_time_ == 0)
+	hs_out_->ResetToLegacy();
+
     int encoded = -1;
     if (hs_out_->version_ == VER_SWIFT_LEGACY)
     {
@@ -569,7 +573,10 @@ void    Channel::Recv (struct evbuffer *evb) {
 
     Handshake *hishs = NULL;
     if (hs_in_ == NULL) { // first reply from client
-	hishs = StaticOnHandshake(peer_,id(),false,VER_PPSPP_v1,evb);
+	if (hs_out_->version_ == VER_SWIFT_LEGACY) // I sent PPSPP_v1 HS, did not respond, now trying legacy
+	    hishs = StaticOnHandshake(peer_,id(),true,VER_SWIFT_LEGACY,evb);
+	else
+	    hishs = StaticOnHandshake(peer_,id(),false,VER_PPSPP_v1,evb);
 	if (hishs == NULL)
 	    return;
 	else
@@ -988,6 +995,8 @@ void    Channel::OnHint (struct evbuffer *evb) {
  */
 Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_known, popt_version_t ver, struct evbuffer *evb)
 {
+    dprintf("StaticOnHandshake: %s id %u known %d ver %d\n", addr.str(), cid, (int)ver_known, ver );
+
     Handshake *hs = new Handshake();
 
     if (!ver_known)
@@ -1009,28 +1018,31 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
     {
 	dprintf("%s #%u -hs swift legacy\n", tintstr(), cid );
 	hs->version_ = VER_SWIFT_LEGACY;
-	if (evbuffer_get_length(evb) < 4+1+4+Sha1Hash::SIZE) {
-	   dprintf("%s #%u incorrect size %i initial handshake packet %s\n", tintstr(),cid,(int)evbuffer_get_length(evb),addr.str());
-	   delete hs;
-	   return NULL;
+	if (cid == 0)
+	{
+	    // Incoming handshake
+	    if (evbuffer_get_length(evb)<4+1+4+Sha1Hash::SIZE)
+	    {
+	        dprintf("%s #0 incorrect size %i initial handshake packet %s\n", tintstr(),(int)evbuffer_get_length(evb),addr.str());
+	        delete hs;
+	        return NULL;
+	    }
+	    bin_t pos = bin_fromUInt32(evbuffer_remove_32be(evb));
+	    if (!pos.is_all()) {
+		dprintf("%s #%u that is not the root hash %s\n",tintstr(), cid, addr.str());
+	       delete hs;
+	       return NULL;
+	    }
+	    Sha1Hash swarmid = evbuffer_remove_hash(evb);
+	    hs->SetSwarmID(swarmid);
+	    dprintf("%s #%u -hash ALL %s\n",tintstr(),cid,swarmid.hex().c_str());
 	}
-	bin_t pos = bin_fromUInt32(evbuffer_remove_32be(evb));
-	if (!pos.is_all()) {
-	    dprintf("%s #%u that is not the root hash %s\n",tintstr(), cid, addr.str());
-	   delete hs;
-	   return NULL;
-	}
-	Sha1Hash swarmid = evbuffer_remove_hash(evb);
-	hs->SetSwarmID(swarmid);
-	dprintf("%s #%u -hash ALL %s\n",tintstr(),cid,swarmid.hex().c_str());
 
+	// Read SWIFT_HANDSHAKE
+	uint8_t msgid = evbuffer_remove_8(evb);
 	hs->peer_channel_id_ = evbuffer_remove_32be(evb);
 
-	hs->cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
-	hs->merkle_func_ = POPT_MERKLE_HASH_FUNC_SHA1;
-	hs->live_sig_alg_ = 0; // PPSPTODO
-	hs->chunk_addr_ = POPT_CHUNK_ADDR_BIN32;
-	hs->live_disc_wnd_ = (uint32_t)POPT_LIVE_DISC_WND_ALL;
+	hs->ResetToLegacy();
     }
     else if (ver == VER_PPSPP_v1)
     {
@@ -1099,6 +1111,7 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
 
 void Channel::OnHandshake(Handshake *hishs) {
 
+    dprintf("OnHandshake\n");
     dprintf("%s #%u -hs %x\n",tintstr(),id_,hishs->peer_channel_id_);
 
     if (hishs->peer_channel_id_ == 0) {
@@ -1106,10 +1119,6 @@ void Channel::OnHandshake(Handshake *hishs) {
 	dprintf("%s #%u -hs close\n",tintstr(),id_);
         Close(CLOSE_DO_NOT_SEND);
         delete hishs;
-
-
-        exit(0);
-
         return;
     }
 
@@ -1136,6 +1145,9 @@ void Channel::OnHandshake(Handshake *hishs) {
 
     hs_in_ = hishs;
     hs_in_->ReleaseSwarmID(); // save mem per channel
+
+    if (hs_in_->version_ == VER_SWIFT_LEGACY)
+	hs_out_->ResetToLegacy(); // he speaks legacy, so will I
 
     // FUTURE: channel forking
     if (is_established()) // when this was reply to our HS
