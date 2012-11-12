@@ -16,7 +16,7 @@
 #include "swarmmanager.h"
 
 #define SECONDS_UNTIL_INDEX_REUSE   			120
-#define SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED   30
+#define SECONDS_UNUSED_UNTIL_SWARM_MAY_BE_DEACTIVATED   300
 
 #ifdef __APPLE__
 #define DEFAULT_MAX_ACTIVE_SWARMS			224 // 2 file descriptors per swarm 256 max
@@ -350,6 +350,10 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
         newSwarm->id_ = swarmList_.size();
         swarmList_.push_back( newSwarm );
     }
+
+    // Arno: transfer id as assigned by SwarmManager not known at constructor time :-(
+    if (newSwarm->ft_)
+	newSwarm->ft_->SetTD(newSwarm->id_);
 
     // Arno
     if (activate)

@@ -339,3 +339,10 @@ void ContentTransfer::Progress(bin_t bin) {
 	    ((*iter).first)( td_, bin );
     }
 }
+
+void ContentTransfer::SetTD(int td)
+{
+    td_ = td;
+    if (storage_ != NULL)
+	storage_->SetTD(td);
+}

@@ -305,6 +305,8 @@ namespace swift {
         PiecePicker *   picker() { return picker_; }
         /** Returns the local ID for this transfer. */
         int             td() const { return td_; }
+        /** Sets the ID for this transfer post create (used by SwarmManager) */
+        void		SetTD(int td);
         // Gertjan fix: return bool
         bool            OnPexIn(const Address& addr);
         // Gertjan
@@ -920,6 +922,10 @@ namespace swift {
 
         /** Return a one-time callback when swift starts allocating disk space */
         void AddOneTimeAllocationCallback(ProgressCallback cb) { alloc_cb_ = cb; }
+
+        /** Sets the transfer descriptor for this storage obj post create (used by SwarmManager) */
+        void SetTD(int td) { td_ = td; }
+
 
       protected:
         storage_state_t    state_;
