@@ -1020,7 +1020,7 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
 	hs->version_ = VER_SWIFT_LEGACY;
 	if (cid == 0)
 	{
-	    // Incoming handshake
+	    // He is initiating. Initiating handshake has SWIFT_HASH + root hash, reply doesn't
 	    if (evbuffer_get_length(evb)<4+1+4+Sha1Hash::SIZE)
 	    {
 	        dprintf("%s #0 incorrect size %i initial handshake packet %s\n", tintstr(),(int)evbuffer_get_length(evb),addr.str());
