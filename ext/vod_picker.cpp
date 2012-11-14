@@ -251,15 +251,14 @@ public:
         // TODO clean ... printing percentage of completeness for the priority sets
         //status();
 
-        //fprintf(stderr,"%s #1 Picker -> picked %s\t from %c set\t max width %lu \n",tintstr(), hint.str(tmp), set, max_width );
+        //fprintf(stderr,"%s #1 Picker -> picked %s\t from %c set\t max width %lu \n",tintstr(), hint.str().c_str(), set, max_width );
         //if (avail_->size())
         return hint;
     }
 
     int Seek(bin_t offbin, int whence)
     {
-    	char binstr[32];
-    	fprintf(stderr,"vodpp: seek: %s whence %d\n", offbin.str(binstr), whence );
+    	fprintf(stderr,"vodpp: seek: %s whence %d\n", offbin.str().c_str(), whence );
 
     	if (whence != SEEK_SET)
     		return -1;

@@ -13,6 +13,7 @@
 #define __bin_h__
 
 #include <iosfwd>
+#include <string>
 
 
 /**
@@ -299,9 +300,8 @@ public:
 
     /**
      * Get the standard-form of this bin, e.g. "(2,1)".
-     * (buffer should have enough of space)
      */
-    const char* str(char* buf) const;
+    std::string str() const;
 
 
 private:

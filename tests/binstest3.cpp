@@ -46,11 +46,9 @@ TEST(BinsTest,FindFiltered1b) {
     filter.reset(bin_t(1,4));
     filter.reset(bin_t(0,13));
 
-    char binstr[32];
-
     bin_t s = bin_t(3,1);
-    fprintf(stderr,"Searching 0,12 from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Searching 0,12 from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     bin_t x = binmap_t::find_complement(data, filter, s, 0);
     EXPECT_EQ(bin_t(0,12),x);
@@ -73,8 +71,8 @@ TEST(BinsTest,FindFiltered1c) {
     char binstr[32];
 
     bin_t s = bin_t(3,1);
-    fprintf(stderr,"Searching 0,12x from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Searching 0,12x from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     bin_t x = binmap_t::find_complement(data, filter, s, 0);
     EXPECT_EQ(bin_t(0,12),x);
@@ -521,7 +519,7 @@ TEST(BinsTest,FindFiltered20) {
 			hint = binmap_t::find_complement(binmap, offer, twist);
 
 			if (!hint.is_none())
-				fprintf(stderr,"Found alt %s ", hint.str(binstr) );
+				fprintf(stderr,"Found alt %s ", hint.str().c_str() );
 			binmap.clear();
 
 			//patch hole
@@ -547,12 +545,12 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
     bin_t s(1,2);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     s = bin_t(2,1);
-    fprintf(stderr,"Searching 0,6 from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Searching 0,6 from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     bin_t got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,6),got);
@@ -563,12 +561,12 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
     s = bin_t(1,8);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     s = bin_t(2,4);
-    fprintf(stderr,"Searching 0,18 from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Searching 0,18 from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,18),got);
@@ -579,12 +577,12 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
     s = bin_t(1,80);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     s = bin_t(2,40);
-    fprintf(stderr,"Searching 0,162 from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Searching 0,162 from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,162),got);
@@ -595,12 +593,12 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
     s = bin_t(1,84);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     s = bin_t(2,42);
-    fprintf(stderr,"Searching 0,168 from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Searching 0,168 from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,170),got);
@@ -611,12 +609,12 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
     s = bin_t(1,86);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     s = bin_t(2,43);
-    fprintf(stderr,"Searching 0,174 from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Searching 0,174 from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,174),got);
@@ -627,13 +625,13 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
     s = bin_t(1,90);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
 
     s = bin_t(2,45);
-    fprintf(stderr,"Searching 0,182 from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Searching 0,182 from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,182),got);
@@ -644,12 +642,12 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
     s = bin_t(1,92);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     s = bin_t(2,46);
-    fprintf(stderr,"Searching 0,184 from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Searching 0,184 from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,186),got);
@@ -660,12 +658,12 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
     s = bin_t(1,94);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     s = bin_t(2,47);
-    fprintf(stderr,"Searching 0,188 from %s ", s.base_left().str(binstr ) );
-    fprintf(stderr,"to %s\n", s.base_right().str(binstr ) );
+    fprintf(stderr,"Searching 0,188 from %s ", s.base_left().str().c_str() );
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,190),got);

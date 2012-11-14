@@ -70,12 +70,11 @@ TEST(ChunkAddrTest,Chunk32ToBin32a)
     EXPECT_EQ(expbv,bv);
 
     binvector::iterator iter;
-    char binstr[32];
     binmap_t binmap;
     for (iter=bv.begin(); iter != bv.end(); iter++)
     {
 	bin_t b = *iter;
-	fprintf(stderr,"%s\n", b.str(binstr) );
+	fprintf(stderr,"%s\n", b.str().c_str() );
 	binmap.set(b);
     }
 
@@ -108,7 +107,7 @@ TEST(ChunkAddrTest,Chunk32ToBin32b)
 	    for (iter=bv.begin(); iter != bv.end(); iter++)
 	    {
 		bin_t b = *iter;
-		fprintf(stderr,"%s\n", b.str(binstr) );
+		fprintf(stderr,"%s\n", b.str().c_str() );
 		binmap.set(b);
 	    }
 

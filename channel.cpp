@@ -96,8 +96,8 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     else
 	hs_out_->cont_int_prot_ = POPT_CONT_INT_PROT_NONE; // PPSPTODO implement live schemes
 
-    dprintf("%s #%u init channel %s transfer %d\n",tintstr(),id_,peer_.str(), transfer_->td() );
-    //fprintf(stderr,"new Channel %d %s\n", id_, peer_.str() );
+    dprintf("%s #%u init channel %s transfer %d\n",tintstr(),id_,peer_.str().c_str(), transfer_->td() );
+    //fprintf(stderr,"new Channel %d %s\n", id_, peer_.str().c_str() );
 }
 
 
@@ -209,11 +209,11 @@ bool Channel::IsDiffSenderOrDuplicate(Address addr, uint32_t chid)
             // One must break the connection, decide using port
             // number:
             dprintf("%s #%u found duplicate channel to %s\n",
-                    tintstr(),chid,addr.str());
+                    tintstr(),chid,addr.str().c_str());
 
             if (addr.port() > GetMyPort()) {
                 dprintf("%s #%u closing duplicate channel to %s\n",
-                    tintstr(),chid,addr.str());
+                    tintstr(),chid,addr.str().c_str());
                 return true;
             }
         }
@@ -223,7 +223,7 @@ bool Channel::IsDiffSenderOrDuplicate(Address addr, uint32_t chid)
             // HANDSHAKE to, and the address is not an IANA private
             // address (=no NAT in play), so close.
             dprintf("%s #%u invalid peer address %s!=%s\n",
-                    tintstr(),chid,peer().str(),addr.str());
+                    tintstr(),chid,peer().str(),addr.str().c_str());
             return true;
         }
     }
@@ -569,20 +569,19 @@ void swift::chunk32_to_bin32(uint32_t schunk, uint32_t echunk, binvector *bvptr)
     bin_t e(0,echunk);
 
     bin_t cur = s;
-    //char binstr[32],binstr2[32], binstr3[32];
     while (true)
     {
 	// Move up in tree till we exceed either start or end. If so, the
 	// previous node belongs to the range description. Next, we start at
 	// the left most chunk in the subtree next to the previous node, and see
 	// how far up we can go there.
-	//fprintf(stderr,"\ncur %s par left %s par right %s\n", cur.str(binstr), cur.parent().base_left().str(binstr2), cur.parent().base_right().str(binstr3));
+	//fprintf(stderr,"\ncur %s par left %s par right %s\n", cur.str().c_str(), cur.parent().base_left().str().c_str(), cur.parent().base_right().str().c_str());
 	if (cur.parent().base_left() < s || cur.parent().base_right() > e)
 	{
 	    /*if (cur.parent().base_left() < s)
-		fprintf(stderr,"parent %s left %s before s, add %s\n", cur.parent().str(binstr2), cur.parent().base_left().str(binstr3), cur.str(binstr) );
+		fprintf(stderr,"parent %s left %s before s, add %s\n", cur.parent().str().c_str(), cur.parent().base_left().str().c_str(), cur.str().c_str() );
 	    if (cur.parent().base_right() > e)
-		fprintf(stderr,"parent %s right %s exceeds e, add %s\n", cur.parent().str(binstr2), cur.parent().base_right().str(binstr3), cur.str(binstr) );
+		fprintf(stderr,"parent %s right %s exceeds e, add %s\n", cur.parent().str().c_str(), cur.parent().base_right().str().c_str(), cur.str().c_str() );
 	     */
 	    bvptr->push_back(cur);
 
@@ -591,13 +590,13 @@ void swift::chunk32_to_bin32(uint32_t schunk, uint32_t echunk, binvector *bvptr)
 	    else
 		cur = bin_t(0,cur.base_right().layer_offset()+1);
 
-	    //fprintf(stderr,"newcur %s\n", cur.str(binstr) );
+	    //fprintf(stderr,"newcur %s\n", cur.str().c_str() );
 
 	    if (cur >= e)
 	    {
 		if (cur == e)
 		{
-		    // fprintf(stderr,"adding e %s\n", cur.str(binstr) );
+		    // fprintf(stderr,"adding e %s\n", cur.str().c_str() );
 		    bvptr->push_back(e);
 		}
 		break;

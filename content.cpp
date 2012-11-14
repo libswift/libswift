@@ -175,7 +175,7 @@ void ContentTransfer::ConnectToTracker()
 
 bool ContentTransfer::OnPexIn (const Address& addr)
 {
-    //fprintf(stderr,"ContentTransfer::OnPexIn: %s\n", addr.str() );
+    //fprintf(stderr,"ContentTransfer::OnPexIn: %s\n", addr.str().c_str() );
     // Arno: this brings safety, but prevents private swift installations.
     // TODO: detect public internet.
     //if (addr.is_private())

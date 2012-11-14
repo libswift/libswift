@@ -47,7 +47,7 @@ static void on_may_receive(SOCKET sock) {
     if ((magic != REPLY_MAGIC && magic != REPLY_SEC_MAGIC) ||
             (magic == REPLY_MAGIC && data.size() != 6) || (magic == REPLY_SEC_MAGIC && data.size() != 0))
     {
-        dprintf("%s #0 NATTEST weird packet %s \n", tintstr(), data.address().str());
+        dprintf("%s #0 NATTEST weird packet %s \n", tintstr(), data.address().str().c_str());
         return;
     }
 
@@ -55,9 +55,9 @@ static void on_may_receive(SOCKET sock) {
         uint32_t ip = data.Pull32();
         uint16_t port = data.Pull16();
         Address reported(ip, port);
-        dprintf("%s #0 NATTEST incoming %s %s\n", tintstr(), data.address().str(), reported.str());
+        dprintf("%s #0 NATTEST incoming %s %s\n", tintstr(), data.address().str().c_str(), reported.str().c_str());
     } else {
-        dprintf("%s #0 NATTEST incoming secondary %s\n", tintstr(), data.address().str());
+        dprintf("%s #0 NATTEST incoming secondary %s\n", tintstr(), data.address().str().c_str());
     }
     packets_since_last_try++;
 }
@@ -80,7 +80,7 @@ static void on_may_send(SOCKET sock) {
         dprintf("%s #0 NATTEST could not get local address\n", tintstr());
     } else {
         Address local(ntohl(name.sin_addr.s_addr), ntohs(name.sin_port));
-        dprintf("%s #0 NATTEST local %s\n", tintstr(), local.str());
+        dprintf("%s #0 NATTEST local %s\n", tintstr(), local.str().c_str());
     }
 }
 

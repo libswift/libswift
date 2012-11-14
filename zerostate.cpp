@@ -84,13 +84,13 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 		Channel *c = *iter2;
 		if (c != NULL)
 		{
-		    //fprintf(stderr,"%s F%u zero clean %s opentime %lld connect %lld\n",tintstr(),ft->fd(), c->peer().str(), (NOW-c->GetOpenTime()), zs->connect_timeout_ );
+		    //fprintf(stderr,"%s F%u zero clean %s opentime %lld connect %lld\n",tintstr(),ft->fd(), c->peer().str().c_str(), (NOW-c->GetOpenTime()), zs->connect_timeout_ );
 		    // Garbage collect copychans when open for long and slow upload
 		    if ((NOW-c->GetOpenTime()) > zs->connect_timeout_)
 		    {
-			//fprintf(stderr,"%s F%u zero clean %s opentime %lld ulspeed %lf\n",tintstr(),ft->fd(), c->peer().str(), (NOW-c->GetOpenTime())/TINT_SEC, ft->GetCurrentSpeed(DDIR_UPLOAD) );
-			fprintf(stderr,"%s F%u zero clean %s close slow channel\n",tintstr(),td, c->peer().str() );
-			dprintf("%s F%u zero clean %s close slow channel\n",tintstr(),td, c->peer().str() );
+			//fprintf(stderr,"%s F%u zero clean %s opentime %lld ulspeed %lf\n",tintstr(),ft->fd(), c->peer().str().c_str(), (NOW-c->GetOpenTime())/TINT_SEC, ft->GetCurrentSpeed(DDIR_UPLOAD) );
+			fprintf(stderr,"%s F%u zero clean %s close slow channel\n",tintstr(),td, c->peer().str() .c_str());
+			dprintf("%s F%u zero clean %s close slow channel\n",tintstr(),td, c->peer().str().c_str() );
 			c->Close(CLOSE_SEND_IF_ESTABLISHED);
 			delete c;
 		    }

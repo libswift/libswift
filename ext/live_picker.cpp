@@ -106,9 +106,7 @@ public:
      */
     void StartAddPeerPos(uint32_t channelid, bin_t peerpos, bool peerissource)
     {
-    	char binstr[32];
-
-    	//fprintf(stderr,"live: pp: StartAddPeerPos: peerpos %s\n", peerpos.str(binstr));
+    	//fprintf(stderr,"live: pp: StartAddPeerPos: peerpos %s\n", peerpos.str().c_str());
     	if (hooking_in_) {
 
     	    if (peerissource) {
@@ -118,7 +116,7 @@ public:
 
     	    bin_t peerbasepos(peerpos.base_right());
 
-    	    fprintf(stderr,"live: pp: StartAddPeerPos: peerbasepos %s\n", peerbasepos.str(binstr));
+    	    fprintf(stderr,"live: pp: StartAddPeerPos: peerbasepos %s\n", peerbasepos.str().c_str());
     	    bin_t cand;
 #ifdef _WIN32
     	    cand = bin_t(0,max(0,peerbasepos.layer_offset()-LIVE_PP_NUMBER_PREBUF_CHUNKS));
@@ -154,7 +152,7 @@ public:
 	    current_bin_ = hookin_bin_;
 	    hooking_in_ = false;
 
-	    fprintf(stderr,"live: pp: EndAddPeerPos: hookin on source, pos %s\n", hookin_bin_.str(binstr));
+	    fprintf(stderr,"live: pp: EndAddPeerPos: hookin on source, pos %s\n", hookin_bin_.str().c_str());
     	}
     	else if (peer_pos_map_.size() > 0)
     	{
@@ -166,10 +164,10 @@ public:
     	    {
     	    	hookin_pos_ = iter->second;
     	    	current_pos_ = hookin_pos_;
-    	    	fprintf(stderr,"live: pp: EndAddPeerPos: cand pos %s\n", hookin_pos_.str(binstr));
+    	    	fprintf(stderr,"live: pp: EndAddPeerPos: cand pos %s\n", hookin_pos_.str().c_str());
     	    }
-    		fprintf(stderr,"live: pp: EndAddPeerPos: hookin on peers, pos %s\n", hookin_pos_.str(binstr));
-    		hooking_in_ = false;*/
+	    fprintf(stderr,"live: pp: EndAddPeerPos: hookin on peers, pos %s\n", hookin_pos_.str().c_str());
+	    hooking_in_ = false;*/
     	}
     }
 

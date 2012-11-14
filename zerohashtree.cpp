@@ -81,8 +81,7 @@ bool ZeroHashTree::RecoverPeakHashes()
 
 
 bool            ZeroHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
-    char bin_name_buf[32];
-    dprintf("%s zero hashtree offer peak %s\n",tintstr(),pos.str(bin_name_buf));
+    dprintf("%s zero hashtree offer peak %s\n",tintstr(),pos.str().c_str());
 
     //assert(!size_);
     if (peak_count_) {

@@ -1443,8 +1443,7 @@ bin_t binmap_t::_find_complement(const bin_t& bin, const bitmap_t dbitmap, const
         	diff = bin_t(0,absoff);
         	diff = diff.to_twisted(twist & 0x1f);
 
-        	//char binstr[32];
-        	//fprintf(stderr,"__fc solution %s\n", diff.str(binstr) );
+        	//fprintf(stderr,"__fc solution %s\n", diff.str().c_str() );
         }
         return diff;
     }

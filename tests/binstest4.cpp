@@ -18,7 +18,6 @@
 
 using namespace swift;
 
-
 TEST(BinsTest,FindEmptyStart1)
 {
     binmap_t hole;
@@ -149,7 +148,6 @@ TEST(BinsTest,FindEmptyStart4)
     //EXPECT_EQ(bin_t::NONE,f);
     EXPECT_EQ(bin_t(0,8),f); // binmap_t has minimal tree height of 6, take into account.
 }
-
 
 
 int main (int argc, char** argv) {

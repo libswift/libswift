@@ -108,8 +108,7 @@ void Availability::set(uint32_t channel_id, binmap_t& binmap, bin_t target)
 {
 	if (DEBUGAVAILABILITY)
 	{
-		char bin_name_buf[32];
-		dprintf("%s #%u Availability -> setting %s (%llu)\n",tintstr(),channel_id,target.str(bin_name_buf),target.toUInt());
+		dprintf("%s #%u Availability -> setting %s (%llu)\n",tintstr(),channel_id,target.str().c_str(),target.toUInt());
 	}
 
 	if (size_>0 && !binmap.is_filled(target))

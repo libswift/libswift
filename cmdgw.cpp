@@ -963,7 +963,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         cmd_tunnel_state = CMDGW_TUNNEL_READTUNNEL;
 
         if (cmd_gw_debug)
-            fprintf(stderr,"cmdgw: Want tunnel %d bytes to %s\n", cmd_tunnel_expect, cmd_tunnel_dest_addr.str() );
+            fprintf(stderr,"cmdgw: Want tunnel %d bytes to %s\n", cmd_tunnel_expect, cmd_tunnel_dest_addr.str().c_str() );
     }
     else if (!strcmp(method,"PEERADDR"))
     {
@@ -1052,7 +1052,7 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
     // Allocate libevent listener for cmd connections
     // From http://www.wangafu.net/~nickm/libevent-book/Ref8_listener.html
 
-    fprintf(stderr,"cmdgw: Creating new TCP listener on addr %s\n", cmdaddr.str() );
+    fprintf(stderr,"cmdgw: Creating new TCP listener on addr %s\n", cmdaddr.str().c_str() );
   
     const struct sockaddr_in sin = (sockaddr_in)cmdaddr;
 
@@ -1080,7 +1080,7 @@ void swift::CmdGwTunnelUDPDataCameIn(Address srcaddr, uint32_t srcchan, struct e
     // Message received on UDP socket, forward over TCP conn.
 
     if (cmd_gw_debug)
-        fprintf(stderr,"cmdgw: TunnelUDPData:DataCameIn %d bytes from %s/%08x\n", evbuffer_get_length(evb), srcaddr.str(), srcchan );
+        fprintf(stderr,"cmdgw: TunnelUDPData:DataCameIn %d bytes from %s/%08x\n", evbuffer_get_length(evb), srcaddr.str().c_str(), srcchan );
 
     /*
      *  Format:

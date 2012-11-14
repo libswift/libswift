@@ -158,23 +158,17 @@ namespace swift {
         addr.sin_port==b.addr.sin_port &&
         addr.sin_addr.s_addr==b.addr.sin_addr.s_addr;
     }
-    const char* str () const {
-        // Arno, 2011-10-04: not thread safe, replace.
-        static char rs[4][32];
-        static int i;
-        i = (i+1) & 3;
-        sprintf(rs[i],"%i.%i.%i.%i:%i",ipv4()>>24,(ipv4()>>16)&0xff,
+    std::string str () const {
+        char rs[32];
+        sprintf(rs,"%i.%i.%i.%i:%i",ipv4()>>24,(ipv4()>>16)&0xff,
             (ipv4()>>8)&0xff,ipv4()&0xff,port());
-        return rs[i];
+        return std::string(rs);
     }
-    const char* ipv4str () const {
-        // Arno, 2011-10-04: not thread safe, replace.
-        static char rs[4][32];
-        static int i;
-        i = (i+1) & 3;
-        sprintf(rs[i],"%i.%i.%i.%i",ipv4()>>24,(ipv4()>>16)&0xff,
+    std::string ipv4str () const {
+        char rs[32];
+        sprintf(rs,"%i.%i.%i.%i",ipv4()>>24,(ipv4()>>16)&0xff,
             (ipv4()>>8)&0xff,ipv4()&0xff);
-        return rs[i];
+        return std::string(rs);
     }
     bool operator != (const Address& b) const { return !(*this==b); }
     bool is_private() const {

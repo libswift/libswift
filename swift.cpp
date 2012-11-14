@@ -341,7 +341,7 @@ int utf8main (int argc, char** argv)
 
     if (bindaddr!=Address()) { // seeding
         if (Listen(bindaddr)<=0)
-            quit("cant listen to %s\n",bindaddr.str())
+            quit("cant listen to %s\n",bindaddr.str().c_str())
     } else if (tracker!=Address() || httpgw_enabled || cmdgw_enabled) { // leeching
         evutil_socket_t sock = INVALID_SOCKET;
         for (int i=0; i<=10; i++) {
@@ -350,7 +350,7 @@ int utf8main (int argc, char** argv)
             if (sock>0)
                 break;
             if (i==10)
-                quit("cant listen on %s\n",bindaddr.str());
+                quit("cant listen on %s\n",bindaddr.str().c_str());
         }
         if (!quiet)
             fprintf(stderr,"swift: My listen port is %d\n", BoundAddress(sock).port() );

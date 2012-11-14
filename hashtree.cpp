@@ -390,8 +390,7 @@ int MmapHashTree::internal_deserialize(FILE *fp,bool contentavail) {
 
 
 bool            MmapHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
-    char bin_name_buf[32];
-    dprintf("%s hashtree offer peak %s\n",tintstr(),pos.str(bin_name_buf));
+    dprintf("%s hashtree offer peak %s\n",tintstr(),pos.str().c_str());
 
     //assert(!size_);
     if (peak_count_) {
@@ -596,7 +595,7 @@ bool            MmapHashTree::OfferData (bin_t pos, const char* data, size_t len
         char bin_name_buf[32];
         //printf("invalid hash for %s: %s\n",pos.str(bin_name_buf),data_hash.hex().c_str()); // paranoid
         //fprintf(stderr,"INVALID HASH FOR %lli layer %d\n", pos.toUInt(), pos.layer() );
-        dprintf("%s hashtree check failed (bug TODO) %s\n",tintstr(),pos.str(bin_name_buf));
+        dprintf("%s hashtree check failed (bug TODO) %s\n",tintstr(),pos.str().c_str());
         return false;
     }
 

@@ -101,7 +101,7 @@ Storage::~Storage()
 
 ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 {
-    dprintf("%s %s storage: Write: fd %d nbyte %d off %lld state %d\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
+    //dprintf("%s %s storage: Write: fd %d nbyte %d off %lld state %d\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
 
     if (state_ == STOR_STATE_SINGLE_FILE)
     {

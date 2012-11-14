@@ -24,7 +24,7 @@ static bool api_debug=false;
 int     swift::Listen( Address addr)
 {
     if (api_debug)
-        fprintf(stderr,"swift::Listen addr %s\n", addr.str() );
+        fprintf(stderr,"swift::Listen addr %s\n", addr.str().c_str() );
 
     sckrwecb_t cb;
     cb.may_read = &Channel::LibeventReceiveCallback;
@@ -54,7 +54,7 @@ void    swift::Shutdown()
 int swift::Open( std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, bool activate, uint32_t chunk_size)
 {
     if (api_debug)
-	fprintf(stderr,"swift::Open %s hash %s track %s cdisk %d cnet %d zs %d act %d cs %u\n", filename.c_str(), hash.hex().c_str(), tracker.str(), force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
+	fprintf(stderr,"swift::Open %s hash %s track %s cdisk %d cnet %d zs %d act %d cs %u\n", filename.c_str(), hash.hex().c_str(), tracker.str().c_str(), force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
 
     if (ContentTransfer::cleancounter == 0)
     {
@@ -551,8 +551,7 @@ int swift::Seek(int td, int64_t offset, int whence)
     int64_t coff = offset - (offset % ft->hashtree()->chunk_size()); // ceil to chunk
     bin_t offbin = bin_t(0,coff/ft->hashtree()->chunk_size());
 
-    char binstr[32];
-    dprintf("%s F%i Seek: to bin %s\n",tintstr(), td, offbin.str(binstr) );
+    dprintf("%s F%i Seek: to bin %s\n",tintstr(), td, offbin.str().c_str() );
 
     return ft->picker()->Seek(offbin,whence);
 }
@@ -562,7 +561,7 @@ int swift::Seek(int td, int64_t offset, int whence)
 void swift::AddPeer(Address& addr, const Sha1Hash& swarmid)
 {
     if (api_debug)
-	fprintf(stderr,"swift::AddPeer addr %s hash %s\n", addr.str(), swarmid.hex().c_str() );
+	fprintf(stderr,"swift::AddPeer addr %s hash %s\n", addr.str().c_str(), swarmid.hex().c_str() );
 
     ContentTransfer *ct = NULL;
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm(swarmid);
@@ -674,7 +673,7 @@ int swift::LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte)
 int swift::LiveOpen(std::string filename, const Sha1Hash& swarmid, Address tracker, bool check_netwvshash, uint32_t chunk_size)
 {
     if (api_debug)
-	fprintf(stderr,"swift::LiveOpen %s hash %s addr %s cnet %d cs %u\n", filename.c_str(), swarmid.hex().c_str(), tracker.str(), check_netwvshash, chunk_size );
+	fprintf(stderr,"swift::LiveOpen %s hash %s addr %s cnet %d cs %u\n", filename.c_str(), swarmid.hex().c_str(), tracker.str().c_str(), check_netwvshash, chunk_size );
 
     LiveTransfer *lt = new LiveTransfer(filename,swarmid,false,chunk_size);
 

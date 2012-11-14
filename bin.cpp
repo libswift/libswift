@@ -11,7 +11,7 @@
 
 #include "bin.h"
 #include <ostream>
-
+#include <sstream>
 
 const bin_t bin_t::NONE(8 * sizeof(bin_t::uint_t), 0);
 const bin_t bin_t::ALL(8 * sizeof(bin_t::uint_t) - 1, 0);
@@ -56,106 +56,24 @@ int bin_t::layer(void) const
 
 /* String operations */
 
-namespace {
-
-char* append(char* buf, int x)
-{
-    char* l = buf;
-    char* r = buf;
-
-    if (x < 0) {
-        *r++ = '-';
-        x = -x;
-    }
-
-    do {
-        *r++ = '0' + x % 10;
-        x /= 10;
-    } while (x);
-
-    char* e = r--;
-
-    while (l < r) {
-        const char t = *l;
-        *l++ = *r;
-        *r-- = t;
-    }
-
-    *e = '\0';
-
-    return e;
-}
-
-char* append(char* buf, bin_t::uint_t x)
-{
-    char* l = buf;
-    char* r = buf;
-
-    do {
-        *r++ = '0' + x % 10;
-        x /= 10;
-    } while (x);
-
-    char* e = r--;
-
-    while (l < r) {
-        const char t = *l;
-        *l++ = *r;
-        *r-- = t;
-    }
-
-    *e = '\0';
-
-    return e;
-}
-
-char* append(char* buf, const char* s)
-{
-    char* e = buf;
-
-    while (*s) {
-        *e++ = *s++;
-    }
-
-    *e = '\0';
-
-    return e;
-}
-
-char* append(char* buf, char c)
-{
-    char* e = buf;
-
-    *e++ = c;
-    *e = '\0';
-
-    return e;
-}
-
-} /* namespace */
-
-
 /**
  * Get the standard-form of this bin, e.g. "(2,1)".
- * (buffer should have enough of space)
  */
-const char* bin_t::str(char* buf) const
+std::string bin_t::str() const
 {
-    char* e = buf;
-
     if (is_all()) {
-        e = append(e, "(ALL)");
+        return "(ALL)";
     } else if (is_none()) {
-        e = append(e, "(NONE)");
+        return "(NONE)";
     } else {
-        e = append(e, '(');
-        e = append(e, layer());
-        e = append(e, ',');
-        e = append(e, layer_offset());
-        e = append(e, ')');
+	std::ostringstream cross;
+        cross << "(";
+        cross << layer();
+        cross << ",";
+        cross << layer_offset();
+        cross << ")";
+        return cross.str();
     }
-
-    return buf;
 }
 
 
@@ -164,6 +82,5 @@ const char* bin_t::str(char* buf) const
  */
 std::ostream & operator << (std::ostream & ostream, const bin_t & bin)
 {
-    char bin_name_buf[64];
-    return ostream << bin.str(bin_name_buf);
+    return ostream << bin.str();
 }
