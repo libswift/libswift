@@ -5,8 +5,8 @@
  *  Arno: Currently uses ever increasing chunk IDs. The binmap datastructure
  *  can store this quite efficiently, as long as there are few holes.
  *  The Storage object will save all chunks. The latter can be modified to wrap
- *  around, that is, a certain module is applied that overwrites earlier chunks.
- *  This module is equivalent to the live discard window (see IETF PPSPP spec).
+ *  around, that is, a certain modulo is applied that overwrites earlier chunks.
+ *  This modulo is equivalent to the live discard window (see IETF PPSPP spec).
  *  This overwriting can be done both at the source and in a client.
  *
  *  Created by Arno Bakker.
