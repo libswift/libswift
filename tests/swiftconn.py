@@ -7,14 +7,16 @@ import binascii
 
 HASH_ZERO = '\x00' * 20
 
-CHUNK_SPEC_ID_BIN32 = '\x00'
-CHUNK_SPEC_ID_BYTE64 = '\x01'
-CHUNK_SPEC_ID_CHUNK32 = '\x02' 
 
 TSBYTES_LEN = 8
 
 IPV4BYTES_LEN = (32/8)+2
 IPV6BYTES_LEN = (128/8)+2
+
+
+CHUNK_SPEC_ID_BIN32 = '\x00'
+CHUNK_SPEC_ID_BYTE64 = '\x01'
+CHUNK_SPEC_ID_CHUNK32 = '\x02' 
 
 class Encodable:
     def to_bytes(self):
@@ -22,11 +24,14 @@ class Encodable:
     def from_bytes(bytes):
         pass
     from_bytes = staticmethod(from_bytes)
-    def get_bytes_length(self):
+    def get_bytes_length():
         pass
     def __repr__(self):
         return self.__str__()
 
+#
+# Chunk Addressing
+#
 
 class Bin(Encodable):
     def __init__(self,i):
@@ -38,10 +43,12 @@ class Bin(Encodable):
         [i] = struct.unpack(">I",bytes)
         return Bin(i)
     from_bytes = staticmethod(from_bytes)
-    def get_bytes_length(self):
+    def get_bytes_length():
         return 4
-    def get_id(self):
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
         return CHUNK_SPEC_ID_BIN32
+    get_id = staticmethod(get_id)
     def __str__(self):
         return "Bin("+str(self.i)+")"
 
@@ -61,12 +68,551 @@ class ChunkRange(Encodable):
         [s,e] = struct.unpack(">II",bytes)
         return ChunkRange(s,e)
     from_bytes = staticmethod(from_bytes)
-    def get_bytes_length(self):
+    def get_bytes_length():
         return 8
-    def get_id(self):
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
         return CHUNK_SPEC_ID_CHUNK32
+    get_id = staticmethod(get_id)
     def __str__(self):
         return "ChunkRange("+str(self.s)+","+str(self.e)+")"
+
+#
+# TimeStamp
+#
+
+class TimeStamp(Encodable):
+    def __init__(self,ts):
+        self.ts = ts
+    def to_bytes(self):
+        return struct.pack(">Q",self.ts)
+    def from_bytes(bytes):
+        [ts] = struct.unpack(">Q",bytes)
+        return TimeStamp(ts)
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return 8
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return None
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "TimeStamp("+str(self.s)+","+str(self.e)+")"
+
+
+class IPv4Port(Encodable):
+    def __init__(self,ipport): # Python tuple
+        self.ipport = ipport
+    def to_bytes(self):
+        ipbytes = socket.inet_pton(socket.AF_INET, self.ipport[0])
+        portbytes = struct.pack(">H",self.ipport[1])
+        chain = [get_id(),ipbytes,portbytes]
+        return "".join(chain)
+    def from_bytes(bytes):
+        ipbytes = bytes[0:4]
+        ip = socket.inet_ntop(socket.AF_INET, ipbytes)
+        portbytes = bytes[4:6]
+        [port] = struct.unpack(">H",portbytes)
+        return IPv4Port((ip,port))
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return 6
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return None
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return str(self.ipport)
+
+
+class IPv6Port(Encodable):
+    def __init__(self,ipport): # Python tuple
+        self.ipport = ipport
+    def to_bytes(self):
+        ipbytes = socket.inet_pton(socket.AF_INET6, self.ipport[0])
+        portbytes = struct.pack(">H",self.ipport[1])
+        chain = [get_id(),ipbytes,portbytes]
+        return "".join(chain)
+    def from_bytes(bytes):
+        ipbytes = bytes[0:16]
+        ip = socket.inet_ntop(socket.AF_INET6, ipbytes)
+        portbytes = bytes[16:18]
+        [port] = struct.unpack(">H",portbytes)
+        return IPv4Port((ip,port))
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return 18
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return None
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return str(self.ipport)
+
+
+
+#
+# ProtocolOptions
+#
+
+POPT_VER_TYPE = '\x00'
+POPT_VER_SWIFT = '\x00'
+POPT_VER_PPSP = '\x01'
+
+POPT_SWARMID_TYPE = '\x01'
+POPT_CIPM_TYPE = '\x02'
+POPT_MHF_TYPE = '\x03'
+POPT_LSA_TYPE = '\x04'
+POPT_CAM_TYPE = '\x05'
+POPT_LDW_TYPE = '\x06'
+POPT_MSGS_TYPE = '\x07'
+POPT_END_TYPE = '\xff'
+
+
+
+#
+# Messages
+#
+
+
+MSG_ID_HANDSHAKE = '\x00'
+MSG_ID_DATA = '\x01'
+MSG_ID_ACK = '\x02'
+MSG_ID_HAVE = '\x03'
+MSG_ID_INTEGRITY = '\x04'
+MSG_ID_PEX_RESv4 = '\x05'
+MSG_ID_PEX_REQ = '\x06'
+MSG_ID_SIGN_INTEGRITY = '\x07'
+MSG_ID_REQUEST = '\x08'
+MSG_ID_CANCEL = '\x09'
+MSG_ID_CHOKE = '\x0a'
+MSG_ID_UNCHOKE = '\x0b'
+MSG_ID_PEX_RESv6 = '\x0c'
+MSG_ID_PEX_REScert = '\x0d'
+
+class HandshakeMessage(Encodable):
+    def __init__(self,chanid,ver,swarmid=None,cipm=None,mhf=None,lsa=None,cam=None,ldw=None,msgdata=None):
+        self.chanid = chanid
+        self.ver = ver
+        self.swarmid = swarmid
+        self.cipm = cipm
+        self.mhf = mhf
+        self.lsa = lsa
+        self.cam = cam
+        self.ldw = ldw
+        self.msgdata = msgdata
+    def to_bytes(self):
+        chain = []
+        chain.append(MSG_ID_HANDSHAKE)
+        chain.append(self.chanid)
+        if self.ver == POPT_VER_PPSP:
+            # TODO, make each ProtocolOption an Encodable
+            chain.append(POPT_VER_TYPE)
+            chain.append(self.ver)
+            if self.swarmid is not None:
+                chain.append(POPT_SWARMID_TYPE)
+                s = len(self.swarmid)
+                sbytes = struct.pack(">H",s)
+                chain.append(sbytes)
+                chain.append(self.swarmid)
+            if self.cipm is not None:
+                chain.append(POPT_CIPM_TYPE)
+                chain.append(self.cipm)
+            if self.mhf is not None:
+                chain.append(POPT_MHF_TYPE)
+                chain.append(self.mhf)
+            if self.lsa is not None:
+                chain.append(POPT_LSA_TYPE)
+                chain.append(self.lsa)
+            if self.cam is not None:
+                chain.append(POPT_CIPM_TYPE)
+                chain.append(self.cam)
+            if self.ldw is not None:
+                chain.append(POPT_CIPM_TYPE)
+                chain.append(self.ldw)
+            if self.msgdata is not None:
+                chain.append(POPT_MSGDATA_TYPE)
+                s = len(msgdata)
+                sbytes = struct.pack(">H",s)
+                chain.append(sbytes)
+                chain.append(self.msgdata)
+            chain.append(POPT_END_TYPE)
+        return "".join(chain)
+    
+    def from_bytes(t,bytes,off):
+        off += 1
+        chanid = ChannelID.from_bytes( bytes[off:off+ChannelID.get_bytes_length()])
+        off += chanid.get_bytes_length()
+        ver = None
+        swarmid = None
+        cipm = None
+        mhf = None
+        lsa = None
+        cam = None
+        ldw = None
+        msgdata = None
+        if t.get_version() == POPT_VER_PPSP:
+            while off < len(bytes):
+                popt = bytes[off]
+                off += 1
+                if popt == POPT_VER_TYPE:
+                    ver = bytes[off]
+                    off += 1
+                elif popt == POPT_SWARMID_TYPE:
+                    sbytes = bytes[off:off+1]
+                    off += len(sbytes)
+                    [s] = struct.unpack(">H",sbytes)
+                    swarmid = bytes[off:off+s]
+                    off += len(swarmid)
+                elif popt == POPT_CIPM_TYPE:
+                    cipm = bytes[off]
+                    off += 1
+                elif popt == POPT_MHF_TYPE:
+                    mhf = bytes[off]
+                    off += 1
+                elif popt == POPT_LSA_TYPE:
+                    lsa = bytes[off]
+                    off += 1
+                elif popt == POPT_CAM_TYPE:
+                    cam = bytes[off]
+                    off += 1
+                elif popt == POPT_LDW_TYPE:
+                    ldw = bytes[off]
+                    off += 1
+                elif popt == POPT_MSGS_TYPE:
+                    sbytes = bytes[off:off+1]
+                    off += len(sbytes)
+                    [s] = struct.unpack(">H",sbytes)
+                    msgdata = bytes[off:off+s]
+                    off += len(msgdata)
+                elif popt == POPT_END_TYPE:
+                    break
+        
+        return [HandshakeMessage(chanid,ver,swarmid,cipm,mhf,lsa,cam,ldw,msgdata),off]
+    
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return None # variable
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return MSG_ID_HANDSHAKE
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "HANDSHAKE(ver="+`self.ver`+",sid="+`self.swarmid`+",cam="+`self.cam`+")"
+
+
+
+
+
+class DataMessage(Encodable):
+    def __init__(self,t,chunkspec,timestamp,chunk):
+        self.chunkspec = chunkspec
+        self.ts = timestamp
+        self.chunk  = chunk
+    def to_bytes(self):
+        chain = [get_id(),self.chunkspec.to_bytes(),self.ts.to_bytes(),self.chunk]
+        return "".join(chain)
+    def from_bytes(t,bytes,off):
+        off += 1
+        cabytes = bytes[off:off+t.get_chunkspec().get_bytes_length()]
+        off += len(cabytes)
+        chunkspec = t.chunkspec.from_bytes(cabytes)
+        tsbytes = bytes[off:off+TimeStamp.get_bytes_length()]
+        ts = TimeStamp.from_bytes(tsbytes)
+        off += len(tsbytes)
+        chunk = bytes[off:]
+        off = len(bytes)
+        return [DataMessage(chunkspec,ts,chunk),off]
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return None # variable
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return MSG_ID_DATA
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "DATA("+`self.chunkspec`+",ts,chunk)"
+
+
+class AckMessage(Encodable):
+    def __init__(self,chunkspec,timestamp):
+        self.chunkspec = chunkspec
+        self.ts = timestamp
+    def to_bytes(self):
+        chain = [get_id(),self.chunkspec.to_bytes(),self.ts.to_bytes()]
+        return "".join(chain)
+    def from_bytes(t,bytes,off):
+        off += 1
+        cabytes = bytes[off:off+t.get_chunkspec().get_bytes_length()]
+        off += len(cabytes)
+        chunkspec = t.chunkspec.from_bytes(cabytes)
+        tsbytes = bytes[off:off+TimeStamp.get_bytes_length()]
+        ts = TimeStamp.from_bytes(tsbytes)
+        off += len(tsbytes)
+        return [AckMessage(chunkspec,ts),off]
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return None # variable due to chunkspec
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return MSG_ID_ACK
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "ACK("+`self.chunkspec`+",ts)"
+
+
+class HaveMessage(Encodable):
+    def __init__(self,chunkspec):
+        self.chunkspec = chunkspec
+    def to_bytes(self):
+        chain = [get_id(),self.chunkspec.to_bytes()]
+        return "".join(chain)
+    def from_bytes(t,bytes,off):
+        off += 1
+        cabytes = bytes[off:off+t.get_chunkspec().get_bytes_length()]
+        off += len(cabytes)
+        chunkspec = t.chunkspec.from_bytes(cabytes)
+        return [HaveMessage(chunkspec),off]
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return None # variable due to chunkspec
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return MSG_ID_HAVE
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "HAVE("+`self.chunkspec`+")"
+
+
+class IntegrityMessage(Encodable):
+    def __init__(self,t,chunkspec,intbytes):
+        self.chunkspec = chunkspec
+        self.intbytes  = intbytes
+    def to_bytes(self):
+        chain = [get_id(),self.chunkspec.to_bytes(),self.intbytes]
+        return "".join(chain)
+    def from_bytes(t,bytes,off):
+        off += 1
+        cabytes = bytes[off:off+t.get_chunkspec().get_bytes_length()]
+        off += len(cabytes)
+        chunkspec = t.chunkspec.from_bytes(cabytes)
+        intbytes = bytes[off:off+t.get_hash_length()]
+        off += len(intbytes)
+        return [IntegrityMessage(chunkspec,intbytes),off]
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return None # variable
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return MSG_ID_INTEGRITY
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "INTEGRITY("+`self.chunkspec`+",intbytes)"
+
+class PexResv4Message(Encodable):
+    def __init__(self,ipp):
+        self.ipp = ipport
+    def to_bytes(self):
+        chain = [get_id(),self.ipp.to_bytes()]
+        return "".join(chain)
+    def from_bytes(t,bytes,off):
+        off += 1
+        ippbytes = bytes[off:off+IPv4Port.get_bytes_length()]
+        off += len(ippbytes)
+        ipp = IPv4Port.from_bytes(cabytes)
+        return [PexResv4Message(ipp),off]
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return None # variable due to chunkspec
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return MSG_ID_PEX_RESv4
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "PEX_RESv4("+`self.ipp`+")"
+
+class PexReqMessage(Encodable):
+    def __init__(self):
+        pass
+    def to_bytes(self):
+        chain = [get_id()]
+        return "".join(chain)
+    def from_bytes(t,bytes,off):
+        off += 1
+        return [PexReqMessage(),off]
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return 1 # just MSG_ID
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return MSG_ID_PEX_REQ
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "PEX_REQ()"
+
+
+class SignedIntegrityMessage(Encodable):
+    def __init__(self,t,chunkspec,intbytes):
+        self.chunkspec = chunkspec
+        self.intbytes  = intbytes
+    def to_bytes(self):
+        chain = [get_id(),self.chunkspec.to_bytes(),self.intbytes]
+        return "".join(chain)
+    def from_bytes(t,bytes,off):
+        off += 1
+        cabytes = bytes[off:off+t.get_chunkspec().get_bytes_length()]
+        off += len(cabytes)
+        chunkspec = t.chunkspec.from_bytes(cabytes)
+        intbytes = bytes[off:off+t.TODO]
+        off += len(intbytes)
+        return [SignedIntegrityMessage(chunkspec,intbytes),off]
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return None # variable
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return MSG_ID_SIGNED_INTEGRITY
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "SIGNED_INTEGRITY("+`self.chunkspec`+",intbytes)"
+
+
+class RequestMessage(Encodable):
+    def __init__(self,chunkspec):
+        self.chunkspec = chunkspec
+    def to_bytes(self):
+        chain = [get_id(),self.chunkspec.to_bytes(),self.ts.to_bytes()]
+        return "".join(chain)
+    def from_bytes(t,bytes,off):
+        off += 1
+        cabytes = bytes[off:off+t.get_chunkspec().get_bytes_length()]
+        off += len(cabytes)
+        chunkspec = t.chunkspec.from_bytes(cabytes)
+        return [RequestMessage(chunkspec),off]
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return None # variable due to chunkspec
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return MSG_ID_REQUEST
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "REQUEST("+`self.chunkspec`+")"
+
+class CancelMessage(Encodable):
+    def __init__(self,chunkspec):
+        self.chunkspec = chunkspec
+    def to_bytes(self):
+        chain = [get_id(),self.chunkspec.to_bytes(),self.ts.to_bytes()]
+        return "".join(chain)
+    def from_bytes(t,bytes,off):
+        off += 1
+        cabytes = bytes[off:off+t.get_chunkspec().get_bytes_length()]
+        off += len(cabytes)
+        chunkspec = t.chunkspec.from_bytes(cabytes)
+        return [CancelMessage(chunkspec),off]
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return None # variable due to chunkspec
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return MSG_ID_CANCEL
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "CANCEL("+`self.chunkspec`+")"
+
+
+class ChokeMessage(Encodable):
+    def __init__(self):
+        pass
+    def to_bytes(self):
+        chain = [get_id()]
+        return "".join(chain)
+    def from_bytes(t,bytes,off):
+        off += 1
+        return [ChokeMessage(),off]
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return 1 # just MSG_ID
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return MSG_ID_CHOKE
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "CHOKE()"
+
+
+class UnchokeMessage(Encodable):
+    def __init__(self):
+        pass
+    def to_bytes(self):
+        chain = [get_id()]
+        return "".join(chain)
+    def from_bytes(t,bytes,off):
+        off += 1
+        return [UnchokeMessage(),off]
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return 1 # just MSG_ID
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return MSG_ID_UNCHOKE
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "UNCHOKE()"
+
+
+
+class PexResv6Message(Encodable):
+    def __init__(self,ipp):
+        self.ipp = ipport
+    def to_bytes(self):
+        chain = [get_id(),self.ipp.to_bytes()]
+        return "".join(chain)
+    def from_bytes(t,bytes,off):
+        ippbytes = bytes[off:off+IPv6Port.get_bytes_length()]
+        off += len(ippbytes)
+        ipp = IPv6Port.from_bytes(cabytes)
+        return [PexResv6Message(ipp),off]
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return None # variable due to chunkspec
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return MSG_ID_PEX_RESv6
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "PEX_RESv6("+`self.ipp`+")"
+
+
+class PexRescertMessage(Encodable):
+    def __init__(self,certbytes):
+        self.certbytes = certbytes
+    def to_bytes(self):
+        sbytes = struct.pack(">H",len(self.certbytes))
+        chain = [get_id(),sbytes,self.certbytes]
+        return "".join(chain)
+    def from_bytes(t,bytes,off):
+        sbytes = bytes[off:off+1]
+        off += len(sbytes)
+        [s] = struct.unpack(">H",sbytes)
+        certbytes = bytes[2:2+s]
+        off += len(certbytes)
+        return [PexRescertMessage(certbytes),off]
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return None # variable due to certificate
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return MSG_ID_PEX_REScert
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "PEX_REScert(cert)"
+
+
+#
+# Transfer
+#
 
 
 class Transfer:
@@ -91,34 +637,31 @@ class Transfer:
     
     def get_socket(self):
         return self.socket
+
+
+
+class ChannelID(Encodable):
+    def __init__(self,id):
+        self.id = id
+    def to_bytes(self):
+        return self.id
+    def from_bytes(bytes):
+        id = bytes[0:4]
+        return ChannelID(id)
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return 4
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():     
+        return None
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "ChannelID("+`self.id`+")"
+
     
-MSG_ID_HANDSHAKE = '\x00'
-MSG_ID_DATA = '\x01'
-MSG_ID_ACK = '\x02'
-MSG_ID_HAVE = '\x03'
-MSG_ID_INTEGRITY = '\x04'
-MSG_ID_PEX_RESv4 = '\x05'
-MSG_ID_PEX_REQ = '\x06'
-MSG_ID_SIGN_INTEGRITY = '\x07'
-MSG_ID_REQUEST = '\x08'
-MSG_ID_CANCEL = '\x09'
-MSG_ID_CHOKE = '\x0a'
-MSG_ID_UNCHOKE = '\x0b'
-MSG_ID_PEX_RESv6 = '\x0c'
-MSG_ID_PEX_REScert = '\x0d'
-
-POPT_VER_TYPE = '\x00'
-POPT_VER_SWIFT = '\x00'
-POPT_VER_PPSP = '\x01'
-
-POPT_SWARMID_TYPE = '\x01'
-POPT_CIPM_TYPE = '\x02'
-POPT_MHF_TYPE = '\x03'
-POPT_LSA_TYPE = '\x04'
-POPT_CAM_TYPE = '\x05'
-POPT_LDW_TYPE = '\x06'
-POPT_MSGS_TYPE = '\x07'
-POPT_END_TYPE = '\xff'
+#
+# Datagram
+#
 
 class Datagram(Encodable):
     """ Serialization """
@@ -133,203 +676,60 @@ class Datagram(Encodable):
     def set_t(self,t):
         self.t = t
         
-    def add_channel_id(self,chanid):
-        self.chain.append(chanid)
-        
-    def add_handshake(self,mychanid,intdata=None):
-        self.chain.append(MSG_ID_HANDSHAKE)
-        self.chain.append(mychanid)
-        if self.t.get_version() == POPT_VER_PPSP:
-            self.chain.append(POPT_VER_TYPE)
-            self.chain.append(self.t.get_version())
-            self.chain.append(POPT_SWARMID_TYPE)
-            s = len(intdata)
-            sbytes = struct.pack(">H",s)
-            self.chain.append(sbytes)
-            self.chain.append(intdata)
-            self.chain.append(POPT_END_TYPE)
-        
-    def add_integrity(self,chunkspec,intdata):
-        self.chain.append(MSG_ID_INTEGRITY)
-        self.chain.append(chunkspec.to_bytes())
-        self.chain.append(intdata)
-        
-    def add_have(self,chunkspec):
-        self.chain.append(MSG_ID_HAVE)
-        self.chain.append(chunkspec.to_bytes())
-
-    def add_request(self,chunkspec):
-        self.chain.append(MSG_ID_REQUEST)
-        self.chain.append(chunkspec.to_bytes())
+    def add(self,e):
+        self.chain.append(e)
         
     def to_bytes(self):
-        #print >>sys.stderr,"dgram: to_bytes:",`self.chain`
-        return "".join(self.chain)
+        wire = ''
+        for e in self.chain:
+            wire += e.to_bytes()
+        return wire
 
     def get_channel_id(self):
-        chanid = self.data[0:len(CONN_ID_ZERO)]
-        self.off += len(chanid)
-        return {"chanid":chanid}
+        x = ChannelID.from_bytes( self.data[0:ChannelID.get_bytes_length()])
+        self.off += ChannelID.get_bytes_length()
+        return x
 
     def get_message(self):
         if self.off == len(self.data):
-            return (None,None)
+            return None
             
         msgid = self.data[self.off:self.off+len(MSG_ID_HANDSHAKE)]
-        self.off += len(msgid)
         print >>sys.stderr,"dgram: get_message: GOT msgid",`msgid`
         
         if msgid == MSG_ID_HANDSHAKE:
-            fields = self.get_handshake()
+            [msg,self.off] = HandshakeMessage.from_bytes(self.t,self.data,self.off)
         elif msgid == MSG_ID_DATA:
-            fields = self.get_data()
+            [msg,self.off] = DataMessage.from_bytes(self.t,self.data,self.off)
         elif msgid == MSG_ID_ACK:
-            fields = self.get_ack()
+            [msg,self.off] = AckMessage.from_bytes(self.t,self.data,self.off)
         elif msgid == MSG_ID_HAVE:
-            fields = self.get_have()
+            [msg,self.off] = HaveMessage.from_bytes(self.t,self.data,self.off)
         elif msgid == MSG_ID_INTEGRITY:
-            fields = self.get_integrity()
+            [msg,self.off] = IntegrityMessage.from_bytes(self.t,self.data,self.off)
         elif msgid == MSG_ID_PEX_RESv4:
-            fields = self.get_pex_resv4()
+            [msg,self.off] = PexResv4Message.from_bytes(self.t,self.data,self.off)
         elif msgid == MSG_ID_PEX_REQ:
-            fields = self.get_pex_req()
+            [msg,self.off] = PexReqMessage.from_bytes(self.t,self.data,self.off)
         elif msgid == MSG_ID_SIGN_INTEGRITY:
-            fields = self.get_sign_integrity()
+            [msg,self.off] = SignedIntegrityMessage.from_bytes(self.t,self.data,self.off)
         elif msgid == MSG_ID_REQUEST:
-            fields = self.get_request()
+            [msg,self.off] = RequestMessage.from_bytes(self.t,self.data,self.off)
         elif msgid == MSG_ID_CANCEL:
-            fields = self.get_cancel()
+            [msg,self.off] = CancelMessage.from_bytes(self.t,self.data,self.off)
         elif msgid == MSG_ID_CHOKE:
-            fields = self.get_choke()
+            [msg,self.off] = ChokeMessage.from_bytes(self.t,self.data,self.off)
         elif msgid == MSG_ID_UNCHOKE:
-            fields = self.get_unchoke()
+            [msg,self.off] = UnchokeMessage.from_bytes(self.t,self.data,self.off)
         elif msgid == MSG_ID_PEX_RESv6:
-            fields = self.get_pex_resv6()
+            [msg,self.off] = PexResv6Message.from_bytes(self.t,self.data,self.off)
         elif msgid == MSG_ID_PEX_REScert:
-            fields = self.get_pex_rescert()
+            [msg,self.off] = PexRescertMessage.from_bytes(self.t,self.data,self.off)
         else:
             print >>sys.stderr,"dgram: get_message: unknown msgid",`msgid`
-            fields = []
-        return (msgid,fields)
+            msg = None
+        return msg
     
-    def get_handshake(self):
-        chanid = self.data[self.off:self.off+len(CONN_ID_ZERO)]
-        self.off += len(chanid)
-        ver = None
-        cipm = None
-        mhf = None
-        lsa = None
-        cam = None
-        ldw = None
-        msgdata = None
-        swarmid = None
-        if self.t.get_version() == POPT_VER_PPSP:
-            while self.off < len(self.data):
-                popt = self.data[self.off]
-                self.off += 1
-                if popt == POPT_VER_TYPE:
-                    ver = self.data[self.off]
-                    self.off += 1
-                elif popt == POPT_SWARMID_TYPE:
-                    sbytes = self.data[self.off:self.off+1]
-                    self.off += len(sbytes)
-                    [s] = struct.unpack(">H",sbytes)
-                    swarmid = self.data[self.off:self.off+s]
-                    self.off += len(swarmid)
-                elif popt == POPT_CIPM_TYPE:
-                    cipm = self.data[self.off]
-                    self.off += 1
-                elif popt == POPT_MHF_TYPE:
-                    mhf = self.data[self.off]
-                    self.off += 1
-                elif popt == POPT_LSA_TYPE:
-                    lsa = self.data[self.off]
-                    self.off += 1
-                elif popt == POPT_CAM_TYPE:
-                    cam = self.data[self.off]
-                    self.off += 1
-                elif popt == POPT_LDW_TYPE:
-                    ldw = self.data[self.off]
-                    self.off += 1
-                elif popt == POPT_MSGS_TYPE:
-                    sbytes = self.data[self.off:self.off+1]
-                    self.off += len(sbytes)
-                    [s] = struct.unpack(">H",sbytes)
-                    msgdata = self.data[self.off:self.off+s]
-                    self.off += len(msgdata)
-                elif popt == POPT_END_TYPE:
-                    break
-        
-        return {"chanid":chanid,"ver":ver,"swarmid":swarmid,"cipm":cipm,"mhf":mhf,"lsa":lsa,"cam":cam,"ldw":ldw,"msgdata":msgdata}
-        
-    def get_integrity(self):
-        cabytes = self.data[self.off:self.off+self.t.get_chunkspec().get_bytes_length()]
-        self.off += len(cabytes)
-        chunkspec = self.t.chunkspec.from_bytes(cabytes)
-        intdata = self.data[self.off:self.off+self.t.get_hash_length()]
-        self.off += len(intdata)
-        return {"chunkspec":chunkspec,"intdata":intdata}
-        
-    def get_have(self):
-        cabytes = self.data[self.off:self.off+self.t.get_chunkspec().get_bytes_length()]
-        self.off += len(cabytes)
-        chunkspec = self.t.chunkspec.from_bytes(cabytes)
-        return {"chunkspec":chunkspec}
-
-    def get_data(self):
-        cabytes = self.data[self.off:self.off+self.t.get_chunkspec().get_bytes_length()]
-        self.off += len(cabytes)
-        chunkspec = self.t.chunkspec.from_bytes(cabytes)
-        tsbytes = self.data[self.off:self.off+TSBYTES_LEN]
-        self.off += len(tsbytes)
-        chunk = self.data[self.off:]
-        self.off = len(self.data)
-        return {"chunkspec":chunkspec,"tsbytes":tsbytes,"chunk":chunk}
-
-    def get_ack(self):
-        cabytes = self.data[self.off:self.off+self.t.get_chunkspec().get_bytes_length()]
-        self.off += len(cabytes)
-        chunkspec = self.t.chunkspec.from_bytes(cabytes)
-        tsbytes = self.data[self.off:self.off+TSBYTES_LEN]
-        self.off += len(tsbytes)
-        return {"chunkspec":chunkspec,"tsbytes":tsbytes}
-        
-    def get_pex_resv4(self):
-        ippbytes = self.data[self.off:self.off+IPV4BYTES_LEN]
-        self.off += len(ippbytes)
-        return {"ipv4bytes":ippbytes}
-
-    def get_pex_req(self):
-        return {}
-    
-    def get_sign_integrity(self):
-        return {}
-    
-    def get_request(self):
-        cabytes = self.data[self.off:self.off+self.t.get_chunkspec().get_bytes_length()]
-        self.off += len(cabytes)
-        chunkspec = self.t.chunkspec.from_bytes(cabytes)
-        return {"chunkspec":chunkspec}
-    
-    def get_cancel(self):
-        cabytes = self.data[self.off:self.off+self.t.get_chunkspec().get_bytes_length()]
-        self.off += len(cabytes)
-        chunkspec = self.t.chunkspec.from_bytes(cabytes)
-        return {"chunkspec":chunkspec}
-
-    def get_choke(self):
-        return {}
-    
-    def get_unchoke(self):
-        return {}
-    
-    def get_pex_resv6(self):
-        ippbytes = self.data[self.off:self.off+IPV6BYTES_LEN]
-        self.off += len(ippbytes)
-        return {"ipv6bytes":ippbytes}
-        
-    def get_pex_rescert(self):
-        return {}
 
 CONN_STATE_INIT = 0
 CONN_STATE_WAIT4HIS = 1
@@ -410,15 +810,13 @@ class SwiftConnection:
         if hs:
             d = Datagram(self.t)
             if self.t.version == POPT_VER_SWIFT:
-                d.add_channel_id(self.c.get_his_chanid())
-                d.add_integrity(BIN_ALL,self.t.get_swarm_id())
-                d.add_handshake(self.c.get_my_chanid())
-                #d.add_have(BIN_NONE)
+                d.add( ChannelID(self.c.get_his_chanid()) )
+                d.add( IntegrityMessage(BIN_ALL,self.t.get_swarm_id()) )
+                d.add( HandshakeMessage(self.c.get_my_chanid(),POPT_VER_SWIFT) )
                 self.c.send(d)
             else:
-                d.add_channel_id(self.c.get_his_chanid())
-                d.add_handshake(self.c.get_my_chanid(),self.t.get_swarm_id())
-                #d.add_have(ChunkRange(1,4))
+                d.add( ChannelID(self.c.get_his_chanid()) )
+                d.add( HandshakeMessage(self.c.get_my_chanid(),POPT_VER_PPSP,self.t.get_swarm_id()) )
                 self.c.send(d)
 
     def makeDatagram(self,autochanid=True):

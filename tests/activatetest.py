@@ -96,11 +96,11 @@ class TestDirSeed(TestAsServer):
         d = s.recv()
         responded = False
         while True:
-            (msgid,fields) = d.get_message()
-            if msgid is None:
+            msg = d.get_message()
+            if msg is None:
                 break 
-            if msgid == MSG_ID_HANDSHAKE:
-                print >>sys.stderr,"Found HS",`fields`
+            if msg.get_id() == MSG_ID_HANDSHAKE:
+                print >>sys.stderr,"Found",`msg`
                 responded = True
                 
         self.assertTrue(responded)
