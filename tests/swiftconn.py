@@ -421,15 +421,20 @@ class SwiftConnection:
                 #d.add_have(ChunkRange(1,4))
                 self.c.send(d)
 
-    def makeDatagram(self):
-        return Datagram(self.t)
+    def makeDatagram(self,autochanid=True):
+        d = Datagram(self.t)
+        if autochanid:
+            d.add_channel_id(self.c.get_his_chanid())
+        return d
 
     def send(self,d):
         self.c.send(d)
         
-    def recv(self):
+    def recv(self,autochanid=True):
         d = self.s.recv()
         d.set_t(self.t)
+        if autochanid:
+            chanid = d.get_channel_id()
         return d
 
     def test(self):
