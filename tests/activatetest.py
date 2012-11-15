@@ -22,7 +22,7 @@ from swiftconn import *
 DEBUG=False
 
 
-class TestDirSeed(TestAsServer):
+class TestDirSeedFramework(TestAsServer):
     """
     Framework for multi-file tests.
     """
@@ -84,6 +84,9 @@ class TestDirSeed(TestAsServer):
         TestAsServer.tearDown(self)
         #time.sleep(1)
         #shutil.rmtree(self.scandir)
+
+
+class TestDirSeed(TestDirSeedFramework):
 
     def test_connect_one(self):
         myaddr = ("127.0.0.1",5353)

@@ -203,8 +203,8 @@ class HandshakeMessage(Encodable):
         self.msgdata = msgdata
     def to_bytes(self):
         chain = []
-        chain.append(MSG_ID_HANDSHAKE)
-        chain.append(self.chanid)
+        chain.append(HandshakeMessage.get_id())
+        chain.append(self.chanid.to_bytes())
         if self.ver == POPT_VER_PPSP:
             # TODO, make each ProtocolOption an Encodable
             chain.append(POPT_VER_TYPE)
@@ -305,12 +305,12 @@ class HandshakeMessage(Encodable):
 
 
 class DataMessage(Encodable):
-    def __init__(self,t,chunkspec,timestamp,chunk):
+    def __init__(self,chunkspec,timestamp,chunk):
         self.chunkspec = chunkspec
         self.ts = timestamp
         self.chunk  = chunk
     def to_bytes(self):
-        chain = [get_id(),self.chunkspec.to_bytes(),self.ts.to_bytes(),self.chunk]
+        chain = [DataMessage.get_id(),self.chunkspec.to_bytes(),self.ts.to_bytes(),self.chunk]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         off += 1
@@ -339,7 +339,7 @@ class AckMessage(Encodable):
         self.chunkspec = chunkspec
         self.ts = timestamp
     def to_bytes(self):
-        chain = [get_id(),self.chunkspec.to_bytes(),self.ts.to_bytes()]
+        chain = [AckMessage.get_id(),self.chunkspec.to_bytes(),self.ts.to_bytes()]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         off += 1
@@ -365,7 +365,7 @@ class HaveMessage(Encodable):
     def __init__(self,chunkspec):
         self.chunkspec = chunkspec
     def to_bytes(self):
-        chain = [get_id(),self.chunkspec.to_bytes()]
+        chain = [HaveMessage.get_id(),self.chunkspec.to_bytes()]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         off += 1
@@ -385,11 +385,11 @@ class HaveMessage(Encodable):
 
 
 class IntegrityMessage(Encodable):
-    def __init__(self,t,chunkspec,intbytes):
+    def __init__(self,chunkspec,intbytes):
         self.chunkspec = chunkspec
         self.intbytes  = intbytes
     def to_bytes(self):
-        chain = [get_id(),self.chunkspec.to_bytes(),self.intbytes]
+        chain = [IntegrityMessage.get_id(),self.chunkspec.to_bytes(),self.intbytes]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         off += 1
@@ -413,7 +413,7 @@ class PexResv4Message(Encodable):
     def __init__(self,ipp):
         self.ipp = ipport
     def to_bytes(self):
-        chain = [get_id(),self.ipp.to_bytes()]
+        chain = [PexResv4Message.get_id(),self.ipp.to_bytes()]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         off += 1
@@ -435,7 +435,7 @@ class PexReqMessage(Encodable):
     def __init__(self):
         pass
     def to_bytes(self):
-        chain = [get_id()]
+        chain = [PexReqMessage.get_id()]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         off += 1
@@ -456,7 +456,7 @@ class SignedIntegrityMessage(Encodable):
         self.chunkspec = chunkspec
         self.intbytes  = intbytes
     def to_bytes(self):
-        chain = [get_id(),self.chunkspec.to_bytes(),self.intbytes]
+        chain = [SignedIntegrity.get_id(),self.chunkspec.to_bytes(),self.intbytes]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         off += 1
@@ -481,7 +481,7 @@ class RequestMessage(Encodable):
     def __init__(self,chunkspec):
         self.chunkspec = chunkspec
     def to_bytes(self):
-        chain = [get_id(),self.chunkspec.to_bytes(),self.ts.to_bytes()]
+        chain = [RequestMessage.get_id(),self.chunkspec.to_bytes()]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         off += 1
@@ -503,7 +503,7 @@ class CancelMessage(Encodable):
     def __init__(self,chunkspec):
         self.chunkspec = chunkspec
     def to_bytes(self):
-        chain = [get_id(),self.chunkspec.to_bytes(),self.ts.to_bytes()]
+        chain = [CancelMessage.get_id(),self.chunkspec.to_bytes(),self.ts.to_bytes()]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         off += 1
@@ -526,7 +526,7 @@ class ChokeMessage(Encodable):
     def __init__(self):
         pass
     def to_bytes(self):
-        chain = [get_id()]
+        chain = [ChokeMessage.get_id()]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         off += 1
@@ -546,7 +546,7 @@ class UnchokeMessage(Encodable):
     def __init__(self):
         pass
     def to_bytes(self):
-        chain = [get_id()]
+        chain = [UnchokeMessage.get_id()]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         off += 1
@@ -567,7 +567,7 @@ class PexResv6Message(Encodable):
     def __init__(self,ipp):
         self.ipp = ipport
     def to_bytes(self):
-        chain = [get_id(),self.ipp.to_bytes()]
+        chain = [PexResv6Message.get_id(),self.ipp.to_bytes()]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         ippbytes = bytes[off:off+IPv6Port.get_bytes_length()]
@@ -590,7 +590,7 @@ class PexRescertMessage(Encodable):
         self.certbytes = certbytes
     def to_bytes(self):
         sbytes = struct.pack(">H",len(self.certbytes))
-        chain = [get_id(),sbytes,self.certbytes]
+        chain = [PexRescertMessage.get_id(),sbytes,self.certbytes]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         sbytes = bytes[off:off+1]
@@ -682,6 +682,7 @@ class Datagram(Encodable):
     def to_bytes(self):
         wire = ''
         for e in self.chain:
+            print >>sys.stderr,"ADDING",`e`
             wire += e.to_bytes()
         return wire
 
@@ -736,7 +737,7 @@ CONN_STATE_WAIT4HIS = 1
 CONN_STATE_WAIT4MINE = 2
 CONN_STATE_ESTABLISHED = 3 
 
-CONN_ID_ZERO = '\x00' * 4
+CONN_ID_ZERO = ChannelID.from_bytes('\x00' * 4)
 
 
 DGRAM_MAX_RECV = 65536
@@ -747,7 +748,7 @@ class Channel:
         self.addr = addr
         self.localinit = localinit
         if localinit:
-            self.mychanid = '6778'
+            self.mychanid = ChannelID.from_bytes('6778')
         else:
             self.mychanid = CONN_ID_ZERO
         self.hischanid = CONN_ID_ZERO 
@@ -755,25 +756,14 @@ class Channel:
     def send(self,d):
         self.t.get_socket().sendto(d,self.addr)
         
-    """
     def recv(self,d):
-        d.set_t(self.t)
-        
         while True:
-            (msgid,fields) = d.get_message()
-            if msgid is None:
-                break 
-            if msgid == MSG_ID_HANDSHAKE:
-                print >>sys.stderr,"Found HS",`fields`
-                self.hischanid = fields["chanid"]
-            elif msgid == MSG_ID_INTEGRITY:
-                print >>sys.stderr,"Found INT",`fields`
-            elif msgid == MSG_ID_HAVE:
-                print >>sys.stderr,"Found HAVE",`fields`
-            elif msgid == MSG_ID_DATA:
-                print >>sys.stderr,"Found DATA",fields.keys()
-    """
-
+            msg = d.get_message()
+            if msg is None:
+                break
+            print >>sys.stderr,"Found",`msg`
+            if msg.get_id() == MSG_ID_HANDSHAKE:
+                self.hischanid = msg.chanid
       
     def get_my_chanid(self):
         return self.mychanid
@@ -810,19 +800,19 @@ class SwiftConnection:
         if hs:
             d = Datagram(self.t)
             if self.t.version == POPT_VER_SWIFT:
-                d.add( ChannelID(self.c.get_his_chanid()) )
+                d.add( self.c.get_his_chanid() )
                 d.add( IntegrityMessage(BIN_ALL,self.t.get_swarm_id()) )
                 d.add( HandshakeMessage(self.c.get_my_chanid(),POPT_VER_SWIFT) )
                 self.c.send(d)
             else:
-                d.add( ChannelID(self.c.get_his_chanid()) )
+                d.add( self.c.get_his_chanid() )
                 d.add( HandshakeMessage(self.c.get_my_chanid(),POPT_VER_PPSP,self.t.get_swarm_id()) )
                 self.c.send(d)
 
     def makeDatagram(self,autochanid=True):
         d = Datagram(self.t)
         if autochanid:
-            d.add_channel_id(self.c.get_his_chanid())
+            d.add( self.c.get_his_chanid() )
         return d
 
     def send(self,d):
@@ -834,23 +824,4 @@ class SwiftConnection:
         if autochanid:
             chanid = d.get_channel_id()
         return d
-
-    def test(self):
-        d = self.s.recv()
-        chanid = d.get_channel_id()
-        # self.assertEquals(chanid,c.get_my_chanid())
-        self.c.recv(d)
-        
-        # Request DATA
-        d = Datagram(t)
-        d.add_channel_id(c.get_his_chanid())
-        d.add_request(ChunkRange(0,0))
-        self.c.send(d)
-
-        # Recv DATA        
-        d = self.s.recv()
-        chanid = d.get_channel_id()
-        # self.assertEquals(chanid,c.get_my_chanid())
-        self.c.recv(d)
-        
 
