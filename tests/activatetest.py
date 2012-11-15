@@ -15,9 +15,9 @@ import string
 import binascii
 from traceback import print_exc
 
-from httpmftest import TestAsServer
+from testasserver import TestAsServer
 from SwiftDef import SwiftDef
-from swiftconn import SwiftConnection
+from swiftconn import *
 
 DEBUG=False
 
@@ -86,14 +86,24 @@ class TestDirSeed(TestAsServer):
         #shutil.rmtree(self.scandir)
 
     def test_connect_one(self):
-        myaddr = ("127.0.0.1","5353")
+        myaddr = ("127.0.0.1",5353)
         hisaddr = ("127.0.0.1",self.listenport)
         
         # last
         swarmid = self.filelist[len(self.filelist)-1][2]
         
         s = SwiftConnection(myaddr,hisaddr,swarmid)
-        
+        d = s.recv()
+        responded = False
+        while True:
+            (msgid,fields) = d.get_message()
+            if msgid is None:
+                break 
+            if msgid == MSG_ID_HANDSHAKE:
+                print >>sys.stderr,"Found HS",`fields`
+                responded = True
+                
+        self.assertTrue(responded)
         
         time.sleep(10)
     

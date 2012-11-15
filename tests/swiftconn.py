@@ -11,6 +11,10 @@ CHUNK_SPEC_ID_BIN32 = '\x00'
 CHUNK_SPEC_ID_BYTE64 = '\x01'
 CHUNK_SPEC_ID_CHUNK32 = '\x02' 
 
+TSBYTES_LEN = 8
+
+IPV4BYTES_LEN = (32/8)+2
+IPV6BYTES_LEN = (128/8)+2
 
 class Encodable:
     def to_bytes(self):
@@ -93,6 +97,15 @@ MSG_ID_DATA = '\x01'
 MSG_ID_ACK = '\x02'
 MSG_ID_HAVE = '\x03'
 MSG_ID_INTEGRITY = '\x04'
+MSG_ID_PEX_RESv4 = '\x05'
+MSG_ID_PEX_REQ = '\x06'
+MSG_ID_SIGN_INTEGRITY = '\x07'
+MSG_ID_REQUEST = '\x08'
+MSG_ID_CANCEL = '\x09'
+MSG_ID_CHOKE = '\x0a'
+MSG_ID_UNCHOKE = '\x0b'
+MSG_ID_PEX_RESv6 = '\x0c'
+MSG_ID_PEX_REScert = '\x0d'
 
 POPT_VER_TYPE = '\x00'
 POPT_VER_SWIFT = '\x00'
@@ -144,14 +157,19 @@ class Datagram(Encodable):
     def add_have(self,chunkspec):
         self.chain.append(MSG_ID_HAVE)
         self.chain.append(chunkspec.to_bytes())
+
+    def add_request(self,chunkspec):
+        self.chain.append(MSG_ID_REQUEST)
+        self.chain.append(chunkspec.to_bytes())
         
     def to_bytes(self):
-        print >>sys.stderr,"Datagram: to_bytes:",`self.chain`
+        #print >>sys.stderr,"dgram: to_bytes:",`self.chain`
         return "".join(self.chain)
 
     def get_channel_id(self):
         chanid = self.data[0:len(CONN_ID_ZERO)]
         self.off += len(chanid)
+        return {"chanid":chanid}
 
     def get_message(self):
         if self.off == len(self.data):
@@ -163,10 +181,32 @@ class Datagram(Encodable):
         
         if msgid == MSG_ID_HANDSHAKE:
             fields = self.get_handshake()
+        elif msgid == MSG_ID_DATA:
+            fields = self.get_data()
+        elif msgid == MSG_ID_ACK:
+            fields = self.get_ack()
         elif msgid == MSG_ID_HAVE:
             fields = self.get_have()
         elif msgid == MSG_ID_INTEGRITY:
             fields = self.get_integrity()
+        elif msgid == MSG_ID_PEX_RESv4:
+            fields = self.get_pex_resv4()
+        elif msgid == MSG_ID_PEX_REQ:
+            fields = self.get_pex_req()
+        elif msgid == MSG_ID_SIGN_INTEGRITY:
+            fields = self.get_sign_integrity()
+        elif msgid == MSG_ID_REQUEST:
+            fields = self.get_request()
+        elif msgid == MSG_ID_CANCEL:
+            fields = self.get_cancel()
+        elif msgid == MSG_ID_CHOKE:
+            fields = self.get_choke()
+        elif msgid == MSG_ID_UNCHOKE:
+            fields = self.get_unchoke()
+        elif msgid == MSG_ID_PEX_RESv6:
+            fields = self.get_pex_resv6()
+        elif msgid == MSG_ID_PEX_REScert:
+            fields = self.get_pex_rescert()
         else:
             print >>sys.stderr,"dgram: get_message: unknown msgid",`msgid`
             fields = []
@@ -176,7 +216,13 @@ class Datagram(Encodable):
         chanid = self.data[self.off:self.off+len(CONN_ID_ZERO)]
         self.off += len(chanid)
         ver = None
-        intdata = None
+        cipm = None
+        mhf = None
+        lsa = None
+        cam = None
+        ldw = None
+        msgdata = None
+        swarmid = None
         if self.t.get_version() == POPT_VER_PPSP:
             while self.off < len(self.data):
                 popt = self.data[self.off]
@@ -185,12 +231,36 @@ class Datagram(Encodable):
                     ver = self.data[self.off]
                     self.off += 1
                 elif popt == POPT_SWARMID_TYPE:
-                    intdata = self.data[self.off:self.off+self.t.get_hash_length()]
-                    self.off += len(intdata)
+                    sbytes = self.data[self.off:self.off+1]
+                    self.off += len(sbytes)
+                    [s] = struct.unpack(">H",sbytes)
+                    swarmid = self.data[self.off:self.off+s]
+                    self.off += len(swarmid)
+                elif popt == POPT_CIPM_TYPE:
+                    cipm = self.data[self.off]
+                    self.off += 1
+                elif popt == POPT_MHF_TYPE:
+                    mhf = self.data[self.off]
+                    self.off += 1
+                elif popt == POPT_LSA_TYPE:
+                    lsa = self.data[self.off]
+                    self.off += 1
+                elif popt == POPT_CAM_TYPE:
+                    cam = self.data[self.off]
+                    self.off += 1
+                elif popt == POPT_LDW_TYPE:
+                    ldw = self.data[self.off]
+                    self.off += 1
+                elif popt == POPT_MSGS_TYPE:
+                    sbytes = self.data[self.off:self.off+1]
+                    self.off += len(sbytes)
+                    [s] = struct.unpack(">H",sbytes)
+                    msgdata = self.data[self.off:self.off+s]
+                    self.off += len(msgdata)
                 elif popt == POPT_END_TYPE:
                     break
         
-        return [chanid,ver,intdata]
+        return {"chanid":chanid,"ver":ver,"swarmid":swarmid,"cipm":cipm,"mhf":mhf,"lsa":lsa,"cam":cam,"ldw":ldw,"msgdata":msgdata}
         
     def get_integrity(self):
         cabytes = self.data[self.off:self.off+self.t.get_chunkspec().get_bytes_length()]
@@ -198,14 +268,68 @@ class Datagram(Encodable):
         chunkspec = self.t.chunkspec.from_bytes(cabytes)
         intdata = self.data[self.off:self.off+self.t.get_hash_length()]
         self.off += len(intdata)
-        return [chunkspec,intdata]
+        return {"chunkspec":chunkspec,"intdata":intdata}
         
     def get_have(self):
         cabytes = self.data[self.off:self.off+self.t.get_chunkspec().get_bytes_length()]
         self.off += len(cabytes)
         chunkspec = self.t.chunkspec.from_bytes(cabytes)
-        return [chunkspec]
+        return {"chunkspec":chunkspec}
+
+    def get_data(self):
+        cabytes = self.data[self.off:self.off+self.t.get_chunkspec().get_bytes_length()]
+        self.off += len(cabytes)
+        chunkspec = self.t.chunkspec.from_bytes(cabytes)
+        tsbytes = self.data[self.off:self.off+TSBYTES_LEN]
+        self.off += len(tsbytes)
+        chunk = self.data[self.off:]
+        self.off = len(self.data)
+        return {"chunkspec":chunkspec,"tsbytes":tsbytes,"chunk":chunk}
+
+    def get_ack(self):
+        cabytes = self.data[self.off:self.off+self.t.get_chunkspec().get_bytes_length()]
+        self.off += len(cabytes)
+        chunkspec = self.t.chunkspec.from_bytes(cabytes)
+        tsbytes = self.data[self.off:self.off+TSBYTES_LEN]
+        self.off += len(tsbytes)
+        return {"chunkspec":chunkspec,"tsbytes":tsbytes}
         
+    def get_pex_resv4(self):
+        ippbytes = self.data[self.off:self.off+IPV4BYTES_LEN]
+        self.off += len(ippbytes)
+        return {"ipv4bytes":ippbytes}
+
+    def get_pex_req(self):
+        return {}
+    
+    def get_sign_integrity(self):
+        return {}
+    
+    def get_request(self):
+        cabytes = self.data[self.off:self.off+self.t.get_chunkspec().get_bytes_length()]
+        self.off += len(cabytes)
+        chunkspec = self.t.chunkspec.from_bytes(cabytes)
+        return {"chunkspec":chunkspec}
+    
+    def get_cancel(self):
+        cabytes = self.data[self.off:self.off+self.t.get_chunkspec().get_bytes_length()]
+        self.off += len(cabytes)
+        chunkspec = self.t.chunkspec.from_bytes(cabytes)
+        return {"chunkspec":chunkspec}
+
+    def get_choke(self):
+        return {}
+    
+    def get_unchoke(self):
+        return {}
+    
+    def get_pex_resv6(self):
+        ippbytes = self.data[self.off:self.off+IPV6BYTES_LEN]
+        self.off += len(ippbytes)
+        return {"ipv6bytes":ippbytes}
+        
+    def get_pex_rescert(self):
+        return {}
 
 CONN_STATE_INIT = 0
 CONN_STATE_WAIT4HIS = 1
@@ -231,6 +355,7 @@ class Channel:
     def send(self,d):
         self.t.get_socket().sendto(d,self.addr)
         
+    """
     def recv(self,d):
         d.set_t(self.t)
         
@@ -240,17 +365,23 @@ class Channel:
                 break 
             if msgid == MSG_ID_HANDSHAKE:
                 print >>sys.stderr,"Found HS",`fields`
+                self.hischanid = fields["chanid"]
             elif msgid == MSG_ID_INTEGRITY:
                 print >>sys.stderr,"Found INT",`fields`
             elif msgid == MSG_ID_HAVE:
                 print >>sys.stderr,"Found HAVE",`fields`
+            elif msgid == MSG_ID_DATA:
+                print >>sys.stderr,"Found DATA",fields.keys()
+    """
+
       
     def get_my_chanid(self):
         return self.mychanid
       
     def get_his_chanid(self):
         return self.hischanid
-            
+    
+        
         
 class Socket:
     def __init__(self,myaddr):
@@ -267,30 +398,56 @@ class Socket:
     def sendto(self,d,addr):
         data = d.to_bytes()
         return self.sock.sendto(data,addr)
-        
+    
         
 class SwiftConnection:
-    def __init__(self,myaddr,hisaddr,swarmid):
+    def __init__(self,myaddr,hisaddr,swarmid,hs=True,ver=POPT_VER_PPSP,chunkspec=ChunkRange(0,0)):
         self.s = Socket(myaddr)
-        t = Transfer(swarmid,POPT_VER_PPSP,BIN_ALL,self.s)
-        c = Channel(t,hisaddr,True)
+        #t = Transfer(swarmid,POPT_VER_PPSP,BIN_ALL,self.s)
+        self.t = Transfer(swarmid,ver,chunkspec,self.s)
+        self.c = Channel(self.t,hisaddr,True)
         
+        if hs:
+            d = Datagram(self.t)
+            if self.t.version == POPT_VER_SWIFT:
+                d.add_channel_id(self.c.get_his_chanid())
+                d.add_integrity(BIN_ALL,self.t.get_swarm_id())
+                d.add_handshake(self.c.get_my_chanid())
+                #d.add_have(BIN_NONE)
+                self.c.send(d)
+            else:
+                d.add_channel_id(self.c.get_his_chanid())
+                d.add_handshake(self.c.get_my_chanid(),self.t.get_swarm_id())
+                #d.add_have(ChunkRange(1,4))
+                self.c.send(d)
+
+    def makeDatagram(self):
+        return Datagram(self.t)
+
+    def send(self,d):
+        self.c.send(d)
+        
+    def recv(self):
+        d = self.s.recv()
+        d.set_t(self.t)
+        return d
+
+    def test(self):
+        d = self.s.recv()
+        chanid = d.get_channel_id()
+        # self.assertEquals(chanid,c.get_my_chanid())
+        self.c.recv(d)
+        
+        # Request DATA
         d = Datagram(t)
-        if t.version == POPT_VER_SWIFT:
-            d.add_channel_id(c.get_his_chanid())
-            d.add_integrity(BIN_ALL,t.get_swarm_id())
-            d.add_handshake(c.get_my_chanid())
-            d.add_have(BIN_NONE)
-            c.send(d)
-        else:
-            d.add_channel_id(c.get_his_chanid())
-            d.add_handshake(c.get_my_chanid(),t.get_swarm_id())
-            d.add_have(ChunkRange(0,4))
-            c.send(d)
-        while True:
-            d = self.s.recv()
-            chanid = d.get_channel_id()
-            # self.assertEquals(chanid,c.get_my_chanid())
-            c.recv(d)
-            break
+        d.add_channel_id(c.get_his_chanid())
+        d.add_request(ChunkRange(0,0))
+        self.c.send(d)
+
+        # Recv DATA        
+        d = self.s.recv()
+        chanid = d.get_channel_id()
+        # self.assertEquals(chanid,c.get_my_chanid())
+        self.c.recv(d)
+        
 
