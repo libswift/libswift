@@ -14,12 +14,30 @@ import urllib2
 import string
 import binascii
 from traceback import print_exc
+from sha import sha
 
 from activatetest import TestDirSeedFramework
 from SwiftDef import SwiftDef
 from swiftconn import *
 
 DEBUG=False
+
+def crlist_cmp(x,y):
+    a = x[0]
+    b = y[0]
+    
+    if a[0] <= b[0] and b[1] <= a[1]: # b contained in a
+        return 1 # b smaller
+    if b[0] <= a[0] and a[1] <= b[1]: # a contained in b
+        return -1 # a smaller
+    if a[1] <= b[0]:
+        return -1 # a ends before b starts
+    if b[1] <= a[0]:
+        return 1 # b ends before a starts
+    if a == b:
+        return 0 
+    else:
+        print >>sys.stderr,"\n\nNOT YET IMPLEMENTED cmp a b",a,b
 
 
 class TestRequest(TestDirSeedFramework):
@@ -28,8 +46,8 @@ class TestRequest(TestDirSeedFramework):
         myaddr = ("127.0.0.1",5353)
         hisaddr = ("127.0.0.1",self.listenport)
         
-        # last
-        fidx = len(self.filelist)-1 # claire.ts
+        # Request from claire.ts
+        fidx = len(self.filelist)-1 
         swarmid = self.filelist[fidx][2]
         
         s = SwiftConnection(myaddr,hisaddr,swarmid)
@@ -46,15 +64,11 @@ class TestRequest(TestDirSeedFramework):
 
         # Recv DATA  
         print >>sys.stderr,"test: Waiting for response"
+        time.sleep(1)
         
-        time.sleep(5)
-        # Repeat
-        d = s.makeDatagram()
-        d.add( RequestMessage(ChunkRange(0,0)) )
-        s.c.send(d)
-              
         # clair.ts is 64K exactly
         peakunclelist = [[0,63],[32,63],[16,31],[8,15],[4,7],[2,3],[1,1]]
+        hashlist = []
         d = s.recv()
         while True:
             msg = d.get_message()
@@ -64,6 +78,7 @@ class TestRequest(TestDirSeedFramework):
             if msg.get_id() == MSG_ID_INTEGRITY:
                 crlist = [msg.chunkspec.s,msg.chunkspec.e]
                 peakunclelist.remove(crlist)
+                hashlist.append([crlist,msg.intbytes])
             if msg.get_id() == MSG_ID_DATA:
                 self.assertEquals(ChunkRange(0,0).to_bytes(),msg.chunkspec.to_bytes())
                 filename = self.filelist[fidx][0]
@@ -72,9 +87,31 @@ class TestRequest(TestDirSeedFramework):
                 expchunk = f.read(CHUNKSIZE)
                 f.close()
                 self.assertEquals(expchunk,msg.chunk)
+                hash = sha(expchunk).digest()
+                hashlist.append([[0,0],hash])
 
         # See if we got necessary peak + uncle hashes
         self.assertEquals([],peakunclelist)
+
+        # See if they add up to the root hash
+        hash = None
+        hashlist.sort(cmp=crlist_cmp)
+        pair = [ hashlist[0], hashlist[1] ]
+        i = 2
+        while i < len(hashlist): # not peak
+            # order left right
+            pair.sort(cmp=crlist_cmp) 
+            # calc root hash of parenet
+            hash = sha(pair[0][1]+pair[1][1]).digest()
+            # calc chunkspec of parent
+            crlist = [pair[0][0][0],pair[1][0][1]]
+            parent = [crlist,hash]
+            # repeat with parent and its sibling
+            pair = [parent,hashlist[i]]
+            i += 1
+        
+        self.assertEquals(swarmid,hash)
+        
 
         # Send Ack
         d = s.makeDatagram()
@@ -83,6 +120,9 @@ class TestRequest(TestDirSeedFramework):
 
 
         time.sleep(5)
+
+
+
     
 def test_suite():
     suite = unittest.TestSuite()

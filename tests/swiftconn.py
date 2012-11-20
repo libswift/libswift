@@ -61,7 +61,7 @@ class ChunkRange(Encodable):
     def __init__(self,s,e):
         self.s = s
         self.e = e
-        print >>sys.stderr,"ChunkRange: set:",s,e
+        #print >>sys.stderr,"ChunkRange: set:",s,e
     def to_bytes(self):
         return struct.pack(">II",self.s,self.e)
     def from_bytes(bytes):
