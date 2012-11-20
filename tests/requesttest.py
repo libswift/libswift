@@ -40,6 +40,25 @@ def crlist_cmp(x,y):
         print >>sys.stderr,"\n\nNOT YET IMPLEMENTED cmp a b",a,b
 
 
+def check_hashes(hashlist):
+    hash = None
+    hashlist.sort(cmp=crlist_cmp)
+    pair = [ hashlist[0], hashlist[1] ]
+    i = 2
+    while i < len(hashlist): # not peak
+        # order left right
+        pair.sort(cmp=crlist_cmp) 
+        # calc root hash of parent
+        hash = sha(pair[0][1]+pair[1][1]).digest()
+        # calc chunkspec of parent
+        crlist = [pair[0][0][0],pair[1][0][1]]
+        parent = [crlist,hash]
+        # repeat recursive hash with parent and its sibling
+        pair = [parent,hashlist[i]]
+        i += 1
+    return hash
+
+
 class TestRequest(TestDirSeedFramework):
 
     def test_request_one(self):
@@ -94,33 +113,17 @@ class TestRequest(TestDirSeedFramework):
         self.assertEquals([],peakunclelist)
 
         # See if they add up to the root hash
-        hash = None
-        hashlist.sort(cmp=crlist_cmp)
-        pair = [ hashlist[0], hashlist[1] ]
-        i = 2
-        while i < len(hashlist): # not peak
-            # order left right
-            pair.sort(cmp=crlist_cmp) 
-            # calc root hash of parenet
-            hash = sha(pair[0][1]+pair[1][1]).digest()
-            # calc chunkspec of parent
-            crlist = [pair[0][0][0],pair[1][0][1]]
-            parent = [crlist,hash]
-            # repeat with parent and its sibling
-            pair = [parent,hashlist[i]]
-            i += 1
-        
-        self.assertEquals(swarmid,hash)
-        
+        gothash = check_hashes(hashlist)
+        self.assertEquals(swarmid,gothash)
 
-        # Send Ack
+        # Send Ack + explicit close
         d = s.makeDatagram()
         d.add( AckMessage(ChunkRange(0,0),TimeStamp(1234L)) )
+        d.add( HandshakeMessage(CHAN_ID_ZERO,None) )
         s.c.send(d)
 
 
         time.sleep(5)
-
 
 
     

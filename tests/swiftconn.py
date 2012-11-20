@@ -738,7 +738,7 @@ CONN_STATE_WAIT4HIS = 1
 CONN_STATE_WAIT4MINE = 2
 CONN_STATE_ESTABLISHED = 3 
 
-CONN_ID_ZERO = ChannelID.from_bytes('\x00' * 4)
+CHAN_ID_ZERO = ChannelID.from_bytes('\x00' * 4)
 
 
 DGRAM_MAX_RECV = 65536
@@ -751,8 +751,8 @@ class Channel:
         if localinit:
             self.mychanid = ChannelID.from_bytes('6778')
         else:
-            self.mychanid = CONN_ID_ZERO
-        self.hischanid = CONN_ID_ZERO 
+            self.mychanid = CHAN_ID_ZERO
+        self.hischanid = CHAN_ID_ZERO 
         
     def send(self,d):
         self.t.get_socket().sendto(d,self.addr)
