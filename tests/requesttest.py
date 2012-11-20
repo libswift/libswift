@@ -29,7 +29,7 @@ class TestRequest(TestDirSeedFramework):
         hisaddr = ("127.0.0.1",self.listenport)
         
         # last
-        fidx = len(self.filelist)-1
+        fidx = len(self.filelist)-1 # claire.ts
         swarmid = self.filelist[fidx][2]
         
         s = SwiftConnection(myaddr,hisaddr,swarmid)
@@ -53,6 +53,7 @@ class TestRequest(TestDirSeedFramework):
         d.add( RequestMessage(ChunkRange(0,0)) )
         s.c.send(d)
               
+        # clair.ts is 64K exactly
         peakunclelist = [[0,63],[32,63],[16,31],[8,15],[4,7],[2,3],[1,1]]
         d = s.recv()
         while True:

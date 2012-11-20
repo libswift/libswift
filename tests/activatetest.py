@@ -64,6 +64,7 @@ class TestDirSeedFramework(TestAsServer):
     def setUpScanDir(self):
         self.filelist = []
         # Minimum 1 entry
+        # DO NOT MODIFY THESE ENTRIES without adjusting tests, e.g. requesttest.py
         self.filelist.append([os.path.join(self.scandir,"anita.ts"), 1234, None])
         self.filelist.append([os.path.join(self.scandir,"bill.ts"),  200487, None])
         self.filelist.append([os.path.join(self.scandir,"claire.ts"),65535, None])
