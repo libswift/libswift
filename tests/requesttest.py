@@ -29,7 +29,8 @@ class TestRequest(TestDirSeedFramework):
         hisaddr = ("127.0.0.1",self.listenport)
         
         # last
-        swarmid = self.filelist[len(self.filelist)-1][2]
+        fidx = len(self.filelist)-1
+        swarmid = self.filelist[fidx][2]
         
         s = SwiftConnection(myaddr,hisaddr,swarmid)
         
@@ -38,15 +39,49 @@ class TestRequest(TestDirSeedFramework):
         
         # Request DATA
         d = s.makeDatagram()
+        #killer = ChannelID.from_bytes('\x05\xacH\xa0')
+        #d.add( killer )
         d.add( RequestMessage(ChunkRange(0,0)) )
         s.c.send(d)
 
-        # Recv DATA        
+        # Recv DATA  
+        print >>sys.stderr,"test: Waiting for response"
+        
+        time.sleep(5)
+        # Repeat
+        d = s.makeDatagram()
+        d.add( RequestMessage(ChunkRange(0,0)) )
+        s.c.send(d)
+              
+        peakunclelist = [[0,63],[32,63],[16,31],[8,15],[4,7],[2,3],[1,1]]
         d = s.recv()
-        s.c.recv(d)
+        while True:
+            msg = d.get_message()
+            if msg is None:
+                break
+            print >>sys.stderr,"test: Got",`msg`
+            if msg.get_id() == MSG_ID_INTEGRITY:
+                crlist = [msg.chunkspec.s,msg.chunkspec.e]
+                peakunclelist.remove(crlist)
+            if msg.get_id() == MSG_ID_DATA:
+                self.assertEquals(ChunkRange(0,0).to_bytes(),msg.chunkspec.to_bytes())
+                filename = self.filelist[fidx][0]
+                f = open(filename,"rb")
+                CHUNKSIZE=1024
+                expchunk = f.read(CHUNKSIZE)
+                f.close()
+                self.assertEquals(expchunk,msg.chunk)
+
+        # See if we got necessary peak + uncle hashes
+        self.assertEquals([],peakunclelist)
+
+        # Send Ack
+        d = s.makeDatagram()
+        d.add( AckMessage(ChunkRange(0,0),TimeStamp(1234L)) )
+        s.c.send(d)
+
 
         time.sleep(5)
-    
     
 def test_suite():
     suite = unittest.TestSuite()

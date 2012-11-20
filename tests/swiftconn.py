@@ -310,6 +310,7 @@ class DataMessage(Encodable):
         self.ts = timestamp
         self.chunk  = chunk
     def to_bytes(self):
+        # TODO SWIFT LEGACY WITH NO TS
         chain = [DataMessage.get_id(),self.chunkspec.to_bytes(),self.ts.to_bytes(),self.chunk]
         return "".join(chain)
     def from_bytes(t,bytes,off):
@@ -771,6 +772,9 @@ class Channel:
     def get_his_chanid(self):
         return self.hischanid
     
+    def set_his_chanid(self,chanid):
+        self.hischanid = chanid
+
         
         
 class Socket:

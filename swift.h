@@ -108,6 +108,10 @@ namespace swift {
 // Value for protocol option: Live Discard Window
 #define POPT_LIVE_DISC_WND_ALL	      0xFFFFFFFF	// automatically truncated for 32-bit
 
+//
+#define POPT_MAX_SWARMID_SIZE		     1024
+
+
 
 /** IPv4 address, just a nice wrapping around struct sockaddr_in. */
     struct Address {

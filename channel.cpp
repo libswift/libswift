@@ -502,28 +502,28 @@ int swift::evbuffer_add_chunkaddr(struct evbuffer *evb, bin_t &b, popt_chunk_add
 uint8_t swift::evbuffer_remove_8(struct evbuffer *evb) {
     uint8_t b;
     if (evbuffer_remove(evb, &b, 1) < 1)
-    return 0;
+	return 0;
     return b;
 }
 
 uint16_t swift::evbuffer_remove_16be(struct evbuffer *evb) {
     uint16_t wbe;
     if (evbuffer_remove(evb, &wbe, 2) < 2)
-    return 0;
+	return 0;
     return ntohs(wbe);
 }
 
 uint32_t swift::evbuffer_remove_32be(struct evbuffer *evb) {
     uint32_t ibe;
     if (evbuffer_remove(evb, &ibe, 4) < 4)
-    return 0;
+	return 0;
     return ntohl(ibe);
 }
 
 uint64_t swift::evbuffer_remove_64be(struct evbuffer *evb) {
     uint32_t lbe[2];
     if (evbuffer_remove(evb, lbe, 8) < 8)
-    return 0;
+	return 0;
     uint64_t l = ntohl(lbe[0]);
     l<<=32;
     l |= ntohl(lbe[1]);

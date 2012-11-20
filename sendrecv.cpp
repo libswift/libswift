@@ -1044,9 +1044,10 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
 	uint8_t *msgbitmapbytes = NULL;
 	Sha1Hash swarmid;
 	std::ostringstream cross;
-	while (!end)
+	while (!end && evbuffer_get_length(evb) > 0)
 	{
 	    popt_t poid = (popt_t)evbuffer_remove_8(evb);
+	    //dprintf("%s #%u -hs popt %d\n", tintstr(),cid, (int)poid );
 	    switch (poid) {
 		case POPT_VERSION:
 		    hs->version_ = (popt_version_t)evbuffer_remove_8(evb);
@@ -1054,6 +1055,11 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
 		    break;
 		case POPT_SWARMID:
 		    size = evbuffer_remove_16be(evb);
+		    if (size > POPT_MAX_SWARMID_SIZE || evbuffer_get_length(evb) < size) {
+			dprintf("%s #%u ?hs popt swarmid too big\n",tintstr(),cid);
+			delete hs;
+			return NULL;
+		    }
 		    swarmidbytes = evbuffer_pullup(evb,size);
 		    swarmid = Sha1Hash(false,(const char *)swarmidbytes);
 		    hs->SetSwarmID(swarmid);
@@ -1085,6 +1091,11 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
 		    break;
 		case POPT_SUPP_MSGS:
 		    size8 = evbuffer_remove_8(evb);
+		    if (size8 > 8 || evbuffer_get_length(evb) < size8) {
+			dprintf("%s #%u ?hs popt supp msgs too big\n",tintstr(),cid);
+			delete hs;
+			return NULL;
+		    }
 		    msgbitmapbytes = evbuffer_pullup(evb,size8);
 		    evbuffer_drain(evb, size);
 		    cross << "msgs " << std::hex;
@@ -1159,6 +1170,7 @@ void Channel::OnPexAdd (struct evbuffer *evb) {
     uint16_t port = evbuffer_remove_16be(evb);
     Address addr(ipv4,port);
     dprintf("%s #%u -pex %s\n",tintstr(),id_,addr.str().c_str());
+
     if (transfer()->OnPexIn(addr))
         useless_pex_count_ = 0;
     else
