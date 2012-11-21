@@ -127,6 +127,26 @@ class TestHave(TestAsServer):
         d.add( DataMessage(ChunkRange(0,0),TimeStamp(1234L),self.chunks[0] ) )
         s.c.send(d)
         
+        # Recv ACK and HAVE
+        gotack = False
+        gothave = False
+        
+        print >>sys.stderr,"test: Waiting for response"
+        d = s.recv()
+        while True:
+            msg = d.get_message()
+            if msg is None:
+                break
+            print >>sys.stderr,"test: Parsed",`msg` 
+            if msg.get_id() == MSG_ID_HAVE:
+                self.assertEquals(ChunkRange(0,0).to_bytes(),msg.chunkspec.to_bytes())
+                gothave = True
+            if msg.get_id() == MSG_ID_ACK:
+                self.assertEquals(ChunkRange(0,0).to_bytes(),msg.chunkspec.to_bytes())
+                gotack = True
+
+        self.assertTrue(gotack and gothave)
+                
         time.sleep(10)
     
     
