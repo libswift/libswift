@@ -223,7 +223,7 @@ bool Channel::IsDiffSenderOrDuplicate(Address addr, uint32_t chid)
             // HANDSHAKE to, and the address is not an IANA private
             // address (=no NAT in play), so close.
             dprintf("%s #%u invalid peer address %s!=%s\n",
-                    tintstr(),chid,peer().str(),addr.str().c_str());
+                    tintstr(),chid,peer().str().c_str(),addr.str().c_str());
             return true;
         }
     }

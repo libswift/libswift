@@ -1010,13 +1010,13 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
 	    // He is initiating. Initiating handshake has SWIFT_HASH + root hash, reply doesn't
 	    if (evbuffer_get_length(evb)<4+1+4+Sha1Hash::SIZE)
 	    {
-	        dprintf("%s #0 incorrect size %i initial handshake packet %s\n", tintstr(),(int)evbuffer_get_length(evb),addr.str());
+	        dprintf("%s #0 incorrect size %i initial handshake packet %s\n", tintstr(),(int)evbuffer_get_length(evb),addr.str().c_str());
 	        delete hs;
 	        return NULL;
 	    }
 	    bin_t pos = bin_fromUInt32(evbuffer_remove_32be(evb));
 	    if (!pos.is_all()) {
-		dprintf("%s #%u ?hs that is not the root hash %s\n",tintstr(), cid, addr.str());
+		dprintf("%s #%u ?hs that is not the root hash %s\n",tintstr(), cid, addr.str().c_str());
 	       delete hs;
 	       return NULL;
 	    }
