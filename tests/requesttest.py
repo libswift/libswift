@@ -28,7 +28,7 @@ EMPTYHASH='\x00' * 20
 def crtup_cmp(x,y):
     a = x[0]
     b = y[0]
-    print >>sys.stderr,"crtup_cmp:",a,b
+    #print >>sys.stderr,"crtup_cmp:",a,b
     
     if a[0] <= b[0] and b[1] <= a[1]: # b contained in a
         return 1 # b smaller
@@ -52,11 +52,11 @@ def check_hashes(hashdict,unclelist):
         # order left right
         pair.sort(cmp=crtup_cmp) 
         # calc root hash of parent
-        print >>sys.stderr,"Comparing",pair[0][0],pair[1][0]
+        #print >>sys.stderr,"Comparing",pair[0][0],pair[1][0]
         hash = sha(pair[0][1]+pair[1][1]).digest()
         # calc chunkspec of parent
         crtup = (pair[0][0][0],pair[1][0][1])
-        print >>sys.stderr,"Parent",crtup
+        #print >>sys.stderr,"Parent",crtup
         parent = [crtup,hash]
         # Add to hashdict, sender will expect this.
         hashdict[crtup] = hash
@@ -171,7 +171,6 @@ class TestRequest(TestDirSeedFramework):
         s.c.send(d)
 
 
-        time.sleep(5)
 
 
     def test_request_one_middle(self):
@@ -205,7 +204,6 @@ class TestRequest(TestDirSeedFramework):
         d.add( HandshakeMessage(CHAN_ID_ZERO,None) )
         s.c.send(d)
 
-        time.sleep(5)
 
 
     def get_bill_67(self,s,fidx,swarmid,peaklist):
@@ -292,7 +290,6 @@ class TestRequest(TestDirSeedFramework):
         d.add( HandshakeMessage(CHAN_ID_ZERO,None) )
         s.c.send(d)
 
-        time.sleep(5)
 
 
     def get_bill_68(self,s,fidx,swarmid,peaklist,hashdict):

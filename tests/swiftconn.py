@@ -683,7 +683,7 @@ class Datagram(Encodable):
     def to_bytes(self):
         wire = ''
         for e in self.chain:
-            print >>sys.stderr,"ADDING",`e`
+            print >>sys.stderr,"dgram: Add",`e`
             wire += e.to_bytes()
         return wire
 
