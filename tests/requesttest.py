@@ -55,15 +55,49 @@ def check_hashes(hashdict,unclelist):
         print >>sys.stderr,"Comparing",pair[0][0],pair[1][0]
         hash = sha(pair[0][1]+pair[1][1]).digest()
         # calc chunkspec of parent
-        crtup = [pair[0][0][0],pair[1][0][1]]
+        crtup = (pair[0][0][0],pair[1][0][1])
         print >>sys.stderr,"Parent",crtup
         parent = [crtup,hash]
+        # Add to hashdict, sender will expect this.
+        hashdict[crtup] = hash
         # repeat recursive hash with parent and its sibling
         if i >= len(unclelist):
             break
         pair = [parent,[unclelist[i],hashdict[unclelist[i]]]]
         i += 1
     return hash
+
+
+def check_peak_hashes(hashdict,peaklist):
+    righthash = EMPTYHASH
+    i = 0
+    # Build up hash tree starting from lowest peak hash, combining it
+    # with a right-side empty hash until it has the same size tree as 
+    # covered by the next peak, until we have combined with the last peak,
+    # in which case the top hash should be the root hash.
+    #
+    lefthash = hashdict[peaklist[i]]
+    gotwidth = peaklist[i][1] - peaklist[i][0] +1
+    while True:
+        hash = sha(lefthash+righthash).digest()
+        gotwidth *= 2
+        if i == len(peaklist)-1:
+            break
+        wantwidth = peaklist[i+1][1] - peaklist[i+1][0] +1
+        if gotwidth >= wantwidth:
+            # Our tree is now as big as the next available peak,
+            # so we can combine those
+            i += 1
+            lefthash = hashdict[peaklist[i]]
+            righthash = hash
+        else:
+            # Our tree still small, increase by assuming all empty
+            # hashes on the right side
+            lefthash = hash
+            righthash = EMPTYHASH
+    return hash
+
+    
 
 
 class TestRequest(TestDirSeedFramework):
@@ -96,7 +130,7 @@ class TestRequest(TestDirSeedFramework):
         peaklist = [(0,63)]
         # Uncles for chunk 0. MUST be sorted in the uncle order
         unclelist = [(1,1),(2,3),(4,7),(8,15),(16,31),(32,63)]
-        peakunclelist = peaklist + unclelist
+        expunclelist = peaklist + unclelist
         hashdict = {}
         d = s.recv()
         while True:
@@ -106,8 +140,8 @@ class TestRequest(TestDirSeedFramework):
             print >>sys.stderr,"test: Got",`msg`
             if msg.get_id() == MSG_ID_INTEGRITY:
                 crtup = (msg.chunkspec.s,msg.chunkspec.e)
-                if crtup in peakunclelist: # test later
-                    peakunclelist.remove(crtup)
+                if crtup in expunclelist: # test later
+                    expunclelist.remove(crtup)
                 hashdict[crtup] = msg.intbytes
             if msg.get_id() == MSG_ID_DATA:
                 self.assertEquals(ChunkRange(0,0).to_bytes(),msg.chunkspec.to_bytes())
@@ -121,7 +155,7 @@ class TestRequest(TestDirSeedFramework):
                 hashdict[(0,0)] = hash
 
         # See if we got necessary peak + uncle hashes
-        self.assertEquals([],peakunclelist)
+        self.assertEquals([],expunclelist)
 
         # Check peak hashes
         self.assertEquals(hashdict[peaklist[0]],swarmid)
@@ -140,13 +174,17 @@ class TestRequest(TestDirSeedFramework):
         time.sleep(5)
 
 
-    def test_request_two(self):
+    def disabled_test_request_one_middle(self):
         myaddr = ("127.0.0.1",5353)
         hisaddr = ("127.0.0.1",self.listenport)
         
         # Request from bill.ts
         fidx = 1 
         swarmid = self.filelist[fidx][2]
+        # bill.ts is 195.788 chunks, 3 peaks [0,127], ...
+        # MUST be sorted low to high level
+        peaklist = [(192,195),(128,191),(0,127)]
+
         
         s = SwiftConnection(myaddr,hisaddr,swarmid)
         
@@ -158,18 +196,29 @@ class TestRequest(TestDirSeedFramework):
         d.add( RequestMessage(ChunkRange(67,67)) )
         s.c.send(d)
 
-        # Recv DATA  
-        print >>sys.stderr,"test: Waiting for response"
-        time.sleep(1)
+
+        self.get_bill_67(s,fidx,swarmid,peaklist)
+
+        # Send Ack + explicit close
+        d = s.makeDatagram()
+        d.add( AckMessage(ChunkRange(67,67),TimeStamp(1234L)) )
+        d.add( HandshakeMessage(CHAN_ID_ZERO,None) )
+        s.c.send(d)
+
+        time.sleep(5)
+
+
+    def get_bill_67(self,s,fidx,swarmid,peaklist):
         
-        # bill.ts is 195.788 chunks, 3 peaks [0,127], ...
-        # MUST be sorted low to high level
-        peaklist = [(192,195),(128,191),(0,127)]
         # Uncles for chunk 67. MUST be sorted in the uncle order
         unclelist = [(66,66),(64,65),(68,71),(72,79),(80,95),(96,127),(0,63)]
-        peakunclelist = peaklist + unclelist
+        expunclelist = peaklist + unclelist
         hashdict = {}
+
+        # Recv DATA  
+        print >>sys.stderr,"test: Waiting for response"
         d = s.recv()
+
         while True:
             msg = d.get_message()
             if msg is None:
@@ -177,8 +226,8 @@ class TestRequest(TestDirSeedFramework):
             print >>sys.stderr,"test: Got",`msg`
             if msg.get_id() == MSG_ID_INTEGRITY:
                 crtup = (msg.chunkspec.s,msg.chunkspec.e)
-                if crtup in peakunclelist: # test later
-                    peakunclelist.remove(crtup)
+                if crtup in expunclelist: # test later
+                    expunclelist.remove(crtup)
                 hashdict[crtup] = msg.intbytes
             if msg.get_id() == MSG_ID_DATA:
                 self.assertEquals(ChunkRange(67,67).to_bytes(),msg.chunkspec.to_bytes())
@@ -191,37 +240,10 @@ class TestRequest(TestDirSeedFramework):
                 hashdict[(67,67)] = hash
 
         # See if we got necessary peak + uncle hashes
-        self.assertEquals([],peakunclelist)
+        self.assertEquals([],expunclelist)
 
         # Check peak hashes against root hash
-        righthash = EMPTYHASH
-        i = 0
-        # Build up hash tree starting from lowest peak hash, combining it
-        # with a right-side empty hash until it has the same size tree as 
-        # covered by the next peak, until we have combined with the last peak,
-        # in which case the top hash should be the root hash.
-        #
-        lefthash = hashdict[peaklist[i]]
-        gotwidth = peaklist[i][1] - peaklist[i][0] +1
-        while True:
-            hash = sha(lefthash+righthash).digest()
-            gotwidth *= 2
-            if i == len(peaklist)-1:
-                break
-            wantwidth = peaklist[i+1][1] - peaklist[i+1][0] +1
-            if gotwidth >= wantwidth:
-                # Our tree is now as big as the next available peak,
-                # so we can combine those
-                i += 1
-                lefthash = hashdict[peaklist[i]]
-                righthash = hash
-            else:
-                # Our tree still small, increase by assuming all empty
-                # hashes on the right side
-                lefthash = hash
-                righthash = EMPTYHASH
-        gothash = hash
-        
+        gothash = check_peak_hashes(hashdict,peaklist)
         self.assertEquals(swarmid,gothash)
 
         # See if they add up to the covering peak hash, now that they are OK.
@@ -229,13 +251,93 @@ class TestRequest(TestDirSeedFramework):
         exphash = hashdict[peaklist[len(peaklist)-1]]
         self.assertEquals(exphash,gothash)
 
-        # Send Ack + explicit close
+        return hashdict
+
+    def test_request_two(self):
+        myaddr = ("127.0.0.1",5353)
+        hisaddr = ("127.0.0.1",self.listenport)
+        
+        # Request from bill.ts
+        fidx = 1 
+        swarmid = self.filelist[fidx][2]
+        # bill.ts is 195.788 chunks, 3 peaks [0,127], ...
+        # MUST be sorted low to high level
+        peaklist = [(192,195),(128,191),(0,127)]
+        
+        s = SwiftConnection(myaddr,hisaddr,swarmid)
+        
+        d = s.recv()
+        s.c.recv(d)
+        
+        # Request DATA
+        d = s.makeDatagram()
+        d.add( RequestMessage(ChunkRange(67,68)) )  # ask 2 chunks
+        s.c.send(d)
+
+
+        hashdict = self.get_bill_67(s,fidx,swarmid,peaklist) # SHOULD process sequentially
+        print >>sys.stderr,"HASHDICT KEYS",hashdict.keys()
+        
+        
+        # Send Ack 67
         d = s.makeDatagram()
         d.add( AckMessage(ChunkRange(67,67),TimeStamp(1234L)) )
+        s.c.send(d)
+        
+        self.get_bill_68(s,fidx,swarmid,peaklist,hashdict) # SHOULD process sequentially
+
+        # Send Ack + explicit close
+        d = s.makeDatagram()
+        d.add( AckMessage(ChunkRange(67,68),TimeStamp(1234L)) )
         d.add( HandshakeMessage(CHAN_ID_ZERO,None) )
         s.c.send(d)
 
         time.sleep(5)
+
+
+    def get_bill_68(self,s,fidx,swarmid,peaklist,hashdict):
+        
+        # bill.ts is 195.788 chunks, 3 peaks [0,127], ...
+        # Uncles for chunk 67. MUST be sorted in the uncle order
+        realunclelist = [(69,69),(70,71),(64,67),(72,79),(80,95),(96,127),(0,63)]
+        recvunclelist = [(69,69),(70,71)]  # already known is [(64,67),(72,79),(80,95),(96,127),(0,63)]
+        expunclelist = recvunclelist # peaklist already sent before
+
+        # Recv DATA  
+        print >>sys.stderr,"test: Waiting for response"
+        d = s.recv()
+        while True:
+            msg = d.get_message()
+            if msg is None:
+                break
+            print >>sys.stderr,"test: Got",`msg`
+            if msg.get_id() == MSG_ID_INTEGRITY:
+                crtup = (msg.chunkspec.s,msg.chunkspec.e)
+                if crtup in expunclelist: # test later
+                    expunclelist.remove(crtup)
+                hashdict[crtup] = msg.intbytes
+            if msg.get_id() == MSG_ID_DATA:
+                self.assertEquals(ChunkRange(68,68).to_bytes(),msg.chunkspec.to_bytes())
+                filename = self.filelist[fidx][0]
+                f = open(filename,"rb")
+                expchunk = f.read(CHUNKSIZE)
+                f.close()
+                self.assertEquals(expchunk,msg.chunk)
+                hash = sha(expchunk).digest()
+                hashdict[(68,68)] = hash
+
+        # See if we got necessary peak + uncle hashes
+        self.assertEquals([],expunclelist)
+
+        # See if they add up to the covering peak hash, now that they are OK.
+        
+        print >>sys.stderr,"HASHDICT KEYS TWO",hashdict.keys()
+
+        
+        gothash = check_hashes(hashdict,[(68,68)]+realunclelist)
+        exphash = hashdict[peaklist[len(peaklist)-1]]
+        self.assertEquals(exphash,gothash)
+
 
 
 

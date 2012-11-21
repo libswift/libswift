@@ -36,7 +36,7 @@ class Encodable:
 class Bin(Encodable):
     def __init__(self,i):
         self.i = i
-        print >>sys.stderr,"Bin: set:",self.i
+        #print >>sys.stderr,"Bin: set:",self.i
     def to_bytes(self):
         return struct.pack(">I",self.i)
     def from_bytes(bytes):
