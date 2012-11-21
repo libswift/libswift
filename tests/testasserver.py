@@ -62,6 +62,10 @@ class TestAsServer(unittest.TestCase):
         #self.popen = subprocess.Popen(args,stdout=subprocess.PIPE,cwd=self.workdir)
         self.popen = subprocess.Popen(args,stdout=self.stdoutfile,cwd=self.workdir) 
 
+        if DEBUG:
+            print >>sys.stderr,"SwiftProcess: sleep to let process start"
+        time.sleep(1)
+
         self.setUpPostSession()
 
     def setUpPreSession(self):
@@ -85,6 +89,8 @@ class TestAsServer(unittest.TestCase):
         """ unittest test tear down code """
         if self.popen is not None:
             self.popen.kill()
-
+            
+        time.sleep(5)
+        print >>sys.stderr,"TestAsServer: tearDown: EXIT"
 
         

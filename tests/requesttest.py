@@ -102,7 +102,7 @@ def check_peak_hashes(hashdict,peaklist):
 
 class TestRequest(TestDirSeedFramework):
 
-    def disabled_test_request_one(self):
+    def test_request_one(self):
         myaddr = ("127.0.0.1",5353)
         hisaddr = ("127.0.0.1",self.listenport)
         
@@ -174,8 +174,8 @@ class TestRequest(TestDirSeedFramework):
         time.sleep(5)
 
 
-    def disabled_test_request_one_middle(self):
-        myaddr = ("127.0.0.1",5353)
+    def test_request_one_middle(self):
+        myaddr = ("127.0.0.1",5354)
         hisaddr = ("127.0.0.1",self.listenport)
         
         # Request from bill.ts
@@ -254,7 +254,7 @@ class TestRequest(TestDirSeedFramework):
         return hashdict
 
     def test_request_two(self):
-        myaddr = ("127.0.0.1",5353)
+        myaddr = ("127.0.0.1",5356)
         hisaddr = ("127.0.0.1",self.listenport)
         
         # Request from bill.ts
