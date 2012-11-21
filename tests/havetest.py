@@ -146,6 +146,23 @@ class TestHave(TestAsServer):
                 gotack = True
 
         self.assertTrue(gotack and gothave)
+
+        # Now connect as another peer and see if chunk is advocated
+        myaddr2 = ("127.0.0.1",5352)
+        s2 = SwiftConnection(myaddr2,hisaddr,swarmid)
+        d2 = s2.recv()
+        gothave2 = False
+        while True:
+            msg = d2.get_message()
+            if msg is None:
+                break 
+            if msg.get_id() == MSG_ID_HAVE:
+                self.assertEquals(ChunkRange(0,0).to_bytes(),msg.chunkspec.to_bytes())
+                gothave2 = True
+                
+        self.assertTrue(gothave2)
+
+
                 
         time.sleep(10)
     
