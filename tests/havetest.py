@@ -14,6 +14,7 @@ import subprocess
 import urllib2
 import string
 import binascii
+from sha import sha
 from traceback import print_exc
 
 from testasserver import TestAsServer
@@ -34,6 +35,27 @@ class TestHave(TestAsServer):
             pass
         os.mkdir(self.destdir)
         
+        # Create tree with 6 chunks
+        self.chunks = []
+        for i in range(0,6+1):
+            chunk = chr(i) * 1024
+            self.chunks.append(chunk)
+            
+        self.hashes = {}
+        self.hashes[(7,7)] = '\x00' * 20
+        for i in range(0,6+1):
+            hash = sha(self.chunks[i]).digest()
+            self.hashes[(i,i)] = hash
+        self.hashes[(0,1)] = sha(self.hashes[(0,0)]+self.hashes[(1,1)]).digest()
+        self.hashes[(2,3)] = sha(self.hashes[(2,2)]+self.hashes[(3,3)]).digest()
+        self.hashes[(4,5)] = sha(self.hashes[(4,4)]+self.hashes[(5,5)]).digest()
+        self.hashes[(6,7)] = sha(self.hashes[(6,6)]+self.hashes[(7,7)]).digest()
+        
+        self.hashes[(0,3)] = sha(self.hashes[(0,1)]+self.hashes[(2,3)]).digest()
+        self.hashes[(4,7)] = sha(self.hashes[(4,5)]+self.hashes[(6,7)]).digest()
+        
+        self.hashes[(0,7)] = sha(self.hashes[(0,3)]+self.hashes[(4,7)]).digest()
+        
     def setUpPostSession(self):
         TestAsServer.setUpPostSession(self)
         
@@ -49,7 +71,7 @@ class TestHave(TestAsServer):
         myaddr = ("127.0.0.1",5353)
         hisaddr = ("127.0.0.1",self.listenport)
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
-        swarmid = binascii.unhexlify('24aa9484fbee33564fc197252c7c837ce4ce449a')
+        swarmid = self.hashes[(0,7)]
         
         # Setup listen socket
         self.listensock = Socket(myaddr)
@@ -76,15 +98,34 @@ class TestHave(TestAsServer):
         
         d = s.recv()
         responded = False
+        wantchunkspec = None
         while True:
             msg = d.get_message()
             if msg is None:
                 break
             print >>sys.stderr,"test: Parsed",`msg` 
             responded = True
-            #if msg.get_id() == MSG_ID_REQUEST:
+            if msg.get_id() == MSG_ID_REQUEST:
+                wantchunkspec = msg.chunkspec
                 
         self.assertTrue(responded)
+        
+        # Simulate sending of chunk (0,0)
+        d = s.makeDatagram()
+        
+        # Send peaks
+        d.add( IntegrityMessage(ChunkRange(0,3),self.hashes[(0,3)] ) )
+        d.add( IntegrityMessage(ChunkRange(4,5),self.hashes[(4,5)] ) )
+        d.add( IntegrityMessage(ChunkRange(6,6),self.hashes[(6,6)] ) )
+
+        # Send uncle
+        d.add( IntegrityMessage(ChunkRange(1,1),self.hashes[(1,1)] ) )
+        d.add( IntegrityMessage(ChunkRange(2,3),self.hashes[(2,3)] ) )
+        d.add( IntegrityMessage(ChunkRange(4,7),self.hashes[(4,7)] ) )
+        
+        # Send data
+        d.add( DataMessage(ChunkRange(0,0),TimeStamp(1234L),self.chunks[0] ) )
+        s.c.send(d)
         
         time.sleep(10)
     
