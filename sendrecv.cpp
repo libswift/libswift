@@ -32,9 +32,11 @@ struct event Channel::evrecv;
 
 /** Arno, 2011-11-24: When rate limit is on and the download is in progress
  * we send HINTs for 2 chunks at the moment. This constant can be used to
- * get greater granularity. Set to 0 for original behaviour.
+ * get greater granularity. Set to 0 for original behavior.
+ * Ric: set to 2, it should be smaller than 4 or we need to change the hint
+ * strategy first
  */
-#define HINT_GRANULARITY    16 // chunks
+#define HINT_GRANULARITY    2 // chunks
 
 /** Arno, 2012-03-16: Swift can now tunnel data from CMDGW over UDP to
  * CMDGW at another swift instance. This is the default channel ID on UDP
@@ -134,7 +136,7 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
             send = hint;
     }
     uint64_t mass = 0;
-    // Arno, 2012-03-09: Is mucho expensive on busy server.
+    // Arno, 2012-03-09: Is much to expensive on busy server.
     //for(int i=0; i<hint_in_.size(); i++)
     //    mass += hint_in_[i].bin.base_length();
     dprintf("%s #%u dequeued %s [%llu]\n",tintstr(),id_,send.str().c_str(),mass);
@@ -249,6 +251,7 @@ void    Channel::Send () {
                 "Only call Reschedule for 'reverse PEX' if the channel is in keep-alive mode"
                  */
                 AddPexReq(evb);
+                AddCancel(evb);
             }
             AddPex(evb);
             TimeoutDataOut();
@@ -299,8 +302,11 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
     tint timed_out = NOW - plan_for*2;
     while ( !hint_out_.empty() && hint_out_.front().time < timed_out ) {
-        hint_out_size_ -= hint_out_.front().bin.base_length();
+    	bin_t hint = hint_out_.front().bin;
+        hint_out_size_ -= hint.base_length();
         hint_out_.pop_front();
+        // Ric: send Cancel msg
+        cancel_out_.push_back(hint);
     }
 
     int first_plan_pck = max ( (tint)1, plan_for / dip_avg_ );
@@ -362,6 +368,16 @@ void    Channel::AddHint (struct evbuffer *evb) {
     }
 }
 
+void    Channel::AddCancel (struct evbuffer *evb) {
+	while (SWIFT_MAX_NONDATA_DGRAM_SIZE-evbuffer_get_length(evb) >= 5 && !cancel_out_.empty()) {
+		bin_t cancel = cancel_out_.front();
+		cancel_out_.pop_front();
+		evbuffer_add_8(evb, SWIFT_CANCEL);
+		evbuffer_add_32be(evb, bin_toUInt32(cancel));
+		dprintf("%s #%u +cancel %s\n",
+			tintstr(),id_,cancel.str().c_str());
+	}
+}
 
 bin_t        Channel::AddData (struct evbuffer *evb) {
     // RATELIMIT
@@ -425,7 +441,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     // PPSPTODO LEDBAT current system time 64-bit
     if (hs_in_ != NULL && hs_in_->version_ == VER_PPSPP_v1)
     {
-	// NOTE: Time updates NOW, so customary behaviour where NOW is not
+	// NOTE: Time updates NOW, so customary behavior where NOW is not
 	// updated during the handling of a message (just at start) is no longer
 	// there. Not sure if this matters.
         evbuffer_add_64be(evb, Time() );
@@ -613,6 +629,9 @@ void    Channel::Recv (struct evbuffer *evb) {
             case SWIFT_REQUEST:
                 OnHint(evb);
                 break;
+            case SWIFT_CANCEL:
+            	OnCancel(evb);
+            	break;
             case SWIFT_PEX_RES:
                 if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
                     OnPexAddZeroState(evb);
@@ -694,8 +713,11 @@ void    Channel::CleanHintOut (bin_t pos) {
     if (hi==hint_out_.size())
         return; // something not hinted or hinted in far past
     while (hi--) { // removing likely snubbed hints
-        hint_out_size_ -= hint_out_.front().bin.base_length();
+    	bin_t hint = hint_out_.front().bin;
+        hint_out_size_ -= hint.base_length();
         hint_out_.pop_front();
+        // Ric: send Cancel msgs
+		cancel_out_.push_back(hint);
     }
     while (hint_out_.front().bin!=pos) {
         tintbin f = hint_out_.front();
@@ -720,15 +742,15 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
     if (bv.size() == 0 || bv.size() > 1) {
-	// Chunk spec must denote single chunk
-	dprintf("%s #%u ?data bad chunk spec\n",tintstr(),id_);
-	Close(CLOSE_DO_NOT_SEND);
-	return bin_t::NONE;
+		// Chunk spec must denote single chunk
+		dprintf("%s #%u ?data bad chunk spec\n",tintstr(),id_);
+		Close(CLOSE_DO_NOT_SEND);
+		return bin_t::NONE;
     }
     bin_t pos = bv.front();
     tint peer_time = TINT_NEVER;
     if (hs_out_->version_ == VER_PPSPP_v1)
-	peer_time = evbuffer_remove_64be(evb);
+    	peer_time = evbuffer_remove_64be(evb);
 
     // Arno: Assuming DATA last message in datagram
     if (evbuffer_get_length(evb) > transfer()->chunk_size()) {
@@ -751,6 +773,9 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 
     uint8_t *data = evbuffer_pullup(evb, length);
     data_in_ = tintbin(NOW,bin_t::NONE);
+    // Ric: the time of the ack is the owd.
+    if (peer_time!=TINT_NEVER)
+    	data_in_.time = NOW - peer_time;
 
     //fprintf(stderr,"OnData: Got chunk %d / %lli\n", length, swift::SeqComplete(transfer()->fd()) );
 
@@ -821,7 +846,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
 	Close(CLOSE_DO_NOT_SEND);
 	return;
     }
-    tint peer_time = evbuffer_remove_64be(evb);
+    tint peer_owd = evbuffer_remove_64be(evb);
 
     binvector::iterator iter;
     for (iter=bv.begin(); iter != bv.end(); iter++)
@@ -848,37 +873,38 @@ void    Channel::OnAck (struct evbuffer *evb) {
 	// rule out retransmits
 	while (ri<data_out_tmo_.size() && !ackd_pos.contains(data_out_tmo_[ri].bin) )
 	    ri++;
-	dprintf("%s #%u %cack %s %lld\n",tintstr(),id_,
-		di==data_out_.size()?'?':'-',ackd_pos.str().c_str(),peer_time);
+	dprintf("%s #%u %cack %s owd:%lld\n",tintstr(),id_,
+		di==data_out_.size()?'?':'-',ackd_pos.str().c_str(),peer_owd);
 	if (di!=data_out_.size() && ri==data_out_tmo_.size()) { // not a retransmit
 	    // round trip time calculations
+		// Ric: TODO delayed acks
 	    tint rtt = NOW-data_out_[di].time;
 	    rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
 	    dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
 	    assert(data_out_[di].time!=TINT_NEVER);
 	    // one-way delay calculations
-	    tint owd = peer_time - data_out_[di].time;
+	    // Ric: we r always re-writing the first element
 	    owd_cur_bin_ = 0;//(owd_cur_bin_+1) & 3;
-	    owd_current_[owd_cur_bin_] = owd;
+	    owd_current_[owd_cur_bin_] = peer_owd;
 	    if ( owd_min_bin_start_+TINT_SEC*30 < NOW ) {
-		owd_min_bin_start_ = NOW;
-		owd_min_bin_ = (owd_min_bin_+1) & 3;
-		owd_min_bins_[owd_min_bin_] = TINT_NEVER;
+			owd_min_bin_start_ = NOW;
+			owd_min_bin_ = (owd_min_bin_+1) & 3;
+			owd_min_bins_[owd_min_bin_] = TINT_NEVER;
 	    }
-	    if (owd_min_bins_[owd_min_bin_]>owd)
-		owd_min_bins_[owd_min_bin_] = owd;
+	    if (owd_min_bins_[owd_min_bin_]>peer_owd)
+	    	owd_min_bins_[owd_min_bin_] = peer_owd;
 	    dprintf("%s #%u sendctrl rtt %lld dev %lld based on %s\n",
 		    tintstr(),id_,rtt_avg_,dev_avg_,data_out_[di].bin.str().c_str());
 	    ack_rcvd_recent_++;
 	    // early loss detection by packet reordering
 	    for (int re=0; re<di-MAX_REORDERING; re++) {
-		if (data_out_[re]==tintbin())
-		    continue;
-		ack_not_rcvd_recent_++;
-		data_out_tmo_.push_back(data_out_[re].bin);
-		dprintf("%s #%u Rdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
-		data_out_cap_ = bin_t::ALL;
-		data_out_[re] = tintbin();
+			if (data_out_[re]==tintbin())
+				continue;
+			ack_not_rcvd_recent_++;
+			data_out_tmo_.push_back(data_out_[re].bin);
+			dprintf("%s #%u Rdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
+			data_out_cap_ = bin_t::ALL;
+			data_out_[re] = tintbin();
 	    }
 	}
 	if (di!=data_out_.size())
@@ -1162,6 +1188,30 @@ void Channel::OnHandshake(Handshake *hishs) {
     // FUTURE: channel forking
     if (is_established()) // when this was reply to our HS
         dprintf("%s #%u established %s\n", tintstr(), id_, peer().str().c_str());
+}
+
+
+void    Channel::OnCancel (struct evbuffer *evb) {
+
+	binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
+    bin_t cancel = bv.front();
+
+    int hi = 0;
+    while (hi<hint_in_.size() && !cancel.contains(hint_in_[hi].bin))
+        hi++;
+
+    // nothing to cancel
+    if (hi==hint_in_.size())
+        return;
+
+    dprintf("%s #%u -cancel %s => removing: ",tintstr(),id_,cancel.str().c_str());
+    do {
+    	dprintf("%s ",hint_in_[hi].bin.str().c_str());
+    	hint_in_.erase(hint_in_.begin()+hi);
+    	hi++;
+    } while (cancel.contains(hint_in_[hi].bin));
+    dprintf("\n");
+
 }
 
 

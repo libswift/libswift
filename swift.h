@@ -722,6 +722,7 @@ namespace swift {
         void        OnHave (struct evbuffer *evb);
         bin_t       OnData (struct evbuffer *evb);
         void        OnHint (struct evbuffer *evb);
+        void        OnCancel (struct evbuffer *evb);
         void        OnHash (struct evbuffer *evb);
         void        OnPexAdd (struct evbuffer *evb);
         static Handshake *StaticOnHandshake( Address &addr, uint32_t cid, bool ver_known, popt_version_t ver, struct evbuffer *evb);
@@ -731,6 +732,7 @@ namespace swift {
         void        AddAck (struct evbuffer *evb);
         void        AddHave (struct evbuffer *evb);
         void        AddHint (struct evbuffer *evb);
+        void        AddCancel (struct evbuffer *evb);
         void        AddUncleHashes (struct evbuffer *evb, bin_t pos);
         void        AddPeakHashes (struct evbuffer *evb);
         void        AddPex (struct evbuffer *evb);
@@ -840,6 +842,8 @@ namespace swift {
         /** Hints sent (to detect and reschedule ignored hints). */
         tbqueue     hint_out_;
         uint64_t    hint_out_size_;
+        /** Ric: hints that are removed from the hint_out_ queue and need to be canceled */
+		std::deque<bin_t> cancel_out_;
         /** Types of messages the peer accepts. */
         uint64_t    cap_in_;
         /** PEX progress */

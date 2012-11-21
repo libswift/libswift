@@ -190,12 +190,17 @@ tint Channel::LedbatNextSendTime () {
     float oldcwnd = cwnd_;
 
     tint owd_cur(TINT_NEVER), owd_min(TINT_NEVER);
-    for(int i=0; i<4; i++) {
+    // Ric: TODO for the moment we only use one sample!!
+    /*for(int i=0; i<4; i++) {
         if (owd_min>owd_min_bins_[i])
             owd_min = owd_min_bins_[i];
         if (owd_cur>owd_current_[i])
             owd_cur = owd_current_[i];
-    }
+    }*/
+    // ---
+    owd_min = owd_min_bins_[0];
+    owd_cur = owd_current_[0];
+    // ---
     if (ack_not_rcvd_recent_)
         BackOffOnLosses(0.8);
     ack_rcvd_recent_ = 0;
