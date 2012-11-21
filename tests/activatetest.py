@@ -1,4 +1,4 @@
-# Written by Arno Bakker, Jie Yang
+# Written by Arno Bakker
 # see LICENSE.txt for license information
 
 import unittest

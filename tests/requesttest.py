@@ -195,7 +195,7 @@ class TestRequest(TestDirSeedFramework):
         d.add( RequestMessage(ChunkRange(67,67)) )
         s.c.send(d)
 
-
+        # Recv hashes and chunk 67
         self.get_bill_67(s,fidx,swarmid,peaklist)
 
         # Send Ack + explicit close
@@ -272,16 +272,15 @@ class TestRequest(TestDirSeedFramework):
         d.add( RequestMessage(ChunkRange(67,68)) )  # ask 2 chunks
         s.c.send(d)
 
-
+        # Recv hashes and chunk 67 
         hashdict = self.get_bill_67(s,fidx,swarmid,peaklist) # SHOULD process sequentially
-        print >>sys.stderr,"HASHDICT KEYS",hashdict.keys()
-        
         
         # Send Ack 67
         d = s.makeDatagram()
         d.add( AckMessage(ChunkRange(67,67),TimeStamp(1234L)) )
         s.c.send(d)
         
+        # Recv hashes and chunk 68
         self.get_bill_68(s,fidx,swarmid,peaklist,hashdict) # SHOULD process sequentially
 
         # Send Ack + explicit close
@@ -327,9 +326,6 @@ class TestRequest(TestDirSeedFramework):
         self.assertEquals([],expunclelist)
 
         # See if they add up to the covering peak hash, now that they are OK.
-        
-        print >>sys.stderr,"HASHDICT KEYS TWO",hashdict.keys()
-
         
         gothash = check_hashes(hashdict,[(68,68)]+realunclelist)
         exphash = hashdict[peaklist[len(peaklist)-1]]

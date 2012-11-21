@@ -213,6 +213,8 @@ class HandshakeMessage(Encodable):
                 chain.append(POPT_SWARMID_TYPE)
                 s = len(self.swarmid)
                 sbytes = struct.pack(">H",s)
+                if len(sbytes) != 2:
+                    print >>sys.stderr,"HandshakeMessage: SWARM SIZE WRONG PACK"
                 chain.append(sbytes)
                 chain.append(self.swarmid)
             if self.cipm is not None:
@@ -242,6 +244,7 @@ class HandshakeMessage(Encodable):
     def from_bytes(t,bytes,off):
         off += 1
         chanid = ChannelID.from_bytes( bytes[off:off+ChannelID.get_bytes_length()])
+        #print >>sys.stderr,"hs:",`chanid`
         off += chanid.get_bytes_length()
         ver = None
         swarmid = None
@@ -254,12 +257,14 @@ class HandshakeMessage(Encodable):
         if t.get_version() == POPT_VER_PPSP:
             while off < len(bytes):
                 popt = bytes[off]
+                
+                print >>sys.stderr,"hs: popt is",`popt`
                 off += 1
                 if popt == POPT_VER_TYPE:
                     ver = bytes[off]
                     off += 1
                 elif popt == POPT_SWARMID_TYPE:
-                    sbytes = bytes[off:off+1]
+                    sbytes = bytes[off:off+2]
                     off += len(sbytes)
                     [s] = struct.unpack(">H",sbytes)
                     swarmid = bytes[off:off+s]
@@ -688,6 +693,7 @@ class Datagram(Encodable):
         return wire
 
     def get_channel_id(self):
+        print >>sys.stderr,"dgram: get_channel_id"
         x = ChannelID.from_bytes( self.data[0:ChannelID.get_bytes_length()])
         self.off += ChannelID.get_bytes_length()
         return x
@@ -748,10 +754,7 @@ class Channel:
         self.t = t
         self.addr = addr
         self.localinit = localinit
-        if localinit:
-            self.mychanid = ChannelID.from_bytes('6778')
-        else:
-            self.mychanid = CHAN_ID_ZERO
+        self.mychanid = ChannelID.from_bytes('6778')
         self.hischanid = CHAN_ID_ZERO 
         
     def send(self,d):
@@ -762,7 +765,7 @@ class Channel:
             msg = d.get_message()
             if msg is None:
                 break
-            print >>sys.stderr,"Found",`msg`
+            print >>sys.stderr,"chan: Parsed",`msg`
             if msg.get_id() == MSG_ID_HANDSHAKE:
                 self.hischanid = msg.chanid
       
@@ -784,22 +787,34 @@ class Socket:
         self.sock.bind(myaddr)
 
     def recv(self):
-        data = self.sock.recv(DGRAM_MAX_RECV)
+        [data,addr] = self.sock.recvfrom(DGRAM_MAX_RECV)
         print >>sys.stderr,"recv len",len(data)
 
-        return Datagram(None,data)
+        return [addr,Datagram(None,data)]
         
     def sendto(self,d,addr):
         data = d.to_bytes()
         return self.sock.sendto(data,addr)
     
+    def listen(self,swarmid,autochanid=True,hs=True):
+        [addr,d] = self.recv()
+        s = SwiftConnection(self.myaddr,addr,swarmid,listensock=self,hs=hs)
+        if autochanid:
+            chanid = d.get_channel_id()
+            print >>sys.stderr,"Socket: listen: Got ChannelID",`chanid`
+        d.set_t(s.t)
+        return [s,d]
+        
         
 class SwiftConnection:
-    def __init__(self,myaddr,hisaddr,swarmid,hs=True,ver=POPT_VER_PPSP,chunkspec=ChunkRange(0,0)):
-        self.s = Socket(myaddr)
+    def __init__(self,myaddr,hisaddr,swarmid,listensock=None,hs=True,ver=POPT_VER_PPSP,chunkspec=ChunkRange(0,0)):
+        if listensock is None:
+            self.s = Socket(myaddr)
+        else:
+            self.s = listensock
         #t = Transfer(swarmid,POPT_VER_PPSP,BIN_ALL,self.s)
         self.t = Transfer(swarmid,ver,chunkspec,self.s)
-        self.c = Channel(self.t,hisaddr,True)
+        self.c = Channel(self.t,hisaddr,listensock is None)
         
         if hs:
             d = Datagram(self.t)
@@ -823,7 +838,7 @@ class SwiftConnection:
         self.c.send(d)
         
     def recv(self,autochanid=True):
-        d = self.s.recv()
+        [addr,d] = self.s.recv()
         d.set_t(self.t)
         if autochanid:
             chanid = d.get_channel_id()
