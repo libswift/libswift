@@ -94,6 +94,7 @@ class TestRequest(TestDirSeedFramework):
         
         # clair.ts is 64K exactly
         peaklist = [(0,63)]
+        # MUST be sorted in the uncle order
         unclelist = [(1,1),(2,3),(4,7),(8,15),(16,31),(32,63)]
         peakunclelist = peaklist + unclelist
         hashdict = {}
@@ -162,7 +163,9 @@ class TestRequest(TestDirSeedFramework):
         time.sleep(1)
         
         # bill.ts is 195.788 chunks, 3 peaks [0,127], ...
+        # MUST be sorted low to high level
         peaklist = [(192,195),(128,191),(0,127)]
+        # MUST be sorted in the uncle order
         unclelist = [(66,66),(64,65),(68,71),(72,79),(80,95),(96,127),(0,63)]
         peakunclelist = peaklist + unclelist
         hashdict = {}
@@ -190,25 +193,31 @@ class TestRequest(TestDirSeedFramework):
         # See if we got necessary peak + uncle hashes
         self.assertEquals([],peakunclelist)
 
-        # Check peak hashes
+        # Check peak hashes against root hash
         righthash = EMPTYHASH
         i = 0
+        # Build up hash tree starting from lowest peak hash, combining it
+        # with a right-side empty hash until the same size tree as covered
+        # by the next peak, until we have combined with the last peak,
+        # in which case the top hash should be the root hash.
+        #
         lefthash = hashdict[peaklist[i]]
-        gotwidth = peaklist[i][1]-peaklist[i][0]+1
+        gotwidth = peaklist[i][1] - peaklist[i][0] +1
         while True:
-            print >>sys.stderr,"Peak combine idx",i,"width",gotwidth
             hash = sha(lefthash+righthash).digest()
             gotwidth *= 2
             if i == len(peaklist)-1:
                 break
-            wantwidth = peaklist[i+1][1]-peaklist[i+1][0]+1
+            wantwidth = peaklist[i+1][1] - peaklist[i+1][0] +1
             if gotwidth >= wantwidth:
-                print >>sys.stderr,"Up to next peak level, increase",gotwidth    
+                # Our tree is now as big as the next available peak,
+                # so we can combine those
                 i += 1
                 lefthash = hashdict[peaklist[i]]
                 righthash = hash
             else:
-                print >>sys.stderr,"Want level",wantwidth,"got",gotwidth,", adding empty"
+                # Our tree still small, increase by assuming all empty
+                # hashes on the right side
                 lefthash = hash
                 righthash = EMPTYHASH
         gothash = hash
