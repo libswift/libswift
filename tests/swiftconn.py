@@ -310,13 +310,15 @@ class HandshakeMessage(Encodable):
 
 
 class DataMessage(Encodable):
-    def __init__(self,chunkspec,timestamp,chunk):
+    def __init__(self,chunkspec,timestamp,chunk): # timestamp MUST be None for POPT_VER_SWIFT
         self.chunkspec = chunkspec
         self.ts = timestamp
         self.chunk  = chunk
     def to_bytes(self):
-        # TODO SWIFT LEGACY WITH NO TS
-        chain = [DataMessage.get_id(),self.chunkspec.to_bytes(),self.ts.to_bytes(),self.chunk]
+        if self.ts is None:
+            chain = [DataMessage.get_id(),self.chunkspec.to_bytes(),self.chunk]
+        else:
+            chain = [DataMessage.get_id(),self.chunkspec.to_bytes(),self.ts.to_bytes(),self.chunk]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         off += 1
