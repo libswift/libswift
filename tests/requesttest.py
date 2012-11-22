@@ -332,7 +332,7 @@ class TestRequest(TestDirSeedFramework):
         self.assertEquals(exphash,gothash)
 
 
-    def test_request_two_cancel_2nd(self):
+    def disabled_test_request_two_cancel_2nd(self):
         myaddr = ("127.0.0.1",5356)
         hisaddr = ("127.0.0.1",self.listenport)
         
@@ -356,7 +356,7 @@ class TestRequest(TestDirSeedFramework):
 
         # Cancel 68
         d = s.makeDatagram()
-        d.add( CancelMessage(ChunkRange(68,68)) )  # ask 2 chunks
+        d.add( CancelMessage(ChunkRange(68,68)) )  # cancel 1 chunk
         s.c.send(d)
 
         # Recv hashes and chunk 67 
@@ -386,6 +386,66 @@ class TestRequest(TestDirSeedFramework):
         d.add( HandshakeMessage(CHAN_ID_ZERO,None) )
         s.c.send(d)
 
+
+    def test_request_many_cancel_some(self):
+        myaddr = ("127.0.0.1",5356)
+        hisaddr = ("127.0.0.1",self.listenport)
+        
+        # Request from bill.ts
+        fidx = 1 
+        swarmid = self.filelist[fidx][2]
+        # bill.ts is 195.788 chunks, 3 peaks [0,127], ...
+        # MUST be sorted low to high level
+        peaklist = [(192,195),(128,191),(0,127)]
+        
+        s = SwiftConnection(myaddr,hisaddr,swarmid)
+        
+        d = s.recv()
+        s.c.recv(d)
+        
+        # Request DATA
+        d = s.makeDatagram()
+        d.add( RequestMessage(ChunkRange(67,100)) )  # ask many chunks
+        s.c.send(d)
+
+
+        # Cancel some chunks
+        d = s.makeDatagram()
+        d.add( CancelMessage(ChunkRange(69,69)) )  
+        d.add( CancelMessage(ChunkRange(75,80)) )
+        d.add( CancelMessage(ChunkRange(96,99)) )    
+        s.c.send(d)
+        
+        datalist = [(i,i) for i in range(67,69)]
+        datalist += [(i,i) for i in range(70,75)]
+        datalist += [(i,i) for i in range(81,96)]
+        datalist += [(100,100)]
+
+        cidx = 0
+        for try in range(0,25):
+            d = s.recv()
+            while True:
+                expchunk = datalist[cidx]
+                msg = d.get_message()
+                if msg is None:
+                    break
+                print >>sys.stderr,"test: Got",`msg`
+                if msg.get_id() == MSG_ID_DATA:
+                    self.assertEquals(ChunkRange(expchunk[0],expchunk[0]).to_bytes(),msg.chunkspec.to_bytes())
+                    cidx += 1
+
+                # Send ACK
+                d = s.makeDatagram()
+                d.add( AckMessage(ChunkRange(expchunk[0],expchunk[0]),TimeStamp(1234L)) )
+                s.send(d)
+
+        # Should only receive non-CANCELed messages.
+        self.assertEquals(cidx,len(datalist))
+
+        # Send explicit close
+        d = s.makeDatagram()
+        d.add( HandshakeMessage(CHAN_ID_ZERO,None) )
+        s.send(d)
 
 
 

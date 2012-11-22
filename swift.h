@@ -722,7 +722,6 @@ namespace swift {
         void        OnHave (struct evbuffer *evb);
         bin_t       OnData (struct evbuffer *evb);
         void        OnHint (struct evbuffer *evb);
-        void        OnCancel (struct evbuffer *evb);
         void        OnHash (struct evbuffer *evb);
         void        OnPexAdd (struct evbuffer *evb);
         static Handshake *StaticOnHandshake( Address &addr, uint32_t cid, bool ver_known, popt_version_t ver, struct evbuffer *evb);

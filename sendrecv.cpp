@@ -629,7 +629,7 @@ void    Channel::Recv (struct evbuffer *evb) {
             case SWIFT_REQUEST:
                 OnHint(evb);
                 break;
-            case SWIFT_CANCEL:
+            case SWIFT_CANCEL: // PPSP
             	OnCancel(evb);
             	break;
             case SWIFT_PEX_RES:
@@ -643,9 +643,6 @@ void    Channel::Recv (struct evbuffer *evb) {
                     OnPexReqZeroState(evb);
                 else
                     OnPexReq();
-                break;
-            case SWIFT_CANCEL: // PPSP
-		OnCancel(evb);
                 break;
             default:
                 dprintf("%s #%u ?msg id unknown %i\n",tintstr(),id_,(int)type);
@@ -1194,27 +1191,47 @@ void Channel::OnHandshake(Handshake *hishs) {
 }
 
 
+
 void    Channel::OnCancel (struct evbuffer *evb) {
 
-	binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
-    bin_t cancel = bv.front();
+    binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
+    if (bv.size() == 0) {
+	// Could not parse chunk spec
+	dprintf("%s #%u ?cancel bad chunk spec\n",tintstr(),id_);
+	Close(CLOSE_DO_NOT_SEND);
+	return;
+    }
 
-    int hi = 0;
-    while (hi<hint_in_.size() && !cancel.contains(hint_in_[hi].bin))
-        hi++;
+    // Arno, 2012-11-22: chunkaddr translated to list of bins, iterate
+    binvector::iterator iter;
+    for (iter=bv.begin(); iter != bv.end(); iter++)
+    {
+	bin_t cancelbin = *iter;
+	dprintf("%s #%u -cancel %s\n",tintstr(),id_,cancelbin.str().c_str());
 
-    // nothing to cancel
-    if (hi==hint_in_.size())
-        return;
+	// Arno: Remove hint from hint_in_. If the hint is already in progress,
+	// let it be. Complicating factor is that a hint may have been partially
+	// answered so it may be split into smaller bins. Use Riccardo's
+	// solution:
+	int hi = 0;
+	while (hi<hint_in_.size() && !cancelbin.contains(hint_in_[hi].bin))
+	    hi++;
 
-    dprintf("%s #%u -cancel %s => removing: ",tintstr(),id_,cancel.str().c_str());
-    do {
-    	dprintf("%s ",hint_in_[hi].bin.str().c_str());
-    	hint_in_.erase(hint_in_.begin()+hi);
-    	hi++;
-    } while (cancel.contains(hint_in_[hi].bin));
-    dprintf("\n");
+	// nothing to cancel
+	if (hi==hint_in_.size())
+	    continue;
 
+	// Assumption: all fragments of a bin being cancel consecutive in hint_in_
+	do {
+	    dprintf("%s #%u -cancel actual %s\n",tintstr(),id_,hint_in_[hi].bin.str().c_str());
+	    hint_in_.erase(hint_in_.begin()+hi);
+	    if (hint_in_.size() == 0)
+		break;
+	} while (cancelbin.contains(hint_in_[hi].bin));
+
+	// PPSPTODO: when we cancel part of a bin, split it into smaller units
+	// and replace them in hint_in_
+    }
 }
 
 
@@ -1235,35 +1252,6 @@ void Channel::OnPexAdd (struct evbuffer *evb) {
 }
 
 
-void    Channel::OnCancel (struct evbuffer *evb) {
-
-    binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
-    if (bv.size() == 0) {
-	// Could not parse chunk spec
-	dprintf("%s #%u ?cancel bad chunk spec\n",tintstr(),id_);
-	Close(CLOSE_DO_NOT_SEND);
-	return;
-    }
-
-    binvector::iterator iter;
-    for (iter=bv.begin(); iter != bv.end(); iter++)
-    {
-	bin_t delhint = *iter;
-
-	// Remove hint from hint_in_. If the hint is already in progress, let it be.
-	tbqueue::iterator hiter;
-	for (hiter=hint_in_.begin(); hiter != hint_in_.end(); hiter++)
-	{
-	    tintbin tb = *hiter;
-	    if (tb.bin == delhint)
-	    {
-		hint_in_.erase(hiter);
-		dprintf("%s #%u -cancel %s\n",tintstr(),id_,delhint.str().c_str());
-		break;
-	    }
-	}
-    }
-}
 
 
 /*
