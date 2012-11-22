@@ -427,7 +427,7 @@ class PexResv4Message(Encodable):
         off += 1
         ippbytes = bytes[off:off+IPv4Port.get_bytes_length()]
         off += len(ippbytes)
-        ipp = IPv4Port.from_bytes(cabytes)
+        ipp = IPv4Port.from_bytes(ippbytes)
         return [PexResv4Message(ipp),off]
     from_bytes = staticmethod(from_bytes)
     def get_bytes_length():
@@ -783,9 +783,10 @@ class Channel:
         
         
 class Socket:
-    def __init__(self,myaddr):
+    def __init__(self,myaddr,family=socket.AF_INET):
         self.myaddr = myaddr
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock = socket.socket(family, socket.SOCK_DGRAM)
+        print >>sys.stderr,"Socket: __init__: bind",myaddr,family
         self.sock.bind(myaddr)
 
     def recv(self):

@@ -104,7 +104,7 @@ class TestDirSeed(TestDirSeedFramework):
             if msg is None:
                 break 
             if msg.get_id() == MSG_ID_HANDSHAKE:
-                print >>sys.stderr,"Found",`msg`
+                print >>sys.stderr,"test: Parsed",`msg`
                 responded = True
                 
         self.assertTrue(responded)

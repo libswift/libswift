@@ -120,7 +120,7 @@ class TestRequest(TestDirSeedFramework):
         #killer = ChannelID.from_bytes('\x05\xacH\xa0')
         #d.add( killer )
         d.add( RequestMessage(ChunkRange(0,0)) )
-        s.c.send(d)
+        s.send(d)
 
         # Recv DATA  
         print >>sys.stderr,"test: Waiting for response"

@@ -25,21 +25,38 @@ DEBUG=False
 
 class TestPexRes(TestAsServer):
 
-    def test_reply(self):
+    def test_reply_v4(self):
         
         myaddr = ("127.0.0.1",5353)
         # Fake peer to send as PEX_RES
         myaddr2 = ("127.0.0.1",5352)
+        self.do_test_reply(myaddr,myaddr2)
+
+
+    def disabled_test_reply_v6(self):
+        # TODO: swift IPv6 support
         
-        hisaddr = ("127.0.0.1",self.listenport)
+        myaddr = ("::1",5353)
+        # Fake peer to send as PEX_RES
+        myaddr2 = ("::1",5352)
+        self.do_test_reply(myaddr,myaddr2)
+
+
+    def do_test_reply(self,myaddr,myaddr2):     
+        
+        if ':' in myaddr[0]:
+            family = socket.AF_INET6
+        else:
+            family = socket.AF_INET
+           
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
         swarmid = binascii.unhexlify('24aa9484fbee33564fc197252c7c837ce4ce449a')
         
         # Setup listen socket
-        self.listensock = Socket(myaddr)
+        self.listensock = Socket(myaddr,family=family)
 
         # Setup listen socket for fake peer
-        self.listensock2 = Socket(myaddr2)
+        self.listensock2 = Socket(myaddr2,family=family)
 
         
         # Tell swift to DL swarm via CMDGW
@@ -78,7 +95,10 @@ class TestPexRes(TestAsServer):
         
         # Send PEX_RES 
         d = s.makeDatagram()
-        d.add( PexResv4Message(IPv4Port(myaddr2)) )
+        if family == socket.AF_INET6:
+            d.add( PexResv6Message(IPv6Port(myaddr2)) )
+        else:
+            d.add( PexResv4Message(IPv4Port(myaddr2)) )
         s.c.send(d)
 
         # Listen on fake peer socket
