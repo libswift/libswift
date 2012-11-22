@@ -104,13 +104,13 @@ class IPv4Port(Encodable):
     def __init__(self,ipport): # Python tuple
         self.ipport = ipport
     def to_bytes(self):
-        ipbytes = socket.inet_pton(socket.AF_INET, self.ipport[0])
+        ipbytes = socket.inet_aton(self.ipport[0])
         portbytes = struct.pack(">H",self.ipport[1])
-        chain = [get_id(),ipbytes,portbytes]
+        chain = [ipbytes,portbytes]
         return "".join(chain)
     def from_bytes(bytes):
         ipbytes = bytes[0:4]
-        ip = socket.inet_ntop(socket.AF_INET, ipbytes)
+        ip = socket.inet_ntoa(ipbytes)
         portbytes = bytes[4:6]
         [port] = struct.unpack(">H",portbytes)
         return IPv4Port((ip,port))
@@ -131,7 +131,7 @@ class IPv6Port(Encodable):
     def to_bytes(self):
         ipbytes = socket.inet_pton(socket.AF_INET6, self.ipport[0])
         portbytes = struct.pack(">H",self.ipport[1])
-        chain = [get_id(),ipbytes,portbytes]
+        chain = [ipbytes,portbytes]
         return "".join(chain)
     def from_bytes(bytes):
         ipbytes = bytes[0:16]
@@ -419,7 +419,7 @@ class IntegrityMessage(Encodable):
 
 class PexResv4Message(Encodable):
     def __init__(self,ipp):
-        self.ipp = ipport
+        self.ipp = ipp
     def to_bytes(self):
         chain = [PexResv4Message.get_id(),self.ipp.to_bytes()]
         return "".join(chain)
@@ -573,7 +573,7 @@ class UnchokeMessage(Encodable):
 
 class PexResv6Message(Encodable):
     def __init__(self,ipp):
-        self.ipp = ipport
+        self.ipp = ipp
     def to_bytes(self):
         chain = [PexResv6Message.get_id(),self.ipp.to_bytes()]
         return "".join(chain)
