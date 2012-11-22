@@ -644,6 +644,9 @@ void    Channel::Recv (struct evbuffer *evb) {
                 else
                     OnPexReq();
                 break;
+            case SWIFT_CANCEL: // PPSP
+		OnCancel(evb);
+                break;
             default:
                 dprintf("%s #%u ?msg id unknown %i\n",tintstr(),id_,(int)type);
                 return;
@@ -1231,6 +1234,41 @@ void Channel::OnPexAdd (struct evbuffer *evb) {
     pex_request_outstanding_ = false;
 }
 
+
+void    Channel::OnCancel (struct evbuffer *evb) {
+
+    binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
+    if (bv.size() == 0) {
+	// Could not parse chunk spec
+	dprintf("%s #%u ?cancel bad chunk spec\n",tintstr(),id_);
+	Close(CLOSE_DO_NOT_SEND);
+	return;
+    }
+
+    binvector::iterator iter;
+    for (iter=bv.begin(); iter != bv.end(); iter++)
+    {
+	bin_t delhint = *iter;
+
+	// Remove hint from hint_in_. If the hint is already in progress, let it be.
+	tbqueue::iterator hiter;
+	for (hiter=hint_in_.begin(); hiter != hint_in_.end(); hiter++)
+	{
+	    tintbin tb = *hiter;
+	    if (tb.bin == delhint)
+	    {
+		hint_in_.erase(hiter);
+		dprintf("%s #%u -cancel %s\n",tintstr(),id_,delhint.str().c_str());
+		break;
+	    }
+	}
+    }
+}
+
+
+/*
+ * Sending messages
+ */
 
 void    Channel::AddPex (struct evbuffer *evb) {
     // Gertjan fix: Reverse PEX

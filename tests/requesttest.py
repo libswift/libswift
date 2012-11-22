@@ -102,7 +102,7 @@ def check_peak_hashes(hashdict,peaklist):
 
 class TestRequest(TestDirSeedFramework):
 
-    def test_request_one(self):
+    def disabled_test_request_one(self):
         myaddr = ("127.0.0.1",5353)
         hisaddr = ("127.0.0.1",self.listenport)
         
@@ -173,7 +173,7 @@ class TestRequest(TestDirSeedFramework):
 
 
 
-    def test_request_one_middle(self):
+    def disabled_test_request_one_middle(self):
         myaddr = ("127.0.0.1",5354)
         hisaddr = ("127.0.0.1",self.listenport)
         
@@ -251,7 +251,7 @@ class TestRequest(TestDirSeedFramework):
 
         return hashdict
 
-    def test_request_two(self):
+    def disabled_test_request_two(self):
         myaddr = ("127.0.0.1",5356)
         hisaddr = ("127.0.0.1",self.listenport)
         
@@ -330,6 +330,61 @@ class TestRequest(TestDirSeedFramework):
         gothash = check_hashes(hashdict,[(68,68)]+realunclelist)
         exphash = hashdict[peaklist[len(peaklist)-1]]
         self.assertEquals(exphash,gothash)
+
+
+    def test_request_two_cancel_2nd(self):
+        myaddr = ("127.0.0.1",5356)
+        hisaddr = ("127.0.0.1",self.listenport)
+        
+        # Request from bill.ts
+        fidx = 1 
+        swarmid = self.filelist[fidx][2]
+        # bill.ts is 195.788 chunks, 3 peaks [0,127], ...
+        # MUST be sorted low to high level
+        peaklist = [(192,195),(128,191),(0,127)]
+        
+        s = SwiftConnection(myaddr,hisaddr,swarmid)
+        
+        d = s.recv()
+        s.c.recv(d)
+        
+        # Request DATA
+        d = s.makeDatagram()
+        d.add( RequestMessage(ChunkRange(67,68)) )  # ask 2 chunks
+        s.c.send(d)
+
+
+        # Cancel 68
+        d = s.makeDatagram()
+        d.add( CancelMessage(ChunkRange(68,68)) )  # ask 2 chunks
+        s.c.send(d)
+
+        # Recv hashes and chunk 67 
+        hashdict = self.get_bill_67(s,fidx,swarmid,peaklist) # SHOULD process sequentially
+        
+        # Send Ack 67
+        d = s.makeDatagram()
+        d.add( AckMessage(ChunkRange(67,67),TimeStamp(1234L)) )
+        s.c.send(d)
+        
+        # Now we shouldn't get 68
+        gotdata = False
+        d = s.recv()
+        while True:
+            msg = d.get_message()
+            if msg is None:
+                break
+            print >>sys.stderr,"test: Got",`msg`
+            if msg.get_id() == MSG_ID_DATA:
+                self.assertEquals(ChunkRange(68,68).to_bytes(),msg.chunkspec.to_bytes())
+                gotdata = True
+
+        self.assertFalse(gotdata)
+
+        # Send explicit close
+        d = s.makeDatagram()
+        d.add( HandshakeMessage(CHAN_ID_ZERO,None) )
+        s.c.send(d)
 
 
 

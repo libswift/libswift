@@ -511,7 +511,7 @@ class CancelMessage(Encodable):
     def __init__(self,chunkspec):
         self.chunkspec = chunkspec
     def to_bytes(self):
-        chain = [CancelMessage.get_id(),self.chunkspec.to_bytes(),self.ts.to_bytes()]
+        chain = [CancelMessage.get_id(),self.chunkspec.to_bytes()]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         off += 1

@@ -43,6 +43,7 @@ class TestDirSeed(TestDirSeedFramework):
         s.send(d)
 
 
+        # Create new channel and send PEX_REQ
         myaddr2 = ("127.0.0.1",5352)
         
         s2 = SwiftConnection(myaddr2,hisaddr,swarmid)
