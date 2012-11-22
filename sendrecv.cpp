@@ -298,15 +298,16 @@ void    Channel::AddHint (struct evbuffer *evb) {
     }
 
     // 1. Calc max of what we are allowed to request, uncongested bandwidth wise
-    tint plan_for = max(TINT_SEC,rtt_avg_*4);
-
+    tint plan_for = max(TINT_SEC*2,rtt_avg_*8);
     tint timed_out = NOW - plan_for*2;
+
+    std::deque<bin_t> tbc;
     while ( !hint_out_.empty() && hint_out_.front().time < timed_out ) {
     	bin_t hint = hint_out_.front().bin;
         hint_out_size_ -= hint.base_length();
         hint_out_.pop_front();
-        // Ric: send Cancel msg
-        cancel_out_.push_back(hint);
+        // Ric: keep track of what we want to remove
+        tbc.push_back(hint);
     }
 
     int first_plan_pck = max ( (tint)1, plan_for / dip_avg_ );
@@ -361,10 +362,17 @@ void    Channel::AddHint (struct evbuffer *evb) {
             hint_out_size_ += hint.base_length();
             //fprintf(stderr,"send c%d: HINTLEN %i\n", id(), hint.base_length());
             //fprintf(stderr,"HL %i ", hint.base_length());
+
+            // Ric: final cancel the hints that have been removed
+			while (!tbc.empty()) {
+				bin_t b = tbc.front();
+				if (!b.contains(hint) && !hint.contains(b))
+					cancel_out_.push_back(b);
+				tbc.pop_front();
+			}
         }
         else
             dprintf("%s #%u Xhint\n",tintstr(),id_);
-
     }
 }
 
@@ -500,8 +508,8 @@ void    Channel::AddAck (struct evbuffer *evb) {
         fprintf(stderr,"send c%d: ACK %i\n", id(), bin_toUInt32(data_in_.bin));
 
     have_out_.set(data_in_.bin);
-    dprintf("%s #%u +ack %s %s\n",
-        tintstr(),id_,data_in_.bin.str().c_str(),tintstr(data_in_.time));
+    dprintf("%s #%u +ack %s %d\n",
+        tintstr(),id_,data_in_.bin.str().c_str(),data_in_.time);
     if (data_in_.bin.layer()>2)
         data_in_dbl_ = data_in_.bin;
 
@@ -716,8 +724,6 @@ void    Channel::CleanHintOut (bin_t pos) {
     	bin_t hint = hint_out_.front().bin;
         hint_out_size_ -= hint.base_length();
         hint_out_.pop_front();
-        // Ric: send Cancel msgs
-		cancel_out_.push_back(hint);
     }
     while (hint_out_.front().bin!=pos) {
         tintbin f = hint_out_.front();
