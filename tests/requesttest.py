@@ -387,64 +387,108 @@ class TestRequest(TestDirSeedFramework):
         s.c.send(d)
 
 
-    def test_request_many_cancel_some(self):
+    def disabled_test_request_many_cancel_some1(self):
+        
+        # Request from bill.ts
+        fidx = 1
+        
+        # Ask many chunks
+        reqcp = ChunkRange(67,100)  
+        
+        # Cancel some chunks
+        cancelcplist = []
+        cancelcplist.append(ChunkRange(69,69))  
+        cancelcplist.append(ChunkRange(75,78)) 
+        cancelcplist.append(ChunkRange(80,80)) 
+        cancelcplist.append(ChunkRange(96,99)) 
+            
+        # What chunks still expected
+        expcplist = []
+        expcplist += [ChunkRange(i,i) for i in range(67,69)]
+        expcplist += [ChunkRange(i,i) for i in range(70,75)]
+        expcplist += [ChunkRange(i,i) for i in range(79,80)]
+        expcplist += [ChunkRange(i,i) for i in range(81,96)]
+        expcplist += [ChunkRange(100,100)]
+        
+        self.do_request_many_cancel_some(fidx, reqcp, cancelcplist, expcplist)
+        
+
+    def test_request_many_cancel_some2(self):
+        
+        # Request from clair.ts
+        fidx = 2
+        
+        # Ask many chunks
+        reqcp = ChunkRange(0,30)  
+        
+        # Cancel some chunks
+        cancelcplist = []
+        cancelcplist.append(ChunkRange(4,5))  
+        cancelcplist.append(ChunkRange(8,12)) 
+        cancelcplist.append(ChunkRange(16,22)) 
+        cancelcplist.append(ChunkRange(24,27))
+        cancelcplist.append(ChunkRange(30,30)) 
+            
+        # What chunks still expected
+        expcplist = []
+        expcplist += [ChunkRange(i,i) for i in range( 0,3+1)]
+        expcplist += [ChunkRange(i,i) for i in range( 6,7+1)]
+        expcplist += [ChunkRange(i,i) for i in range(13,15+1)]
+        expcplist += [ChunkRange(i,i) for i in range(23,23+1)]
+        expcplist += [ChunkRange(i,i) for i in range(28,29+1)]
+        
+        self.do_request_many_cancel_some(fidx, reqcp, cancelcplist, expcplist)
+
+        
+        
+    def do_request_many_cancel_some(self,fidx,reqcp,cancelcplist,expcplist):
         myaddr = ("127.0.0.1",5356)
         hisaddr = ("127.0.0.1",self.listenport)
         
-        # Request from bill.ts
-        fidx = 1 
+        # Request from fidx
         swarmid = self.filelist[fidx][2]
-        # bill.ts is 195.788 chunks, 3 peaks [0,127], ...
-        # MUST be sorted low to high level
-        peaklist = [(192,195),(128,191),(0,127)]
         
         s = SwiftConnection(myaddr,hisaddr,swarmid)
         
         d = s.recv()
         s.c.recv(d)
         
-        # Request DATA
+        # Request range of chunks
         d = s.makeDatagram()
-        d.add( RequestMessage(ChunkRange(67,100)) )  # ask many chunks
+        d.add( RequestMessage(reqcp) )  # ask many chunks
         s.send(d)
 
 
         # Cancel some chunks
         d = s.makeDatagram()
-        d.add( CancelMessage(ChunkRange(69,69)) )  
-        d.add( CancelMessage(ChunkRange(75,78)) )
-        d.add( CancelMessage(ChunkRange(80,80)) )
-        d.add( CancelMessage(ChunkRange(96,99)) )    
+        for cp in cancelcplist:
+            d.add( CancelMessage(cp) )  
         s.send(d)
         
-        # What chunks still expected
-        datalist = [(i,i) for i in range(67,69)]
-        datalist += [(i,i) for i in range(70,75)]
-        datalist += [(i,i) for i in range(79,80)]
-        datalist += [(i,i) for i in range(81,96)]
-        datalist += [(100,100)]
-
+        # Receive uncanceled chunks
         cidx = 0
         for attempt in range(0,25):
             d = s.recv()
             while True:
-                expchunk = datalist[cidx]
+                expchunkspec = expcplist[cidx]
                 msg = d.get_message()
                 if msg is None:
                     break
-                print >>sys.stderr,"test: Got",`msg`
+                #print >>sys.stderr,"test: Got",`msg`
                 if msg.get_id() == MSG_ID_DATA:
-                    self.assertEquals(ChunkRange(expchunk[0],expchunk[0]).to_bytes(),msg.chunkspec.to_bytes())
+                    self.assertEquals(expchunkspec.to_bytes(),msg.chunkspec.to_bytes())
                     cidx += 1
 
                     # Send ACK
                     d = s.makeDatagram()
-                    d.add( AckMessage(ChunkRange(expchunk[0],expchunk[0]),TimeStamp(1234L)) )
+                    d.add( AckMessage(expchunkspec,TimeStamp(1234L)) )
                     s.send(d)
                     break
+            if cidx == len(expcplist):
+                break
 
-        # Should only receive non-CANCELed messages.
-        self.assertEquals(cidx,len(datalist))
+        # Should only receive non-CANCELed chunks.
+        self.assertEquals(cidx,len(expcplist))
 
         # Send explicit close
         d = s.makeDatagram()

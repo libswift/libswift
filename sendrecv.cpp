@@ -1236,10 +1236,12 @@ void    Channel::OnCancel (struct evbuffer *evb) {
 	    do {
 		//dprintf("%s #%u -cancel frag %s\n",tintstr(),id_,hint_in_[hi].bin.str().c_str());
 		hint_in_.erase(hint_in_.begin()+hi);
-		if (hint_in_.size() == 0)
+		if (hint_in_.size() == 0 || hi >= hint_in_.size())
 		    break;
 	    } while (cancelbin.contains(hint_in_[hi].bin));
 	}
+
+	//dprintf("%s #%u -cancel ORIG %s len %d\n",tintstr(),id_,cancelbin.str().c_str(), hint_in_.size() );
 
 	// 2. Fragment hint from hint_in_ if it covers cancelbin. Use Riccardo's solution:
 	hi = 0;
@@ -1269,6 +1271,10 @@ void    Channel::OnCancel (struct evbuffer *evb) {
 	}
     }
 
+    for (int i=0; i<hint_in_.size(); i++)
+    {
+	dprintf("%s #%u -cancel NETS %s\n",tintstr(),id_,hint_in_[i].bin.str().c_str());
+    }
 }
 
 

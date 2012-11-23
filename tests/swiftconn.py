@@ -258,7 +258,7 @@ class HandshakeMessage(Encodable):
             while off < len(bytes):
                 popt = bytes[off]
                 
-                print >>sys.stderr,"hs: popt is",`popt`
+                #print >>sys.stderr,"hs: popt is",`popt`
                 off += 1
                 if popt == POPT_VER_TYPE:
                     ver = bytes[off]
@@ -690,12 +690,12 @@ class Datagram(Encodable):
     def to_bytes(self):
         wire = ''
         for e in self.chain:
-            print >>sys.stderr,"dgram: Add",`e`
+            #print >>sys.stderr,"dgram: Add",`e`
             wire += e.to_bytes()
         return wire
 
     def get_channel_id(self):
-        print >>sys.stderr,"dgram: get_channel_id"
+        #print >>sys.stderr,"dgram: get_channel_id"
         x = ChannelID.from_bytes( self.data[0:ChannelID.get_bytes_length()])
         self.off += ChannelID.get_bytes_length()
         return x
@@ -705,7 +705,7 @@ class Datagram(Encodable):
             return None
             
         msgid = self.data[self.off:self.off+len(MSG_ID_HANDSHAKE)]
-        print >>sys.stderr,"dgram: get_message: GOT msgid",`msgid`
+        #print >>sys.stderr,"dgram: get_message: GOT msgid",`msgid`
         
         if msgid == MSG_ID_HANDSHAKE:
             [msg,self.off] = HandshakeMessage.from_bytes(self.t,self.data,self.off)
