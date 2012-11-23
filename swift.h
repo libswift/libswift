@@ -1228,6 +1228,7 @@ namespace swift {
     Sha1Hash evbuffer_remove_hash(struct evbuffer* evb);
     binvector evbuffer_remove_chunkaddr(struct evbuffer *evb, popt_chunk_addr_t chunk_addr); // PPSP
     void chunk32_to_bin32(uint32_t schunk, uint32_t echunk, binvector *bvptr);
+    binvector bin_fragment(bin_t &origbin, bin_t &cancelbin);
 
     const char* tintstr(tint t=0);
     std::string sock2str (struct sockaddr_in addr);

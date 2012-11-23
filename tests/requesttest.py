@@ -406,23 +406,26 @@ class TestRequest(TestDirSeedFramework):
         # Request DATA
         d = s.makeDatagram()
         d.add( RequestMessage(ChunkRange(67,100)) )  # ask many chunks
-        s.c.send(d)
+        s.send(d)
 
 
         # Cancel some chunks
         d = s.makeDatagram()
         d.add( CancelMessage(ChunkRange(69,69)) )  
-        d.add( CancelMessage(ChunkRange(75,80)) )
+        d.add( CancelMessage(ChunkRange(75,78)) )
+        d.add( CancelMessage(ChunkRange(80,80)) )
         d.add( CancelMessage(ChunkRange(96,99)) )    
-        s.c.send(d)
+        s.send(d)
         
+        # What chunks still expected
         datalist = [(i,i) for i in range(67,69)]
         datalist += [(i,i) for i in range(70,75)]
+        datalist += [(i,i) for i in range(79,80)]
         datalist += [(i,i) for i in range(81,96)]
         datalist += [(100,100)]
 
         cidx = 0
-        for try in range(0,25):
+        for attempt in range(0,25):
             d = s.recv()
             while True:
                 expchunk = datalist[cidx]
@@ -434,10 +437,11 @@ class TestRequest(TestDirSeedFramework):
                     self.assertEquals(ChunkRange(expchunk[0],expchunk[0]).to_bytes(),msg.chunkspec.to_bytes())
                     cidx += 1
 
-                # Send ACK
-                d = s.makeDatagram()
-                d.add( AckMessage(ChunkRange(expchunk[0],expchunk[0]),TimeStamp(1234L)) )
-                s.send(d)
+                    # Send ACK
+                    d = s.makeDatagram()
+                    d.add( AckMessage(ChunkRange(expchunk[0],expchunk[0]),TimeStamp(1234L)) )
+                    s.send(d)
+                    break
 
         # Should only receive non-CANCELed messages.
         self.assertEquals(cidx,len(datalist))

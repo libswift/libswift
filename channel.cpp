@@ -606,3 +606,34 @@ void swift::chunk32_to_bin32(uint32_t schunk, uint32_t echunk, binvector *bvptr)
 	    cur = cur.parent();
     }
 }
+
+
+/*
+ * Calculate the complement of 2 bins, where origbin covers cancelbin.
+ * I.e., origbin is turned into a list of base bins that are covered by
+ * origbin but not by cancelbin.
+ */
+binvector swift::bin_fragment(bin_t &origbin, bin_t &cancelbin)
+{
+    // origbin covers cancelbin
+    // Easy: just split into base bins
+    binvector bv;
+    bin_t origsbase = origbin.base_left();
+    bin_t origebase = origbin.base_right();
+    bin_t cansbase = cancelbin.base_left();
+    bin_t canebase = cancelbin.base_right();
+    bin_t curbin = origsbase;
+    while (curbin < cansbase)
+    {
+	bv.push_back(curbin);
+	curbin = bin_t(0,curbin.base_offset()+1);
+    }
+    curbin = bin_t(0,canebase.base_offset()+1);
+    while (curbin <= origebase)
+    {
+	bv.push_back(curbin);
+	curbin = bin_t(0,curbin.base_offset()+1);
+    }
+
+    return bv;
+}

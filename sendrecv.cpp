@@ -1197,7 +1197,6 @@ void Channel::OnHandshake(Handshake *hishs) {
 }
 
 
-
 void    Channel::OnCancel (struct evbuffer *evb) {
 
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
@@ -1208,36 +1207,68 @@ void    Channel::OnCancel (struct evbuffer *evb) {
 	return;
     }
 
-    // Arno, 2012-11-22: chunkaddr translated to list of bins, iterate
+    // Arno, 2012-11-23: chunkaddr translated to list of bins, iterate and
+    // process in two ways:
+    // 1. Remove bins from hint_in_ that are contained in the cancelled bins.
+    //    A hint may have been partially answered so it may be split into
+    //    smaller bins.
+    // 2. Split up bins from hint_in_ that have only been partially canceled.
+    //    i.e., where cancelbin is contained by a bin in hint_in_
+    //
+    // If the hint is already in progress (i.e, already transmitted, not yet
+    // acked), we let it be.
+    //
     binvector::iterator iter;
     for (iter=bv.begin(); iter != bv.end(); iter++)
     {
 	bin_t cancelbin = *iter;
 	dprintf("%s #%u -cancel %s\n",tintstr(),id_,cancelbin.str().c_str());
 
-	// Arno: Remove hint from hint_in_. If the hint is already in progress,
-	// let it be. Complicating factor is that a hint may have been partially
-	// answered so it may be split into smaller bins. Use Riccardo's
-	// solution:
+	// 1. Remove hint from hint_in_ if contained in cancelbin. Use Riccardo's solution:
 	int hi = 0;
-	while (hi<hint_in_.size() && !cancelbin.contains(hint_in_[hi].bin))
+	while (hi<hint_in_.size() && !cancelbin.contains(hint_in_[hi].bin) && cancelbin != hint_in_[hi].bin)
+	    hi++;
+
+	// something to cancel?
+	if (hi != hint_in_.size())
+	{
+	    // Assumption: all fragments of a bin being cancelled consecutive in hint_in_
+	    do {
+		//dprintf("%s #%u -cancel frag %s\n",tintstr(),id_,hint_in_[hi].bin.str().c_str());
+		hint_in_.erase(hint_in_.begin()+hi);
+		if (hint_in_.size() == 0)
+		    break;
+	    } while (cancelbin.contains(hint_in_[hi].bin));
+	}
+
+	// 2. Fragment hint from hint_in_ if it covers cancelbin. Use Riccardo's solution:
+	hi = 0;
+	while (hi<hint_in_.size() && !hint_in_[hi].bin.contains(cancelbin))
 	    hi++;
 
 	// nothing to cancel
 	if (hi==hint_in_.size())
 	    continue;
 
-	// Assumption: all fragments of a bin being cancel consecutive in hint_in_
-	do {
-	    dprintf("%s #%u -cancel actual %s\n",tintstr(),id_,hint_in_[hi].bin.str().c_str());
-	    hint_in_.erase(hint_in_.begin()+hi);
-	    if (hint_in_.size() == 0)
-		break;
-	} while (cancelbin.contains(hint_in_[hi].bin));
-
-	// PPSPTODO: when we cancel part of a bin, split it into smaller units
-	// and replace them in hint_in_
+	// Split up hint
+	tint origt = hint_in_[hi].time;
+	bin_t origbin = hint_in_[hi].bin;
+	binvector fragbins = swift::bin_fragment(origbin,cancelbin);
+	// Erase original
+	hint_in_.erase(hint_in_.begin()+hi);
+	// Replace with fragments left
+	binvector::iterator iter2;
+	int idx=0;
+	for (iter2=fragbins.begin(); iter2 != fragbins.end(); iter2++)
+	{
+	    bin_t fragbin = *iter2;
+	    //dprintf("%s #%u -cancel keep %s\n",tintstr(),id_,fragbin.str().c_str());
+	    tintbin newtb(origt,fragbin);
+	    hint_in_.insert(hint_in_.begin()+hi+idx,newtb);
+	    idx++;
+	}
     }
+
 }
 
 
