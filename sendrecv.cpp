@@ -634,6 +634,9 @@ void    Channel::Recv (struct evbuffer *evb) {
                 else
                     OnHash(evb);
                 break;
+            case SWIFT_SIGNED_INTEGRITY: // PPSP
+		OnSignedHash(evb);
+                break;
             case SWIFT_REQUEST:
                 OnHint(evb);
                 break;
@@ -1343,6 +1346,24 @@ void Channel::OnUnchoke(struct evbuffer *evb)
 {
     //PPSPTODO
     dprintf("%s #%u -unchoke\n",tintstr(),id_);
+}
+
+
+void Channel::OnSignedHash(struct evbuffer *evb)
+{
+    binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
+    if (bv.size() == 0 || bv.size() > 1)
+    {
+    	// chunk spec for hash must be power-of-2 range, so must fit in single bin
+    	dprintf("%s #%u ?sighash bad chunk spec\n",tintstr(),id_);
+    	Close(CLOSE_DO_NOT_SEND);
+    	return;
+    }
+    bin_t pos = bv.front();
+
+    // PPSPTODO
+    //if (hs_in_->live_sig_alg_ == )
+    //evbuffer_drain(evb, size);
 }
 
 

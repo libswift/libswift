@@ -94,7 +94,7 @@ class TestHave(TestAsServer):
         d.add( HandshakeMessage(s.c.get_my_chanid(),POPT_VER_PPSP,swarmid) )
 
         d.add( HaveMessage(ChunkRange(0,6)) )
-        s.c.send(d)
+        s.send(d)
         
         d = s.recv()
         responded = False
@@ -124,7 +124,7 @@ class TestHave(TestAsServer):
         
         # Send data
         d.add( DataMessage(ChunkRange(0,0),TimeStamp(1234L),self.chunks[0] ) )
-        s.c.send(d)
+        s.send(d)
         
         # Recv ACK and HAVE
         gotack = False

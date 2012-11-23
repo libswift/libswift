@@ -25,7 +25,7 @@ DEBUG=False
 
 class TestPexRes(TestAsServer):
 
-    def disabled_test_reply_v4(self):
+    def test_reply_v4(self):
         
         myaddr = ("127.0.0.1",5353)
         # Fake peer to send as PEX_RES

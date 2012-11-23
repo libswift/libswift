@@ -730,9 +730,10 @@ namespace swift {
         void        OnPexAddCert (struct evbuffer *evb);
         static Handshake *StaticOnHandshake( Address &addr, uint32_t cid, bool ver_known, popt_version_t ver, struct evbuffer *evb);
         void        OnHandshake (Handshake *hishs);
-        void        OnCancel(struct evbuffer *evb);
+        void        OnCancel(struct evbuffer *evb); // PPSP
         void        OnChoke(struct evbuffer *evb);
         void        OnUnchoke(struct evbuffer *evb);
+        void        OnSignedHash (struct evbuffer *evb);
         void        AddHandshake (struct evbuffer *evb);
         bin_t       AddData (struct evbuffer *evb);
         void        AddAck (struct evbuffer *evb);
