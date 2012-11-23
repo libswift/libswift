@@ -593,12 +593,12 @@ class PexResv6Message(Encodable):
         return "PEX_RESv6("+`self.ipp`+")"
 
 
-class PexRescertMessage(Encodable):
+class PexResCertMessage(Encodable):
     def __init__(self,certbytes):
         self.certbytes = certbytes
     def to_bytes(self):
         sbytes = struct.pack(">H",len(self.certbytes))
-        chain = [PexRescertMessage.get_id(),sbytes,self.certbytes]
+        chain = [PexResCertMessage.get_id(),sbytes,self.certbytes]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         sbytes = bytes[off:off+1]
@@ -785,6 +785,7 @@ class Channel:
 class Socket:
     def __init__(self,myaddr,family=socket.AF_INET):
         self.myaddr = myaddr
+        socket.setdefaulttimeout(10.0)
         self.sock = socket.socket(family, socket.SOCK_DGRAM)
         print >>sys.stderr,"Socket: __init__: bind",myaddr,family
         self.sock.bind(myaddr)

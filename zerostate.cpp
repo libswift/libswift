@@ -186,12 +186,36 @@ void Channel::OnHashZeroState(struct evbuffer *evb)
     dprintf("%s #%u zero -hash, don't need it, am a seeder\n",tintstr(),id_);
 }
 
-void Channel::OnPexAddZeroState(struct evbuffer *evb)
+void Channel::OnPexAddv4ZeroState(struct evbuffer *evb)
 {
     uint32_t ipv4 = evbuffer_remove_32be(evb);
     uint16_t port = evbuffer_remove_16be(evb);
     // Forget about it
 }
+
+void Channel::OnPexAddv6ZeroState(struct evbuffer *evb)
+{
+    uint32_t ip0 = evbuffer_remove_32be(evb);
+    uint32_t ip1 = evbuffer_remove_32be(evb);
+    uint32_t ip2 = evbuffer_remove_32be(evb);
+    uint32_t ip3 = evbuffer_remove_32be(evb);
+    uint16_t port = evbuffer_remove_16be(evb);
+    // Forget about it
+}
+
+
+void Channel::OnPexAddCertZeroState(struct evbuffer *evb)
+{
+    uint16_t size = evbuffer_remove_16be(evb);
+    if (size > PEX_RES_MAX_CERT_SIZE || evbuffer_get_length(evb) < size) {
+	dprintf("%s #%u ?pex cert too big\n",tintstr(),id_);
+	return;
+    }
+    //swarmidbytes = evbuffer_pullup(evb,size);
+    evbuffer_drain(evb, size);
+    // Forget about it
+}
+
 
 void Channel::OnPexReqZeroState(struct evbuffer *evb)
 {

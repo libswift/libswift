@@ -25,12 +25,12 @@ DEBUG=False
 
 class TestPexRes(TestAsServer):
 
-    def test_reply_v4(self):
+    def disabled_test_reply_v4(self):
         
         myaddr = ("127.0.0.1",5353)
         # Fake peer to send as PEX_RES
         myaddr2 = ("127.0.0.1",5352)
-        self.do_test_reply(myaddr,myaddr2)
+        self.do_test_reply(socket.AF_INET,myaddr,myaddr2)
 
 
     def disabled_test_reply_v6(self):
@@ -39,15 +39,20 @@ class TestPexRes(TestAsServer):
         myaddr = ("::1",5353)
         # Fake peer to send as PEX_RES
         myaddr2 = ("::1",5352)
-        self.do_test_reply(myaddr,myaddr2)
+        self.do_test_reply(socket.AF_INET6,myaddr,myaddr2)
 
-
-    def do_test_reply(self,myaddr,myaddr2):     
+    def test_reply_cert(self):
+        # TODO: swift PEX cert support
         
-        if ':' in myaddr[0]:
-            family = socket.AF_INET6
-        else:
-            family = socket.AF_INET
+        myaddr = ("127.0.0.1",5353)
+        # Fake peer to send as PEX_RES
+        myaddr2 = ("127.0.0.1",5352)
+        cert = '\xab' * 481 
+        self.do_test_reply(socket.AF_INET,myaddr,myaddr2,cert=cert)
+
+
+
+    def do_test_reply(self,family,myaddr,myaddr2,cert=None):     
            
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
         swarmid = binascii.unhexlify('24aa9484fbee33564fc197252c7c837ce4ce449a')
@@ -76,7 +81,7 @@ class TestPexRes(TestAsServer):
         d = s.makeDatagram()
         d.add( HandshakeMessage(s.c.get_my_chanid(),POPT_VER_PPSP,swarmid) )
 
-        s.c.send(d)
+        s.send(d)
         
         # Expect PEX_REQ
         d = s.recv()
@@ -95,11 +100,14 @@ class TestPexRes(TestAsServer):
         
         # Send PEX_RES 
         d = s.makeDatagram()
-        if family == socket.AF_INET6:
-            d.add( PexResv6Message(IPv6Port(myaddr2)) )
+        if cert is None:
+            if family == socket.AF_INET6:
+                d.add( PexResv6Message(IPv6Port(myaddr2)) )
+            else:
+                d.add( PexResv4Message(IPv4Port(myaddr2)) )
         else:
-            d.add( PexResv4Message(IPv4Port(myaddr2)) )
-        s.c.send(d)
+            d.add( PexResCertMessage(cert) )
+        s.send(d)
 
         # Listen on fake peer socket
         responded = False

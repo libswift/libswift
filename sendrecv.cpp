@@ -640,17 +640,35 @@ void    Channel::Recv (struct evbuffer *evb) {
             case SWIFT_CANCEL: // PPSP
             	OnCancel(evb);
             	break;
-            case SWIFT_PEX_RES:
+            case SWIFT_PEX_RESv4:
                 if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
-                    OnPexAddZeroState(evb);
+                    OnPexAddv4ZeroState(evb);
                 else
-                    OnPexAdd(evb);
+                    OnPexAddv4(evb);
+                break;
+            case SWIFT_PEX_RESv6: // PPSP
+                if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
+                    OnPexAddv6ZeroState(evb);
+                else
+                    OnPexAddv6(evb);
+                break;
+            case SWIFT_PEX_REScert: // PPSP
+                if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
+                    OnPexAddCertZeroState(evb);
+                else
+                    OnPexAddCert(evb);
                 break;
             case SWIFT_PEX_REQ:
                 if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
                     OnPexReqZeroState(evb);
                 else
                     OnPexReq();
+                break;
+            case SWIFT_CHOKE: // PPSP
+		OnChoke(evb);
+                break;
+            case SWIFT_UNCHOKE: // PPSP
+		OnUnchoke(evb);
                 break;
             default:
                 dprintf("%s #%u ?msg id unknown %i\n",tintstr(),id_,(int)type);
@@ -1278,7 +1296,7 @@ void    Channel::OnCancel (struct evbuffer *evb) {
 }
 
 
-void Channel::OnPexAdd (struct evbuffer *evb) {
+void Channel::OnPexAddv4 (struct evbuffer *evb) {
     uint32_t ipv4 = evbuffer_remove_32be(evb);
     uint16_t port = evbuffer_remove_16be(evb);
     Address addr(ipv4,port);
@@ -1295,6 +1313,37 @@ void Channel::OnPexAdd (struct evbuffer *evb) {
 }
 
 
+void Channel::OnPexAddv6(struct evbuffer *evb)
+{
+    // Just read fields, IPV6TODO
+    OnPexAddv6ZeroState(evb);
+    dprintf("%s #%u -pex v6\n",tintstr(),id_);
+}
+
+
+void Channel::OnPexAddCert(struct evbuffer *evb)
+{
+    OnPexAddCertZeroState(evb);
+    dprintf("%s #%u -pex cert\n",tintstr(),id_);
+}
+
+
+void Channel::OnChoke(struct evbuffer *evb)
+{
+    if (hs_in_->version_ == VER_SWIFT_LEGACY) { // FRAGRAND support
+	evbuffer_remove_32be(evb); // read 4 random bytes
+	return;
+    }
+
+    //PPSPTODO
+    dprintf("%s #%u -choke\n",tintstr(),id_);
+}
+
+void Channel::OnUnchoke(struct evbuffer *evb)
+{
+    //PPSPTODO
+    dprintf("%s #%u -unchoke\n",tintstr(),id_);
+}
 
 
 /*
@@ -1314,7 +1363,7 @@ void    Channel::AddPex (struct evbuffer *evb) {
             // Arno, 2012-02-28: Don't send private addresses to non-private peers.
             if (!a.is_private() || (a.is_private() && peer().is_private()))
             {
-                evbuffer_add_8(evb, SWIFT_PEX_RES);
+                evbuffer_add_8(evb, SWIFT_PEX_RESv4);
                 evbuffer_add_32be(evb, a.ipv4());
                 evbuffer_add_16be(evb, a.port());
                 dprintf("%s #%u +pex (reverse) %s\n",tintstr(),id_,a.str().c_str());
@@ -1348,7 +1397,7 @@ void    Channel::AddPex (struct evbuffer *evb) {
         tries++;
     }
 
-    evbuffer_add_8(evb, SWIFT_PEX_RES);
+    evbuffer_add_8(evb, SWIFT_PEX_RESv4);
     evbuffer_add_32be(evb, a.ipv4());
     evbuffer_add_16be(evb, a.port());
     dprintf("%s #%u +pex %s\n",tintstr(),id_,a.str().c_str());

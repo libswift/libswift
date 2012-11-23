@@ -66,7 +66,7 @@ class TestHave(TestAsServer):
         #shutil.rmtree(self.destdir)
 
 
-    def test_connect_one(self):
+    def disabled_test_connect_one(self):
         
         myaddr = ("127.0.0.1",5353)
         hisaddr = ("127.0.0.1",self.listenport)
@@ -98,7 +98,6 @@ class TestHave(TestAsServer):
         
         d = s.recv()
         responded = False
-        wantchunkspec = None
         while True:
             msg = d.get_message()
             if msg is None:
@@ -106,7 +105,7 @@ class TestHave(TestAsServer):
             print >>sys.stderr,"test: Parsed",`msg` 
             responded = True
             if msg.get_id() == MSG_ID_REQUEST:
-                wantchunkspec = msg.chunkspec
+                self.assertEquals(ChunkRange(0,0).to_bytes(),msg.chunkspec.to_bytes())
                 
         self.assertTrue(responded)
         
@@ -163,9 +162,71 @@ class TestHave(TestAsServer):
         self.assertTrue(gothave2)
 
 
+
+    def test_choke(self):
+        
+        myaddr = ("127.0.0.1",5353)
+        hisaddr = ("127.0.0.1",self.listenport)
+        hiscmdgwaddr = ("127.0.0.1",self.cmdport)
+        swarmid = self.hashes[(0,7)]
+        
+        # Setup listen socket
+        self.listensock = Socket(myaddr)
+        
+        # Tell swift to DL swarm via CMDGW
+        print >>sys.stderr,"test: Connect CMDGW",hiscmdgwaddr
+        self.cmdsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.cmdsock.connect(hiscmdgwaddr)
+
+        CMD = "START tswift://"+myaddr[0]+":"+str(myaddr[1])+"/"+binascii.hexlify(swarmid)+"\r\n"
+        
+        self.cmdsock.send(CMD)
+        
+        [s,d] = self.listensock.listen(swarmid,hs=False) # do not send HS, we need hischanid first
+        # Process his handshake and other
+        s.c.recv(d)
+        
+        # Send HAVE + CHOKE
+        d = s.makeDatagram()
+        d.add( HandshakeMessage(s.c.get_my_chanid(),POPT_VER_PPSP,swarmid) )
+
+        d.add( HaveMessage(ChunkRange(0,6)) )
+        d.add( ChokeMessage() )
+        s.send(d)
+        
+        d = s.recv()
+        gotreq = False
+        while True:
+            msg = d.get_message()
+            if msg is None:
+                break
+            print >>sys.stderr,"test: Parsed",`msg` 
+            if msg.get_id() == MSG_ID_REQUEST:
+                gotreq = True
                 
-        time.sleep(10)
-    
+        self.assertFalse(gotreq)
+        
+        time.sleep(5)
+        
+        # Send UNCHOKE
+        d = s.makeDatagram()
+        d.add( UnchokeMessage() )
+        s.send(d)
+
+        d = s.recv()
+        gotreq = False
+        while True:
+            msg = d.get_message()
+            if msg is None:
+                break
+            print >>sys.stderr,"test: Parsed",`msg` 
+            if msg.get_id() == MSG_ID_REQUEST:
+                gotreq = True
+                self.assertEquals(ChunkRange(0,0).to_bytes(),msg.chunkspec.to_bytes())
+                
+        self.assertTrue(gotreq)
+        
+
     
 def test_suite():
     suite = unittest.TestSuite()

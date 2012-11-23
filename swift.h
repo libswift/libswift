@@ -108,9 +108,10 @@ namespace swift {
 // Value for protocol option: Live Discard Window
 #define POPT_LIVE_DISC_WND_ALL	      0xFFFFFFFF	// automatically truncated for 32-bit
 
-//
+// Max size of the swarm ID protocol option in a HANDSHAKE message.
 #define POPT_MAX_SWARMID_SIZE		     1024
-
+// Max size of a X.509 certificate in a PEX_REScert message.
+#define PEX_RES_MAX_CERT_SIZE		     1024
 
 
 /** IPv4 address, just a nice wrapping around struct sockaddr_in. */
@@ -259,7 +260,7 @@ namespace swift {
         SWIFT_ACK = 2,
         SWIFT_HAVE = 3,
         SWIFT_INTEGRITY = 4,  // previously SWIFT_HASH
-        SWIFT_PEX_RES = 5,    // previously SWIFT_PEX_ADD
+        SWIFT_PEX_RESv4 = 5,    // previously SWIFT_PEX_ADD
         SWIFT_PEX_REQ = 6,
         SWIFT_SIGNED_INTEGRITY = 7, // previously SWIFT_SIGNED_HASH
         SWIFT_REQUEST = 8,    // previously SWIFT_HINT
@@ -268,7 +269,8 @@ namespace swift {
         // SWIFT_RANDOMIZE = 10, //FRAGRAND disabled
         SWIFT_UNCHOKE = 11,
         SWIFT_PEX_RESv6 = 12,
-        SWIFT_MESSAGE_COUNT = 13
+        SWIFT_PEX_REScert = 13,
+        SWIFT_MESSAGE_COUNT = 14
     } messageid_t;
 
     typedef enum {
@@ -723,10 +725,14 @@ namespace swift {
         bin_t       OnData (struct evbuffer *evb);
         void        OnHint (struct evbuffer *evb);
         void        OnHash (struct evbuffer *evb);
-        void        OnPexAdd (struct evbuffer *evb);
+        void        OnPexAddv4 (struct evbuffer *evb);
+        void        OnPexAddv6 (struct evbuffer *evb);
+        void        OnPexAddCert (struct evbuffer *evb);
         static Handshake *StaticOnHandshake( Address &addr, uint32_t cid, bool ver_known, popt_version_t ver, struct evbuffer *evb);
         void        OnHandshake (Handshake *hishs);
         void        OnCancel(struct evbuffer *evb);
+        void        OnChoke(struct evbuffer *evb);
+        void        OnUnchoke(struct evbuffer *evb);
         void        AddHandshake (struct evbuffer *evb);
         bin_t       AddData (struct evbuffer *evb);
         void        AddAck (struct evbuffer *evb);
@@ -801,7 +807,9 @@ namespace swift {
         void 	    OnDataZeroState(struct evbuffer *evb);
         void        OnHaveZeroState(struct evbuffer *evb);
         void        OnHashZeroState(struct evbuffer *evb);
-        void        OnPexAddZeroState(struct evbuffer *evb);
+        void        OnPexAddv4ZeroState(struct evbuffer *evb);
+        void        OnPexAddv6ZeroState(struct evbuffer *evb);
+        void        OnPexAddCertZeroState(struct evbuffer *evb);
         void        OnPexReqZeroState(struct evbuffer *evb);
         tint        GetOpenTime() { return open_time_; }
 
