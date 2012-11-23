@@ -102,7 +102,7 @@ def check_peak_hashes(hashdict,peaklist):
 
 class TestRequest(TestDirSeedFramework):
 
-    def disabled_test_request_one(self):
+    def test_request_one(self):
         myaddr = ("127.0.0.1",5353)
         hisaddr = ("127.0.0.1",self.listenport)
         
@@ -173,7 +173,7 @@ class TestRequest(TestDirSeedFramework):
 
 
 
-    def disabled_test_request_one_middle(self):
+    def test_request_one_middle(self):
         myaddr = ("127.0.0.1",5354)
         hisaddr = ("127.0.0.1",self.listenport)
         
@@ -251,7 +251,7 @@ class TestRequest(TestDirSeedFramework):
 
         return hashdict
 
-    def disabled_test_request_two(self):
+    def test_request_two(self):
         myaddr = ("127.0.0.1",5356)
         hisaddr = ("127.0.0.1",self.listenport)
         
@@ -332,7 +332,7 @@ class TestRequest(TestDirSeedFramework):
         self.assertEquals(exphash,gothash)
 
 
-    def disabled_test_request_two_cancel_2nd(self):
+    def test_request_two_cancel_2nd(self):
         myaddr = ("127.0.0.1",5356)
         hisaddr = ("127.0.0.1",self.listenport)
         
@@ -387,7 +387,7 @@ class TestRequest(TestDirSeedFramework):
         s.c.send(d)
 
 
-    def disabled_test_request_many_cancel_some1(self):
+    def test_request_many_cancel_some1(self):
         
         # Request from bill.ts
         fidx = 1
@@ -467,7 +467,7 @@ class TestRequest(TestDirSeedFramework):
         
         # Receive uncanceled chunks
         cidx = 0
-        for attempt in range(0,25):
+        for attempt in range(0,reqcp.e - reqcp.s):
             d = s.recv()
             while True:
                 expchunkspec = expcplist[cidx]
