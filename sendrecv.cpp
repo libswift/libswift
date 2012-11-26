@@ -50,7 +50,7 @@ void    Channel::AddPeakHashes (struct evbuffer *evb) {
     for(int i=0; i<hashtree()->peak_count(); i++) {
         bin_t peak = hashtree()->peak(i);
         evbuffer_add_8(evb, SWIFT_INTEGRITY);
-	evbuffer_add_chunkaddr(evb,peak,hs_out_->chunk_addr_);
+        evbuffer_add_chunkaddr(evb,peak,hs_out_->chunk_addr_);
         evbuffer_add_hash(evb, hashtree()->peak_hash(i));
         dprintf("%s #%u +phash %s\n",tintstr(),id_,peak.str().c_str());
     }
@@ -65,7 +65,7 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
     // Ric: TODO check (remove data_out_cap??)
     //while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
     //        ack_in_.is_empty(pos.parent()) ) {
-   	while (pos!=peak || ack_in_.is_empty(pos.parent()) ) {
+   	while (pos!=peak && ack_in_.is_empty(pos.parent()) ) {
         bin_t uncle = pos.sibling();
         evbuffer_add_8(evb, SWIFT_INTEGRITY);
         evbuffer_add_chunkaddr(evb,uncle,hs_out_->chunk_addr_);
