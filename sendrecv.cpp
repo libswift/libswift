@@ -62,8 +62,10 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
     dprintf("%s #%u +uncle hash for %s\n",tintstr(),id_,pos.str().c_str());
 
     bin_t peak = hashtree()->peak_for(pos);
-    while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
-            ack_in_.is_empty(pos.parent()) ) {
+    // Ric: TODO check (remove data_out_cap??)
+    //while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
+    //        ack_in_.is_empty(pos.parent()) ) {
+   	while (pos!=peak || ack_in_.is_empty(pos.parent()) ) {
         bin_t uncle = pos.sibling();
         evbuffer_add_8(evb, SWIFT_INTEGRITY);
         evbuffer_add_chunkaddr(evb,uncle,hs_out_->chunk_addr_);

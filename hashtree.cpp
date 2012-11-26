@@ -592,10 +592,9 @@ bool            MmapHashTree::OfferData (bin_t pos, const char* data, size_t len
 
     Sha1Hash data_hash(data,length);
     if (!OfferHash(pos, data_hash)) {
-        char bin_name_buf[32];
         //printf("invalid hash for %s: %s\n",pos.str(bin_name_buf),data_hash.hex().c_str()); // paranoid
         //fprintf(stderr,"INVALID HASH FOR %lli layer %d\n", pos.toUInt(), pos.layer() );
-        // Ric: TODO it's not a bug.. it happens if a pkt was lost!
+        // Ric: TODO it's not necessarily a bug.. it happens if a pkt was lost!
         dprintf("%s hashtree check failed (bug TODO) %s\n",tintstr(),pos.str().c_str());
         return false;
     }
