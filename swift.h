@@ -715,6 +715,12 @@ namespace swift {
         static tint 	last_tick;
 
 
+        // Ric: used for testing LEDBAT's behaviour
+        float_t		GetCwnd() { return cwnd_; }
+        tint 		GetHintSize() { return hint_in_size_; }
+        bool 		Totest;
+        bool 		Tocancel;
+
         // Arno: Per instance methods
         void        Recv (struct evbuffer *evb);
         void        Send ();  // Called by LibeventSendCallback
@@ -848,6 +854,7 @@ namespace swift {
         binmap_t    have_out_;
         /**    Transmit schedule: in most cases filled with the peer's hints */
         tbqueue     hint_in_;
+        uint64_t	hint_in_size_;
         /** Hints sent (to detect and reschedule ignored hints). */
         tbqueue     hint_out_;
         uint64_t    hint_out_size_;

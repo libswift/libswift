@@ -94,7 +94,7 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
     // Arno, 2012-01-23: Extra protection against channel loss, don't send DATA
     if (last_recv_time_ < NOW-(3*TINT_SEC))
     {
-    	dprintf("%s #%u dequeued bad time %lld\n",tintstr(),id_, last_recv_time_ );
+    	dprintf("%s #%u dequeued bad time %ld\n",tintstr(),id_, last_recv_time_ );
     	return bin_t::NONE;
     }
 
@@ -117,6 +117,7 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
     if (ENABLE_SENDERSIZE_PUSH && send.is_none() && hint_in_.empty() && last_recv_time_>NOW-rtt_avg_-TINT_SEC) {
         bin_t my_pick = ImposeHint(); // FIXME move to the loop
         if (!my_pick.is_none()) {
+        	hint_in_size_ += my_pick.base_offset();
             hint_in_.push_back(my_pick);
             dprintf("%s #%u *hint %s\n",tintstr(),id_,my_pick.str().c_str());
         }
@@ -125,9 +126,11 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
     while (!hint_in_.empty() && send.is_none()) {
         bin_t hint = hint_in_.front().bin;
         tint time = hint_in_.front().time;
+        hint_in_size_ -= hint_in_.front().bin.base_length();
         hint_in_.pop_front();
         while (!hint.is_base()) { // FIXME optimize; possible attack
             hint_in_.push_front(tintbin(time,hint.right()));
+            hint_in_size_ += hint_in_.front().bin.base_length();
             hint = hint.left();
         }
         //if (time < NOW-TINT_SEC*3/2 )
@@ -135,11 +138,8 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
         if (!ack_in_.is_filled(hint))
             send = hint;
     }
-    uint64_t mass = 0;
-    // Arno, 2012-03-09: Is much to expensive on busy server.
-    //for(int i=0; i<hint_in_.size(); i++)
-    //    mass += hint_in_[i].bin.base_length();
-    dprintf("%s #%u dequeued %s [%llu]\n",tintstr(),id_,send.str().c_str(),mass);
+
+    dprintf("%s #%u dequeued %s [%ld]\n",tintstr(),id_,send.str().c_str(),hint_in_size_);
     return send;
 }
 
@@ -275,7 +275,13 @@ void    Channel::Send () {
     dprintf("%s #%u sent %ib %s:%x\n",
             tintstr(),id_,(int)evbuffer_get_length(evb),peer().str().c_str(),
             pcid);
-    int r = SendTo(socket_,peer(),evb);
+    // Ric: TODO remove!!!
+    int r = 1103;
+    if (!Tocancel)
+    	r = SendTo(socket_,peer(),evb);
+    else {
+    	Tocancel = false;
+    }
     if (r==-1)
         print_error("swift can't send datagram");
     else
@@ -418,6 +424,15 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     if (tosend.is_none())// && (last_data_out_time_>NOW-TINT_SEC || data_out_.empty()))
         return bin_t::NONE; // once in a while, empty data is sent just to check rtt FIXED
 
+    // ------------------
+    // Ric: TODO test to remove!!!
+    if (tosend == bin_t(0,4) && Totest) {
+    	Tocancel = true;
+    	Totest = false;
+    }
+    //----------------------
+    //--------------------
+
     //LIVE
     if (transfer()->ttype() == FILE_TRANSFER) {
         if (ack_in_.is_empty() && hashtree()->size())
@@ -514,6 +529,7 @@ void    Channel::AddAck (struct evbuffer *evb) {
         data_in_dbl_ = data_in_.bin;
 
     //fprintf(stderr,"data_in_ c%d\n", id() );
+    // Ric: TODO should not be a single element
     data_in_ = tintbin();
     //data_in_ = tintbin(NOW,bin64_t::NONE);
 }
@@ -583,7 +599,7 @@ void    Channel::Recv (struct evbuffer *evb) {
         rtt_avg_ = NOW - last_send_time_;
         dev_avg_ = rtt_avg_;
         dip_avg_ = rtt_avg_;
-        dprintf("%s #%u sendctrl rtt init %lld\n",tintstr(),id_,rtt_avg_);
+        dprintf("%s #%u sendctrl rtt init %ld\n",tintstr(),id_,rtt_avg_);
     }
 
     bin_t data = evbuffer_get_length(evb) ? bin_t::NONE : bin_t::ALL;
@@ -800,9 +816,6 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 
     uint8_t *data = evbuffer_pullup(evb, length);
     data_in_ = tintbin(NOW,bin_t::NONE);
-    // Ric: the time of the ack is the owd.
-    if (peer_time!=TINT_NEVER)
-    	data_in_.time = NOW - peer_time;
 
     //fprintf(stderr,"OnData: Got chunk %d / %lli\n", length, swift::SeqComplete(transfer()->fd()) );
 
@@ -843,6 +856,9 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     if (cover.layer() >= 5) // Arno: update DL speed. Tested with 32K, presently = 2 ** 5 * chunk_size CHUNKSIZE
         transfer()->OnRecvData( pow((double)2,(double)5)*((double)transfer()->chunk_size()) );
     data_in_.bin = pos;
+    // Ric: the time of the ack is the owd.
+	if (peer_time!=TINT_NEVER)
+		data_in_.time = NOW - peer_time;
 
     UpdateDIP(pos);
     CleanHintOut(pos);
@@ -920,7 +936,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
 	    }
 	    if (owd_min_bins_[owd_min_bin_]>peer_owd)
 	    	owd_min_bins_[owd_min_bin_] = peer_owd;
-	    dprintf("%s #%u sendctrl rtt %lld dev %lld based on %s\n",
+	    dprintf("%s #%u sendctrl rtt %ld dev %ld based on %s\n",
 		    tintstr(),id_,rtt_avg_,dev_avg_,data_out_[di].bin.str().c_str());
 	    ack_rcvd_recent_++;
 	    // early loss detection by packet reordering
@@ -1026,7 +1042,8 @@ void    Channel::OnHint (struct evbuffer *evb) {
 
 	// FIXME: wake up here
 	hint_in_.push_back(hint);
-	dprintf("%s #%u -hint %s\n",tintstr(),id_,hint.str().c_str());
+	hint_in_size_ += hint.base_length();
+	dprintf("%s #%u -hint %s [%ld]\n",tintstr(),id_,hint.str().c_str(),hint_in_size_);
     }
 }
 
@@ -1256,9 +1273,10 @@ void    Channel::OnCancel (struct evbuffer *evb) {
 	    // Assumption: all fragments of a bin being cancelled consecutive in hint_in_
 	    do {
 		//dprintf("%s #%u -cancel frag %s\n",tintstr(),id_,hint_in_[hi].bin.str().c_str());
-		hint_in_.erase(hint_in_.begin()+hi);
-		if (hint_in_.size() == 0 || hi >= hint_in_.size())
-		    break;
+	    	hint_in_size_ -= hint_in_[hi].bin.base_length();
+			hint_in_.erase(hint_in_.begin()+hi);
+			if (hint_in_.size() == 0 || hi >= hint_in_.size())
+				break;
 	    } while (cancelbin.contains(hint_in_[hi].bin));
 	}
 
@@ -1278,6 +1296,7 @@ void    Channel::OnCancel (struct evbuffer *evb) {
 	bin_t origbin = hint_in_[hi].bin;
 	binvector fragbins = swift::bin_fragment(origbin,cancelbin);
 	// Erase original
+	hint_in_size_ -= hint_in_[hi].bin.base_length();
 	hint_in_.erase(hint_in_.begin()+hi);
 	// Replace with fragments left
 	binvector::iterator iter2;
@@ -1287,6 +1306,7 @@ void    Channel::OnCancel (struct evbuffer *evb) {
 	    bin_t fragbin = *iter2;
 	    //dprintf("%s #%u -cancel keep %s\n",tintstr(),id_,fragbin.str().c_str());
 	    tintbin newtb(origt,fragbin);
+	    hint_in_size_ += fragbin.base_length();
 	    hint_in_.insert(hint_in_.begin()+hi+idx,newtb);
 	    idx++;
 	}
@@ -1502,7 +1522,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
     RecvFrom(socket, addr, evb);
     size_t evboriglen = evbuffer_get_length(evb);
 
-    dprintf("%s recvdgram %d\n",tintstr(),evboriglen );
+    dprintf("%s recvdgram %lu\n",tintstr(),evboriglen );
 
 //#define return_log(...) { fprintf(stderr,__VA_ARGS__); evbuffer_free(evb); return; }
 #define return_log(...) { dprintf(__VA_ARGS__); evbuffer_free(evb); if (hishs != NULL) { delete hishs; } return; }
