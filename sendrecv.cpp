@@ -815,7 +815,6 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     }
 
     uint8_t *data = evbuffer_pullup(evb, length);
-    data_in_ = tintbin(NOW,bin_t::NONE);
 
     //fprintf(stderr,"OnData: Got chunk %d / %lli\n", length, swift::SeqComplete(transfer()->fd()) );
 
@@ -855,6 +854,8 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     transfer()->Progress(cover);
     if (cover.layer() >= 5) // Arno: update DL speed. Tested with 32K, presently = 2 ** 5 * chunk_size CHUNKSIZE
         transfer()->OnRecvData( pow((double)2,(double)5)*((double)transfer()->chunk_size()) );
+
+    data_in_ = tintbin(NOW,bin_t::NONE);
     data_in_.bin = pos;
     // Ric: the time of the ack is the owd.
 	if (peer_time!=TINT_NEVER)
