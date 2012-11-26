@@ -191,7 +191,7 @@ int remove_utf8(std::string pathname);
 class DirEntry
 {
   public:
-	DirEntry(std::string filename, bool isdir) : filename_(filename), isdir_(isdir) {}
+	DirEntry(std::string filename, bool isdir) : filename_(filename), isdir_(isdir), dirp_(NULL) {}
 	std::string filename_;
 	bool isdir_;
 

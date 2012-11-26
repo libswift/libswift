@@ -369,8 +369,8 @@ namespace swift {
 	    live_disc_wnd_ = (uint32_t)POPT_LIVE_DISC_WND_ALL;
 	}
 
-        /**    Peer channel id; zero if we are trying to open a channel. */
-        uint32_t    		peer_channel_id_;
+	/**    Peer channel id; zero if we are trying to open a channel. */
+	uint32_t    		peer_channel_id_;
 	popt_version_t   	version_;
 	popt_cont_int_prot_t  	cont_int_prot_;
 	popt_merkle_func_t	merkle_func_;
