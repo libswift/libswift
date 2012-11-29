@@ -74,6 +74,12 @@ tint    Channel::KeepAliveNextSendTime () {
         return SwitchSendControl(SLOW_START_CONTROL);
     if (data_in_.time!=TINT_NEVER)
         return NOW;
+
+    if (live_have_no_hint_)
+    {
+	live_have_no_hint_ = false;
+	return NOW;
+    }
     /* Gertjan fix 5f51e5451e3785a74c058d9651b2d132c5a94557
     "Do not increase send interval in keep-alive mode when previous Reschedule
     was already in the future.
@@ -90,7 +96,7 @@ tint    Channel::KeepAliveNextSendTime () {
     // Arno: Fix that doesn't do exponential growth always, only after sends
     // without following recvs
 
-    // fprintf(stderr,"KeepAliveNextSendTime: gotka %d sentka %d ss %d si %lli\n", lastrecvwaskeepalive_, lastsendwaskeepalive_, sent_since_recv_, send_interval_);
+    //dprintf("KeepAliveNextSendTime: gotka %d sentka %d ss %d si %lli rtt %lli\n", lastrecvwaskeepalive_, lastsendwaskeepalive_, sent_since_recv_, send_interval_, rtt_avg_ );
 
     if (lastrecvwaskeepalive_ && lastsendwaskeepalive_)
     {

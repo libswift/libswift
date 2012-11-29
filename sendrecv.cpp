@@ -281,7 +281,8 @@ void    Channel::AddHint (struct evbuffer *evb) {
     uint64_t plan_pck = (uint64_t)min(rate_allowed_hints,queue_allowed_hints);
 
     // 4. Ask allowance in blocks of chunks to get pipelining going from serving peer.
-    if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY)
+    // Arno, 2012-10-30: not HINT_GRANULARITY for LIVE
+    if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY || transfer()->ttype() == LIVE_TRANSFER)
     {
         bin_t hint = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2);
         if (!hint.is_none()) {
@@ -860,10 +861,22 @@ void Channel::OnHave (struct evbuffer *evb) {
     //fprintf(stderr,"OnHave: got bin %s is_complete %d\n", ackd_pos.str(), IsComplete() );
 
     // Arno, 2012-01-09: Provide PP with info needed for hook-in.
-    if (transfer()->ttype() == LIVE_TRANSFER) {
+    if (transfer()->ttype() == LIVE_TRANSFER)
+    {
         LiveTransfer *lt = (LiveTransfer *)transfer();
         if (!lt->am_source())
+        {
             ((LivePiecePicker *)lt->picker())->StartAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_);
+
+	    // Arno: it can happen that we receive a HAVE and have no hints
+            // outstanding. In that case we should not wait till next_send_time_
+            // but request directly. See send_control.cpp
+	    if (hint_out_.size() == 0)
+	    {
+		live_have_no_hint_ = true;
+		dprintf("%s #%u have but no hints\n",tintstr(),id_);
+	    }
+        }
     }
 }
 

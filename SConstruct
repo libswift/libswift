@@ -72,10 +72,14 @@ if sys.platform == "win32":
 
     # Somehow linker can't find uuid.lib
     libpath += 'C:\\Program Files\\Microsoft SDKs\\Windows\\v6.0A\\Lib;'
-    
-    # TODO: Make the swift.exe a Windows program not a Console program
+
+    linkflags = '-Wl,-rpath,'+libevent2path+'/lib'
+    env.Append(LINKFLAGS=linkflags);
+
+    # Make the swift.exe a Windows program not a Console program when used inside another prog
+    linkflags = '/SUBSYSTEM:WINDOWS'
     if not DEBUG:
-    	env.Append(LINKFLAGS="/SUBSYSTEM:WINDOWS")
+    	env.Append(LINKFLAGS=linkflags)
     
     APPSOURCE=['swift.cpp','statsgw.cpp','getopt.c','getopt_long.c']
     

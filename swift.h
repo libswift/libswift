@@ -667,6 +667,7 @@ namespace swift {
             return tmo < 30*TINT_SEC ? tmo : 30*TINT_SEC;
         }
         uint32_t    id () const { return id_; }
+        const binmap_t& ack_in() const { return ack_in_; }
 
         // MORESTATS
         uint64_t    raw_bytes_up() { return raw_bytes_up_; }
@@ -764,6 +765,10 @@ namespace swift {
         /** Arno: Fix for KEEP_ALIVE_CONTROL */
         bool        lastrecvwaskeepalive_;
         bool        lastsendwaskeepalive_;
+	/** Arno: For live, we may receive a HAVE but have no hints
+            outstanding. In that case we should not wait till next_send_time_
+            but request directly. See send_control.cpp */
+        bool	    live_have_no_hint_;
 
         /** Recent acknowlegements for data previously sent.    */
         int         ack_rcvd_recent_;
@@ -1095,6 +1100,9 @@ namespace swift {
     ContentTransfer *GetActivatedTransfer(int td);
     /** Record use of this transfer. For internal use only. */
     void Touch(int td);
+    /** Write a checkpoint for filename in .mhash and .mbinmap files without
+     * creating a FileTransfer object */
+    int HashCheckOffline( std::string filename, Sha1Hash *calchashptr, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
     // Arno: helper functions for constructing datagrams */
     int evbuffer_add_string(struct evbuffer *evb, std::string str);

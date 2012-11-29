@@ -72,6 +72,16 @@ std::string    Sha1Hash::hex() const {
 }
 
 
+Sha1Hash & Sha1Hash::operator= (const Sha1Hash & source)
+{
+     if (this != &source)
+     {
+	 memcpy(bits,source.bits,SIZE);
+     }
+     return *this;
+ }
+
+
 
 /**     H a s h   t r e e       */
 

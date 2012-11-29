@@ -15,7 +15,7 @@
 
 using namespace swift;
 
-#define HTTPGW_VOD_PROGRESS_STEP_BYTES	(256*1024)
+static uint32_t HTTPGW_VOD_PROGRESS_STEP_BYTES = (256*1024); // configurable
 // For best performance make bigger than HTTPGW_PROGRESS_STEP_BYTES
 #define HTTPGW_VOD_MAX_WRITE_BYTES	(512*1024)
 
@@ -40,7 +40,7 @@ using namespace swift;
 #define HTTPGW_MAX_OUTBUF_BYTES		(2*1024*1024)
 
 // Arno: Minium amout of content to have download before replying to HTTP
-#define HTTPGW_MIN_PREBUF_BYTES         (256*1024)
+static uint32_t HTTPGW_MIN_PREBUF_BYTES  = (256*1024); // configurable
 
 
 #define HTTPGW_MAX_REQUEST 128
@@ -55,6 +55,7 @@ struct http_gw_t {
     struct event           *sinkevwrite;
     std::string    mfspecname; // (optional) name from multi-file spec
     std::string xcontentdur;
+    std::string mimetype;
     bool     replied;
     bool     closing;
     uint64_t startoff;   // MULTIFILE: starting offset in content range of desired file
@@ -62,7 +63,7 @@ struct http_gw_t {
     int replycode;         // HTTP status code
     int64_t  rangefirst; // First byte wanted in HTTP GET Range request or -1
     int64_t  rangelast;  // Last byte wanted in HTTP GET Range request (also 99 for 100 byte interval) or -1
-     
+    bool     foundH264NALU;
 
 } http_requests[HTTPGW_MAX_REQUEST];
 
@@ -73,6 +74,8 @@ struct evhttp *http_gw_event;
 struct evhttp_bound_socket *http_gw_handle;
 uint32_t httpgw_chunk_size = SWIFT_DEFAULT_CHUNK_SIZE; // Copy of cmdline param
 double *httpgw_maxspeed = NULL;                         // Copy of cmdline param
+std::string httpgw_storage_dir="";
+Address httpgw_bindaddr;
 
 // Arno, 2010-11-30: for SwarmPlayer 3000 backend autoquit when no HTTP req is received
 bool sawhttpconn = false;
@@ -183,6 +186,9 @@ void HttpGwWrite(int td) {
     // When writing first data, send reply header
     if (req->offset == req->startoff) {
         // Not just for chunked encoding, see libevent2's http.c
+
+	dprintf("%s @%d http reply 2: %d\n",tintstr(),req->id, req->replycode );
+
         evhttp_send_reply_start(req->sinkevreq, req->replycode, "OK");
         req->replied = true;
     }
@@ -206,9 +212,9 @@ void HttpGwWrite(int td) {
     struct evbuffer *outbuf = bufferevent_get_output(buffy);
 
     // Arno: If sufficient data to write (avoid small increments) and out buffer
-    // not filled. libevent2 has a liberal understanding of socket writability,
-    // that may result in tens of megabytes being cached in memory. Limit that
-    // amount at app level.
+    // not filled then write to socket. Unfortunately, libevent2 has a liberal
+    // understanding of socket writability that may result in tens of megabytes
+    // being cached in memory. Limit that amount at app level.
     //
     if (avail > 0 && evbuffer_get_length(outbuf) < HTTPGW_MAX_OUTBUF_BYTES)
     {
@@ -237,16 +243,80 @@ void HttpGwWrite(int td) {
 
         // Construct evbuffer and send incrementally
         struct evbuffer *evb = evbuffer_new();
-        int ret = evbuffer_add(evb,buf,rd);
-        if (ret < 0) {
-            print_error("httpgw: MayWrite: error evbuffer_add");
-            evbuffer_free(evb);
-            HttpGwCloseConnection(req);
-            free(buf);
-            return;
+        int ret = 0;
+
+        // ARNO LIVE raw H264 hack
+        if (req->mimetype == "video/h264")
+        {
+	    if (req->offset == req->startoff)
+	    {
+		// Arno, 2012-10-24: When tuning into a live stream of raw H.264
+		// you must
+		// 1. Replay Sequence Picture Set (SPS) and Picture Parameter Set (PPS)
+		// 2. Find first NALU in video stream (starts with 00 00 00 01 and next bit is 0
+		// 3. Write that first NALU
+		//
+		// PROBLEM is that SPS and PPS contain info on video size, frame rate,
+		// and stuff, so is stream specific. The hardcoded values here are
+		// for H.264 640x480 15 fps 500000 bits/s obtained via Spydroid.
+		//
+
+		const char h264sps[] = { 0x00, 0x00, 0x00, 0x01, 0x27, 0x42, 0x80, 0x29, 0x8D, 0x95, 0x01, 0x40, 0x7B, 0x20 };
+		const char h264pps[] = { 0x00, 0x00, 0x00, 0x01, 0x28, 0xDE, 0x09, 0x88 };
+
+		dprintf("%s @%i http write: adding H.264 SPS and PPS\n",tintstr(),req->id );
+
+		ret = evbuffer_add(evb,h264sps,sizeof(h264sps));
+		if (ret < 0)
+		    print_error("httpgw: MayWrite: error evbuffer_add H.264 SPS");
+		ret = evbuffer_add(evb,h264pps,sizeof(h264pps));
+		if (ret < 0)
+		    print_error("httpgw: MayWrite: error evbuffer_add H.264 PPS");
+	    }
+        }
+	else
+	    req->foundH264NALU = true; // Other MIME type
+
+        // Find first H.264 NALU
+        size_t naluoffset = 0;
+        if (!req->foundH264NALU && rd >= 5)
+        {
+            for (int i=0; i<rd-5; i++)
+            {
+        	// Find startcode before NALU
+        	if (buf[i] == '\x00' && buf[i+1] == '\x00' && buf[i+2] == '\x00' && buf[i+3] == '\x01')
+        	{
+        	    char naluhead = buf[i+4];
+        	    if ((naluhead & 0x80) == 0)
+        	    {
+        		// Found NALU
+        		// http://mailman.videolan.org/pipermail/x264-devel/2007-February/002681.html
+        		naluoffset = i;
+        		req->foundH264NALU = true;
+        		dprintf("%s @%i http write: Found H.264 NALU at %d\n",tintstr(),req->id, naluoffset );
+        		break;
+        	    }
+        	}
+            }
         }
 
-        evhttp_send_reply_chunk(req->sinkevreq, evb);
+        // Live tuned-in or VOD:
+        if (req->foundH264NALU)
+        {
+	    // Arno, 2012-10-24: LIVE Don't change rd here, as that should be a multiple of chunks
+	    ret = evbuffer_add(evb,buf+naluoffset,rd-naluoffset);
+	    if (ret < 0) {
+		print_error("httpgw: MayWrite: error evbuffer_add");
+		evbuffer_free(evb);
+		HttpGwCloseConnection(req);
+		free(buf);
+		return;
+	    }
+        }
+
+        if (evbuffer_get_length(evb) > 0)
+	    evhttp_send_reply_chunk(req->sinkevreq, evb);
+
         evbuffer_free(evb);
         free(buf);
 
@@ -486,7 +556,7 @@ bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
         evhttp_add_header(repheaders, "Content-Range", cross.str().c_str() );
 
         evhttp_send_error(req->sinkevreq,416,"Malformed range specification");
-                req->replied = true;
+	req->replied = true;
 
         dprintf("%s @%i http get: invalid range %lld-%lld\n",tintstr(),req->id,req->rangefirst,req->rangelast );
         return false;
@@ -550,9 +620,10 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     }
 
     if (req->xcontentdur == "-1")
+    {
         fprintf(stderr,"httpgw: Live: hook-in at %llu\n", swift::GetHookinOffset(td) );
-
-
+        dprintf("%s @%i http first: hook-in at %llu\n",tintstr(),req->id, swift::GetHookinOffset(td) );
+    }
 
     // MULTIFILE
     // Is storage ready?
@@ -609,7 +680,10 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     // Handle HTTP GET Range request, i.e. additional offset within content
     // or file. Sets some headers or sends HTTP error.
     if (req->xcontentdur == "-1") //LIVE
-        req->rangefirst = -1; 
+    {
+        req->rangefirst = -1;
+        req->replycode = 200;
+    }
     else if (!HttpGwParseContentRangeHeader(req,filesize))
         return;
 
@@ -645,9 +719,9 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     struct evkeyvalq *reqheaders = evhttp_request_get_output_headers(req->sinkevreq);
     //evhttp_add_header(reqheaders, "Connection", "keep-alive" );
     evhttp_add_header(reqheaders, "Connection", "close" );
+    evhttp_add_header(reqheaders, "Content-Type", req->mimetype.c_str() );
     if (req->xcontentdur != "-1")
     {
-        evhttp_add_header(reqheaders, "Content-Type", "video/ogg" );
         if (req->xcontentdur.length() > 0)
             evhttp_add_header(reqheaders, "X-Content-Duration", req->xcontentdur.c_str() );
 
@@ -659,7 +733,7 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     else
     {
     	// LIVE
-        evhttp_add_header(reqheaders, "Content-Type", "video/mp2t" );
+	// Uses chunked encoding, configured by not setting a Content-Length header
         evhttp_add_header(reqheaders, "Accept-Ranges", "none" );
     }
 
@@ -792,6 +866,8 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     std::string uri = evhttp_request_get_uri(evreq);
     struct evkeyvalq *reqheaders = evhttp_request_get_input_headers(evreq);
 
+    dprintf("%s @%i http get: new request %s\n",tintstr(),http_gw_reqs_count+1,uri.c_str() );
+
     // Arno, 2012-04-19: libevent adds "Connection: keep-alive" to reply headers
     // if there is one in the request headers, even if a different Connection
     // reply header has already been set. And we don't do persistent conns here.
@@ -815,13 +891,29 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     durstr = puri["durationstr"];
     chunksizestr = puri["chunksizestr"];
 
-    // Arno, 2012-06-15: LIVE: VLC can't take @-1 as in URL, so workaround
-    if (hashstr.length() > 40 && hashstr.substr(hashstr.length()-2) == "-1")
+    // Handle LIVE
+    std::string mimetype = "video/mp2t";
+    if (hashstr.substr(hashstr.length()-5) == ".h264")
     {
+	// LIVESOURCE=ANDROID
+	hashstr = hashstr.substr(0,40); // strip .h264
+	durstr = "-1";
+	mimetype = "video/h264";
+    }
+    else if (hashstr.length() > 40 && hashstr.substr(hashstr.length()-2) == "-1")
+    {
+	// Arno, 2012-06-15: LIVE: VLC can't take @-1 as in URL, so workaround
         hashstr = hashstr.substr(0,40);
         durstr = "-1";
+        mimetype = "video/mp2t";
     }
-    dprintf("%s @%i http get: demands %s mf %s dur %s\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str(),mfstr.c_str(),durstr.c_str() );
+    else if (durstr.length() > 0 && durstr != "-1")
+    {
+	// Used in SwarmPlayer 3000
+	mimetype = "video/ogg";
+    }
+
+    dprintf("%s @%i http get: demands %s mf %s dur %s mime %s\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str(),mfstr.c_str(),durstr.c_str(), mimetype.c_str() );
 
     uint32_t chunksize=httpgw_chunk_size; // default externally configured
     if (chunksizestr.length() > 0)
@@ -837,16 +929,26 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
         return;
     }
 
+    // ANDROID
+    std::string filename = "";
+    if (httpgw_storage_dir == "") {
+    	filename = hashstr;
+    }
+    else {
+    	filename = httpgw_storage_dir;
+    	filename += hashstr;
+    }
+
     // 4. Initiate transfer, activating FileTransfer if needed
     bool activate=true;
     int td = swift::Find(swarm_id,activate);
     if (td == -1) {
         // LIVE
         if (durstr != "-1") {
-            td = swift::Open(hashstr,swarm_id,Address(),false,true,false,activate,chunksize);
+            td = swift::Open(filename,swarm_id,Address(),false,true,false,activate,chunksize);
         }
         else {
-            td = swift::LiveOpen(hashstr,swarm_id,Address(),false,chunksize);
+            td = swift::LiveOpen(filename,swarm_id,Address(),false,chunksize);
         }
 
         // Arno, 2011-12-20: Only on new transfers, otherwise assume that CMD GW
@@ -865,6 +967,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     req->mfspecname = std::string(decodedmf);
     free(decodedmf);
     req->xcontentdur = durstr;
+    req->mimetype = mimetype;
     req->offset = 0;
     req->tosend = 0;
     req->td = td;
@@ -874,6 +977,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     req->replied = false;
     req->startoff = 0;
     req->endoff = 0;
+    req->foundH264NALU = false;
 
     fprintf(stderr,"httpgw: Opened %s dur %s\n",hashstr.c_str(), durstr.c_str() );
 
@@ -902,8 +1006,15 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 }
 
 
-bool InstallHTTPGateway (struct event_base *evbase,Address bindaddr, uint32_t chunk_size, double *maxspeed) {
+bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf ) {
     // Arno, 2011-10-04: From libevent's http-server.c example
+
+    // Arno, 2012-10-16: Made configurable for ANDROID
+    httpgw_storage_dir = storage_dir;
+    if (vod_step != -1)
+	HTTPGW_VOD_PROGRESS_STEP_BYTES = vod_step;
+    if (min_prebuf != -1)
+	HTTPGW_MIN_PREBUF_BYTES = min_prebuf;
 
     /* Create a new evhttp object to handle requests. */
     http_gw_event = evhttp_new(evbase);
@@ -923,9 +1034,84 @@ bool InstallHTTPGateway (struct event_base *evbase,Address bindaddr, uint32_t ch
     }
 
     httpgw_chunk_size = chunk_size;
-    httpgw_maxspeed = maxspeed;
+    // Arno, 2012-11-1: Make copy.
+    httpgw_maxspeed = new double[2];
+    for (int d=0; d<2; d++)
+	httpgw_maxspeed[d] = maxspeed[d];
+    httpgw_bindaddr = bindaddr;
     return true;
 }
+
+
+/*
+ * ANDROID
+ * Return progress info in "x/y" format. This is returned to the Java Activity
+ * which uses it to update the progress bar. Currently x is not the number of
+ * bytes downloaded, but the number of bytes written to the HTTP connection.
+ */
+std::string HttpGwGetProgressString(Sha1Hash swarmid)
+{
+    std::stringstream rets;
+    //rets << "httpgw: ";
+
+    int td = swift::Find(swarmid);
+    if (td==-1)
+	rets << "0/0";
+    else
+    {
+	http_gw_t* req = HttpGwFindRequestByTD(td);
+	if (req == NULL)
+	    rets << "0/0";
+	else
+	{
+	    //rets << swift::SeqComplete(td);
+	    rets << req->offset;
+	    rets << "/";
+	    rets << swift::Size(req->td);
+	}
+    }
+
+    return rets.str();
+}
+
+// ANDROID
+// Arno: dummy place holder
+std::string HttpGwStatsGetSpeedCallback(Sha1Hash swarmid)
+{
+    int dspeed = 0, uspeed = 0;
+    uint32_t nleech=0,nseed=0;
+    int statsgw_last_down=0, statsgw_last_up=0;
+
+    int td = swift::Find(swarmid);
+    if (td !=-1)
+    {
+	http_gw_t* req = HttpGwFindRequestByTD(td);
+	if (req != NULL)
+	{
+	    statsgw_last_down = req->offset;
+	    dspeed = (int)(GetCurrentSpeed(td,DDIR_DOWNLOAD)/1024.0);
+	    uspeed = (int)(GetCurrentSpeed(td,DDIR_UPLOAD)/1024.0);
+	}
+
+	statsgw_last_up = swift::SeqComplete(td);
+    }
+    std::stringstream ss;
+    ss << dspeed;
+    ss << "/";
+    ss << uspeed;
+    ss << "/";
+    ss << nleech;
+    ss << "/";
+    ss << nseed;
+    ss << "/";
+    //ss << statsgw_last_down;
+    ss << statsgw_last_down;
+    ss << "/";
+    ss << statsgw_last_up;
+
+    return ss.str();
+}
+
 
 
 /** For SwarmPlayer 3000's HTTP failover. We should exit if swift isn't

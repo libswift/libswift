@@ -636,6 +636,52 @@ void swift::RemoveProgressCallback(int td, ProgressCallback cb)
 }
 
 
+/*
+ * Offline hash checking. Writes .mhash and .mbinmap file for the specified
+ * content filename.
+ *
+ * MUST NOT use any swift global variables!
+ */
+
+int swift::HashCheckOffline( std::string filename, Sha1Hash *calchashptr, uint32_t chunk_size)
+{
+    if (api_debug)
+	fprintf(stderr,"swift::HashCheckOffline %s hashptr %p cs %u\n", filename.c_str(), calchashptr, chunk_size );
+
+    // From transfer.cpp::FileTransfer constructor
+    std::string destdir = dirname_utf8(filename);
+    if (destdir == "")
+	destdir = ".";
+
+    // MULTIFILE
+    Storage *storage_ = new Storage(filename,destdir,-1);
+
+    std::string hash_filename;
+    hash_filename.assign(filename);
+    hash_filename.append(".mhash");
+
+    std::string binmap_filename;
+    binmap_filename.assign(filename);
+    binmap_filename.append(".mbinmap");
+
+    MmapHashTree *hashtree_ = new MmapHashTree(storage_,Sha1Hash::ZERO,chunk_size,hash_filename,true,true,binmap_filename);
+
+    FILE *fp = fopen_utf8(binmap_filename.c_str(),"wb");
+    if (!fp) {
+        print_error("cannot open mbinmap for writing");
+        return -1;
+    }
+    int ret = hashtree_->serialize(fp);
+    if (ret < 0)
+        print_error("writing to mbinmap");
+    fclose(fp);
+
+    *calchashptr = hashtree_->root_hash();
+
+    return ret;
+}
+
+
 
 /*
  * LIVE
