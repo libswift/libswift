@@ -248,9 +248,9 @@ tint Channel::Time () {
 
 // SOCKMGMT
 evutil_socket_t Channel::Bind (Address address, sckrwecb_t callbacks) {
-    struct sockaddr_in addr = address;
+    struct sockaddr_storage addr = address;
     evutil_socket_t fd;
-    int len = sizeof(struct sockaddr_in), sndbuf=1<<20, rcvbuf=1<<20;
+    int len = sizeof(struct sockaddr_storage), sndbuf=1<<20, rcvbuf=1<<20;
     #define dbnd_ensure(x) { if (!(x)) { \
         print_error("binding fails"); close_socket(fd); return INVALID_SOCKET; } }
     dbnd_ensure ( (fd = socket(AF_INET, SOCK_DGRAM, 0)) >= 0 );
@@ -270,7 +270,7 @@ evutil_socket_t Channel::Bind (Address address, sckrwecb_t callbacks) {
 
 Address Channel::BoundAddress(evutil_socket_t sock) {
 
-    struct sockaddr_in myaddr;
+    struct sockaddr_storage myaddr;
     socklen_t mylen = sizeof(myaddr);
     int ret = getsockname(sock,(sockaddr*)&myaddr,&mylen);
     if (ret >= 0) {
@@ -367,47 +367,6 @@ int Channel::DecodeID(int scrambled) {
 int Channel::EncodeID(int unscrambled) {
     return unscrambled ^ (int)start;
 }
-
-
-/*
- * class Address implementation
- */
-
-void Address::set_ipv4 (const char* ip_str) {
-    struct hostent *h = gethostbyname(ip_str);
-    if (h == NULL) {
-        print_error("cannot lookup address");
-        return;
-    } else {
-        addr.sin_addr.s_addr = *(u_long *) h->h_addr_list[0];
-    }
-}
-
-
-Address::Address(const char* ip_port) {
-    clear();
-    if (strlen(ip_port)>=1024)
-        return;
-    char ipp[1024];
-    strncpy(ipp,ip_port,1024);
-    char* semi = strchr(ipp,':');
-    if (semi) {
-        *semi = 0;
-        set_ipv4(ipp);
-        set_port(semi+1);
-    } else {
-        if (strchr(ipp, '.')) {
-            set_ipv4(ipp);
-            set_port((uint16_t)0);
-        } else {
-            set_ipv4((uint32_t)INADDR_ANY);
-            set_port(ipp);
-        }
-    }
-}
-
-
-uint32_t Address::LOCALHOST = INADDR_LOOPBACK;
 
 
 /*

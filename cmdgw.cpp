@@ -314,7 +314,7 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 		if (iter!=peerchans->begin())
 		    oss << ", ";
 		oss << "{";
-		oss << "\"ip\": \"" << c->peer().ipv4str() << "\", ";
+		oss << "\"ip\": \"" << c->peer().ipstr() << "\", ";
 		oss << "\"port\": " << c->peer().port() << ", ";
 		oss << "\"raw_bytes_up\": " << c->raw_bytes_up() << ", ";
 		oss << "\"raw_bytes_down\": " << c->raw_bytes_down() << ", ";
@@ -1054,7 +1054,7 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
 
     fprintf(stderr,"cmdgw: Creating new TCP listener on addr %s\n", cmdaddr.str().c_str() );
   
-    const struct sockaddr_in sin = (sockaddr_in)cmdaddr;
+    const struct sockaddr_storage sin = (sockaddr_storage)cmdaddr;
 
     cmd_evlistener = evconnlistener_new_bind(evbase, CmdGwNewConnectionCallback, NULL,
         LEV_OPT_CLOSE_ON_FREE|LEV_OPT_REUSEABLE, -1,

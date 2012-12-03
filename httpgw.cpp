@@ -916,7 +916,7 @@ bool InstallHTTPGateway (struct event_base *evbase,Address bindaddr, uint32_t ch
     evhttp_set_gencb(http_gw_event, HttpGwNewRequestCallback, NULL);
 
     /* Now we tell the evhttp what port to listen on */
-    http_gw_handle = evhttp_bind_socket_with_handle(http_gw_event, bindaddr.ipv4str().c_str(), bindaddr.port());
+    http_gw_handle = evhttp_bind_socket_with_handle(http_gw_event, bindaddr.ipstr().c_str(), bindaddr.port());
     if (!http_gw_handle) {
         print_error("httpgw: evhttp_bind_socket_with_handle failed");
         return false;

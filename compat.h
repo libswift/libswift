@@ -28,6 +28,8 @@ typedef unsigned __int64 uint64_t;
 #include <io.h>
 #include <xutility> // for std::min/max
 #include <direct.h>
+#include <In6addr.h>
+#include <Ws2tcpip.h>
 #else
 #include <sys/mman.h>
 #include <arpa/inet.h>

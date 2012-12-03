@@ -51,6 +51,14 @@ env.StaticLibrary(
     LIBPATH=libpath)
 
 env.Program( 
+    target='addrtest',
+    source=['addrtest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+"""
+env.Program( 
     target='binstest2',
     source=['binstest2.cpp'],
     CPPPATH=cpppath,
@@ -137,6 +145,7 @@ env.Program(
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )
+"""
 '''
 env.Program( 
     target='storagetest',
