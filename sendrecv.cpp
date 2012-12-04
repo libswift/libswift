@@ -377,11 +377,15 @@ void    Channel::AddHint (struct evbuffer *evb) {
 }
 
 void    Channel::AddCancel (struct evbuffer *evb) {
+
+        // PPSPTODO
+        return;
+
 	while (SWIFT_MAX_NONDATA_DGRAM_SIZE-evbuffer_get_length(evb) >= 5 && !cancel_out_.empty()) {
 		bin_t cancel = cancel_out_.front();
 		cancel_out_.pop_front();
 		evbuffer_add_8(evb, SWIFT_CANCEL);
-		evbuffer_add_32be(evb, bin_toUInt32(cancel));
+                evbuffer_add_chunkaddr(evb,cancel,hs_out_->chunk_addr_);
 		dprintf("%s #%u +cancel %s\n",
 			tintstr(),id_,cancel.str().c_str());
 	}

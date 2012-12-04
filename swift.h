@@ -114,7 +114,7 @@ namespace swift {
 #define PEX_RES_MAX_CERT_SIZE		     1024
 
 
-/** IPv4 address, just a nice wrapping around struct sockaddr_in. */
+/** IPv4/6 address, just a nice wrapping around struct sockaddr_storage. */
     struct Address {
     struct sockaddr_storage  addr;
     Address();
@@ -141,6 +141,7 @@ namespace swift {
     std::string ipstr (bool includeport=false) const;
     bool operator != (const Address& b) const { return !(*this==b); }
     bool is_private() const;
+    int get_family() const { return addr.ss_family; }
     };
 
 // Arno, 2011-10-03: Use libevent callback functions, no on_error?
@@ -1197,7 +1198,6 @@ namespace swift {
     binvector bin_fragment(bin_t &origbin, bin_t &cancelbin);
 
     const char* tintstr(tint t=0);
-    std::string sock2str (struct sockaddr_in addr);
  #define SWIFT_MAX_CONNECTIONS 20
 
     // SOCKTUNNEL

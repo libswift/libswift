@@ -199,6 +199,7 @@ std::string Address::ipstr(bool includeport) const
     if (addr.ss_family == AF_UNSPEC)
 	return "AF_UNSPEC";
 
+    /*
     if (addr.ss_family == AF_INET) {
 	struct sockaddr_in *addr4ptr = (struct sockaddr_in *)&addr;
 	fprintf(stderr,"Address::ipstr:v4 OCTET %08lx\n", addr4ptr->sin_addr.s_addr );
@@ -208,7 +209,7 @@ std::string Address::ipstr(bool includeport) const
 	for (int i=0; i<16; i++)
 	    fprintf(stderr,"Address::ipstr:v6 OCTET %02x\n", addr6ptr->sin6_addr.s6_addr[i] );
 
-    }
+    }*/
 
 
     // See RFC3493

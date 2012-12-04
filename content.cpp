@@ -24,7 +24,7 @@ uint64_t ContentTransfer::cleancounter = 0;
  * Local Constants
  */
 #define CHANNEL_GARBAGECOLLECT_INTERVAL		5 // seconds, or GlobalCleanCallback calls actually
-#define TRANSFER_IDLE_DEACTIVATE_INTERVAL  	30 // seconds, or GlobalCleanCallback calls actually
+#define TRANSFER_IDLE_DEACTIVATE_INTERVAL  	300 // seconds, or GlobalCleanCallback calls actually
 
 #define TRACKER_RETRY_INTERVAL_START	(5*TINT_SEC)
 #define TRACKER_RETRY_INTERVAL_EXP	1.1	// exponent used to increase INTERVAL_START
@@ -164,18 +164,6 @@ void ContentTransfer::ConnectToTracker()
 
     if (!IsOperational())
  	return;
-
-    fprintf(stderr,"ContentTransfer::ConnectToTracker: tracker_ is %s\n", tracker_.str().c_str() );
-    fprintf(stderr,"ContentTransfer::ConnectToTracker: Channel::tracker is %s\n", Channel::tracker.str().c_str() );
-    fprintf(stderr,"ContentTransfer::ConnectToTracker: Address is %s\n", Address().str().c_str() );
-    if (tracker_ != Address())
-	fprintf(stderr,"ContentTransfer::ConnectToTracker: tracker_ NOT ADDR\n" );
-    else if (Channel::tracker!=Address())
-	fprintf(stderr,"ContentTransfer::ConnectToTracker: Channel::tracker NOT ADDR\n" );
-    else
-	fprintf(stderr,"ContentTransfer::ConnectToTracker: tracker else\n" );
-
-
 
     Channel *c = NULL;
     if (tracker_ != Address())
