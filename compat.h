@@ -44,6 +44,7 @@ typedef unsigned __int64 uint64_t;
 #include <cstdlib>
 #include <string>
 #include <errno.h>
+#include <math.h>
 
 #ifdef _MSC_VER
 #include "getopt_win.h"

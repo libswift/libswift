@@ -10,7 +10,6 @@
 #include "swift.h"
 #include <algorithm>  // kill it
 #include <cassert>
-#include <math.h>
 #include <cfloat>
 #include "compat.h"
 

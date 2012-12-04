@@ -67,7 +67,6 @@
 #include <list>
 #include <algorithm>
 #include <string>
-#include <math.h>
 
 #include "compat.h"
 #include <event2/event.h>
