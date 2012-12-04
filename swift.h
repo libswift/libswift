@@ -124,6 +124,7 @@ namespace swift {
     Address(const char* ip_port);
     Address(uint32_t ipv4addr, uint16_t port);
     Address(const struct sockaddr_storage& address) : addr(address) {}
+    Address(struct in6_addr ipv6addr, uint16_t port);
 
     void set_ip   (const char* ip_str, int family);
     void set_port (uint16_t port);
@@ -131,6 +132,7 @@ namespace swift {
     void set_ipv4 (uint32_t ipv4);
     void set_ipv4 (const char* ipv4_str);
     void set_ipv6 (const char* ip_str);
+    void set_ipv6 (struct in6_addr &ipv6);
     void clear ();
     uint32_t ipv4() const;
     struct in6_addr ipv6() const;
@@ -683,8 +685,7 @@ namespace swift {
         bin_t       OnData (struct evbuffer *evb);
         void        OnHint (struct evbuffer *evb);
         void        OnHash (struct evbuffer *evb);
-        void        OnPexAddv4 (struct evbuffer *evb);
-        void        OnPexAddv6 (struct evbuffer *evb);
+        void        OnPexAdd(struct evbuffer *evb, int family);
         void        OnPexAddCert (struct evbuffer *evb);
         static Handshake *StaticOnHandshake( Address &addr, uint32_t cid, bool ver_known, popt_version_t ver, struct evbuffer *evb);
         void        OnHandshake (Handshake *hishs);
@@ -766,8 +767,7 @@ namespace swift {
         void 	    OnDataZeroState(struct evbuffer *evb);
         void        OnHaveZeroState(struct evbuffer *evb);
         void        OnHashZeroState(struct evbuffer *evb);
-        void        OnPexAddv4ZeroState(struct evbuffer *evb);
-        void        OnPexAddv6ZeroState(struct evbuffer *evb);
+        void        OnPexAddZeroState(struct evbuffer *evb, int family);
         void        OnPexAddCertZeroState(struct evbuffer *evb);
         void        OnPexReqZeroState(struct evbuffer *evb);
         tint        GetOpenTime() { return open_time_; }
@@ -1187,6 +1187,7 @@ namespace swift {
     int evbuffer_add_64be(struct evbuffer *evb, uint64_t l);
     int evbuffer_add_hash(struct evbuffer *evb, const Sha1Hash& hash);
     int evbuffer_add_chunkaddr(struct evbuffer *evb, bin_t &b, popt_chunk_addr_t chunk_addr); // PPSP
+    int evbuffer_add_pexaddr(struct evbuffer *evb, Address& a);
 
     uint8_t evbuffer_remove_8(struct evbuffer *evb);
     uint16_t evbuffer_remove_16be(struct evbuffer *evb);
@@ -1194,6 +1195,7 @@ namespace swift {
     uint64_t evbuffer_remove_64be(struct evbuffer *evb);
     Sha1Hash evbuffer_remove_hash(struct evbuffer* evb);
     binvector evbuffer_remove_chunkaddr(struct evbuffer *evb, popt_chunk_addr_t chunk_addr); // PPSP
+    Address evbuffer_remove_pexaddr(struct evbuffer *evb, int family);
     void chunk32_to_bin32(uint32_t schunk, uint32_t echunk, binvector *bvptr);
     binvector bin_fragment(bin_t &origbin, bin_t &cancelbin);
 

@@ -450,6 +450,26 @@ int swift::evbuffer_add_chunkaddr(struct evbuffer *evb, bin_t &b, popt_chunk_add
     return ret;
 }
 
+int swift::evbuffer_add_pexaddr(struct evbuffer *evb, Address& a)
+{
+    int ret = -1;
+    if (a.get_family() == AF_INET)
+    {
+	ret = evbuffer_add_8(evb, SWIFT_PEX_RESv4);
+	ret = evbuffer_add_32be(evb, a.ipv4());
+	ret = evbuffer_add_16be(evb, a.port());
+    }
+    else
+    {
+	struct in6_addr ipv6 = a.ipv6();
+
+	ret = evbuffer_add_8(evb, SWIFT_PEX_RESv6);
+	for (int i=0; i<16; i++)
+	    ret = evbuffer_add_8(evb, ipv6.s6_addr[i] );
+	ret = evbuffer_add_16be(evb, a.port());
+    }
+    return ret;
+}
 
 
 uint8_t swift::evbuffer_remove_8(struct evbuffer *evb) {
@@ -507,6 +527,27 @@ binvector swift::evbuffer_remove_chunkaddr(struct evbuffer *evb, popt_chunk_addr
 	    swift::chunk32_to_bin32(schunk,echunk,&bv);
     }
     return bv;
+}
+
+Address swift::evbuffer_remove_pexaddr(struct evbuffer *evb, int family)
+{
+    int ret = -1;
+    if (family == AF_INET)
+    {
+	uint32_t ipv4 = evbuffer_remove_32be(evb);
+	uint16_t port = evbuffer_remove_16be(evb);
+	Address addr(ipv4,port);
+	return addr;
+    }
+    else
+    {
+	struct in6_addr ipv6;
+	for (int i=0; i<16; i++)
+	    ipv6.s6_addr[i] = evbuffer_remove_8(evb);
+	uint16_t port = evbuffer_remove_16be(evb);
+	Address addr(ipv6,port);
+	return addr;
+    }
 }
 
 

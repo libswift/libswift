@@ -72,6 +72,13 @@ Address::Address(uint32_t ipv4addr, uint16_t port)
 }
 
 
+Address::Address(struct in6_addr ipv6addr, uint16_t port)
+{
+    clear();
+    set_ipv6(ipv6addr);
+    set_port(port);
+}
+
 void Address::set_port (uint16_t port) {
     if (addr.ss_family == AF_INET) {
 	struct sockaddr_in *addr4ptr = (struct sockaddr_in *)&addr;
@@ -82,16 +89,26 @@ void Address::set_port (uint16_t port) {
 	addr6ptr->sin6_port = htons(port);
     }
 }
+
 void Address::set_port (const char* port_str) {
     int p;
     if (sscanf(port_str,"%i",&p))
 	set_port(p);
 }
+
 void Address::set_ipv4 (uint32_t ipv4) {
     addr.ss_family = AF_INET;
     struct sockaddr_in *addr4ptr = (struct sockaddr_in *)&addr;
     addr4ptr->sin_addr.s_addr = htonl(ipv4);
 }
+
+void Address::set_ipv6(struct in6_addr &ipv6) {
+    addr.ss_family = AF_INET6;
+    struct sockaddr_in6 *addr6ptr = (struct sockaddr_in6 *)&addr;
+    memcpy(&addr6ptr->sin6_addr.s6_addr,&ipv6.s6_addr,sizeof(ipv6.s6_addr) );
+}
+
+
 void Address::clear () {
     memset(&addr,0,sizeof(struct sockaddr_storage));
     addr.ss_family = AF_UNSPEC;

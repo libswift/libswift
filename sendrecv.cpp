@@ -649,15 +649,15 @@ void    Channel::Recv (struct evbuffer *evb) {
             	break;
             case SWIFT_PEX_RESv4:
                 if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
-                    OnPexAddv4ZeroState(evb);
+                    OnPexAddZeroState(evb,AF_INET);
                 else
-                    OnPexAddv4(evb);
+                    OnPexAdd(evb,AF_INET);
                 break;
             case SWIFT_PEX_RESv6: // PPSP
                 if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
-                    OnPexAddv6ZeroState(evb);
+                    OnPexAddZeroState(evb,AF_INET6);
                 else
-                    OnPexAddv6(evb);
+                    OnPexAdd(evb,AF_INET6);
                 break;
             case SWIFT_PEX_REScert: // PPSP
                 if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
@@ -1303,11 +1303,9 @@ void    Channel::OnCancel (struct evbuffer *evb) {
 }
 
 
-void Channel::OnPexAddv4 (struct evbuffer *evb) {
-    uint32_t ipv4 = evbuffer_remove_32be(evb);
-    uint16_t port = evbuffer_remove_16be(evb);
-    Address addr(ipv4,port);
-    dprintf("%s #%u -pex %s\n",tintstr(),id_,addr.str().c_str());
+void Channel::OnPexAdd(struct evbuffer *evb, int family) {
+    Address addr = evbuffer_remove_pexaddr(evb,family);
+    dprintf("%s #%u -pex %s %s\n",tintstr(),id_,addr.str().c_str(), (addr.get_family() == AF_INET) ? "v4" : "v6" );
 
     if (transfer()->OnPexIn(addr))
         useless_pex_count_ = 0;
@@ -1317,14 +1315,6 @@ void Channel::OnPexAddv4 (struct evbuffer *evb) {
         useless_pex_count_++;
     }
     pex_request_outstanding_ = false;
-}
-
-
-void Channel::OnPexAddv6(struct evbuffer *evb)
-{
-    // Just read fields, IPV6TODO
-    OnPexAddv6ZeroState(evb);
-    dprintf("%s #%u -pex v6\n",tintstr(),id_);
 }
 
 
@@ -1388,10 +1378,8 @@ void    Channel::AddPex (struct evbuffer *evb) {
             // Arno, 2012-02-28: Don't send private addresses to non-private peers.
             if (!a.is_private() || (a.is_private() && peer().is_private()))
             {
-                evbuffer_add_8(evb, SWIFT_PEX_RESv4);
-                evbuffer_add_32be(evb, a.ipv4());
-                evbuffer_add_16be(evb, a.port());
-                dprintf("%s #%u +pex (reverse) %s\n",tintstr(),id_,a.str().c_str());
+        	evbuffer_add_pexaddr(evb, a);
+        	dprintf("%s #%u +pex (reverse) %s\n",tintstr(),id_,a.str().c_str());
             }
         } while (!reverse_pex_out_.empty() && (SWIFT_MAX_NONDATA_DGRAM_SIZE-evbuffer_get_length(evb)) >= 7);
 
@@ -1422,9 +1410,7 @@ void    Channel::AddPex (struct evbuffer *evb) {
         tries++;
     }
 
-    evbuffer_add_8(evb, SWIFT_PEX_RESv4);
-    evbuffer_add_32be(evb, a.ipv4());
-    evbuffer_add_16be(evb, a.port());
+    evbuffer_add_pexaddr(evb, a);
     dprintf("%s #%u +pex %s\n",tintstr(),id_,a.str().c_str());
 
     pex_requested_ = false;
@@ -1444,6 +1430,8 @@ void    Channel::AddPex (struct evbuffer *evb) {
             channels[chid]->next_send_time_ > NOW + 2 * TINT_SEC)
         channels[chid]->Reschedule();
 }
+
+
 
 void Channel::OnPexReq(void) {
     dprintf("%s #%u -pex req\n", tintstr(), id_);
