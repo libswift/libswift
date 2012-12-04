@@ -1305,7 +1305,7 @@ void    Channel::OnCancel (struct evbuffer *evb) {
 
 void Channel::OnPexAdd(struct evbuffer *evb, int family) {
     Address addr = evbuffer_remove_pexaddr(evb,family);
-    dprintf("%s #%u -pex %s %s\n",tintstr(),id_,addr.str().c_str(), (addr.get_family() == AF_INET) ? "v4" : "v6" );
+    dprintf("%s #%u -pex %s %s\n",tintstr(),id_,(addr.get_family() == AF_INET) ? "v4" : "v6", addr.str().c_str() );
 
     if (transfer()->OnPexIn(addr))
         useless_pex_count_ = 0;
