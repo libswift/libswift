@@ -9,15 +9,18 @@ using namespace swift;
 
 
 Address::Address() {
+    fprintf(stderr,"Addres::Address()\n");
     clear();
 }
 Address::Address(const char* ip, uint16_t port)  {
+    fprintf(stderr,"Addres::Address(ip=%s,port=%u)\n", ip, port);
     clear();
     set_ip(ip,AF_UNSPEC);
     set_port(port);
 }
 
 Address::Address(const char* ip_port) {
+    fprintf(stderr,"Addres::Address(ip_port=%s)\n", ip_port);
     clear();
     if (strlen(ip_port)>=1024 || strlen(ip_port) == 0)
         return;
@@ -60,7 +63,9 @@ Address::Address(const char* ip_port) {
 }
 
 
-Address::Address(uint32_t ipv4addr, uint16_t port) {
+Address::Address(uint32_t ipv4addr, uint16_t port)
+{
+    fprintf(stderr,"Addres::Address(ipv4addr=%08x,port=%u)\n", ipv4addr, port);
     clear();
     set_ipv4(ipv4addr);
     set_port(port);
@@ -129,7 +134,12 @@ uint16_t Address::port () const
 
 bool Address::operator == (const Address& b) const {
 
-    if (addr.ss_family == AF_INET && b.addr.ss_family == AF_INET)
+    if (addr.ss_family == AF_UNSPEC && b.addr.ss_family == AF_UNSPEC)
+    {
+	// For comparing empty Address-es
+	return true;
+    }
+    else if (addr.ss_family == AF_INET && b.addr.ss_family == AF_INET)
     {
 	struct sockaddr_in *aaddr4ptr = (struct sockaddr_in *)&addr;
 	struct sockaddr_in *baddr4ptr = (struct sockaddr_in *)&b.addr;
@@ -167,34 +177,39 @@ bool Address::operator == (const Address& b) const {
 	    y6map.sin6_addr.s6_addr[i] = 0xFF;
 	memcpy(&y6map.sin6_addr.s6_addr[i], &yaddr4ptr->sin_addr.s_addr, 4);
 
-	/*for (int i=0; i<16; i++)
-	{
-	    fprintf(stderr,"YOCTET %02x\n", y6map.sin6_addr.s6_addr[i] );
-	}
-	for (int i=0; i<16; i++)
-	{
-	    fprintf(stderr,"XOCTET %02x\n", xaddr6ptr->sin6_addr.s6_addr[i] );
-	}*/
-
-
 	struct sockaddr_in6 *yaddr6ptr = (struct sockaddr_in6 *)&y6map;
-
-	//fprintf(stderr,"XPORT %d YPORT %d\n", xaddr6ptr->sin6_port, yaddr6ptr->sin6_port );
-
 	return xaddr6ptr->sin6_port == yaddr6ptr->sin6_port &&
 	       !memcmp(&xaddr6ptr->sin6_addr.s6_addr,&yaddr6ptr->sin6_addr.s6_addr,sizeof(struct in6_addr) );
     }
 }
 
 
-std::string Address::str() const {
+std::string Address::str() const
+{
     return ipstr(true);
 }
 
-std::string Address::ipstr(bool includeport) const {
-
+std::string Address::ipstr(bool includeport) const
+{
     char node[256];
     char service[256];
+
+    fprintf(stderr,"Address::ipstr(includeport=%d): addr family %d\n", includeport, addr.ss_family );
+
+    if (addr.ss_family == AF_UNSPEC)
+	return "AF_UNSPEC";
+
+    if (addr.ss_family == AF_INET) {
+	struct sockaddr_in *addr4ptr = (struct sockaddr_in *)&addr;
+	fprintf(stderr,"Address::ipstr:v4 OCTET %08lx\n", addr4ptr->sin_addr.s_addr );
+    }
+    else {
+	struct sockaddr_in6 *addr6ptr = (struct sockaddr_in6 *)&addr;
+	for (int i=0; i<16; i++)
+	    fprintf(stderr,"Address::ipstr:v6 OCTET %02x\n", addr6ptr->sin6_addr.s6_addr[i] );
+
+    }
+
 
     // See RFC3493
     int ret = getnameinfo((const struct sockaddr *)&addr, (socklen_t)sizeof(addr),
@@ -215,7 +230,10 @@ std::string Address::ipstr(bool includeport) const {
 	    return nodestr;
     }
     else
+    {
+	print_error("getnameinfo error");
 	return "getnameinfo failed";
+    }
 }
 
 
@@ -237,16 +255,20 @@ bool Address::is_private() const
     }
 }
 
-void Address::set_ipv4 (const char* ip_str) {
+void Address::set_ipv4 (const char* ip_str)
+{
     set_ip(ip_str,AF_INET);
 }
 
-void Address::set_ipv6 (const char* ip_str) {
+void Address::set_ipv6 (const char* ip_str)
+{
     set_ip(ip_str,AF_INET6);
 }
 
 
-void Address::set_ip(const char* ip_str, int family) {
+void Address::set_ip(const char* ip_str, int family)
+{
+    fprintf(stderr,"Address::set_ip: %s family %d\n", ip_str, family );
 
     struct addrinfo hint;
     hint.ai_flags = AI_PASSIVE | AI_NUMERICHOST | AI_NUMERICSERV;
@@ -264,6 +286,8 @@ void Address::set_ip(const char* ip_str, int family) {
     {
 	// Copy sockaddr to sockaddr_storage
 	memcpy(&addr,results->ai_addr,results->ai_addrlen);
+
+	fprintf(stderr,"Address::set_ip: result %s\n", this->str().c_str() );
     }
     if (results != NULL)
 	freeaddrinfo(results);

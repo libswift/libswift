@@ -289,9 +289,12 @@ Address swift::BoundAddress(evutil_socket_t sock) {
 
 int Channel::SendTo (evutil_socket_t sock, const Address& addr, struct evbuffer *evb) {
 
+
+    fprintf(stderr,"Channel::SendTo: addr %s\n", addr.str().c_str() );
+
     int length = evbuffer_get_length(evb);
     int r = sendto(sock,(const char *)evbuffer_pullup(evb, length),length,0,
-                   (struct sockaddr*)&(addr.addr),sizeof(struct sockaddr_in));
+                   (struct sockaddr*)&(addr.addr),sizeof(struct sockaddr_storage));
     // SCHAAP: 2012-06-16 - How about EAGAIN and EWOULDBLOCK? Do we just drop the packet then as well?
     if (r<0) {
         print_error("can't send");

@@ -11,6 +11,20 @@
 
 using namespace swift;
 
+TEST(TAddress,IPv4Any) {
+
+    Address a("0.0.0.0", 8093 );
+    ASSERT_EQ(INADDR_ANY, a.ipv4() );
+    ASSERT_EQ(8093,a.port());
+}
+
+TEST(TAddress,IPv4AnyIPPortString) {
+
+    Address a("0.0.0.0:8093" );
+    ASSERT_EQ(INADDR_ANY, a.ipv4() );
+    ASSERT_EQ(8093,a.port());
+}
+
 
 TEST(TAddress,IPv6Loopback) {
 
@@ -114,6 +128,31 @@ TEST(TAddress,IPv4SockAddr) {
 }
 
 
+TEST(TAddress,IPv4Equal) {
+
+    Address a(0x8225c141,8093);
+    Address b("130.37.193.65", 8093 );
+    ASSERT_TRUE( a == b );
+    ASSERT_TRUE( b == a );
+}
+
+TEST(TAddress,IPv6Equal) {
+
+    Address a("2001:610:110:6e1:7578:776f:e141:d2bb",8093);
+    Address b("2001:0610:0110:06e1:7578:776f:e141:d2bb",8093);
+    ASSERT_TRUE( a == b );
+    ASSERT_TRUE( b == a );
+}
+
+TEST(TAddress,IPv6EqualTrunk) {
+
+    Address a("0000:0000:0000:0000:0000:ffff:8225:c141",8093);
+    Address b("::ffff:8225:c141",8093);
+    ASSERT_TRUE( a == b );
+    ASSERT_TRUE( b == a );
+}
+
+
 TEST(TAddress,IPv4MappedIPv6EqualDot) {
 
     Address a("130.37.193.65",8093);
@@ -130,6 +169,31 @@ TEST(TAddress,IPv4MappedIPv6EqualSemi) {
     ASSERT_TRUE(IN6_IS_ADDR_V4MAPPED(&b.ipv6()) );
     ASSERT_TRUE( a == b );
     ASSERT_TRUE( b == a );
+}
+
+
+TEST(TAddress,IPv4Private168) {
+
+    Address a("192.168.0.105", 8093 );
+    ASSERT_TRUE( a.is_private() );
+}
+
+TEST(TAddress,IPv4Private10) {
+
+    Address a("10.168.0.105", 8093 );
+    ASSERT_TRUE( a.is_private() );
+}
+
+TEST(TAddress,IPv4Private172) {
+
+    Address a("172.16.0.105", 8093 );
+    ASSERT_TRUE( a.is_private() );
+}
+
+TEST(TAddress,IPv6Private) {
+
+    Address a("fe80::1", 8093 );
+    ASSERT_TRUE( a.is_private() );
 }
 
 
