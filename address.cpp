@@ -7,20 +7,28 @@
 
 using namespace swift;
 
+#define DEBUG 	false
 
-Address::Address() {
-    fprintf(stderr,"Addres::Address()\n");
+Address::Address()
+{
+    if (DEBUG)
+	fprintf(stderr,"Addres::Address()\n");
     clear();
 }
-Address::Address(const char* ip, uint16_t port)  {
-    fprintf(stderr,"Addres::Address(ip=%s,port=%u)\n", ip, port);
+
+Address::Address(const char* ip, uint16_t port)
+{
+    if (DEBUG)
+	fprintf(stderr,"Addres::Address(ip=%s,port=%u)\n", ip, port);
     clear();
     set_ip(ip,AF_UNSPEC);
     set_port(port);
 }
 
-Address::Address(const char* ip_port) {
-    fprintf(stderr,"Addres::Address(ip_port=%s)\n", ip_port);
+Address::Address(const char* ip_port)
+{
+    if (DEBUG)
+	fprintf(stderr,"Addres::Address(ip_port=%s)\n", ip_port);
     clear();
     if (strlen(ip_port)>=1024 || strlen(ip_port) == 0)
         return;
@@ -65,7 +73,8 @@ Address::Address(const char* ip_port) {
 
 Address::Address(uint32_t ipv4addr, uint16_t port)
 {
-    fprintf(stderr,"Addres::Address(ipv4addr=%08x,port=%u)\n", ipv4addr, port);
+    if (DEBUG)
+	fprintf(stderr,"Addres::Address(ipv4addr=%08x,port=%u)\n", ipv4addr, port);
     clear();
     set_ipv4(ipv4addr);
     set_port(port);
@@ -211,7 +220,8 @@ std::string Address::ipstr(bool includeport) const
     char node[256];
     char service[256];
 
-    fprintf(stderr,"Address::ipstr(includeport=%d): addr family %d\n", includeport, addr.ss_family );
+    if (DEBUG)
+	fprintf(stderr,"Address::ipstr(includeport=%d): addr family %d\n", includeport, addr.ss_family );
 
     if (addr.ss_family == AF_UNSPEC)
 	return "AF_UNSPEC";
@@ -227,7 +237,6 @@ std::string Address::ipstr(bool includeport) const
 	    fprintf(stderr,"Address::ipstr:v6 OCTET %02x\n", addr6ptr->sin6_addr.s6_addr[i] );
 
     }*/
-
 
     // See RFC3493
     int ret = getnameinfo((const struct sockaddr *)&addr, (socklen_t)sizeof(addr),
@@ -286,7 +295,8 @@ void Address::set_ipv6 (const char* ip_str)
 
 void Address::set_ip(const char* ip_str, int family)
 {
-    fprintf(stderr,"Address::set_ip: %s family %d\n", ip_str, family );
+    if (DEBUG)
+	fprintf(stderr,"Address::set_ip: %s family %d\n", ip_str, family );
 
     struct addrinfo hint;
     hint.ai_flags = AI_PASSIVE;
@@ -305,7 +315,8 @@ void Address::set_ip(const char* ip_str, int family)
 	// Copy sockaddr to sockaddr_storage
 	memcpy(&addr,results->ai_addr,results->ai_addrlen);
 
-	fprintf(stderr,"Address::set_ip: result %s\n", this->str().c_str() );
+	if (DEBUG)
+	    fprintf(stderr,"Address::set_ip: result %s\n", this->str().c_str() );
     }
     if (results != NULL)
 	freeaddrinfo(results);

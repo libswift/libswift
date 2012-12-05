@@ -44,8 +44,8 @@ void usage(void)
     fprintf(stderr,"  -h, --hash\troot Merkle hash for the transmission\n");
     fprintf(stderr,"  -f, --file\tname of file to use (root hash by default)\n");
     fprintf(stderr,"  -d, --dir\tname of directory to scan and seed\n");
-    fprintf(stderr,"  -l, --listen\t[ip:|host:]port to listen to (default: random)\n");
-    fprintf(stderr,"  -t, --tracker\t[ip:|host:]port of the tracker (default: none)\n");
+    fprintf(stderr,"  -l, --listen\t[ip:|host:]port to listen to (default: random). MUST set for IPv6\n");
+    fprintf(stderr,"  -t, --tracker\t[ip:|host:]port of the tracker (default: none). IPv6 between [] cf. RFC2732\n");
     fprintf(stderr,"  -D, --debug\tfile name for debugging logs (default: stdout)\n");
     fprintf(stderr,"  -B\tdebugging logs to stdout (win32 hack)\n");
     fprintf(stderr,"  -p, --progress\treport transfer progress\n");
