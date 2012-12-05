@@ -363,7 +363,7 @@ int utf8main (int argc, char** argv)
     {
 	int ret = file_exists_utf8(filename);
 	if (ret < 1)
-	    quit( (std::string("file does not exist: ")+filename).c_str() );
+	    quit( "file does not exist: %s\n", filename.c_str() );
     }
 
     if (httpgw_enabled)
@@ -738,7 +738,7 @@ void ReportCallback(int fd, short event, void *arg) {
 		Channel* c = swift::Channel::channel(1);
 		if (c!=NULL) {
 			fprintf(stderr,"ledbat %3.2f\n",c->GetCwnd());
-			fprintf(stderr,"hints_in %d\n",c->GetHintSize());
+			fprintf(stderr,"hints_in %lld\n",c->GetHintSize());
 		}
 		//fprintf(stderr,"npeers %d\n",ft->GetNumLeechers()+ft->GetNumSeeders() );
 	}

@@ -654,7 +654,7 @@ LiveTransfer *swift::LiveCreate(std::string filename, const Sha1Hash& swarmid, u
 	return lt;
     else
     {
-	fprintf(stderr,"swift::LiveCreate: swarm created, but not operational\n",swarmid.hex().c_str() );
+	fprintf(stderr,"swift::LiveCreate: %s swarm created, but not operational\n",swarmid.hex().c_str() );
 	delete lt;
 	return NULL;
     }
@@ -688,7 +688,7 @@ int swift::LiveOpen(std::string filename, const Sha1Hash& swarmid, Address track
 uint64_t  swift::GetHookinOffset(int td)
 {
     if (api_debug)
-	fprintf(stderr,"swift::GetHookinOffset td %s\n", td );
+	fprintf(stderr,"swift::GetHookinOffset td %d\n", td );
 
     LiveTransfer *lt = LiveTransfer::FindByTD(td);
     if (lt == NULL)

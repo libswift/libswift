@@ -104,7 +104,7 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
     // Arno, 2012-01-23: Extra protection against channel loss, don't send DATA
     if (last_recv_time_ < NOW-(3*TINT_SEC))
     {
-    	dprintf("%s #%u dequeued bad time %ld\n",tintstr(),id_, last_recv_time_ );
+    	dprintf("%s #%u dequeued bad time %lld\n",tintstr(),id_, last_recv_time_ );
     	return bin_t::NONE;
     }
 
@@ -149,7 +149,7 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
             send = hint;
     }
 
-    dprintf("%s #%u dequeued %s [%ld]\n",tintstr(),id_,send.str().c_str(),hint_in_size_);
+    dprintf("%s #%u dequeued %s [%llu]\n",tintstr(),id_,send.str().c_str(),hint_in_size_);
     return send;
 }
 
@@ -540,7 +540,7 @@ void    Channel::AddAck (struct evbuffer *evb) {
         fprintf(stderr,"send c%d: ACK %i\n", id(), bin_toUInt32(data_in_.bin));
 
     have_out_.set(data_in_.bin);
-    dprintf("%s #%u +ack %s %d\n",
+    dprintf("%s #%u +ack %s %lld\n",
         tintstr(),id_,data_in_.bin.str().c_str(),data_in_.time);
     if (data_in_.bin.layer()>2)
         data_in_dbl_ = data_in_.bin;
@@ -616,7 +616,7 @@ void    Channel::Recv (struct evbuffer *evb) {
         rtt_avg_ = NOW - last_send_time_;
         dev_avg_ = rtt_avg_;
         dip_avg_ = rtt_avg_;
-        dprintf("%s #%u sendctrl rtt init %ld\n",tintstr(),id_,rtt_avg_);
+        dprintf("%s #%u sendctrl rtt init %lld\n",tintstr(),id_,rtt_avg_);
     }
 
     bin_t data = evbuffer_get_length(evb) ? bin_t::NONE : bin_t::ALL;
@@ -954,7 +954,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
 	    }
 	    if (owd_min_bins_[owd_min_bin_]>peer_owd)
 	    	owd_min_bins_[owd_min_bin_] = peer_owd;
-	    dprintf("%s #%u sendctrl rtt %ld dev %ld based on %s\n",
+	    dprintf("%s #%u sendctrl rtt %lld dev %lld based on %s\n",
 		    tintstr(),id_,rtt_avg_,dev_avg_,data_out_[di].bin.str().c_str());
 	    ack_rcvd_recent_++;
 	    // early loss detection by packet reordering
@@ -1061,7 +1061,7 @@ void    Channel::OnHint (struct evbuffer *evb) {
 	// FIXME: wake up here
 	hint_in_.push_back(hint);
 	hint_in_size_ += hint.base_length();
-	dprintf("%s #%u -hint %s [%ld]\n",tintstr(),id_,hint.str().c_str(),hint_in_size_);
+	dprintf("%s #%u -hint %s [%llu]\n",tintstr(),id_,hint.str().c_str(),hint_in_size_);
     }
 }
 
@@ -1532,7 +1532,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
     RecvFrom(socket, addr, evb);
     size_t evboriglen = evbuffer_get_length(evb);
 
-    dprintf("%s recvdgram %lu\n",tintstr(),evboriglen );
+    dprintf("%s recvdgram " PRISIZET "\n",tintstr(),evboriglen );
 
 //#define return_log(...) { fprintf(stderr,__VA_ARGS__); evbuffer_free(evb); return; }
 #define return_log(...) { dprintf(__VA_ARGS__); evbuffer_free(evb); if (hishs != NULL) { delete hishs; } return; }
