@@ -115,12 +115,12 @@ class TestPexRes4cert(TestPexResFramework):
 
 
     def disabled_test_reply_cert(self):
-        # TODO: swift PEX cert support
+        # TODO: swift PEX cert support: currently just receives
         
         myaddr = ("127.0.0.1",5357)
         # Fake peer to send as PEX_RES
         myaddr2 = ("127.0.0.1",5356)
-        cert = '\xab' * 481 
+        cert = '\xab' * 481  # TODO send real cert
         self.do_test_reply(socket.AF_INET,myaddr,myaddr2,cert=cert)
 
 
@@ -144,7 +144,7 @@ class TestPexRes6(TestPexResFramework):
     
 def test_suite():
     suite = unittest.TestSuite()
-    #suite.addTest(unittest.makeSuite(TestPexRes4cert))
+    suite.addTest(unittest.makeSuite(TestPexRes4cert))
     suite.addTest(unittest.makeSuite(TestPexRes6))
     return suite
 
