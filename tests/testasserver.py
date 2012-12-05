@@ -71,9 +71,12 @@ class TestAsServer(unittest.TestCase):
             print >>sys.stderr,"SwiftProcess: __init__: Running",args,"workdir",self.workdir
 
         self.stdoutfile = tempfile.NamedTemporaryFile(delete=False)       
-        
-        #self.popen = subprocess.Popen(args,stdout=subprocess.PIPE,cwd=self.workdir)
-        self.popen = subprocess.Popen(args,stdout=self.stdoutfile,cwd=self.workdir) 
+
+        if sys.platform == "win32":
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            creationflags=0
+        self.popen = subprocess.Popen(args,stdout=self.stdoutfile,cwd=self.workdir,creationflags=creationflags) 
 
         if DEBUG:
             print >>sys.stderr,"SwiftProcess: sleep to let process start"
