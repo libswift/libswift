@@ -295,10 +295,6 @@ Address swift::BoundAddress(evutil_socket_t sock) {
 
 
 int Channel::SendTo (evutil_socket_t sock, const Address& addr, struct evbuffer *evb) {
-
-
-    fprintf(stderr,"Channel::SendTo: addr %s\n", addr.str().c_str() );
-
     int length = evbuffer_get_length(evb);
     int r = sendto(sock,(const char *)evbuffer_pullup(evb, length),length,0,
                    (struct sockaddr*)&(addr.addr),sizeof(struct sockaddr_storage));
