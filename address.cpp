@@ -289,7 +289,7 @@ void Address::set_ip(const char* ip_str, int family)
     fprintf(stderr,"Address::set_ip: %s family %d\n", ip_str, family );
 
     struct addrinfo hint;
-    hint.ai_flags = AI_PASSIVE | AI_NUMERICHOST | AI_NUMERICSERV;
+    hint.ai_flags = AI_PASSIVE;
     hint.ai_family = family;
     hint.ai_socktype = 0;
     hint.ai_protocol = 0;

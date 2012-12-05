@@ -38,7 +38,7 @@ TEST(Connection,CwndTest) {
     size = st.st_size;//, sizek = (st.st_size>>10) + (st.st_size%1024?1:0) ;
     Channel::SELF_CONN_OK = true;
 
-    int sock1 = swift::Listen(7001);
+    int sock1 = swift::Listen(Address("0.0.0.0",7001));
     ASSERT_TRUE(sock1>=0);
 
     int file = swift::Open("test_file0.dat");
