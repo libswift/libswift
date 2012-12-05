@@ -167,7 +167,7 @@ class TestRequest(TestDirSeedFramework):
         # Send Ack + explicit close
         d = s.makeDatagram()
         d.add( AckMessage(ChunkRange(0,0),TimeStamp(1234L)) )
-        d.add( HandshakeMessage(CHAN_ID_ZERO,POPT_VER_PPSP )
+        d.add( HandshakeMessage(CHAN_ID_ZERO,POPT_VER_PPSP) )
         s.c.send(d)
 
 
