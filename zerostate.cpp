@@ -186,23 +186,11 @@ void Channel::OnHashZeroState(struct evbuffer *evb)
     dprintf("%s #%u zero -hash, don't need it, am a seeder\n",tintstr(),id_);
 }
 
-void Channel::OnPexAddv4ZeroState(struct evbuffer *evb)
+void Channel::OnPexAddZeroState(struct evbuffer *evb, int family)
 {
-    uint32_t ipv4 = evbuffer_remove_32be(evb);
-    uint16_t port = evbuffer_remove_16be(evb);
+    evbuffer_remove_pexaddr(evb, family);
     // Forget about it
 }
-
-void Channel::OnPexAddv6ZeroState(struct evbuffer *evb)
-{
-    uint32_t ip0 = evbuffer_remove_32be(evb);
-    uint32_t ip1 = evbuffer_remove_32be(evb);
-    uint32_t ip2 = evbuffer_remove_32be(evb);
-    uint32_t ip3 = evbuffer_remove_32be(evb);
-    uint16_t port = evbuffer_remove_16be(evb);
-    // Forget about it
-}
-
 
 void Channel::OnPexAddCertZeroState(struct evbuffer *evb)
 {

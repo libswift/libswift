@@ -392,6 +392,7 @@ int MmapHashTree::internal_deserialize(FILE *fp,bool contentavail) {
 bool            MmapHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
     dprintf("%s hashtree offer peak %s\n",tintstr(),pos.str().c_str());
 
+    // PPSPTODO: implicit assumption about order
     //assert(!size_);
     if (peak_count_) {
         bin_t last_peak = peaks_[peak_count_-1];

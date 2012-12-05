@@ -24,7 +24,7 @@ uint64_t ContentTransfer::cleancounter = 0;
  * Local Constants
  */
 #define CHANNEL_GARBAGECOLLECT_INTERVAL		5 // seconds, or GlobalCleanCallback calls actually
-#define TRANSFER_IDLE_DEACTIVATE_INTERVAL  	30 // seconds, or GlobalCleanCallback calls actually
+#define TRANSFER_IDLE_DEACTIVATE_INTERVAL  	300 // seconds, or GlobalCleanCallback calls actually
 
 #define TRACKER_RETRY_INTERVAL_START	(5*TINT_SEC)
 #define TRACKER_RETRY_INTERVAL_EXP	1.1	// exponent used to increase INTERVAL_START

@@ -169,15 +169,15 @@ bool Channel::IsComplete() {
 
 
 uint16_t Channel::GetMyPort() {
-    struct sockaddr_in mysin = {};
-    socklen_t mysinlen = sizeof(mysin);
-    if (getsockname(socket_, (struct sockaddr *)&mysin, &mysinlen) < 0)
+    Address addr;
+    socklen_t addrlen = sizeof(struct sockaddr_storage);
+    if (getsockname(socket_, (struct sockaddr *)&addr.addr, &addrlen) < 0)
     {
         print_error("error on getsockname");
         return 0;
     }
     else
-        return ntohs(mysin.sin_port);
+        return addr.port();
 }
 
 bool Channel::IsDiffSenderOrDuplicate(Address addr, uint32_t chid)
@@ -251,12 +251,12 @@ tint Channel::Time () {
 
 // SOCKMGMT
 evutil_socket_t Channel::Bind (Address address, sckrwecb_t callbacks) {
-    struct sockaddr_in addr = address;
+    struct sockaddr_storage sa = address;
     evutil_socket_t fd;
-    int len = sizeof(struct sockaddr_in), sndbuf=1<<20, rcvbuf=1<<20;
+    int len = sizeof(struct sockaddr_storage), sndbuf=1<<20, rcvbuf=1<<20;
     #define dbnd_ensure(x) { if (!(x)) { \
         print_error("binding fails"); close_socket(fd); return INVALID_SOCKET; } }
-    dbnd_ensure ( (fd = socket(AF_INET, SOCK_DGRAM, 0)) >= 0 );
+    dbnd_ensure ( (fd = socket(address.get_family(), SOCK_DGRAM, 0)) >= 0 );
     dbnd_ensure( make_socket_nonblocking(fd) );  // FIXME may remove this
     int enable = true;
     dbnd_ensure ( setsockopt(fd, SOL_SOCKET, SO_SNDBUF,
@@ -264,7 +264,14 @@ evutil_socket_t Channel::Bind (Address address, sckrwecb_t callbacks) {
     dbnd_ensure ( setsockopt(fd, SOL_SOCKET, SO_RCVBUF,
                              (setsockoptptr_t)&rcvbuf, sizeof(int)) == 0 );
     //setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (setsockoptptr_t)&enable, sizeof(int));
-    dbnd_ensure ( ::bind(fd, (sockaddr*)&addr, len) == 0 );
+    if (address.get_family() == AF_INET6)
+    {
+	// Arno, 2012-12-04: Enable IPv4 on this IPv6 socket, addresses
+	// show up as IPv4-mapped IPv6.
+	int no = 0;
+	dbnd_ensure ( setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (setsockoptptr_t)&no, sizeof(no)) == 0 );
+    }
+    dbnd_ensure ( ::bind(fd, (sockaddr*)&sa, len) == 0 );
 
     callbacks.sock = fd;
     sock_open[sock_count++] = callbacks;
@@ -273,7 +280,7 @@ evutil_socket_t Channel::Bind (Address address, sckrwecb_t callbacks) {
 
 Address Channel::BoundAddress(evutil_socket_t sock) {
 
-    struct sockaddr_in myaddr;
+    struct sockaddr_storage myaddr;
     socklen_t mylen = sizeof(myaddr);
     int ret = getsockname(sock,(sockaddr*)&myaddr,&mylen);
     if (ret >= 0) {
@@ -291,10 +298,9 @@ Address swift::BoundAddress(evutil_socket_t sock) {
 
 
 int Channel::SendTo (evutil_socket_t sock, const Address& addr, struct evbuffer *evb) {
-
     int length = evbuffer_get_length(evb);
     int r = sendto(sock,(const char *)evbuffer_pullup(evb, length),length,0,
-                   (struct sockaddr*)&(addr.addr),sizeof(struct sockaddr_in));
+                   (struct sockaddr*)&(addr.addr),sizeof(struct sockaddr_storage));
     // SCHAAP: 2012-06-16 - How about EAGAIN and EWOULDBLOCK? Do we just drop the packet then as well?
     if (r<0) {
         print_error("can't send");
@@ -309,7 +315,7 @@ int Channel::SendTo (evutil_socket_t sock, const Address& addr, struct evbuffer 
 }
 
 int Channel::RecvFrom (evutil_socket_t sock, Address& addr, struct evbuffer *evb) {
-    socklen_t addrlen = sizeof(struct sockaddr_in);
+    socklen_t addrlen = sizeof(struct sockaddr_storage);
     struct evbuffer_iovec vec;
     if (evbuffer_reserve_space(evb, SWIFT_MAX_RECV_DGRAM_SIZE, &vec, 1) < 0) {
         print_error("error on evbuffer_reserve_space");
@@ -373,47 +379,6 @@ int Channel::EncodeID(int unscrambled) {
 
 
 /*
- * class Address implementation
- */
-
-void Address::set_ipv4 (const char* ip_str) {
-    struct hostent *h = gethostbyname(ip_str);
-    if (h == NULL) {
-        print_error("cannot lookup address");
-        return;
-    } else {
-        addr.sin_addr.s_addr = *(u_long *) h->h_addr_list[0];
-    }
-}
-
-
-Address::Address(const char* ip_port) {
-    clear();
-    if (strlen(ip_port)>=1024)
-        return;
-    char ipp[1024];
-    strncpy(ipp,ip_port,1024);
-    char* semi = strchr(ipp,':');
-    if (semi) {
-        *semi = 0;
-        set_ipv4(ipp);
-        set_port(semi+1);
-    } else {
-        if (strchr(ipp, '.')) {
-            set_ipv4(ipp);
-            set_port((uint16_t)0);
-        } else {
-            set_ipv4((uint32_t)INADDR_ANY);
-            set_port(ipp);
-        }
-    }
-}
-
-
-uint32_t Address::LOCALHOST = INADDR_LOOPBACK;
-
-
-/*
  * Utility methods
  */
 
@@ -438,22 +403,6 @@ const char* swift::tintstr (tint time) {
     int usecs = time/TINT_uSEC;
     sprintf(ret_str[i],"%i_%02i_%02i_%03i_%03i",hours,mins,secs,msecs,usecs);
     return ret_str[i];
-}
-
-
-std::string swift::sock2str (struct sockaddr_in addr) {
-    char ipch[32];
-#ifdef _WIN32
-    //Vista only: InetNtop(AF_INET,&(addr.sin_addr),ipch,32);
-    // IPv4 only:
-    struct in_addr inaddr;
-    memcpy(&inaddr, &(addr.sin_addr), sizeof(inaddr));
-    strncpy(ipch, inet_ntoa(inaddr),32);
-#else
-    inet_ntop(AF_INET,&(addr.sin_addr),ipch,32);
-#endif
-    sprintf(ipch+strlen(ipch),":%i",ntohs(addr.sin_port));
-    return std::string(ipch);
 }
 
 
@@ -500,6 +449,26 @@ int swift::evbuffer_add_chunkaddr(struct evbuffer *evb, bin_t &b, popt_chunk_add
     return ret;
 }
 
+int swift::evbuffer_add_pexaddr(struct evbuffer *evb, Address& a)
+{
+    int ret = -1;
+    if (a.get_family() == AF_INET)
+    {
+	ret = evbuffer_add_8(evb, SWIFT_PEX_RESv4);
+	ret = evbuffer_add_32be(evb, a.ipv4());
+	ret = evbuffer_add_16be(evb, a.port());
+    }
+    else
+    {
+	struct in6_addr ipv6 = a.ipv6();
+
+	ret = evbuffer_add_8(evb, SWIFT_PEX_RESv6);
+	for (int i=0; i<16; i++)
+	    ret = evbuffer_add_8(evb, ipv6.s6_addr[i] );
+	ret = evbuffer_add_16be(evb, a.port());
+    }
+    return ret;
+}
 
 
 uint8_t swift::evbuffer_remove_8(struct evbuffer *evb) {
@@ -557,6 +526,27 @@ binvector swift::evbuffer_remove_chunkaddr(struct evbuffer *evb, popt_chunk_addr
 	    swift::chunk32_to_bin32(schunk,echunk,&bv);
     }
     return bv;
+}
+
+Address swift::evbuffer_remove_pexaddr(struct evbuffer *evb, int family)
+{
+    int ret = -1;
+    if (family == AF_INET)
+    {
+	uint32_t ipv4 = evbuffer_remove_32be(evb);
+	uint16_t port = evbuffer_remove_16be(evb);
+	Address addr(ipv4,port);
+	return addr;
+    }
+    else
+    {
+	struct in6_addr ipv6;
+	for (int i=0; i<16; i++)
+	    ipv6.s6_addr[i] = evbuffer_remove_8(evb);
+	uint16_t port = evbuffer_remove_16be(evb);
+	Address addr(ipv6,port);
+	return addr;
+    }
 }
 
 

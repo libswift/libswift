@@ -28,6 +28,8 @@ typedef unsigned __int64 uint64_t;
 #include <io.h>
 #include <xutility> // for std::min/max
 #include <direct.h>
+#include <In6addr.h>
+#include <Ws2tcpip.h>
 #else
 #include <sys/mman.h>
 #include <arpa/inet.h>
@@ -191,7 +193,11 @@ int remove_utf8(std::string pathname);
 class DirEntry
 {
   public:
+#ifdef _WIN32
+        DirEntry(std::string filename, bool isdir) : filename_(filename), isdir_(isdir), hFind_(0) {}
+#else
 	DirEntry(std::string filename, bool isdir) : filename_(filename), isdir_(isdir), dirp_(NULL) {}
+#endif
 	std::string filename_;
 	bool isdir_;
 

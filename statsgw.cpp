@@ -273,7 +273,7 @@ bool InstallStatsGateway (struct event_base *evbase,Address bindaddr) {
    evhttp_set_gencb(statsgw_event, StatsGwNewRequestCallback, NULL);
 
    /* Now we tell the evhttp what port to listen on */
-   statsgw_handle = evhttp_bind_socket_with_handle(statsgw_event, bindaddr.ipv4str().c_str(), bindaddr.port());
+   statsgw_handle = evhttp_bind_socket_with_handle(statsgw_event, bindaddr.ipstr().c_str(), bindaddr.port());
    if (!statsgw_handle) {
       print_error("statsgw: evhttp_bind_socket_with_handle failed");
       return false;

@@ -114,76 +114,36 @@ namespace swift {
 #define PEX_RES_MAX_CERT_SIZE		     1024
 
 
-/** IPv4 address, just a nice wrapping around struct sockaddr_in. */
+/** IPv4/6 address, just a nice wrapping around struct sockaddr_storage. */
     struct Address {
-    struct sockaddr_in  addr;
-    static uint32_t LOCALHOST;
-    void set_port (uint16_t port) {
-        addr.sin_port = htons(port);
-    }
-    void set_port (const char* port_str) {
-        int p;
-        if (sscanf(port_str,"%i",&p))
-        set_port(p);
-    }
-    void set_ipv4 (uint32_t ipv4) {
-        addr.sin_addr.s_addr = htonl(ipv4);
-    }
-    void set_ipv4 (const char* ipv4_str) ;
-    //{    inet_aton(ipv4_str,&(addr.sin_addr));    }
-    void clear () {
-        memset(&addr,0,sizeof(struct sockaddr_in));
-        addr.sin_family = AF_INET;
-    }
-    Address() {
-        clear();
-    }
-    Address(const char* ip, uint16_t port)  {
-        clear();
-        set_ipv4(ip);
-        set_port(port);
-    }
+    struct sockaddr_storage  addr;
+    Address();
+    Address(const char* ip, uint16_t port);
+    /**IPv4 address as "ip:port" or IPv6 address as "[ip]:port" following
+     * RFC2732, or just port in which case the address is set to in6addr_any */
     Address(const char* ip_port);
-    Address(uint16_t port) {
-        clear();
-        set_ipv4((uint32_t)INADDR_ANY);
-        set_port(port);
-    }
-    Address(uint32_t ipv4addr, uint16_t port) {
-        clear();
-        set_ipv4(ipv4addr);
-        set_port(port);
-    }
-    Address(const struct sockaddr_in& address) : addr(address) {}
-    uint32_t ipv4 () const { return ntohl(addr.sin_addr.s_addr); }
-    uint16_t port () const { return ntohs(addr.sin_port); }
-    operator sockaddr_in () const {return addr;}
-    bool operator == (const Address& b) const {
-        return addr.sin_family==b.addr.sin_family &&
-        addr.sin_port==b.addr.sin_port &&
-        addr.sin_addr.s_addr==b.addr.sin_addr.s_addr;
-    }
-    std::string str () const {
-        char rs[32];
-        sprintf(rs,"%i.%i.%i.%i:%i",ipv4()>>24,(ipv4()>>16)&0xff,
-            (ipv4()>>8)&0xff,ipv4()&0xff,port());
-        return std::string(rs);
-    }
-    std::string ipv4str () const {
-        char rs[32];
-        sprintf(rs,"%i.%i.%i.%i",ipv4()>>24,(ipv4()>>16)&0xff,
-            (ipv4()>>8)&0xff,ipv4()&0xff);
-        return std::string(rs);
-    }
+    Address(uint32_t ipv4addr, uint16_t port);
+    Address(const struct sockaddr_storage& address) : addr(address) {}
+    Address(struct in6_addr ipv6addr, uint16_t port);
+
+    void set_ip   (const char* ip_str, int family);
+    void set_port (uint16_t port);
+    void set_port (const char* port_str);
+    void set_ipv4 (uint32_t ipv4);
+    void set_ipv4 (const char* ipv4_str);
+    void set_ipv6 (const char* ip_str);
+    void set_ipv6 (struct in6_addr &ipv6);
+    void clear ();
+    uint32_t ipv4() const;
+    struct in6_addr ipv6() const;
+    uint16_t port () const;
+    operator sockaddr_storage () const {return addr;}
+    bool operator == (const Address& b) const;
+    std::string str () const;
+    std::string ipstr (bool includeport=false) const;
     bool operator != (const Address& b) const { return !(*this==b); }
-    bool is_private() const {
-        // TODO IPv6
-        uint32_t no = ipv4(); uint8_t no0 = no>>24,no1 = (no>>16)&0xff;
-        if (no0 == 10) return true;
-        else if (no0 == 172 && no1 >= 16 && no1 <= 31) return true;
-        else if (no0 == 192 && no1 == 168) return true;
-        else return false;
-    }
+    bool is_private() const;
+    int get_family() const { return addr.ss_family; }
     };
 
 // Arno, 2011-10-03: Use libevent callback functions, no on_error?
@@ -716,7 +676,7 @@ namespace swift {
 
 
         // Ric: used for testing LEDBAT's behaviour
-        float_t		GetCwnd() { return cwnd_; }
+        float		GetCwnd() { return cwnd_; }
         tint 		GetHintSize() { return hint_in_size_; }
         bool 		Totest;
         bool 		Tocancel;
@@ -731,8 +691,7 @@ namespace swift {
         bin_t       OnData (struct evbuffer *evb);
         void        OnHint (struct evbuffer *evb);
         void        OnHash (struct evbuffer *evb);
-        void        OnPexAddv4 (struct evbuffer *evb);
-        void        OnPexAddv6 (struct evbuffer *evb);
+        void        OnPexAdd(struct evbuffer *evb, int family);
         void        OnPexAddCert (struct evbuffer *evb);
         static Handshake *StaticOnHandshake( Address &addr, uint32_t cid, bool ver_known, popt_version_t ver, struct evbuffer *evb);
         void        OnHandshake (Handshake *hishs);
@@ -814,8 +773,7 @@ namespace swift {
         void 	    OnDataZeroState(struct evbuffer *evb);
         void        OnHaveZeroState(struct evbuffer *evb);
         void        OnHashZeroState(struct evbuffer *evb);
-        void        OnPexAddv4ZeroState(struct evbuffer *evb);
-        void        OnPexAddv6ZeroState(struct evbuffer *evb);
+        void        OnPexAddZeroState(struct evbuffer *evb, int family);
         void        OnPexAddCertZeroState(struct evbuffer *evb);
         void        OnPexReqZeroState(struct evbuffer *evb);
         tint        GetOpenTime() { return open_time_; }
@@ -1236,6 +1194,7 @@ namespace swift {
     int evbuffer_add_64be(struct evbuffer *evb, uint64_t l);
     int evbuffer_add_hash(struct evbuffer *evb, const Sha1Hash& hash);
     int evbuffer_add_chunkaddr(struct evbuffer *evb, bin_t &b, popt_chunk_addr_t chunk_addr); // PPSP
+    int evbuffer_add_pexaddr(struct evbuffer *evb, Address& a);
 
     uint8_t evbuffer_remove_8(struct evbuffer *evb);
     uint16_t evbuffer_remove_16be(struct evbuffer *evb);
@@ -1243,11 +1202,11 @@ namespace swift {
     uint64_t evbuffer_remove_64be(struct evbuffer *evb);
     Sha1Hash evbuffer_remove_hash(struct evbuffer* evb);
     binvector evbuffer_remove_chunkaddr(struct evbuffer *evb, popt_chunk_addr_t chunk_addr); // PPSP
+    Address evbuffer_remove_pexaddr(struct evbuffer *evb, int family);
     void chunk32_to_bin32(uint32_t schunk, uint32_t echunk, binvector *bvptr);
     binvector bin_fragment(bin_t &origbin, bin_t &cancelbin);
 
     const char* tintstr(tint t=0);
-    std::string sock2str (struct sockaddr_in addr);
  #define SWIFT_MAX_CONNECTIONS 20
 
     // SOCKTUNNEL

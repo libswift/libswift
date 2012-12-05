@@ -195,14 +195,12 @@ void Availability::setSize(uint64_t size)
 		// Initialize with the binmaps we already received
 		for(WaitingPeers::iterator vpci = waiting_peers_.begin(); vpci != waiting_peers_.end(); ++vpci)
 		{
-			setBinmap(vpci->second);
+		    setBinmap(vpci->second);
 		}
-
 
 		if (DEBUGAVAILABILITY)
 		{
-			char bin_name_buf[32];
-			dprintf("%s #1 Availability -> setting size in chunk %llu \t avail size %llu\n",tintstr(), size, s);
+		    dprintf("%s #1 Availability -> setting size in chunk %llu \t avail size %llu\n",tintstr(), size, s);
 		}
 	}
 }
