@@ -167,7 +167,7 @@ class TestRequest(TestDirSeedFramework):
         # Send Ack + explicit close
         d = s.makeDatagram()
         d.add( AckMessage(ChunkRange(0,0),TimeStamp(1234L)) )
-        d.add( HandshakeMessage(CHAN_ID_ZERO,None) )
+        d.add( HandshakeMessage(CHAN_ID_ZERO,POPT_VER_PPSP )
         s.c.send(d)
 
 
@@ -201,7 +201,7 @@ class TestRequest(TestDirSeedFramework):
         # Send Ack + explicit close
         d = s.makeDatagram()
         d.add( AckMessage(ChunkRange(67,67),TimeStamp(1234L)) )
-        d.add( HandshakeMessage(CHAN_ID_ZERO,None) )
+        d.add( HandshakeMessage(CHAN_ID_ZERO,POPT_VER_PPSP) )
         s.c.send(d)
 
 
@@ -286,7 +286,7 @@ class TestRequest(TestDirSeedFramework):
         # Send Ack + explicit close
         d = s.makeDatagram()
         d.add( AckMessage(ChunkRange(67,68),TimeStamp(1234L)) )
-        d.add( HandshakeMessage(CHAN_ID_ZERO,None) )
+        d.add( HandshakeMessage(CHAN_ID_ZERO,POPT_VER_PPSP) )
         s.c.send(d)
 
 
@@ -383,7 +383,7 @@ class TestRequest(TestDirSeedFramework):
 
         # Send explicit close
         d = s.makeDatagram()
-        d.add( HandshakeMessage(CHAN_ID_ZERO,None) )
+        d.add( HandshakeMessage(CHAN_ID_ZERO,POPT_VER_PPSP) )
         s.c.send(d)
 
 
@@ -492,7 +492,7 @@ class TestRequest(TestDirSeedFramework):
 
         # Send explicit close
         d = s.makeDatagram()
-        d.add( HandshakeMessage(CHAN_ID_ZERO,None) )
+        d.add( HandshakeMessage(CHAN_ID_ZERO,POPT_VER_PPSP) )
         s.send(d)
 
 

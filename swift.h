@@ -262,13 +262,14 @@ namespace swift {
     // Protocol options defined by IETF PPSPP
     typedef enum {
 	POPT_VERSION = 0,
-	POPT_SWARMID = 1,
-	POPT_CONT_INT_PROT = 2,    // content integrity protection method
-	POPT_MERKLE_HASH_FUNC = 3,
-	POPT_LIVE_SIG_ALG = 4,
-	POPT_CHUNK_ADDR = 5,
-	POPT_LIVE_DISC_WND = 6,
-	POPT_SUPP_MSGS = 7,
+	POPT_MIN_VERSION = 1,
+	POPT_SWARMID = 2,
+	POPT_CONT_INT_PROT = 3,    // content integrity protection method
+	POPT_MERKLE_HASH_FUNC = 4,
+	POPT_LIVE_SIG_ALG = 5,
+	POPT_CHUNK_ADDR = 6,
+	POPT_LIVE_DISC_WND = 7,
+	POPT_SUPP_MSGS = 8,
 	POPT_END = 255
     } popt_t;
 
@@ -300,9 +301,9 @@ namespace swift {
     {
       public:
 #if ENABLE_IETF_PPSP_VERSION == 1
-	Handshake() : version_(VER_PPSPP_v1), swarm_id_ptr_(NULL), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL) {}
+	Handshake() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), swarm_id_ptr_(NULL), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL) {}
 #else
-	Handshake() : version_(VER_SWIFT_LEGACY), swarm_id_ptr_(NULL), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL) {}
+	Handshake() : version_(VER_SWIFT_LEGACY), min_version_(VER_SWIFT_LEGACY), swarm_id_ptr_(NULL), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL) {}
 #endif
 	~Handshake() { ReleaseSwarmID(); }
 	void SetSwarmID(Sha1Hash &swarmid) { swarm_id_ptr_ = new Sha1Hash(swarmid); }
@@ -322,6 +323,7 @@ namespace swift {
 	{
 	    // Do not reset peer_channel_id
 	    version_ = VER_SWIFT_LEGACY;
+	    min_version_ = VER_SWIFT_LEGACY;
 	    cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
 	    merkle_func_ = POPT_MERKLE_HASH_FUNC_SHA1;
 	    live_sig_alg_ = 0; // PPSPTODO
@@ -332,6 +334,7 @@ namespace swift {
 	/**    Peer channel id; zero if we are trying to open a channel. */
 	uint32_t    		peer_channel_id_;
 	popt_version_t   	version_;
+	popt_version_t   	min_version_;
 	popt_cont_int_prot_t  	cont_int_prot_;
 	popt_merkle_func_t	merkle_func_;
 	uint8_t			live_sig_alg_; // PPSPTODO

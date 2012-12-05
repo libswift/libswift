@@ -12,6 +12,7 @@ import time
 import subprocess
 import urllib2
 import string
+import socket
 from traceback import print_exc
 
 DEBUG=True
@@ -26,19 +27,31 @@ class TestAsServer(unittest.TestCase):
         # Main UDP listen socket
         self.setUpPreSession()
         
+        if self.family == socket.AF_INET:
+            self.inaddrany = "0.0.0.0"
+            self.localhost = "127.0.0.1"
+            clinaddrany = self.inaddrany
+            cllocalhost = self.localhost
+        else:
+            self.inaddrany = "::0"
+            self.localhost = "::1"
+            # Swift takes RFC2732 IPv6 addresses on command line
+            clinaddrany = "["+self.inaddrany+"]"
+            cllocalhost = "["+self.localhost+"]"
+        
         # Security: only accept commands from localhost, enable HTTP gw, 
         # no stats/webUI web server
         args=[]
         args.append(str(self.binpath))
         if self.listenport is not None:
             args.append("-l") # listen port
-            args.append("0.0.0.0:"+str(self.listenport))
+            args.append(clinaddrany+":"+str(self.listenport))
         if self.cmdport is not None:            
             args.append("-c") # command port
-            args.append("127.0.0.1:"+str(self.cmdport))
+            args.append(cllocalhost+":"+str(self.cmdport))
         if self.httpport is not None:
             args.append("-g") # HTTP gateway port
-            args.append("127.0.0.1:"+str(self.httpport))
+            args.append(cllocalhost+":"+str(self.httpport))
         if self.destdir is not None:
             args.append("-o") # destdir
             args.append(self.destdir)
@@ -81,6 +94,7 @@ class TestAsServer(unittest.TestCase):
         self.filename = None
         self.scandir = None
         self.progress = False
+        self.family = socket.AF_INET
 
     def setUpPostSession(self):
         pass

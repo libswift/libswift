@@ -129,7 +129,11 @@ class IPv6Port(Encodable):
     def __init__(self,ipport): # Python tuple
         self.ipport = ipport
     def to_bytes(self):
-        ipbytes = socket.inet_pton(socket.AF_INET6, self.ipport[0])
+        if sys.platform == "win32":
+            ipbytes = inet_pton6(self.ipport[0])
+        else:
+            ipbytes = socket.inet_pton(socket.AF_INET6, self.ipport[0])
+            
         portbytes = struct.pack(">H",self.ipport[1])
         chain = [ipbytes,portbytes]
         return "".join(chain)
@@ -150,6 +154,49 @@ class IPv6Port(Encodable):
         return str(self.ipport)
 
 
+# Known deficiency: don't handle :: in the middle right.
+def inet_pton6(p):
+    #print >>sys.stderr,"inet_pton: Input",p,len(p)
+    if '.' in p:
+        # IPv4 mapped
+        idx = p.rfind(':')
+        p4 = p[idx+1:]
+        n4 = socket.inet_aton(p4)
+        n = '\x00' * 10
+        n += '\xff' * 2
+        n += n4
+        #print >>sys.stderr,"inet_pton: IPv4mapped",binascii.hexlify(n)
+        return n
+
+    s = ''    
+    q = p
+    sidx = len(q)
+    while sidx > 0:
+        sidx = q.rfind(':')
+        if sidx == -1:
+            sidx = -1
+        diff = len(q)-1 - sidx
+        #print >>sys.stderr,"sidx",sidx
+        elem = q[sidx+1:]
+        #print >>sys.stderr,"inet_pton: elem",elem,diff
+        if diff < 4:
+            pad = '0' * (4-diff)
+            newelem = pad+elem
+        else:
+            newelem = elem
+        s = newelem+s
+        
+        #print >>sys.stderr,"inet_pton: while s",s
+        q = q[0:sidx]
+
+    if len(s) != 32:
+        diff = 32-len(s)
+        ndiff = diff / 4
+        pre = '0000' * ndiff
+        s = pre+s
+        
+    #print >>sys.stderr,"inet_pton: s",s
+    return binascii.unhexlify(s)
 
 #
 # ProtocolOptions
@@ -159,13 +206,14 @@ POPT_VER_TYPE = '\x00'
 POPT_VER_SWIFT = '\x00'
 POPT_VER_PPSP = '\x01'
 
-POPT_SWARMID_TYPE = '\x01'
-POPT_CIPM_TYPE = '\x02'
-POPT_MHF_TYPE = '\x03'
-POPT_LSA_TYPE = '\x04'
-POPT_CAM_TYPE = '\x05'
-POPT_LDW_TYPE = '\x06'
-POPT_MSGS_TYPE = '\x07'
+POPT_MIN_VER_TYPE = '\x01'
+POPT_SWARMID_TYPE = '\x02'
+POPT_CIPM_TYPE = '\x03'
+POPT_MHF_TYPE = '\x04'
+POPT_LSA_TYPE = '\x05'
+POPT_CAM_TYPE = '\x06'
+POPT_LDW_TYPE = '\x07'
+POPT_MSGS_TYPE = '\x08'
 POPT_END_TYPE = '\xff'
 
 
@@ -191,9 +239,10 @@ MSG_ID_PEX_RESv6 = '\x0c'
 MSG_ID_PEX_REScert = '\x0d'
 
 class HandshakeMessage(Encodable):
-    def __init__(self,chanid,ver,swarmid=None,cipm=None,mhf=None,lsa=None,cam=None,ldw=None,msgdata=None):
+    def __init__(self,chanid,ver,minver=None,swarmid=None,cipm=None,mhf=None,lsa=None,cam=None,ldw=None,msgdata=None):
         self.chanid = chanid
         self.ver = ver
+        self.minver = minver
         self.swarmid = swarmid
         self.cipm = cipm
         self.mhf = mhf
@@ -209,6 +258,9 @@ class HandshakeMessage(Encodable):
             # TODO, make each ProtocolOption an Encodable
             chain.append(POPT_VER_TYPE)
             chain.append(self.ver)
+            if self.minver is not None:
+                chain.append(POPT_MIN_VER_TYPE)
+                chain.append(self.minver)
             if self.swarmid is not None:
                 chain.append(POPT_SWARMID_TYPE)
                 s = len(self.swarmid)
@@ -247,6 +299,7 @@ class HandshakeMessage(Encodable):
         #print >>sys.stderr,"hs:",`chanid`
         off += chanid.get_bytes_length()
         ver = None
+        minver = None
         swarmid = None
         cipm = None
         mhf = None
@@ -262,6 +315,9 @@ class HandshakeMessage(Encodable):
                 off += 1
                 if popt == POPT_VER_TYPE:
                     ver = bytes[off]
+                    off += 1
+                elif popt == POPT_MIN_VER_TYPE:
+                    minver = bytes[off]
                     off += 1
                 elif popt == POPT_SWARMID_TYPE:
                     sbytes = bytes[off:off+2]
@@ -293,7 +349,7 @@ class HandshakeMessage(Encodable):
                 elif popt == POPT_END_TYPE:
                     break
         
-        return [HandshakeMessage(chanid,ver,swarmid,cipm,mhf,lsa,cam,ldw,msgdata),off]
+        return [HandshakeMessage(chanid,ver,minver,swarmid,cipm,mhf,lsa,cam,ldw,msgdata),off]
     
     from_bytes = staticmethod(from_bytes)
     def get_bytes_length():
@@ -303,7 +359,7 @@ class HandshakeMessage(Encodable):
         return MSG_ID_HANDSHAKE
     get_id = staticmethod(get_id)
     def __str__(self):
-        return "HANDSHAKE(ver="+`self.ver`+",sid="+`self.swarmid`+",cam="+`self.cam`+")"
+        return "HANDSHAKE(ver="+`self.ver`+"minver="+`self.minver`+",sid="+`self.swarmid`+",cam="+`self.cam`+")"
 
 
 
@@ -829,7 +885,7 @@ class SwiftConnection:
                 self.c.send(d)
             else:
                 d.add( self.c.get_his_chanid() )
-                d.add( HandshakeMessage(self.c.get_my_chanid(),POPT_VER_PPSP,self.t.get_swarm_id()) )
+                d.add( HandshakeMessage(self.c.get_my_chanid(),POPT_VER_PPSP,POPT_VER_PPSP,self.t.get_swarm_id()) )
                 self.c.send(d)
 
     def makeDatagram(self,autochanid=True):
@@ -848,3 +904,20 @@ class SwiftConnection:
             chanid = d.get_channel_id()
         return d
 
+
+
+if __name__ == "__main__":
+    
+    x = inet_pton6("::1")
+    print >>sys.stderr,"FINAL",`x`
+
+    #x = inet_pton6("2001:0:5ef5:79fb:385c:2235:3f57:ff99")
+    #print >>sys.stderr,"FINAL",`x`
+
+    #x = inet_pton6("fe80::385c:2235:3f57:ff99")
+    #print >>sys.stderr,"FINAL",x
+
+    #x = inet_pton6("::ffff:130.37.193.64")
+    #print >>sys.stderr,"FINAL",x
+
+    

@@ -199,6 +199,9 @@ void    Channel::AddHandshake (struct evbuffer *evb)
 	    evbuffer_add_8(evb, POPT_VERSION);
 	    evbuffer_add_8(evb, hs_out_->version_);
 	    cross << "v" << hs_out_->version_ << " ";
+	    evbuffer_add_8(evb, POPT_MIN_VERSION);
+	    evbuffer_add_8(evb, hs_out_->min_version_);
+	    cross << "nv" << hs_out_->version_ << " ";
 
 	    if (hs_in_ == NULL) { // initiating, send swarm ID
 		evbuffer_add_8(evb, POPT_SWARMID);
@@ -1137,6 +1140,10 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
 		case POPT_VERSION:
 		    hs->version_ = (popt_version_t)evbuffer_remove_8(evb);
 		    cross << "v" << hs->version_ << " ";
+		    break;
+		case POPT_MIN_VERSION:
+		    hs->min_version_ = (popt_version_t)evbuffer_remove_8(evb);
+		    cross << "nv" << hs->min_version_ << " ";
 		    break;
 		case POPT_SWARMID:
 		    size = evbuffer_remove_16be(evb);

@@ -23,38 +23,11 @@ from swiftconn import *
 DEBUG=False
 
 
-class TestPexRes(TestAsServer):
-
-    def test_reply_v4(self):
-        
-        myaddr = ("127.0.0.1",5353)
-        # Fake peer to send as PEX_RES
-        myaddr2 = ("127.0.0.1",5352)
-        self.do_test_reply(socket.AF_INET,myaddr,myaddr2)
-
-
-    def disabled_test_reply_v6(self):
-        # TODO: swift IPv6 support
-        
-        myaddr = ("::1",5353)
-        # Fake peer to send as PEX_RES
-        myaddr2 = ("::1",5352)
-        self.do_test_reply(socket.AF_INET6,myaddr,myaddr2)
-
-    def test_reply_cert(self):
-        # TODO: swift PEX cert support
-        
-        myaddr = ("127.0.0.1",5353)
-        # Fake peer to send as PEX_RES
-        myaddr2 = ("127.0.0.1",5352)
-        cert = '\xab' * 481 
-        self.do_test_reply(socket.AF_INET,myaddr,myaddr2,cert=cert)
-
-
+class TestPexResFramework(TestAsServer):
 
     def do_test_reply(self,family,myaddr,myaddr2,cert=None):     
            
-        hiscmdgwaddr = ("127.0.0.1",self.cmdport)
+        hiscmdgwaddr = (self.localhost,self.cmdport)
         swarmid = binascii.unhexlify('24aa9484fbee33564fc197252c7c837ce4ce449a')
         
         # Setup listen socket
@@ -66,10 +39,16 @@ class TestPexRes(TestAsServer):
         
         # Tell swift to DL swarm via CMDGW
         print >>sys.stderr,"test: Connect CMDGW",hiscmdgwaddr
-        self.cmdsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.cmdsock = socket.socket(self.family, socket.SOCK_STREAM)
         self.cmdsock.connect(hiscmdgwaddr)
 
-        CMD = "START tswift://"+myaddr[0]+":"+str(myaddr[1])+"/"+binascii.hexlify(swarmid)+"\r\n"
+        httptracker = None
+        if self.family == socket.AF_INET6:
+            httptracker = "["+myaddr[0]+"]:"+str(myaddr[1])
+        else:
+            httptracker = myaddr[0]+":"+str(myaddr[1])
+
+        CMD = "START tswift://"+httptracker+"/"+binascii.hexlify(swarmid)+"\r\n"
         
         self.cmdsock.send(CMD)
         
@@ -79,7 +58,7 @@ class TestPexRes(TestAsServer):
         
         # Send HANDSHAKE
         d = s.makeDatagram()
-        d.add( HandshakeMessage(s.c.get_my_chanid(),POPT_VER_PPSP,swarmid) )
+        d.add( HandshakeMessage(s.c.get_my_chanid(),POPT_VER_PPSP,None,swarmid) )
 
         s.send(d)
         
@@ -123,12 +102,50 @@ class TestPexRes(TestAsServer):
 
         # Expect answer on fake peer's socket
         self.assertTrue(responded)    
-    
+
+
+class TestPexRes4cert(TestPexResFramework):
+
+    def test_reply_v4(self):
+        
+        myaddr = ("127.0.0.1",5353)
+        # Fake peer to send as PEX_RES
+        myaddr2 = ("127.0.0.1",5352)
+        self.do_test_reply(socket.AF_INET,myaddr,myaddr2)
+
+
+    def disabled_test_reply_cert(self):
+        # TODO: swift PEX cert support
+        
+        myaddr = ("127.0.0.1",5357)
+        # Fake peer to send as PEX_RES
+        myaddr2 = ("127.0.0.1",5356)
+        cert = '\xab' * 481 
+        self.do_test_reply(socket.AF_INET,myaddr,myaddr2,cert=cert)
+
+
+
+
+
+class TestPexRes6(TestPexResFramework):
+
+    def setUpPreSession(self):
+        TestPexResFramework.setUpPreSession(self)
+        self.family = socket.AF_INET6
+
+    def test_reply_v6(self):
+        # TODO: swift IPv6 support
+        
+        myaddr = ("::1",5355)
+        # Fake peer to send as PEX_RES
+        myaddr2 = ("::1",5354)
+        self.do_test_reply(socket.AF_INET6,myaddr,myaddr2)
+
     
 def test_suite():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(TestPexRes))
-    
+    #suite.addTest(unittest.makeSuite(TestPexRes4cert))
+    suite.addTest(unittest.makeSuite(TestPexRes6))
     return suite
 
 

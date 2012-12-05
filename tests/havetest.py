@@ -66,7 +66,7 @@ class TestHave(TestAsServer):
         #shutil.rmtree(self.destdir)
 
 
-    def disabled_test_connect_one(self):
+    def test_connect_one(self):
         
         myaddr = ("127.0.0.1",5353)
         hisaddr = ("127.0.0.1",self.listenport)
@@ -91,7 +91,7 @@ class TestHave(TestAsServer):
         
         # Send HAVE
         d = s.makeDatagram()
-        d.add( HandshakeMessage(s.c.get_my_chanid(),POPT_VER_PPSP,swarmid) )
+        d.add( HandshakeMessage(s.c.get_my_chanid(),POPT_VER_PPSP,None,swarmid) )
 
         d.add( HaveMessage(ChunkRange(0,6)) )
         s.send(d)
@@ -163,7 +163,7 @@ class TestHave(TestAsServer):
 
 
 
-    def test_choke(self):
+    def disabled_test_choke(self):
         
         myaddr = ("127.0.0.1",5353)
         hisaddr = ("127.0.0.1",self.listenport)
@@ -188,7 +188,7 @@ class TestHave(TestAsServer):
         
         # Send HAVE + CHOKE
         d = s.makeDatagram()
-        d.add( HandshakeMessage(s.c.get_my_chanid(),POPT_VER_PPSP,swarmid) )
+        d.add( HandshakeMessage(s.c.get_my_chanid(),POPT_VER_PPSP,None,swarmid) )
 
         d.add( HaveMessage(ChunkRange(0,6)) )
         d.add( ChokeMessage() )
