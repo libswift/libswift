@@ -60,21 +60,27 @@ void    Channel::AddPeakHashes (struct evbuffer *evb) {
 void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
 
     dprintf("%s #%u +uncle hash for %s\n",tintstr(),id_,pos.str().c_str());
-
-    // PPSPTODO -04: Order descending
-
     bin_t peak = hashtree()->peak_for(pos);
     // Ric: TODO check (remove data_out_cap??)
     //while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
     //        ack_in_.is_empty(pos.parent()) ) {
+    binvector bv;
     while (pos!=peak && ack_in_.is_empty(pos.parent()) ) {
         bin_t uncle = pos.sibling();
+        bv.push_back(uncle);
+        pos = pos.parent();
+    }
+    // PPSP -04: Send in descending layer order
+    binvector::reverse_iterator iter;
+    for (iter=bv.rbegin(); iter != bv.rend(); iter++) {
+        bin_t uncle = *iter;
         evbuffer_add_8(evb, SWIFT_INTEGRITY);
         evbuffer_add_chunkaddr(evb,uncle,hs_out_->chunk_addr_);
         evbuffer_add_hash(evb, hashtree()->hash(uncle) );
         dprintf("%s #%u +hash %s\n",tintstr(),id_,uncle.str().c_str());
         pos = pos.parent();
     }
+
 }
 
 

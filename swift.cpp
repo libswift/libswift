@@ -359,6 +359,13 @@ int utf8main (int argc, char** argv)
     if (tracker!=Address() && !printurl)
         SetTracker(tracker);
 
+    if (filename != "")
+    {
+	int ret = file_exists_utf8(filename);
+	if (ret < 1)
+	    quit( (std::string("file does not exist: ")+filename).c_str() );
+    }
+
     if (httpgw_enabled)
         InstallHTTPGateway(Channel::evbase,httpaddr,chunk_size,maxspeed);
     if (cmdgw_enabled)
