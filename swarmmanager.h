@@ -75,7 +75,7 @@ namespace swift {
 
         ~SwarmData();
 
-        bool Touch();
+        bool Touch(bool onlyifactive=true);
         bool IsActive();
         const Sha1Hash& RootHash();
         int Id();

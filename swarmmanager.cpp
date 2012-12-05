@@ -56,7 +56,7 @@ SwarmData::SwarmData( const std::string filename, const Sha1Hash& rootHash, cons
 {
 }
 
-SwarmData::SwarmData( const SwarmData& sd ) :
+SwarmData::SwarmData( const SwarmData& sd ) : // Arno, 2012-12-05: Note: latestUse not copied
     id_(-1), rootHash_( sd.rootHash_ ), active_( false ), latestUse_(0), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
     filename_( sd.filename_ ), tracker_( sd.tracker_ ), forceCheckDiskVSHash_( sd.forceCheckDiskVSHash_ ), checkNetworkVSHash_(sd.checkNetworkVSHash_), chunkSize_( sd.chunkSize_ ), zerostate_( sd.zerostate_ ), cached_(false)
 {
@@ -67,8 +67,8 @@ SwarmData::~SwarmData() {
         delete ft_;
 }
 
-bool SwarmData::Touch() {
-    if( !active_ )
+bool SwarmData::Touch(bool onlyifactive) {
+    if (onlyifactive && !active_)
         return false;
     latestUse_ = usec_time();
     return true;
@@ -361,6 +361,8 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
 	    delete newSwarm->ft_;
 	    newSwarm->ft_ = NULL;
 	}
+	else // Arno, 2012-12-05: Make sure latestUse_ is set.
+	    newSwarm->Touch(false);
     }
     assert( swarm.rootHash_ == Sha1Hash::ZERO || newSwarm == FindSwarm( swarm.rootHash_ ) );
     assert( newSwarm == FindSwarm( newSwarm->Id() ) );
