@@ -272,9 +272,9 @@ void            MmapHashTree::RecoverProgress () {
     Sha1Hash zero_hash(zero_chunk,chunk_size_);
 
     // Arno: loop over all pieces, read each from file
-    // ARNOSMPTODO: problem is that we may have the complete hashtree, but
-    // not have all pieces. So hash file gives too little information to
-    // determine whether file is complete on disk.
+    // Note that we may have the complete hashtree, but not have all pieces.
+    // So hash file gives too little information to determine whether file is
+    // complete on disk, hence the .mbinmap file.
     //
     char *buf = new char[chunk_size_];
     for(int p=0; p<size_in_chunks(); p++) {
@@ -392,7 +392,8 @@ int MmapHashTree::internal_deserialize(FILE *fp,bool contentavail) {
 bool            MmapHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
     dprintf("%s hashtree offer peak %s\n",tintstr(),pos.str().c_str());
 
-    // PPSPTODO: implicit assumption about order
+    // Arno: This code expects peaks to be sent in tree descending order,
+    // as is now required in PPSP-04.
     //assert(!size_);
     if (peak_count_) {
         bin_t last_peak = peaks_[peak_count_-1];

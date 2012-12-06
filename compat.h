@@ -131,6 +131,13 @@ typedef void* setsockoptptr_t;
 #define FILE_SEP	  "/"
 #endif
 
+#ifdef WIN32
+#define cmin	min
+#define cmax	max
+#else
+#define cmin    std::min
+#define cmax 	std::max
+#endif
 
 
 namespace swift {
@@ -268,7 +275,6 @@ int inline stringreplace(std::string& source, const std::string& find, const std
 }
 
 std::string hex2bin(std::string input);
-
 
 };
 

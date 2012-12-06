@@ -212,7 +212,7 @@ void HttpGwWrite(int td) {
     //
     if (avail > 0 && evbuffer_get_length(outbuf) < HTTPGW_MAX_OUTBUF_BYTES)
     {
-        int max_write_bytes = 0;
+        int64_t max_write_bytes = 0;
         if (swift::ttype(req->td) == FILE_TRANSFER)
             max_write_bytes = HTTPGW_VOD_MAX_WRITE_BYTES;
         else
@@ -221,12 +221,7 @@ void HttpGwWrite(int td) {
         // Allocate buffer to read into. TODO: let swift::Read accept evb
         char *buf = (char *)malloc(max_write_bytes);
 
-// Arno, 2010-08-16, TODO compat
-#ifdef WIN32
-        uint64_t tosend = min(max_write_bytes,avail);
-#else
-        uint64_t tosend = std::min((int64_t)max_write_bytes,avail);
-#endif
+        uint64_t tosend = cmin(max_write_bytes,avail);
         size_t rd = swift::Read(req->td,buf,tosend,swift::GetHookinOffset(req->td)+req->offset);
         if (rd<0) {
             print_error("httpgw: MayWrite: error pread");
