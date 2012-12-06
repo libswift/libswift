@@ -358,11 +358,7 @@ void HttpGwSwiftPrebufferProgressCallback (int td, bin_t bin) {
 
     dprintf("%s T%i http prebuf progress: endoff startoff %llu endoff %llu\n",tintstr(),td, req->startoff, req->endoff);
 
-#ifdef WIN32
-    int64_t wantsize = min(req->endoff+1-req->startoff,HTTPGW_MIN_PREBUF_BYTES);
-#else
-    int64_t wantsize = std::min(req->endoff+1-req->startoff,(uint64_t)HTTPGW_MIN_PREBUF_BYTES);
-#endif
+    int64_t wantsize = cmin(req->endoff+1-req->startoff,(uint64_t)HTTPGW_MIN_PREBUF_BYTES);
 
     dprintf("%s T%i http prebuf progress: want %lld got %lld\n",tintstr(),td, wantsize, swift::SeqComplete(req->td,req->startoff) );
 

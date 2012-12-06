@@ -117,12 +117,8 @@ public:
     	    bin_t peerbasepos(peerpos.base_right());
 
     	    fprintf(stderr,"live: pp: StartAddPeerPos: peerbasepos %s\n", peerbasepos.str().c_str());
-    	    bin_t cand;
-#ifdef _WIN32
-    	    cand = bin_t(0,max(0,peerbasepos.layer_offset()-LIVE_PP_NUMBER_PREBUF_CHUNKS));
-#else
-    	    cand = bin_t(0,std::max((bin_t::uint_t)0,peerbasepos.layer_offset()-LIVE_PP_NUMBER_PREBUF_CHUNKS));
-#endif
+    	    bin_t cand = bin_t(0,cmax((bin_t::uint_t)0,peerbasepos.layer_offset()-LIVE_PP_NUMBER_PREBUF_CHUNKS));
+
     	    PeerPosMapType::iterator iter = peer_pos_map_.find(channelid);
     	    if (iter ==  peer_pos_map_.end())
     	    {

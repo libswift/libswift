@@ -152,11 +152,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
     else
         fprintf(stderr,"live: AddData: stored " PRISIZET " bytes\n", nbyte);
 
-#ifdef _WIN32
-    uint64_t till = max(1,nbyte/chunk_size_);
-#else
-    uint64_t till = std::max((size_t)1,nbyte/chunk_size_);
-#endif
+    uint64_t till = cmax((size_t)1,nbyte/chunk_size_);
     for (uint64_t c=0; c<till; c++)
     {
         // New chunk is here
