@@ -397,9 +397,6 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
 void    Channel::AddCancel (struct evbuffer *evb) {
 
-        // PPSPTODO
-        return;
-
 	while (SWIFT_MAX_NONDATA_DGRAM_SIZE-evbuffer_get_length(evb) >= 5 && !cancel_out_.empty()) {
 		bin_t cancel = cancel_out_.front();
 		cancel_out_.pop_front();
@@ -1167,7 +1164,7 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
 		    cross << "mhf " << hs->merkle_func_ << " ";
 		    break;
 		case POPT_LIVE_SIG_ALG:
-		    hs->live_sig_alg_ = evbuffer_remove_8(evb);
+		    hs->live_sig_alg_ = (popt_live_sig_alg_t)evbuffer_remove_8(evb);
 		    cross << "lsa " << hs->live_sig_alg_ << " ";
 		    break;
 		case POPT_CHUNK_ADDR:
@@ -1394,7 +1391,7 @@ void Channel::OnSignedHash(struct evbuffer *evb)
     bin_t pos = bv.front();
 
     // PPSPTODO
-    //if (hs_in_->live_sig_alg_ == )
+    //if (hs_in_->live_sig_alg_ == POPT_LIVE_SIG_ALG_PRIVATEDNS)
     //evbuffer_drain(evb, size);
 }
 

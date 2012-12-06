@@ -296,14 +296,29 @@ namespace swift {
 	POPT_CHUNK_ADDR_CHUNK64 = 4
     } popt_chunk_addr_t;
 
+    // http://www.iana.org/assignments/dns-sec-alg-numbers/dns-sec-alg-numbers.xml
+    typedef enum {
+	POPT_LIVE_SIG_ALG_DH = 2,
+	POPT_LIVE_SIG_ALG_DSA = 3,
+	POPT_LIVE_SIG_ALG_RSASHA1 = 5,
+	POPT_LIVE_SIG_ALG_DSA_NSEC3_SHA1 = 6,
+	POPT_LIVE_SIG_ALG_RSASHA1_NSEC3_SHA1 = 7,
+	POPT_LIVE_SIG_ALG_RSASHA256 = 8,
+	POPT_LIVE_SIG_ALG_RSASHA512 = 10,
+	POPT_LIVE_SIG_ALG_ECC_GOST = 12,
+	POPT_LIVE_SIG_ALG_ECDSAP256SHA256 = 13,
+	POPT_LIVE_SIG_ALG_ECDSAP384SHA384 = 14,
+	POPT_LIVE_SIG_ALG_PRIVATEDNS = 253     // supported. Hacks ECDSA with SHA1
+    } popt_live_sig_alg_t;
+
 
     class Handshake
     {
       public:
 #if ENABLE_IETF_PPSP_VERSION == 1
-	Handshake() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
+	Handshake() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_sig_alg_(POPT_LIVE_SIG_ALG_PRIVATEDNS), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
 #else
-	Handshake() : version_(VER_SWIFT_LEGACY), min_version_(VER_SWIFT_LEGACY), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
+	Handshake() : version_(VER_SWIFT_LEGACY), min_version_(VER_SWIFT_LEGACY), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_sig_alg_(POPT_LIVE_SIG_ALG_PRIVATEDNS), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
 #endif
 	~Handshake() { ReleaseSwarmID(); }
 	void SetSwarmID(Sha1Hash &swarmid) { swarm_id_ptr_ = new Sha1Hash(swarmid); }
@@ -317,6 +332,8 @@ namespace swift {
 		return false; // PPSPTODO
 	    else if (chunk_addr_ == POPT_CHUNK_ADDR_BYTE64 || chunk_addr_ == POPT_CHUNK_ADDR_BIN64 || chunk_addr_ == POPT_CHUNK_ADDR_CHUNK64)
 		return false; // PPSPTODO
+	    else if (live_sig_alg_ != POPT_LIVE_SIG_ALG_PRIVATEDNS)
+		return false; // PPSPTODO
 	    return true;
 	}
 	void ResetToLegacy()
@@ -326,7 +343,7 @@ namespace swift {
 	    min_version_ = VER_SWIFT_LEGACY;
 	    cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
 	    merkle_func_ = POPT_MERKLE_HASH_FUNC_SHA1;
-	    live_sig_alg_ = 0; // PPSPTODO
+	    live_sig_alg_ = POPT_LIVE_SIG_ALG_PRIVATEDNS;
 	    chunk_addr_ = POPT_CHUNK_ADDR_BIN32;
 	    live_disc_wnd_ = (uint32_t)POPT_LIVE_DISC_WND_ALL;
 	}
@@ -337,7 +354,7 @@ namespace swift {
 	popt_version_t   	min_version_;
 	popt_cont_int_prot_t  	cont_int_prot_;
 	popt_merkle_func_t	merkle_func_;
-	uint8_t			live_sig_alg_; // PPSPTODO
+	popt_live_sig_alg_t	live_sig_alg_; // PPSPTODO
 	popt_chunk_addr_t	chunk_addr_;
 	uint64_t		live_disc_wnd_;
       protected:
