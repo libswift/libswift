@@ -1085,14 +1085,14 @@ std::string HttpGwStatsGetSpeedCallback(Sha1Hash swarmid)
     int td = swift::Find(swarmid);
     if (td !=-1)
     {
+	dspeed = (int)(swift::GetCurrentSpeed(td,DDIR_DOWNLOAD)/1024.0);
+	uspeed = (int)(swift::GetCurrentSpeed(td,DDIR_UPLOAD)/1024.0);
+	nleech = swift::GetNumLeechers(td);
+	nseed = swift::GetNumSeeders(td);
+
 	http_gw_t* req = HttpGwFindRequestByTD(td);
 	if (req != NULL)
-	{
 	    statsgw_last_down = req->offset;
-	    dspeed = (int)(GetCurrentSpeed(td,DDIR_DOWNLOAD)/1024.0);
-	    uspeed = (int)(GetCurrentSpeed(td,DDIR_UPLOAD)/1024.0);
-	}
-
 	statsgw_last_up = swift::SeqComplete(td);
     }
     std::stringstream ss;
@@ -1104,7 +1104,6 @@ std::string HttpGwStatsGetSpeedCallback(Sha1Hash swarmid)
     ss << "/";
     ss << nseed;
     ss << "/";
-    //ss << statsgw_last_down;
     ss << statsgw_last_down;
     ss << "/";
     ss << statsgw_last_up;

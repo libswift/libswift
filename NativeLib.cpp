@@ -277,7 +277,11 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGet
     if (iter == asyncResMap.end())
 	result = "n/a";
     else
+    {
 	result = iter->second;
+	// Arno, 2012-12-04: Remove call result to avoid state buildup.
+	asyncResMap.erase(iter);
+    }
 
     prc = pthread_mutex_unlock(&asyncMutex);
     if (prc != 0)
