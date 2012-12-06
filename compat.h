@@ -23,10 +23,11 @@ typedef unsigned __int64 uint64_t;
 #endif
 
 #ifdef _WIN32
+#define NOMINMAX
 #include <winsock2.h>
 #include <sys/stat.h>
 #include <io.h>
-#include <xutility> // for std::min/max
+#include <algorithm> // for std::min/max
 #include <direct.h>
 #include <In6addr.h>
 #include <Ws2tcpip.h>
@@ -132,8 +133,8 @@ typedef void* setsockoptptr_t;
 #endif
 
 #ifdef WIN32
-#define cmin	min
-#define cmax	max
+#define cmin	std::min
+#define cmax	std::max
 #else
 #define cmin    std::min
 #define cmax 	std::max
