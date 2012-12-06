@@ -132,15 +132,6 @@ typedef void* setsockoptptr_t;
 #define FILE_SEP	  "/"
 #endif
 
-#ifdef WIN32
-#define cmin	std::min
-#define cmax	std::max
-#else
-#define cmin    std::min
-#define cmax 	std::max
-#endif
-
-
 namespace swift {
 
 /** tint is the time integer type; microsecond-precise. */

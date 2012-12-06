@@ -221,7 +221,7 @@ void HttpGwWrite(int td) {
         // Allocate buffer to read into. TODO: let swift::Read accept evb
         char *buf = (char *)malloc(max_write_bytes);
 
-        uint64_t tosend = cmin(max_write_bytes,avail);
+        uint64_t tosend = std::min(max_write_bytes,avail);
         size_t rd = swift::Read(req->td,buf,tosend,swift::GetHookinOffset(req->td)+req->offset);
         if (rd<0) {
             print_error("httpgw: MayWrite: error pread");
@@ -358,7 +358,7 @@ void HttpGwSwiftPrebufferProgressCallback (int td, bin_t bin) {
 
     dprintf("%s T%i http prebuf progress: endoff startoff %llu endoff %llu\n",tintstr(),td, req->startoff, req->endoff);
 
-    int64_t wantsize = cmin(req->endoff+1-req->startoff,(uint64_t)HTTPGW_MIN_PREBUF_BYTES);
+    int64_t wantsize = std::min(req->endoff+1-req->startoff,(uint64_t)HTTPGW_MIN_PREBUF_BYTES);
 
     dprintf("%s T%i http prebuf progress: want %lld got %lld\n",tintstr(),td, wantsize, swift::SeqComplete(req->td,req->startoff) );
 
