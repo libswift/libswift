@@ -217,7 +217,7 @@ uint64_t swift::Complete(int td)
 uint64_t swift::SeqComplete( int td, int64_t offset )
 {
     if (api_debug)
-	fprintf(stderr,"swift::SeqComplete td %d o %lld\n", td, offset );
+	fprintf(stderr,"swift::SeqComplete td %d o %ld\n", td, offset );
 
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
     if (swarm == NULL)
@@ -523,9 +523,9 @@ int swift::Checkpoint(int td)
 int swift::Seek(int td, int64_t offset, int whence)
 {
     if (api_debug)
-	fprintf(stderr,"swift::Seek td %d o %lld w %d\n", td, offset, whence );
+	fprintf(stderr,"swift::Seek td %d o %ld w %d\n", td, offset, whence );
 
-    dprintf("%s F%d Seek: to %lld\n",tintstr(), td, offset );
+    dprintf("%s F%d Seek: to %ld\n",tintstr(), td, offset );
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
     if (swarm == NULL)
 	return -1; // also for LIVE

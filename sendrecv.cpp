@@ -62,10 +62,11 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
     dprintf("%s #%u +uncle hash for %s\n",tintstr(),id_,pos.str().c_str());
     bin_t peak = hashtree()->peak_for(pos);
     // Ric: TODO check (remove data_out_cap??)
-    //while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
-    //        ack_in_.is_empty(pos.parent()) ) {
+    //      For the moment lets keep the old behaviour
     binvector bv;
-    while (pos!=peak && ack_in_.is_empty(pos.parent()) ) {
+    while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
+            ack_in_.is_empty(pos.parent()) ) {
+    //while (pos!=peak && ack_in_.is_empty(pos.parent()) ) {
         bin_t uncle = pos.sibling();
         bv.push_back(uncle);
         pos = pos.parent();
@@ -288,13 +289,8 @@ void    Channel::Send () {
     dprintf("%s #%u sent %ib %s:%x\n",
             tintstr(),id_,(int)evbuffer_get_length(evb),peer().str().c_str(),
             pcid);
-    // Ric: TODO remove!!!
-    int r = 1103;
-    if (!Tocancel)
-    	r = SendTo(socket_,peer(),evb);
-    else {
-    	Tocancel = false;
-    }
+
+	int r = SendTo(socket_,peer(),evb);
     if (r==-1)
         print_error("swift can't send datagram");
     else
@@ -327,6 +323,8 @@ void    Channel::AddHint (struct evbuffer *evb) {
         hint_out_.pop_front();
         // Ric: keep track of what we want to remove
         tbc.push_back(hint);
+	dprintf("%s #%u remove hint %s\n",tintstr(),id_,hint.str().c_str());
+
     }
 
     int first_plan_pck = max ( (tint)1, plan_for / dip_avg_ );
@@ -438,14 +436,6 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     if (tosend.is_none())// && (last_data_out_time_>NOW-TINT_SEC || data_out_.empty()))
         return bin_t::NONE; // once in a while, empty data is sent just to check rtt FIXED
 
-    // ------------------
-    // Ric: TODO test to remove!!!
-    if (tosend == bin_t(0,4) && Totest) {
-    	Tocancel = true;
-    	Totest = false;
-    }
-    //----------------------
-    //--------------------
 
     //LIVE
     if (transfer()->ttype() == FILE_TRANSFER) {
@@ -544,6 +534,7 @@ void    Channel::AddAck (struct evbuffer *evb) {
 
     //fprintf(stderr,"data_in_ c%d\n", id() );
     // Ric: TODO should not be a single element
+    //      keep single ack for the moment
     data_in_ = tintbin();
     //data_in_ = tintbin(NOW,bin64_t::NONE);
 }
@@ -812,7 +803,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     // Arno: Assuming DATA last message in datagram
     if (evbuffer_get_length(evb) > transfer()->chunk_size()) {
     	dprintf("%s #%u !data chunk size mismatch %s: exp %u got " PRISIZET "\n",tintstr(),id_,pos.str().c_str(), transfer()->chunk_size(), evbuffer_get_length(evb));
-    	fprintf(stderr,"WARNING: chunk size mismatch: exp %u got " PRISIZET "\n",transfer()->chunk_size(), evbuffer_get_length(evb));
+    	fprintf(stderr,"WARNING: chunk size mismatch: exp %lu got " PRISIZET "\n",transfer()->chunk_size(), evbuffer_get_length(evb));
     }
 
     int length = (evbuffer_get_length(evb) < transfer()->chunk_size()) ? evbuffer_get_length(evb) : transfer()->chunk_size();
@@ -951,7 +942,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
 	    }
 	    if (owd_min_bins_[owd_min_bin_]>peer_owd)
 	    	owd_min_bins_[owd_min_bin_] = peer_owd;
-	    dprintf("%s #%u sendctrl rtt %lld dev %lld based on %s\n",
+	    dprintf("%s #%u sendctrl rtt %ld dev %ld based on %s\n",
 		    tintstr(),id_,rtt_avg_,dev_avg_,data_out_[di].bin.str().c_str());
 	    ack_rcvd_recent_++;
 	    // early loss detection by packet reordering

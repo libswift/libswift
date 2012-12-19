@@ -738,7 +738,7 @@ void ReportCallback(int fd, short event, void *arg) {
 		Channel* c = swift::Channel::channel(1);
 		if (c!=NULL) {
 			fprintf(stderr,"ledbat %3.2f\n",c->GetCwnd());
-			fprintf(stderr,"hints_in %lld\n",c->GetHintSize());
+			fprintf(stderr,"hints_in %lu\n",c->GetHintSize());
 		}
 		//fprintf(stderr,"npeers %d\n",ft->GetNumLeechers()+ft->GetNumSeeders() );
 	}
@@ -895,7 +895,7 @@ int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int ar
     char numstr[100];
     sprintf(numstr,"%d",specsize);
     char numstr2[100];
-    sprintf(numstr2,"%d",specsize+strlen(numstr));
+    sprintf(numstr2,"%lu",specsize+strlen(numstr));
     if (strlen(numstr) == strlen(numstr2))
         specsize += strlen(numstr);
     else

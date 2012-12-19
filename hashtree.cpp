@@ -331,8 +331,8 @@ int MmapHashTree::serialize(FILE *fp)
     fprintf_retiffail(fp,"version %i\n", 1 );
     fprintf_retiffail(fp,"root hash %s\n", root_hash_.hex().c_str() );
     fprintf_retiffail(fp,"chunk size %u\n", chunk_size_ );
-    fprintf_retiffail(fp,"complete %llu\n", complete_ );
-    fprintf_retiffail(fp,"completec %llu\n", completec_ );
+    fprintf_retiffail(fp,"complete %lu\n", complete_ );
+    fprintf_retiffail(fp,"completec %lu\n", completec_ );
     return ack_out_.serialize(fp);
 }
 

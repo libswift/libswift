@@ -541,7 +541,7 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     }
 
     if (req->xcontentdur == "-1")
-        fprintf(stderr,"httpgw: Live: hook-in at %llu\n", swift::GetHookinOffset(td) );
+        fprintf(stderr,"httpgw: Live: hook-in at %lu\n", swift::GetHookinOffset(td) );
 
 
 
