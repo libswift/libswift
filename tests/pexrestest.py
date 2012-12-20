@@ -23,9 +23,9 @@ from swiftconn import *
 DEBUG=False
 
 
-class FrameworkTestPexRes(TestAsServer):
+class TstPexResFramework(TestAsServer):
 
-    def do_test_reply(self,family,myaddr,myaddr2,cert=None):     
+    def do_tst_reply(self,family,myaddr,myaddr2,cert=None):     
            
         hiscmdgwaddr = (self.localhost,self.cmdport)
         swarmid = binascii.unhexlify('24aa9484fbee33564fc197252c7c837ce4ce449a')
@@ -104,14 +104,14 @@ class FrameworkTestPexRes(TestAsServer):
         self.assertTrue(responded)    
 
 
-class TestPexRes4cert(FrameworkTestPexRes):
+class TestPexRes4cert(TstPexResFramework):
 
     def test_reply_v4(self):
         
         myaddr = ("127.0.0.1",15353)
         # Fake peer to send as PEX_RES
         myaddr2 = ("127.0.0.1",15352)
-        self.do_test_reply(socket.AF_INET,myaddr,myaddr2)
+        self.do_tst_reply(socket.AF_INET,myaddr,myaddr2)
 
     """
     def disabled_test_reply_cert(self):
@@ -121,16 +121,16 @@ class TestPexRes4cert(FrameworkTestPexRes):
         # Fake peer to send as PEX_RES
         myaddr2 = ("127.0.0.1",5356)
         cert = '\xab' * 481  # TODO send real cert
-        self.do_test_reply(socket.AF_INET,myaddr,myaddr2,cert=cert)
+        self.do_tst_reply(socket.AF_INET,myaddr,myaddr2,cert=cert)
     """
 
 
 
 
-class TestPexRes6(FrameworkTestPexRes):
+class TestPexRes6(TstPexResFramework):
 
     def setUpPreSession(self):
-        FrameworkTestPexRes.setUpPreSession(self)
+        TstPexResFramework.setUpPreSession(self)
         self.family = socket.AF_INET6
 
     def test_reply_v6(self):
@@ -139,7 +139,7 @@ class TestPexRes6(FrameworkTestPexRes):
         myaddr = ("::1",5355)
         # Fake peer to send as PEX_RES
         myaddr2 = ("::1",5354)
-        self.do_test_reply(socket.AF_INET6,myaddr,myaddr2)
+        self.do_tst_reply(socket.AF_INET6,myaddr,myaddr2)
 
     
 def test_suite():
