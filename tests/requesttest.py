@@ -481,7 +481,7 @@ class TestRequest(TestDirSeedFramework):
                 msg = d.get_message()
                 if msg is None:
                     break
-                print >>sys.stderr,"test: Got",`msg`
+                print >>sys.stderr,"test: Wait for uncanceled, Got",`msg`
                 if msg.get_id() == MSG_ID_DATA:
                     self.assertEquals(expchunkspec.to_bytes(),msg.chunkspec.to_bytes())
                     cidx += 1
@@ -490,6 +490,7 @@ class TestRequest(TestDirSeedFramework):
                     d = s.makeDatagram()
                     d.add( AckMessage(expchunkspec,TimeStamp(1234L)) )
                     s.send(d)
+                    print >>sys.stderr,"test: ACK",expchunkspec
                     break
             if cidx == len(expcplist):
                 break
