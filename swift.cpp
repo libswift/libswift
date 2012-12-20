@@ -1054,6 +1054,7 @@ int main(int argc, char *argv[])
     // TODO: Convert to UTF-8 if locale not UTF-8
     return utf8main(argc,argv);
 }
+#endif // SWIFTGTEST
 
 #endif
 
