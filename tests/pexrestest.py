@@ -23,7 +23,7 @@ from swiftconn import *
 DEBUG=False
 
 
-class TestPexResFramework(TestAsServer):
+class FrameworkTestPexRes(TestAsServer):
 
     def do_test_reply(self,family,myaddr,myaddr2,cert=None):     
            
@@ -104,7 +104,7 @@ class TestPexResFramework(TestAsServer):
         self.assertTrue(responded)    
 
 
-class TestPexRes4cert(TestPexResFramework):
+class TestPexRes4cert(FrameworkTestPexRes):
 
     def test_reply_v4(self):
         
@@ -127,7 +127,7 @@ class TestPexRes4cert(TestPexResFramework):
 
 
 
-class TestPexRes6(TestPexResFramework):
+class TestPexRes6(FrameworkTestPexRes):
 
     def setUpPreSession(self):
         TestPexResFramework.setUpPreSession(self)
