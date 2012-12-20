@@ -942,8 +942,9 @@ void    Channel::OnAck (struct evbuffer *evb) {
 	    }
 	    if (owd_min_bins_[owd_min_bin_]>peer_owd)
 	    	owd_min_bins_[owd_min_bin_] = peer_owd;
-	    dprintf("%s #%u sendctrl rtt %ld dev %ld based on %s\n",
-		    tintstr(),id_,rtt_avg_,dev_avg_,data_out_[di].bin.str().c_str());
+	    // Arno, 2012-12-20: Temp disable, getting SEGV on this
+	    // dprintf("%s #%u sendctrl rtt %ld dev %ld based on %s\n",
+	    //	    tintstr(),id_,rtt_avg_,dev_avg_,data_out_[di].bin.str().c_str());
 	    ack_rcvd_recent_++;
 	    // early loss detection by packet reordering
 	    for (int re=0; re<di-MAX_REORDERING; re++) {
