@@ -147,7 +147,7 @@ env.Program(
 
 env.Program( 
     target='swift4gtest',
-    source=[os.path.join('..'.'swift.cpp')],
+    source=[os.path.join('..','swift.cpp')],
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )
