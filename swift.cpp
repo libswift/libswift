@@ -1033,9 +1033,24 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
 #else
 
+#ifndef SWIFTGTEST
+
 // UNIX version of app entry point for console apps
 int main(int argc, char *argv[])
 {
+    // TODO: Convert to UTF-8 if locale not UTF-8
+    return utf8main(argc,argv);
+}
+
+#else
+
+#include <gtest/gtest.h>
+
+// UNIX version of app entry point for GTest coverage
+int main(int argc, char *argv[])
+{
+    testing::InitGoogleTest(&argc, argv);
+
     // TODO: Convert to UTF-8 if locale not UTF-8
     return utf8main(argc,argv);
 }

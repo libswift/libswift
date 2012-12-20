@@ -30,7 +30,7 @@ libpath.append(".")
 
 if DEBUG and sys.platform == "linux2":
     #Enable profiling
-    env.Append(CXXFLAGS="-fprofile-arcs -ftest-coverage")
+    env.Append(CXXFLAGS="-fprofile-arcs -ftest-coverage -DSWIFTGTEST")
     linkflags += "-lgcov -fprofile-arcs"
     env.Append(LINKFLAGS=linkflags);
 
@@ -144,3 +144,11 @@ env.Program(
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )
+
+env.Program( 
+    target='swift4gtest',
+    source=[os.path.join('..'.'swift.cpp')],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+    
