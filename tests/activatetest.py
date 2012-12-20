@@ -90,7 +90,7 @@ class TestDirSeedFramework(TestAsServer):
 class TestDirSeed(TestDirSeedFramework):
 
     def test_connect_one(self):
-        myaddr = ("127.0.0.1",5353)
+        myaddr = ("127.0.0.1",15353)
         hisaddr = ("127.0.0.1",self.listenport)
         
         # last
