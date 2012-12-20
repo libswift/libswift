@@ -68,7 +68,7 @@ class TestHave(TestAsServer):
 
     def test_connect_one(self):
         
-        myaddr = ("127.0.0.1",5353)
+        myaddr = ("127.0.0.1",15353)
         hisaddr = ("127.0.0.1",self.listenport)
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
         swarmid = self.hashes[(0,7)]
@@ -162,10 +162,10 @@ class TestHave(TestAsServer):
         self.assertTrue(gothave2)
 
 
-
+    """
     def disabled_test_choke(self):
         
-        myaddr = ("127.0.0.1",5353)
+        myaddr = ("127.0.0.1",15353)
         hisaddr = ("127.0.0.1",self.listenport)
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
         swarmid = self.hashes[(0,7)]
@@ -225,7 +225,7 @@ class TestHave(TestAsServer):
                 self.assertEquals(ChunkRange(0,0).to_bytes(),msg.chunkspec.to_bytes())
                 
         self.assertTrue(gotreq)
-        
+    """    
 
     
 def test_suite():

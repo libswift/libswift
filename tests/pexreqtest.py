@@ -25,7 +25,7 @@ DEBUG=False
 class TestDirSeed(TestDirSeedFramework):
 
     def test_pex_req(self):
-        myaddr = ("127.0.0.1",5353)
+        myaddr = ("127.0.0.1",15353)
         hisaddr = ("127.0.0.1",self.listenport)
         
         # use anita.ts
@@ -44,7 +44,7 @@ class TestDirSeed(TestDirSeedFramework):
 
 
         # Create new channel and send PEX_REQ
-        myaddr2 = ("127.0.0.1",5352)
+        myaddr2 = ("127.0.0.1",15352)
         
         s2 = SwiftConnection(myaddr2,hisaddr,swarmid)
         

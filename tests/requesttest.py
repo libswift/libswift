@@ -103,7 +103,7 @@ def check_peak_hashes(hashdict,peaklist):
 class TestRequest(TestDirSeedFramework):
 
     def test_request_one(self):
-        myaddr = ("127.0.0.1",5353)
+        myaddr = ("127.0.0.1",15353)
         hisaddr = ("127.0.0.1",self.listenport)
         
         # Request from claire.ts
