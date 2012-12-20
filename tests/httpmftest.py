@@ -172,6 +172,10 @@ class TestFrameMultiFileSeek(TestAsServer):
         self.urlprefix = "http://127.0.0.1:"+str(self.httpport)+"/"+self.roothashhex
 
     def test_read_all(self):
+        # Keep nosetest happy
+        if len(self.filelist) == 0:
+            self.assertTrue(True)
+            return
         
         url = self.urlprefix        
         req = urllib2.Request(url)
@@ -198,15 +202,30 @@ class TestFrameMultiFileSeek(TestAsServer):
         
 
     def test_read_file0(self):
+        # Keep nosetest happy
+        if len(self.filelist) == 0:
+            self.assertTrue(True)
+            return
+
         wanttup = self.filelist[0]
         self._test_read_file(wanttup)
 
     def test_read_file1(self):
+        # Keep nosetest happy
+        if len(self.filelist) == 0:
+            self.assertTrue(True)
+            return
+
         if len(self.filelist) > 1:
             wanttup = self.filelist[1]
             self._test_read_file(wanttup)
         
     def test_read_file2(self):
+        # Keep nosetest happy
+        if len(self.filelist) == 0:
+            self.assertTrue(True)
+            return
+
         if len(self.filelist) > 2:
             wanttup = self.filelist[2]
             self._test_read_file(wanttup)
@@ -230,6 +249,11 @@ class TestFrameMultiFileSeek(TestAsServer):
         self.assertEqual(len(content), len(data), "returned less content than expected" )
 
     def test_read_file0_range(self):
+        # Keep nosetest happy
+        if len(self.filelist) == 0:
+            self.assertTrue(True)
+            return
+        
         wanttup = self.filelist[0]
         self._test_read_file_range(wanttup,"-2")
         self._test_read_file_range(wanttup,"0-2")
@@ -237,6 +261,11 @@ class TestFrameMultiFileSeek(TestAsServer):
         self._test_read_file_range(wanttup,"4-10")
 
     def test_read_file1_range(self):
+        # Keep nosetest happy
+        if len(self.filelist) == 0:
+            self.assertTrue(True)
+            return
+        
         if len(self.filelist) > 1:
             wanttup = self.filelist[1]
             self._test_read_file_range(wanttup,"-2")
@@ -245,6 +274,11 @@ class TestFrameMultiFileSeek(TestAsServer):
             self._test_read_file_range(wanttup,"4-10")
 
     def test_read_file2_range(self):
+        # Keep nosetest happy
+        if len(self.filelist) == 0:
+            self.assertTrue(True)
+            return
+        
         if len(self.filelist) > 2:
             wanttup = self.filelist[2]
             self._test_read_file_range(wanttup,"-2")
