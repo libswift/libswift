@@ -102,7 +102,7 @@ def rangestr2triple(rangestr,length):
     
     
 
-class FrameworkTestMultiFileSeek(TestAsServer):
+class TstMultiFileSeekFramework(TestAsServer):
     """
     Framework for multi-file tests.
     """
@@ -166,7 +166,7 @@ class FrameworkTestMultiFileSeek(TestAsServer):
         
         self.urlprefix = "http://127.0.0.1:"+str(self.httpport)+"/"+self.roothashhex
 
-    def test_read_all(self):
+    def tst_read_all(self):
         
         url = self.urlprefix        
         req = urllib2.Request(url)
@@ -192,21 +192,21 @@ class FrameworkTestMultiFileSeek(TestAsServer):
         self.assertEqual(offset, len(data), "returned less content than expected" )
         
 
-    def test_read_file0(self):
+    def tst_read_file0(self):
         wanttup = self.filelist[0]
-        self._test_read_file(wanttup)
+        self._tst_read_file(wanttup)
 
-    def test_read_file1(self):
+    def tst_read_file1(self):
         if len(self.filelist) > 1:
             wanttup = self.filelist[1]
-            self._test_read_file(wanttup)
+            self._tst_read_file(wanttup)
         
-    def test_read_file2(self):
+    def tst_read_file2(self):
         if len(self.filelist) > 2:
             wanttup = self.filelist[2]
-            self._test_read_file(wanttup)
+            self._tst_read_file(wanttup)
 
-    def _test_read_file(self,wanttup):
+    def _tst_read_file(self,wanttup):
         url = self.urlprefix+"/"+wanttup[0]    
         req = urllib2.Request(url)
         resp = urllib2.urlopen(req)
@@ -224,31 +224,31 @@ class FrameworkTestMultiFileSeek(TestAsServer):
                 
         self.assertEqual(len(content), len(data), "returned less content than expected" )
 
-    def test_read_file0_range(self):
+    def tst_read_file0_range(self):
         wanttup = self.filelist[0]
-        self._test_read_file_range(wanttup,"-2")
-        self._test_read_file_range(wanttup,"0-2")
-        self._test_read_file_range(wanttup,"2-")
-        self._test_read_file_range(wanttup,"4-10")
+        self._tst_read_file_range(wanttup,"-2")
+        self._tst_read_file_range(wanttup,"0-2")
+        self._tst_read_file_range(wanttup,"2-")
+        self._tst_read_file_range(wanttup,"4-10")
 
-    def test_read_file1_range(self):
+    def tst_read_file1_range(self):
         if len(self.filelist) > 1:
             wanttup = self.filelist[1]
-            self._test_read_file_range(wanttup,"-2")
-            self._test_read_file_range(wanttup,"0-2")
-            self._test_read_file_range(wanttup,"2-")
-            self._test_read_file_range(wanttup,"4-10")
+            self._tst_read_file_range(wanttup,"-2")
+            self._tst_read_file_range(wanttup,"0-2")
+            self._tst_read_file_range(wanttup,"2-")
+            self._tst_read_file_range(wanttup,"4-10")
 
-    def test_read_file2_range(self):
+    def tst_read_file2_range(self):
         if len(self.filelist) > 2:
             wanttup = self.filelist[2]
-            self._test_read_file_range(wanttup,"-2")
-            self._test_read_file_range(wanttup,"0-2")
-            self._test_read_file_range(wanttup,"2-")
-            self._test_read_file_range(wanttup,"4-10")
+            self._tst_read_file_range(wanttup,"-2")
+            self._tst_read_file_range(wanttup,"0-2")
+            self._tst_read_file_range(wanttup,"2-")
+            self._tst_read_file_range(wanttup,"4-10")
 
 
-    def _test_read_file_range(self,wanttup,rangestr):
+    def _tst_read_file_range(self,wanttup,rangestr):
         url = self.urlprefix+"/"+wanttup[0]    
         req = urllib2.Request(url)
         val = "bytes="+rangestr
@@ -276,7 +276,7 @@ class FrameworkTestMultiFileSeek(TestAsServer):
         self.assertEqual(nbytes, len(data), "returned less content than expected" )
 
 
-class TestMFSAllAbove1K(FrameworkTestMultiFileSeek):
+class TestMFSAllAbove1K(TstMultiFileSeekFramework):
     """ 
     Concrete test of files all > 1024 bytes
     """
@@ -287,8 +287,30 @@ class TestMFSAllAbove1K(FrameworkTestMultiFileSeek):
         self.filelist.append(("MyCollection/harry.ts",5000))
         self.filelist.append(("MyCollection/sjaak.ts",24567))
 
+    def test_read_all(self):
+        self.tst_read_all()
 
-class TestMFS1stSmall(FrameworkTestMultiFileSeek):
+    def test_read_file0(self):
+        self.tst_read_file0()
+
+    def test_read_file1(self):
+        self.tst_read_file1()
+        
+    def test_read_file2(self):
+        self.tst_read_file2()
+
+    def test_read_file0_range(self):
+        self.tst_read_file0_range()
+
+    def test_read_file1_range(self):
+        self.tst_read_file1_range()
+
+    def test_read_file2_range(self):
+        self.tst_read_file2_range()
+
+
+
+class TestMFS1stSmall(TstMultiFileSeekFramework):
     """ 
     Concrete test with 1st file fitting in 1st chunk (i.e. spec+file < 1024)
     """
@@ -297,6 +319,28 @@ class TestMFS1stSmall(FrameworkTestMultiFileSeek):
         self.filelist.append(("MyCollection/anita.ts",123))
         self.filelist.append(("MyCollection/harry.ts",5000))
         self.filelist.append(("MyCollection/sjaak.ts",24567))
+
+    def test_read_all(self):
+        self.tst_read_all()
+
+    def test_read_file0(self):
+        self.tst_read_file0()
+
+    def test_read_file1(self):
+        self.tst_read_file1()
+        
+    def test_read_file2(self):
+        self.tst_read_file2()
+
+    def test_read_file0_range(self):
+        self.tst_read_file0_range()
+
+    def test_read_file1_range(self):
+        self.tst_read_file1_range()
+
+    def test_read_file2_range(self):
+        self.tst_read_file2_range()
+
 
 
 def test_suite():
