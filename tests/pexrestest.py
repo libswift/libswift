@@ -130,7 +130,7 @@ class TestPexRes4cert(FrameworkTestPexRes):
 class TestPexRes6(FrameworkTestPexRes):
 
     def setUpPreSession(self):
-        TestPexResFramework.setUpPreSession(self)
+        FrameworkTestPexRes.setUpPreSession(self)
         self.family = socket.AF_INET6
 
     def test_reply_v6(self):
