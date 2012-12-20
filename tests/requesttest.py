@@ -252,6 +252,9 @@ class TestRequest(TestDirSeedFramework):
         return hashdict
 
     def test_request_two(self):
+        
+        print >>sys.stderr,"test: test_request_two"
+        
         myaddr = ("127.0.0.1",5356)
         hisaddr = ("127.0.0.1",self.listenport)
         
@@ -389,6 +392,8 @@ class TestRequest(TestDirSeedFramework):
 
     def test_request_many_cancel_some1(self):
         
+        print >>sys.stderr,"test: test_request_many_cancel_some1"
+        
         # Request from bill.ts
         fidx = 1
         
@@ -414,6 +419,8 @@ class TestRequest(TestDirSeedFramework):
         
 
     def test_request_many_cancel_some2(self):
+        
+        print >>sys.stderr,"test: test_request_many_cancel_some2"
         
         # Request from clair.ts
         fidx = 2
@@ -474,7 +481,7 @@ class TestRequest(TestDirSeedFramework):
                 msg = d.get_message()
                 if msg is None:
                     break
-                #print >>sys.stderr,"test: Got",`msg`
+                print >>sys.stderr,"test: Got",`msg`
                 if msg.get_id() == MSG_ID_DATA:
                     self.assertEquals(expchunkspec.to_bytes(),msg.chunkspec.to_bytes())
                     cidx += 1
