@@ -27,7 +27,6 @@ class TstPexResFramework(TestAsServer):
 
     def do_tst_reply(self,family,myaddr,myaddr2,cert=None):     
            
-        hiscmdgwaddr = (self.localhost,self.cmdport)
         swarmid = binascii.unhexlify('24aa9484fbee33564fc197252c7c837ce4ce449a')
         
         # Setup listen socket
@@ -38,9 +37,7 @@ class TstPexResFramework(TestAsServer):
 
         
         # Tell swift to DL swarm via CMDGW
-        print >>sys.stderr,"test: Connect CMDGW",hiscmdgwaddr
-        self.cmdsock = socket.socket(self.family, socket.SOCK_STREAM)
-        self.cmdsock.connect(hiscmdgwaddr)
+        # self.cmdsock opened in testasserver.
 
         httptracker = None
         if self.family == socket.AF_INET6:
