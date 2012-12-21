@@ -75,12 +75,8 @@ class TestHave(TestAsServer):
         
         # Setup listen socket
         self.listensock = Socket(myaddr)
-        
-        # Tell swift to DL swarm via CMDGW
-        print >>sys.stderr,"test: Connect CMDGW",hiscmdgwaddr
-        self.cmdsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.cmdsock.connect(hiscmdgwaddr)
 
+        # self.cmdsock from TestAsServer
         CMD = "START tswift://"+myaddr[0]+":"+str(myaddr[1])+"/"+binascii.hexlify(swarmid)+"\r\n"
         
         self.cmdsock.send(CMD)
@@ -174,10 +170,7 @@ class TestHave(TestAsServer):
         self.listensock = Socket(myaddr)
         
         # Tell swift to DL swarm via CMDGW
-        print >>sys.stderr,"test: Connect CMDGW",hiscmdgwaddr
-        self.cmdsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.cmdsock.connect(hiscmdgwaddr)
-
+        # self.cmdsock from TestAsServer
         CMD = "START tswift://"+myaddr[0]+":"+str(myaddr[1])+"/"+binascii.hexlify(swarmid)+"\r\n"
         
         self.cmdsock.send(CMD)

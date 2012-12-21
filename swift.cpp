@@ -90,10 +90,12 @@ void LiveSourceHTTPDownloadChunkCallback(struct evhttp_request *req, void *arg);
 
 // Gateway stuff
 bool InstallHTTPGateway(struct event_base *evbase,Address addr,uint32_t chunk_size, double *maxspeed);
-bool InstallStatsGateway(struct event_base *evbase,Address addr);
 bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr);
 bool HTTPIsSending();
+#ifndef SWIFTGTEST
+bool InstallStatsGateway(struct event_base *evbase,Address addr);
 bool StatsQuit();
+#endif
 void CmdGwUpdateDLStatesCallback();
 
 // Global variables
@@ -371,10 +373,12 @@ int utf8main (int argc, char** argv)
     if (cmdgw_enabled)
         InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr);
 
+#ifndef SWIFTGTEST  
     // TRIALM36: Allow browser to retrieve stats via AJAX and as HTML page
     if (statsaddr != Address())
         InstallStatsGateway(Channel::evbase,statsaddr);
-
+#endif
+  
     // ZEROSTATE
     ZeroState *zs = ZeroState::GetInstance();
     zs->SetContentDir(zerostatedir);
@@ -476,7 +480,7 @@ int utf8main (int argc, char** argv)
     for (iter = tds.begin(); iter != tds.end(); iter++ )
 	swift::Close(*iter);
 
-    if (Channel::debug_file)
+    if (Channel::debug_file && Channel::debug_file != stderr)
         fclose(Channel::debug_file);
 
     swift::Shutdown();
@@ -805,6 +809,7 @@ void ReportCallback(int fd, short event, void *arg) {
             return;
         }
     }
+#ifndef SWIFTGTEST
     if (StatsQuit())
     {
         // SwarmPlayer 3000: User click "Quit" button in webUI.
@@ -812,7 +817,7 @@ void ReportCallback(int fd, short event, void *arg) {
         tv.tv_sec = 1;
         int ret = event_base_loopexit(Channel::evbase,&tv);
     }
-
+#endif
 
     // SWIFTPROC
     if (cmdgw_report_interval == 1 || ((cmdgw_report_counter % cmdgw_report_interval) == 0))
@@ -1052,8 +1057,12 @@ char **copyargv;
 
 TEST(CoverageTest,CoverageMain)
 {
+    fprintf(stderr,"swift: Entering Coverage main\n");
+  
     // TODO: Convert to UTF-8 if locale not UTF-8
     utf8main(copyargc,copyargv);
+    
+    fprintf(stderr,"swift: Leaving Coverage main\n");
 }
 
 // UNIX version of app entry point for GTest coverage

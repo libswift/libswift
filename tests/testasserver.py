@@ -26,7 +26,13 @@ class TestAsServer(unittest.TestCase):
         """ unittest test setup code """
         # Main UDP listen socket
         self.setUpPreSession()
-        
+
+        if self.binpath is None:
+            if self.usegtest:
+                self.binpath = 'swift4gtest' 
+            else:
+                self.binpath = os.path.join("..","swift")
+
         if self.family == socket.AF_INET:
             self.inaddrany = "0.0.0.0"
             self.localhost = "127.0.0.1"
@@ -43,6 +49,11 @@ class TestAsServer(unittest.TestCase):
         # no stats/webUI web server
         args=[]
         args.append(str(self.binpath))
+
+        if self.usegtest:
+            xmlfile = 'arno.out.xml'
+            args.append('--gtest_output=xml:'+xmlfile)
+        
         if self.listenport is not None:
             args.append("-l") # listen port
             args.append(clinaddrany+":"+str(self.listenport))
@@ -82,10 +93,18 @@ class TestAsServer(unittest.TestCase):
             print >>sys.stderr,"SwiftProcess: sleep to let process start"
         time.sleep(1)
 
+        # Open CMD connection by default
+        self.cmdsock = None
+        if self.cmdport is not None and self.hiscmdgwaddr is not None:
+            print >>sys.stderr,"test: Connect CMDGW",self.hiscmdgwaddr
+            self.cmdsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.cmdsock.connect(self.hiscmdgwaddr)
+
+        
         self.setUpPostSession()
 
     def setUpPreSession(self):
-        self.binpath = os.path.join("..","swift") 
+   
         self.listenport = random.randint(10001,10999)  
         # NSSA control socket
         self.cmdport = random.randint(11001,11999)  
@@ -98,16 +117,30 @@ class TestAsServer(unittest.TestCase):
         self.scandir = None
         self.progress = False
         self.family = socket.AF_INET
+        
+        self.hiscmdgwaddr = ('127.0.0.1',self.cmdport)
+        self.usegtest = True
+        self.binpath = None
 
     def setUpPostSession(self):
         pass
 
     def tearDown(self):
         """ unittest test tear down code """
+        # Causes swift to end, and swift4gtest to exit TEST() call.
+        if self.cmdsock is not None:
+            self.cmdsock.close()
+            time.sleep(5)
+        
         if self.popen is not None:
-            self.popen.kill()
+            self.popen.poll()
+            print >>sys.stderr,"test: SwiftProc status",self.popen.returncode
+            if self.popen.returncode != 0:
+                self.popen.kill()
+
+        if self.cmdsock is not None:
+            time.sleep(5)
             
-        time.sleep(5)
         print >>sys.stderr,"TestAsServer: tearDown: EXIT"
 
         
