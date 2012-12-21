@@ -1046,14 +1046,34 @@ int main(int argc, char *argv[])
 
 #include <gtest/gtest.h>
 
+int copyargc;
+char **copyargv;
+
+
+TEST(CoverageTest,CoverageMain)
+{
+    // TODO: Convert to UTF-8 if locale not UTF-8
+    utf8main(copyargc,copyargv);
+}
+
 // UNIX version of app entry point for GTest coverage
 int main(int argc, char *argv[])
 {
     testing::InitGoogleTest(&argc, argv);
 
-    // TODO: Convert to UTF-8 if locale not UTF-8
-    return utf8main(argc,argv);
+    // Google has removed Gtest specific args.
+    // Copy to pass to real main in TEST.
+    copyargc = argc;
+    copyargv = new char *[copyargc];
+    for (int i=0; i<copyargc; i++)
+    {
+	copyargv[i] = new char[strlen(argv[i])+1];
+	strcpy(copyargv[i],argv[i]);
+    }
+
+    return RUN_ALL_TESTS();
 }
+
 #endif // SWIFTGTEST
 
 #endif

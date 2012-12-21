@@ -145,10 +145,21 @@ env.Program(
     LIBS=libs,
     LIBPATH=libpath )
 
-env.Program( 
-    target='swift4gtest',
-    source=[os.path.join('..','swift.cpp')],
-    CPPPATH=cpppath,
-    LIBS=libs,
-    LIBPATH=libpath )
+
+if DEBUG and sys.platform == "linux2":
+	scxxflags = "" 
+	if 'CXXFLAGS' in os.environ:
+	    scxxflags = os.environ['CXXFLAGS']
+	scxxflags += " -DSWIFTGTEST"
+	
+	import shutil
+	shutil.copyfile(os.path.join('..','swift.cpp'),'swift4gtest.cpp')
+	
+	env.Program( 
+	    target='swift4gtest',
+	    source=['swift4gtest.cpp'],
+	    CXXFLAGS=scxxflags,
+	    CPPPATH=cpppath,
+	    LIBS=libs,
+	    LIBPATH=libpath )
     
