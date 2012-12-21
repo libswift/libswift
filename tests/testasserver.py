@@ -29,7 +29,7 @@ class TestAsServer(unittest.TestCase):
 
         if self.binpath is None:
             if self.usegtest:
-                self.binpath = 'swift4gtest' 
+                self.binpath = os.path.join(".","swift4gtest")
             else:
                 self.binpath = os.path.join("..","swift")
 
