@@ -29,14 +29,16 @@ TEST(TAddress,IPv4AnyIPPortString) {
 TEST(TAddress,IPv6Loopback) {
 
     Address a("::1",8093);
-    ASSERT_TRUE(IN6_IS_ADDR_LOOPBACK(&a.ipv6()) );
+    struct in6_addr got = a.ipv6();
+    ASSERT_TRUE(IN6_IS_ADDR_LOOPBACK(&got) );
     ASSERT_EQ(8093,a.port());
 }
 
 TEST(TAddress,IPv6Any) {
 
     Address a("::0",8093);
-    ASSERT_TRUE(!memcmp(&in6addr_any,&a.ipv6(),sizeof(struct in6_addr) ));
+    struct in6_addr got = a.ipv6();
+    ASSERT_TRUE(!memcmp(&in6addr_any,&got,sizeof(struct in6_addr) ));
     ASSERT_EQ(8093,a.port());
 }
 
@@ -157,7 +159,8 @@ TEST(TAddress,IPv4MappedIPv6EqualDot) {
 
     Address a("130.37.193.65",8093);
     Address b("::ffff:130.37.193.65",8093);
-    ASSERT_TRUE(IN6_IS_ADDR_V4MAPPED(&b.ipv6()) );
+    struct in6_addr gotb = b.ipv6();
+    ASSERT_TRUE(IN6_IS_ADDR_V4MAPPED(&gotb) );
     ASSERT_TRUE( a == b );
     ASSERT_TRUE( b == a );
 }
@@ -166,7 +169,8 @@ TEST(TAddress,IPv4MappedIPv6EqualSemi) {
 
     Address a("130.37.193.65",8093);
     Address b("::ffff:8225:c141",8093);
-    ASSERT_TRUE(IN6_IS_ADDR_V4MAPPED(&b.ipv6()) );
+    struct in6_addr gotb = b.ipv6();
+    ASSERT_TRUE(IN6_IS_ADDR_V4MAPPED(&gotb) );
     ASSERT_TRUE( a == b );
     ASSERT_TRUE( b == a );
 }
