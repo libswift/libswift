@@ -33,15 +33,24 @@ TEST(Sha1HashTest,OfferDataTest) {
     //for(bin_t pos(0,0); !pos.is_all(); pos=pos.parent())
     //	roothash123 = Sha1Hash(roothash123,Sha1Hash::ZERO);
     unlink("123");
+    fprintf(stderr,"BEFORE STREQ hash\n");
     EXPECT_STREQ(rooth123,roothash123.hex().c_str());
+    fprintf(stderr,"BEFORE swift::Open\n");
     int file = swift::Open("123", roothash123);
+    fprintf(stderr,"BEFORE Storage\n");
     Storage storage("123", ".", file);
-    MmapHashTree tree(&storage,roothash123);
+    fprintf(stderr,"BEFORE MmapHashTree\n");
+    MmapHashTree tree(&storage,roothash123,1024,"123.mhash",false,true,"123.mbinmap");
+
+    fprintf(stderr,"BEFORE OfferHash\n");
     tree.OfferHash(bin_t(0,0),Sha1Hash(true,hash123));
-	ASSERT_EQ(1,tree.size_in_chunks());
+
+    fprintf(stderr,"BEFORE size_in_chunks\n");
+    ASSERT_EQ(1,tree.size_in_chunks());
+    fprintf(stderr,"BEFORE OfferData\n");
     ASSERT_TRUE(tree.OfferData(bin_t(0,0), "123\n", 4));
     unlink("123");
-	ASSERT_EQ(4,tree.size());
+    ASSERT_EQ(4,tree.size());
 }
 
 
@@ -51,7 +60,8 @@ TEST(Sha1HashTest,SubmitTest) {
     fclose(f123);
     int file = swift::Open("123");
     Storage storage("123", ".", file);
-    MmapHashTree ht123(&storage);
+    //MmapHashTree ht123(&storage);
+    MmapHashTree ht123(&storage,Sha1Hash::ZERO,1024,"123.mhash",false,true,"123.mbinmap");
     EXPECT_STREQ(hash123,ht123.hash(bin_t(0,0)).hex().c_str());
     EXPECT_STREQ(rooth123,ht123.root_hash().hex().c_str());
     EXPECT_EQ(4,ht123.size());
@@ -76,7 +86,8 @@ TEST(Sha1HashTest,OfferDataTest2) {
     EXPECT_STREQ(rooth456,roothash456.hex().c_str());
     int file = swift::Open("456", roothash456);
     Storage storage("456", ".", file);
-    MmapHashTree tree(&storage,roothash456);
+    // MmapHashTree tree(&storage,roothash456);
+    MmapHashTree tree(&storage,roothash456,1024,"456.mhash",false,true,"456.mbinmap");
     tree.OfferHash(bin_t(1,0),roothash456);
     tree.OfferHash(bin_t(0,0),Sha1Hash(true,hash456a));
     tree.OfferHash(bin_t(0,1),Sha1Hash(true,hash456b));

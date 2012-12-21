@@ -165,7 +165,7 @@ protected:
 public:
     
     MmapHashTree (Storage *storage, const Sha1Hash& root=Sha1Hash::ZERO, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE,
-              std::string hash_filename=NULL, bool force_check_diskvshash=true, bool check_netwvshash=true, std::string binmap_filename=NULL);
+              std::string hash_filename="", bool force_check_diskvshash=true, bool check_netwvshash=true, std::string binmap_filename="");
     
     // Arno, 2012-01-03: Hack to quickly learn root hash from a checkpoint
     MmapHashTree (bool dummy, std::string binmap_filename);
