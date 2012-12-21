@@ -27,12 +27,6 @@ class TestAsServer(unittest.TestCase):
         # Main UDP listen socket
         self.setUpPreSession()
 
-        if self.binpath is None:
-            if self.usegtest:
-                self.binpath = os.path.join(".","swift4gtest")
-            else:
-                self.binpath = os.path.join("..","swift")
-
         if self.family == socket.AF_INET:
             self.inaddrany = "0.0.0.0"
             self.localhost = "127.0.0.1"
@@ -44,7 +38,9 @@ class TestAsServer(unittest.TestCase):
             # Swift takes RFC2732 IPv6 addresses on command line
             clinaddrany = "["+self.inaddrany+"]"
             cllocalhost = "["+self.localhost+"]"
-        
+
+        self.hiscmdgwaddr = (self.localhost,self.cmdport)
+            
         # Security: only accept commands from localhost, enable HTTP gw, 
         # no stats/webUI web server
         args=[]
@@ -118,9 +114,11 @@ class TestAsServer(unittest.TestCase):
         self.progress = False
         self.family = socket.AF_INET
         
-        self.hiscmdgwaddr = ('127.0.0.1',self.cmdport)
         self.usegtest = True
-        self.binpath = None
+        if self.usegtest:
+           self.binpath = os.path.join(".","swift4gtest")
+        else:
+           self.binpath = os.path.join("..","swift")
 
     def setUpPostSession(self):
         pass
