@@ -65,9 +65,10 @@ int swift::Open( std::string filename, const Sha1Hash& hash, Address tracker, bo
     }
 
     SwarmData* swarm = SwarmManager::GetManager().AddSwarm( filename, hash, tracker, force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
-    if (swarm)
+    if (swarm == NULL)
+	return -1;
+    else
 	return swarm->Id();
-    return -1;
 }
 
 
@@ -431,7 +432,7 @@ std::string swift::GetOSPathName(int td)
     {
 	LiveTransfer *lt = LiveTransfer::FindByTD(td);
 	if (lt == NULL || lt->GetStorage() == NULL)
-	    return NULL;
+	    return "";
 	else
 	    return lt->GetStorage()->GetOSPathName();
     }

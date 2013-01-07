@@ -423,9 +423,9 @@ int utf8main (int argc, char** argv)
                 ret = HandleSwiftFile(filename,root_hash,tracker,trackerargstr,printurl,false,urlfilename,maxspeed);
         }
 
-    // For testing
-    if (httpgw_enabled || zerostatedir != "")
-        ret = 0;
+        // For testing
+        if (httpgw_enabled || zerostatedir != "")
+            ret = 0;
 
         // No file/dir nor HTTP gateway nor CMD gateway, will never know what to swarm
         if (ret == -1) {
