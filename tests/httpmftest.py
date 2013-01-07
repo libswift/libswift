@@ -1,9 +1,5 @@
 # Written by Arno Bakker
 #
-# NOTE: This particular test doesn't use the CMDGW so the code coverage info 
-# does not appear to be gathered correctly. swift API calls covered via 
-# apitest.cpp. 
-#
 # see LICENSE.txt for license information
 
 import unittest
@@ -17,39 +13,15 @@ import time
 import subprocess
 import urllib2
 import string
+import binascii
 from traceback import print_exc
 
 from testasserver import TestAsServer
+from SwiftDef import SwiftDef
 
 DEBUG=True
 
 
-MULTIFILE_PATHNAME = "META-INF-multifilespec.txt"
-
-def filelist2spec(filelist):
-    # TODO: verify that this gives same sort as C++ CreateMultiSpec
-    filelist.sort()    
-        
-    specbody = ""
-    totalsize = 0L
-    for pathname,flen in filelist:
-        specbody += pathname+" "+str(flen)+"\n"
-        totalsize += flen
-        
-    specsize = len(MULTIFILE_PATHNAME)+1+0+1+len(specbody)
-    numstr = str(specsize)
-    numstr2 = str(specsize+len(str(numstr)))
-    if (len(numstr) == len(numstr2)):
-        specsize += len(numstr)
-    else:
-        specsize += len(numstr)+(len(numstr2)-len(numstr))
-    
-    spec = MULTIFILE_PATHNAME+" "+str(specsize)+"\n"
-    spec += specbody
-    return spec
-    
-    
-    
 def bytestr2int(b):
     if b == "":
         return None
@@ -114,7 +86,6 @@ class TstMultiFileSeekFramework(TestAsServer):
 
     def setUpPreSession(self):
         TestAsServer.setUpPreSession(self)
-        self.cmdport = None
         self.destdir = tempfile.mkdtemp()
         
         print >>sys.stderr,"test: destdir is",self.destdir
@@ -126,6 +97,8 @@ class TstMultiFileSeekFramework(TestAsServer):
         
         prefixdir = os.path.join(self.destdir,specprefix)
         os.mkdir(prefixdir)
+
+        sdef = SwiftDef()
         
         # Create content
         for fn,s in self.filelist:
@@ -135,16 +108,21 @@ class TstMultiFileSeekFramework(TestAsServer):
             data = fn[len(specprefix)+1] * s
             f.write(data)
             f.close()
-        
-        # Create spec
-        self.spec = filelist2spec(self.filelist)
-        
-        fullpath = os.path.join(self.destdir,MULTIFILE_PATHNAME)
-        f = open(fullpath,"wb")
-        f.write(self.spec)
+            
+            sdef.add_content(fullpath,fn)
+
+        self.specfn = sdef.finalize(self.binpath)
+        f = open(self.specfn,"rb")
+        self.spec = f.read()
         f.close()
         
-        self.filename = fullpath
+        self.swarmid = sdef.get_id()
+        print >>sys.stderr,"test: setUpPreSession: roothash is",binascii.hexlify(self.swarmid)
+        
+        self.mfdestfn = os.path.join(self.destdir,binascii.hexlify(self.swarmid))
+        shutil.copyfile(self.specfn,self.mfdestfn)
+        shutil.copyfile(self.specfn+".mhash",self.mfdestfn+".mhash")
+        shutil.copyfile(self.specfn+".mbinmap",self.mfdestfn+".mbinmap")
 
     def setUpFileList(self):
         self.filelist = []
@@ -153,23 +131,11 @@ class TstMultiFileSeekFramework(TestAsServer):
     def setUpPostSession(self):
         TestAsServer.setUpPostSession(self)
         
-        # Allow it to write root hash
-        time.sleep(2)
+        #CMD = "START tswift:/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
+        CMD = "START tswift://127.0.0.1:"+str(self.listenport)+"/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
+        self.cmdsock.send(CMD)
         
-        f = open(self.stdoutfile.name,"rb")
-        output = f.read(1024)
-        f.close()
-        
-        prefix = "Root hash: "
-        idx = output.find(prefix)
-        if idx != -1:
-            self.roothashhex = output[idx+len(prefix):idx+len(prefix)+40]
-        else:
-            self.assert_(False,"Could not read roothash from swift output")
-            
-        print >>sys.stderr,"test: setUpPostSession: roothash is",self.roothashhex
-        
-        self.urlprefix = "http://127.0.0.1:"+str(self.httpport)+"/"+self.roothashhex
+        self.urlprefix = "http://127.0.0.1:"+str(self.httpport)+"/"+binascii.hexlify(self.swarmid)
 
     def tst_read_all(self):
         
@@ -314,7 +280,6 @@ class TestMFSAllAbove1K(TstMultiFileSeekFramework):
         self.tst_read_file2_range()
 
 
-
 class TestMFS1stSmall(TstMultiFileSeekFramework):
     """ 
     Concrete test with 1st file fitting in 1st chunk (i.e. spec+file < 1024)
@@ -345,7 +310,6 @@ class TestMFS1stSmall(TstMultiFileSeekFramework):
 
     def test_read_file2_range(self):
         self.tst_read_file2_range()
-
 
 
 def test_suite():

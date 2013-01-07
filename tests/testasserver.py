@@ -70,6 +70,9 @@ class TestAsServer(unittest.TestCase):
             args.append(self.scandir)
         if self.progress is not None:
             args.append("-p") 
+        if self.zerosdir is not None:
+            args.append("-e") 
+            args.append(self.zerosdir)
 
             
         args.append("-B") # DEBUG Hack        
@@ -111,6 +114,7 @@ class TestAsServer(unittest.TestCase):
         self.destdir = None
         self.filename = None
         self.scandir = None
+        self.zerosdir = None
         self.progress = False
         self.family = socket.AF_INET
         
