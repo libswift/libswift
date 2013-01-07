@@ -17,7 +17,6 @@ from traceback import print_exc
 from sha import sha
 
 from activatetest import TestDirSeedFramework
-from SwiftDef import SwiftDef
 from swiftconn import *
 
 DEBUG=False

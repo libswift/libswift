@@ -115,9 +115,13 @@ class TestAsServer(unittest.TestCase):
         self.family = socket.AF_INET
         
         self.usegtest = True
+        self.binpath = None
         if self.usegtest:
            self.binpath = os.path.join(".","swift4gtest")
-        else:
+           if not os.path.exists(self.binpath):
+               self.binpath = None
+           
+        if self.binpath is None:
            self.binpath = os.path.join("..","swift")
 
     def setUpPostSession(self):
