@@ -145,6 +145,13 @@ env.Program(
     LIBS=libs,
     LIBPATH=libpath )
 
+env.Program( 
+    target='apitest',
+    source=['apitest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
 
 if DEBUG and sys.platform == "linux2":
 	scxxflags = "" 
