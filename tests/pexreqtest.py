@@ -16,7 +16,6 @@ import binascii
 from traceback import print_exc
 
 from activatetest import TestDirSeedFramework
-from SwiftDef import SwiftDef
 from swiftconn import *
 
 DEBUG=False
