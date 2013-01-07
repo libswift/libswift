@@ -1,4 +1,9 @@
-# Written by Arno Bakker, Jie Yang
+# Written by Arno Bakker
+#
+# NOTE: This particular test doesn't use the CMDGW so the code coverage info 
+# does not appear to be gathered correctly. swift API calls covered via 
+# apitest.cpp. 
+#
 # see LICENSE.txt for license information
 
 import unittest
