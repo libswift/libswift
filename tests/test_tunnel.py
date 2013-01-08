@@ -8,7 +8,7 @@ import os
 import unittest
 from threading import Event, Thread, currentThread, Condition
 from socket import error as socketerror
-from time import sleep
+import time
 from traceback import print_exc
 import shutil
 import random
@@ -69,11 +69,8 @@ class TestTunnel(TestAsServer):
         
         self.udpsendport = random.randint(14001,14999) #
 
-        sleep(2) # let server threads start
+        time.sleep(2) # let server threads start
 
-    def tearDown(self):
-        sleep(5)
-        self.popen.kill()
 
     def notify(self):
         self.cond.acquire()
