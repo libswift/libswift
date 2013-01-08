@@ -1,4 +1,4 @@
-# Written by Arno Bakker, Jie Yang
+# Written by Arno Bakker
 # see LICENSE.txt for license information
 
 import unittest
@@ -158,9 +158,14 @@ class TestZeroSeedFramework(TestAsServer):
         
 
     def tearDown(self):
+        # For zerostate cleanup code
+        time.sleep(36)
+        
         TestAsServer.tearDown(self)
-        #shutil.rmtree(self.zerosdir)
-
+        try:
+            shutil.rmtree(self.zerosdir)
+        except:
+            print_exc()
     
 
 

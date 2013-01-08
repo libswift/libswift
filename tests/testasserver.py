@@ -21,6 +21,35 @@ class TestAsServer(unittest.TestCase):
     """ 
     Parent class for testing the server-side of Tribler
     """
+    def setUpPreSession(self):
+   
+        self.listenport = random.randint(10001,10999)  
+        # NSSA control socket
+        self.cmdport = random.randint(11001,11999)  
+        # content web server
+        self.httpport = random.randint(12001,12999)
+            
+        self.workdir = '.' 
+        self.destdir = None
+        self.filename = None
+        self.scandir = None
+        self.zerosdir = None
+        self.progress = False
+        self.family = socket.AF_INET
+        
+        self.usegtest = True
+        self.binpath = None
+        if self.usegtest:
+           self.binpath = os.path.join(".","swift4gtest")
+           if not os.path.exists(self.binpath):
+               self.binpath = None
+           
+        if self.binpath is None:
+           self.binpath = os.path.join("..","swift")
+
+        self.livesourceinput = None
+        
+
     
     def setUp(self):
         """ unittest test setup code """
@@ -69,12 +98,14 @@ class TestAsServer(unittest.TestCase):
         if self.scandir is not None:
             args.append("-d") 
             args.append(self.scandir)
-        if self.progress is not None:
-            args.append("-p") 
         if self.zerosdir is not None:
             args.append("-e") 
             args.append(self.zerosdir)
-
+        if self.livesourceinput is not None:
+            args.append("-i") 
+            args.append(self.livesourceinput)
+        if self.progress is not None:
+            args.append("-p") 
             
         args.append("-B") # DEBUG Hack        
         
@@ -103,31 +134,6 @@ class TestAsServer(unittest.TestCase):
         
         self.setUpPostSession()
 
-    def setUpPreSession(self):
-   
-        self.listenport = random.randint(10001,10999)  
-        # NSSA control socket
-        self.cmdport = random.randint(11001,11999)  
-        # content web server
-        self.httpport = random.randint(12001,12999)
-            
-        self.workdir = '.' 
-        self.destdir = None
-        self.filename = None
-        self.scandir = None
-        self.zerosdir = None
-        self.progress = False
-        self.family = socket.AF_INET
-        
-        self.usegtest = True
-        self.binpath = None
-        if self.usegtest:
-           self.binpath = os.path.join(".","swift4gtest")
-           if not os.path.exists(self.binpath):
-               self.binpath = None
-           
-        if self.binpath is None:
-           self.binpath = os.path.join("..","swift")
 
     def setUpPostSession(self):
         pass
