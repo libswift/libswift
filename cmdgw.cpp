@@ -408,7 +408,7 @@ void CmdGwSwiftPrebufferProgressCallback (int td, bin_t bin)
     uint64_t wantsize = std::min(req->endoff+1-req->startoff,(uint64_t)CMDGW_MAX_PREBUF_BYTES);
 
     //if (cmd_gw_debug)
-    //    fprintf(stderr,"cmd: SwiftPrebuffProgress: want %llu got %llu\n", swift::SeqComplete(req->transfer,req->startoff), wantsize );
+    //   fprintf(stderr,"cmd: SwiftPrebuffProgress: want %llu got %llu\n", swift::SeqComplete(req->td,req->startoff), wantsize );
 
 
     if (swift::SeqComplete(req->td,req->startoff) >= wantsize)
@@ -747,7 +747,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
         Address trackaddr;
         trackaddr = Address(trackerstr.c_str());
-        if (trackaddr==Address())
+        if (trackerstr != "" && trackaddr==Address())
         {
             dprintf("cmd: START: tracker address must be hostname:port, ip:port or just port\n");
             return ERROR_BAD_ARG;
@@ -813,7 +813,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         if (swift::ttype(req->td) == FILE_TRANSFER)
         {
             // MULTIFILE
-            int64_t minsize=CMDGW_MAX_PREBUF_BYTES;
+            uint64_t minsize=CMDGW_MAX_PREBUF_BYTES;
 
             Storage *storage = swift::GetStorage(req->td);
             if (storage == NULL)
@@ -825,10 +825,13 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             storage_files_t sfs = storage->GetStorageFiles();
             if (sfs.size() > 0)
                 minsize = sfs[0]->GetSize();
+            else if (swift::SeqComplete(td) > 0) // Arno, 2013-01-08: Support small files
+        	minsize = std::min(swift::Size(td),minsize);
 
             // Wait for first chunk, so we can handle MULTIFILE, then
             // wait for prebuffering and then send PLAY to user.
             // ARNOSMPTODO: OUTOFORDER: breaks with out-of-order download
+
             if (swift::SeqComplete(td) >= minsize)
             {
                 CmdGwSwiftVODFirstProgressCallback(td,bin_t(0,0));

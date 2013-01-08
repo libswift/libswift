@@ -149,7 +149,10 @@ class TestAsServer(unittest.TestCase):
             self.popen.poll()
             print >>sys.stderr,"test: SwiftProc status",self.popen.returncode
             if self.popen.returncode != 0:
-                self.popen.kill()
+                try:
+                    self.popen.kill()
+                except:
+                    print_exc()
 
         if self.cmdsock is not None:
             time.sleep(5)

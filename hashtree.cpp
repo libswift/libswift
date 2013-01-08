@@ -116,7 +116,7 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
     if (root_hash_==Sha1Hash::ZERO && !binmap_exists)
     	actually_force_check_diskvshash = true;
 
-    //fprintf(stderr,"hashtree: hashchecking %s file %s want %s do %s mhash-on-disk %s binmap-on-disk %s\n", root_hash.hex().c_str(), storage_->GetOSPathName().c_str(), (force_check_diskvshash ? "yes" : "no"), (actually_force_check_diskvshash? "yes" : "no"), (mhash_exists? "yes" : "no"), (binmap_exists? "yes" : "no") );
+    //fprintf(stderr,"hashtree: hashchecking %s file %s destdir %s want %s do %s mhash-on-disk %s binmap-on-disk %s\n", root_hash.hex().c_str(), storage_->GetOSPathName().c_str(), storage_->GetDestDir().c_str(), (force_check_diskvshash ? "yes" : "no"), (actually_force_check_diskvshash? "yes" : "no"), (mhash_exists? "yes" : "no"), (binmap_exists? "yes" : "no") );
     // Arno, 2012-07-27: Sanity check
     if ((mhash_exists || binmap_exists) && storage_->GetReservedSize() == -1)
     {

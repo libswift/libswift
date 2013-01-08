@@ -110,7 +110,8 @@ class TestZeroSeedFramework(TestAsServer):
     def setUpPreSession(self):
         TestAsServer.setUpPreSession(self)
         self.httpport = None
-        self.zerosdir = "zeros2"
+        self.zerosdir = os.path.join(os.getcwd(),"zeros2")
+        self.exitwait = 36
         self.progress = True
         
         self.setUpZerosDir()
@@ -138,6 +139,7 @@ class TestZeroSeedFramework(TestAsServer):
 
         # Hack: now copy to <roothash>[.mhash|.mbinmap] files such that zerostate works
         for i in range(len(self.filelist)):
+            print >>sys.stderr,"test: Configuring",binascii.hexlify(self.filelist[i][2])
             srcfile = self.filelist[i][0]
             dstfile = os.path.join(self.zerosdir,binascii.hexlify(self.filelist[i][2]))
             shutil.copyfile(srcfile,dstfile)
@@ -159,7 +161,7 @@ class TestZeroSeedFramework(TestAsServer):
 
     def tearDown(self):
         # For zerostate cleanup code
-        time.sleep(36)
+        time.sleep(self.exitwait)
         
         TestAsServer.tearDown(self)
         try:
