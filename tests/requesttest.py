@@ -17,6 +17,8 @@ from traceback import print_exc
 from sha import sha
 
 from activatetest import TestDirSeedFramework
+from testasserver import TestAsServer
+from SwiftDef import SwiftDef
 from swiftconn import *
 
 DEBUG=False
@@ -99,9 +101,72 @@ def check_peak_hashes(hashdict,peaklist):
     
 
 
-class TestRequest(TestDirSeedFramework):
+class TestZeroSeedFramework(TestAsServer):
+    """
+    Framework for seeding tests using zero-state transfers. Copy of 
+    activatetest.py/TestDirSeedFramework
+    """
 
-    def test_request_one(self):
+    def setUpPreSession(self):
+        TestAsServer.setUpPreSession(self)
+        self.httpport = None
+        self.zerosdir = "zeros2"
+        self.progress = True
+        
+        self.setUpZerosDir()
+
+        try:
+            shutil.rmtree(self.zerosdir)
+        except:
+            pass
+        os.mkdir(self.zerosdir)
+        
+        # Create content
+        for i in range(len(self.filelist)):
+            fn = self.filelist[i][0]
+            s = self.filelist[i][1]
+            f = open(fn,"wb")
+            data = '#' * s
+            f.write(data)
+            f.close()
+            
+            # Pre hash check and checkpoint them
+            sdef = SwiftDef()
+            sdef.add_content(fn)
+            sdef.finalize(self.binpath)
+            self.filelist[i][2] = sdef.get_id() # save roothash
+
+        # Hack: now copy to <roothash>[.mhash|.mbinmap] files such that zerostate works
+        for i in range(len(self.filelist)):
+            srcfile = self.filelist[i][0]
+            dstfile = os.path.join(self.zerosdir,binascii.hexlify(self.filelist[i][2]))
+            shutil.copyfile(srcfile,dstfile)
+            shutil.copyfile(srcfile+".mhash",dstfile+".mhash")
+            shutil.copyfile(srcfile+".mbinmap",dstfile+".mbinmap")
+
+
+    def setUpZerosDir(self):
+        self.filelist = []
+        # Minimum 1 entry
+        # DO NOT MODIFY THESE ENTRIES without adjusting tests, e.g. requesttest.py
+        self.filelist.append([os.path.join(self.zerosdir,"anita.ts"), 1234, None])
+        self.filelist.append([os.path.join(self.zerosdir,"bill.ts"),  200487, None])
+        self.filelist.append([os.path.join(self.zerosdir,"claire.ts"),65535, None])
+
+    def setUpPostSession(self):
+        TestAsServer.setUpPostSession(self)
+        
+
+    def tearDown(self):
+        TestAsServer.tearDown(self)
+        #shutil.rmtree(self.zerosdir)
+
+    
+
+
+class TestRequestFramework: # subclassed below
+
+    def tst_request_one(self):
         myaddr = ("127.0.0.1",15357)
         hisaddr = ("127.0.0.1",self.listenport)
         
@@ -172,7 +237,7 @@ class TestRequest(TestDirSeedFramework):
 
 
 
-    def test_request_one_middle(self):
+    def tst_request_one_middle(self):
         myaddr = ("127.0.0.1",5354)
         hisaddr = ("127.0.0.1",self.listenport)
         
@@ -250,7 +315,7 @@ class TestRequest(TestDirSeedFramework):
 
         return hashdict
 
-    def test_request_two(self):
+    def tst_request_two(self):
         
         print >>sys.stderr,"test: test_request_two"
         
@@ -334,7 +399,7 @@ class TestRequest(TestDirSeedFramework):
         self.assertEquals(exphash,gothash)
 
 
-    def test_request_two_cancel_2nd(self):
+    def tst_request_two_cancel_2nd(self):
         myaddr = ("127.0.0.1",5356)
         hisaddr = ("127.0.0.1",self.listenport)
         
@@ -389,7 +454,7 @@ class TestRequest(TestDirSeedFramework):
         s.c.send(d)
 
 
-    def test_request_many_cancel_some1(self):
+    def tst_request_many_cancel_some1(self):
         
         print >>sys.stderr,"test: test_request_many_cancel_some1"
         
@@ -417,7 +482,7 @@ class TestRequest(TestDirSeedFramework):
         self.do_request_many_cancel_some(fidx, reqcp, cancelcplist, expcplist)
         
 
-    def test_request_many_cancel_some2(self):
+    def tst_request_many_cancel_some2(self):
         
         print >>sys.stderr,"test: test_request_many_cancel_some2"
         
@@ -503,11 +568,54 @@ class TestRequest(TestDirSeedFramework):
         s.send(d)
 
 
+class TestRequestFullState(TestDirSeedFramework,TestRequestFramework):
+
+    def test_request_one(self):
+        return self.tst_request_one()
+    
+    def test_request_one_middle(self):
+        return self.tst_request_one_middle()
+
+    def test_request_two(self):
+        return self.tst_request_two()
+
+    def test_request_two_cancel_2nd(self):
+        return self.tst_request_two_cancel_2nd()
+
+    def test_request_many_cancel_some1(self):
+        return self.tst_request_many_cancel_some1()
+        
+    def test_request_many_cancel_some2(self):
+        return self.tst_request_many_cancel_some2()
+
+
+class TestRequestZeroState(TestZeroSeedFramework,TestRequestFramework):
+
+    def test_request_one(self):
+        return self.tst_request_one()
+    
+    def test_request_one_middle(self):
+        return self.tst_request_one_middle()
+
+    def test_request_two(self):
+        return self.tst_request_two()
+
+    def test_request_two_cancel_2nd(self):
+        return self.tst_request_two_cancel_2nd()
+
+    def test_request_many_cancel_some1(self):
+        return self.tst_request_many_cancel_some1()
+        
+    def test_request_many_cancel_some2(self):
+        return self.tst_request_many_cancel_some2()
+
+
 
     
 def test_suite():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(TestRequest))
+    suite.addTest(unittest.makeSuite(TestRequestFullState))
+    suite.addTest(unittest.makeSuite(TestRequestZeroState))
     
     return suite
 
