@@ -40,7 +40,7 @@ class TestHave(TestZeroSeedFramework):
         self.stop = False
         self.exitwait = 1
 
-    def disabled_test_start(self):
+    def test_start(self):
 
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
         swarmid = self.filelist[0][2]
@@ -66,7 +66,7 @@ class TestHave(TestZeroSeedFramework):
             self.stop = True
         return 0
 
-    def disabled_test_start_remove(self):
+    def test_start_remove(self):
 
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
         self.swarmid = self.filelist[0][2]
@@ -100,7 +100,7 @@ class TestHave(TestZeroSeedFramework):
 
     # TODO CHECKPOINT
     
-    def disabled_test_maxspeed(self):
+    def test_maxspeed(self):
 
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
         swarmid = self.filelist[0][2]
@@ -120,7 +120,7 @@ class TestHave(TestZeroSeedFramework):
         self.assertTrue(self.gotinfo and self.gotplay)
 
 
-    def disabled_test_setmoreinfo(self):
+    def test_setmoreinfo(self):
 
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
         swarmid = self.filelist[0][2]
