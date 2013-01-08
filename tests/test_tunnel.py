@@ -102,7 +102,7 @@ class TestTunnel(TestAsServer):
             self.data = Rand.rand_bytes(self.randsize)
             cmd = "TUNNELSEND 127.0.0.1:"+str(self.peer1port)+"/ffffffff "+str(self.randsize)+"\r\n";
             self.s.send(cmd)
-            sleep(.1)
+            time.sleep(.1)
             self.s.send(self.data)
             # Read at UDPListener
             self.wait()
