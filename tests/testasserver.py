@@ -49,6 +49,7 @@ class TestAsServer(unittest.TestCase):
         if self.usegtest:
             xmlfile = 'arno.out.xml'
             args.append('--gtest_output=xml:'+xmlfile)
+            args.append("-G") # less strict cmdline testing
         
         if self.listenport is not None:
             args.append("-l") # listen port

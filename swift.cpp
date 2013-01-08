@@ -68,6 +68,7 @@ void usage(void)
     fprintf(stderr,"  -2 urlfilename-in-hex, a win32 workaround for non UTF-16 popen\n");
     fprintf(stderr,"  -3 zerosdir-in-hex, a win32 workaround for non UTF-16 popen\n");
     fprintf(stderr,"  -T time-out in seconds for slow zero state connections\n");
+    fprintf(stderr,"  -G GTest mode\n");
     fprintf(stderr, "%s\n", SubversionRevisionString.c_str() );
 
 }
@@ -157,12 +158,13 @@ int utf8main (int argc, char** argv)
         {"live",no_argument, 0, 'k'}, // LIVE
         {"cmdgwint",required_argument, 0, 'C'}, // SWIFTPROC
         {"zerostimeout",required_argument, 0, 'T'},  // ZEROSTATE
+        {"test",no_argument, 0, 'G'},  // Less command line testing for GTest usage
         {0, 0, 0, 0}
     };
 
     Sha1Hash root_hash=Sha1Hash::ZERO;
     std::string filename = "",destdir = "", trackerargstr= "", zerostatedir="", urlfilename="";
-    bool printurl=false, livestream=false;
+    bool printurl=false, livestream=false, gtesting=false;
     Address bindaddr;
     Address httpaddr;
     Address statsaddr;
@@ -175,7 +177,7 @@ int utf8main (int argc, char** argv)
     Channel::evbase = event_base_new();
 
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:ji:kC:1:2:3:T:", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:ji:kC:1:2:3:T:G", long_options, 0)) ) {
         switch (c) {
             case 'h':
                 if (strlen(optarg)!=40)
@@ -316,6 +318,9 @@ int utf8main (int argc, char** argv)
             case '3': // ZEROSTATE // SWIFTPROCUNICODE
                 zerostatedir = hex2bin(strdup(optarg));
                 break;
+            case 'G': //
+                gtesting = true;
+                break;
             case 'T': // ZEROSTATE
                 double t=0.0;
                 n = sscanf(optarg,"%lf",&t);
@@ -384,7 +389,7 @@ int utf8main (int argc, char** argv)
     zs->SetContentDir(zerostatedir);
     zs->SetConnectTimeout(zerostimeout);
 
-    if (!cmdgw_enabled && livesource_input == "" && zerostatedir == "")
+    if ((!cmdgw_enabled || gtesting) && livesource_input == "" && zerostatedir == "")
     {
         // Seed file or dir, or create multi-spec
         int ret = -1;

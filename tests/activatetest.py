@@ -29,7 +29,7 @@ class TestDirSeedFramework(TestAsServer):
 
     def setUpPreSession(self):
         TestAsServer.setUpPreSession(self)
-        self.cmdport = None
+        #self.cmdport = None
         self.httpport = None
         self.scandir = "seeder2"
         self.progress = True
