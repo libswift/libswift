@@ -366,7 +366,7 @@ int utf8main (int argc, char** argv)
     if (tracker!=Address() && !printurl)
         SetTracker(tracker);
 
-    if (filename != "")
+    if (livesource_input == "" && filename != "")
     {
 	int ret = file_exists_utf8(filename);
 	if (ret < 1)
