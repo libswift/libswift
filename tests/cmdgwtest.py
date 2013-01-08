@@ -2,7 +2,6 @@
 # see LICENSE.txt for license information
 #
 # TODO:
-# - Check return msgs formatting and semantics (INFO)
 # - CHECKPOINT
 # - Test effect of MAXSPEED
 #
@@ -18,13 +17,16 @@ import shutil
 import time
 import subprocess
 import urllib2
+import urlparse
 import string
 import binascii
+import json
 from sha import sha
 from traceback import print_exc
 
 from requesttest import TestZeroSeedFramework
 from swiftconn import *
+
 
 DEBUG=False
 
@@ -34,6 +36,7 @@ class TestHave(TestZeroSeedFramework):
     def setUpPreSession(self):
         TestZeroSeedFramework.setUpPreSession(self)
 
+        self.httpport = random.randint(12001,12999)
         self.destdir = self.zerosdir
         
         self.buffer = ''
@@ -43,10 +46,10 @@ class TestHave(TestZeroSeedFramework):
     def test_start(self):
 
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
-        swarmid = self.filelist[0][2]
+        self.swarmid = self.filelist[0][2]
         
         # self.cmdsock from TestAsServer
-        CMD = "START tswift:/"+binascii.hexlify(swarmid)+" "+self.destdir+"\r\n"
+        CMD = "START tswift:/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
         
         self.cmdsock.send(CMD)
         
@@ -58,8 +61,56 @@ class TestHave(TestZeroSeedFramework):
     def start_readline(self,caller,cmd):
         print >>sys.stderr,"test: start_readline: Got",`cmd`
         if cmd.startswith("INFO"):
-            self.gotinfo = True
+            try:
+                words = cmd.split()
+                hashhex = words[1]
+                dlstatus = int(words[2])
+                pargs = words[3].split("/")
+                dynasize = int(pargs[1])
+                if dynasize == 0:
+                    progress = 0.0
+                else:
+                    progress = float(pargs[0])/float(pargs[1])
+                dlspeed = float(words[4])
+                ulspeed = float(words[5])
+                numleech = int(words[6])
+                numseeds = int(words[7])
+                
+                self.assertEquals(hashhex,binascii.hexlify(self.swarmid))
+                self.assertTrue(dlstatus == 2 or dlstatus == 4) # HASHCHECK or SEEDING
+                if dlstatus == 4:
+                    self.assertEquals(dynasize,self.filelist[0][1])
+                    self.assertEquals(progress,1.0)
+                    self.gotinfo = True
+                else:
+                    self.assertEquals(dynasize,0)
+                    self.assertEquals(progress,0.0)
+                    
+                self.assertEquals(dlspeed,0.0)
+                self.assertEquals(ulspeed,0.0)
+                self.assertEquals(numleech,0)
+                self.assertEquals(numseeds,0)
+    
+                
+            except:
+                print_exc()
+                self.assertEquals("INFO params","do not match")
+                
+                
         if cmd.startswith("PLAY"):
+            words = cmd.split()
+            
+            hashhex = words[1]
+            url = words[2]
+            
+            self.assertEquals(hashhex,binascii.hexlify(self.swarmid))
+            
+            tup = urlparse.urlparse(url)
+            self.assertEquals(tup.scheme,"http")
+            self.assertEquals(tup.hostname,"127.0.0.1")
+            self.assertEquals(tup.port,self.httpport)
+            self.assertEquals(tup.path,"/"+binascii.hexlify(self.swarmid))
+            
             self.gotplay = True
             
         if self.gotinfo and self.gotplay:            
@@ -103,11 +154,11 @@ class TestHave(TestZeroSeedFramework):
     def test_maxspeed(self):
 
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
-        swarmid = self.filelist[0][2]
+        self.swarmid = self.filelist[0][2]
         
         # self.cmdsock from TestAsServer
-        CMD = "START tswift:/"+binascii.hexlify(swarmid)+" "+self.destdir+"\r\n"
-        CMD += "MAXSPEED "+binascii.hexlify(swarmid)+" UPLOAD 10.0\r\n"
+        CMD = "START tswift:/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
+        CMD += "MAXSPEED "+binascii.hexlify(self.swarmid)+" UPLOAD 10.0\r\n"
         
         # TODO: actually check speed change, requires different test :-(
         # So this is more a code coverage test.
@@ -123,11 +174,11 @@ class TestHave(TestZeroSeedFramework):
     def test_setmoreinfo(self):
 
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
-        swarmid = self.filelist[0][2]
+        self.swarmid = self.filelist[0][2]
         
         # self.cmdsock from TestAsServer
-        CMD = "START tswift:/"+binascii.hexlify(swarmid)+" "+self.destdir+"\r\n"
-        CMD += "SETMOREINFO "+binascii.hexlify(swarmid)+" 1\r\n"
+        CMD = "START tswift:/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
+        CMD += "SETMOREINFO "+binascii.hexlify(self.swarmid)+" 1\r\n"
         
         self.cmdsock.send(CMD)
         
@@ -144,7 +195,19 @@ class TestHave(TestZeroSeedFramework):
         if cmd.startswith("PLAY"):
             self.gotplay = True
         if cmd.startswith("MOREINFO"):
-            self.gotmoreinfo = True
+            try:
+                words = cmd.split()
+            
+                hashhex = words[1]
+                self.assertEquals(hashhex,binascii.hexlify(self.swarmid))
+                
+                jsondata = cmd[len("MOREINFO ")+40+1:]
+                midict = json.loads(jsondata)
+
+                self.gotmoreinfo = True
+            except:
+                print_exc()
+                self.assertEquals("MOREINFO","does not contain JSON")
             
         if self.gotinfo and self.gotplay and self.gotmoreinfo:            
             self.stop = True
@@ -154,10 +217,10 @@ class TestHave(TestZeroSeedFramework):
     def test_error(self):
 
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
-        swarmid = self.filelist[0][2]
+        self.swarmid = self.filelist[0][2]
         
         # self.cmdsock from TestAsServer
-        CMD = "START tswift:/BADURL"+binascii.hexlify(swarmid)+" "+self.destdir+"\r\n"
+        CMD = "START tswift:/BADURL"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
         
         self.cmdsock.send(CMD)
         
@@ -168,6 +231,10 @@ class TestHave(TestZeroSeedFramework):
     def error_readline(self,caller,cmd):
         print >>sys.stderr,"test: error_readline: Got",`cmd`
         if cmd.startswith("ERROR"):
+            words = cmd.split()
+            hashhex = words[1]
+            self.assertEquals(hashhex,binascii.hexlify('\x00' * 20))
+            
             self.goterror = True
             self.stop = True
             
