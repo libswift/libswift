@@ -61,8 +61,17 @@ class TestTunnel(unittest.TestCase):
         self.peer1port = 1234
         self.peer1 = UDPListener(self,self.peer1port)
         self.peer1.start()
+
+        self.usegtest = True
+        self.binpath = None
+        if self.usegtest:
+           self.binpath = os.path.join(".","swift4gtest")
+           if not os.path.exists(self.binpath):
+               self.binpath = None
+           
+        if self.binpath is None:
+           self.binpath = os.path.join("..","swift")
         
-        self.binpath = os.path.join("..","swift")
         self.destdir = "."
         
         self.cmdport = random.randint(11001,11999)  # NSSA control socket

@@ -245,6 +245,40 @@ class TestHave(TestZeroSeedFramework):
     # SHUTDOWN tested via TestAsServer
 
 
+    def test_peeraddr(self):
+        
+        myaddr2 = ("127.0.0.1",15352) # fake peer to which swift should send
+        
+        hiscmdgwaddr = ("127.0.0.1",self.cmdport)
+        self.swarmid = self.filelist[0][2]
+
+        # Setup listen socket for fake peer
+        self.listensock2 = Socket(myaddr2,family=socket.AF_INET)
+        
+        # self.cmdsock from TestAsServer
+        CMD = "START tswift:/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
+        CMD += "PEERADDR "+binascii.hexlify(self.swarmid)+" "+myaddr2[0]+":"+str(myaddr2[1])+"\r\n"
+
+        # Tell swift to DL swarm via CMDGW
+        self.cmdsock.send(CMD)
+
+        # Listen on fake peer socket
+        responded = False
+        [s2,d2] = self.listensock2.listen(self.swarmid,hs=False) # do not send HS, we need hischanid first
+        while True:
+            msg = d2.get_message()
+            if msg is None:
+                break
+            print >>sys.stderr,"test: Parsed",`msg` 
+            responded = True
+            if msg.get_id() == MSG_ID_HANDSHAKE:
+                self.assertEquals(self.swarmid,msg.swarmid)
+
+        # Expect answer on fake peer's socket
+        self.assertTrue(responded)    
+
+
+
     # From FastI2I.py
     def process_cmdsock(self,readlinecallback):
         try:
