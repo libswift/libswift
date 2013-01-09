@@ -73,11 +73,11 @@ class TestLive(TestAsNPeers):
 
         # Let peers interact
         self.gotcallback = False
-        self.got100k = False
+        self.got10k = False
         self.count = 0
         self.process_cmdsock(self.peers[1].cmdsock,self.live_readline)
         self.assertTrue(self.gotcallback)
-        self.assertTrue(self.got100k)
+        self.assertTrue(self.got10k)
         
     def live_readline(self,caller,cmd):
         self.gotcallback = True
@@ -105,9 +105,9 @@ class TestLive(TestAsNPeers):
                 numleech = int(words[6])
                 numseeds = int(words[7])
                 
-                print >>sys.stderr,"SEQCOMP",seqcomp
-                if seqcomp > 100*1024:
-                    self.got100k = True
+                # Very conservative, client sometimes slow to hookin on paella
+                if seqcomp > 10*1024:
+                    self.got10k = True
                     self.stop = True
                 
             except:
