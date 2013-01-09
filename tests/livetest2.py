@@ -74,6 +74,7 @@ class TestLive(TestAsNPeers):
         # Let peers interact
         self.gotcallback = False
         self.got100k = False
+        self.count = 0
         self.process_cmdsock(self.peers[1].cmdsock,self.live_readline)
         self.assertTrue(self.gotcallback)
         self.assertTrue(self.got100k)
@@ -82,6 +83,12 @@ class TestLive(TestAsNPeers):
         self.gotcallback = True
         print >>sys.stderr,"test: live_readline: Got",`cmd`
         if cmd.startswith("INFO"):
+            
+            # Safety catch
+            self.count += 1
+            if self.count > 100:
+                self.stop = True
+                
             try:
                 words = cmd.split()
                 hashhex = words[1]
@@ -106,6 +113,7 @@ class TestLive(TestAsNPeers):
             except:
                 print_exc()
                 self.assertEquals("INFO params","do not match")
+            
                 
         return 0
         
