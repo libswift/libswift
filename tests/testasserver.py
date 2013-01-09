@@ -108,7 +108,7 @@ class TestServerFramework:
         if self.progress is not None:
             args.append("-p") 
             
-        args.append("-B") # DEBUG Hack        
+        #args.append("-B") # DEBUG Hack        
         
         if DEBUG:
             print >>sys.stderr,"SwiftProcess: __init__: Running",args,"workdir",self.workdir

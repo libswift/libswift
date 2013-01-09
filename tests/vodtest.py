@@ -18,31 +18,43 @@ from sha import sha
 from traceback import print_exc
 
 from testasserver import TestAsNPeers
+from SwiftDef import SwiftDef
 from swiftconn import *
 
 DEBUG=False
 
 
-class TestLive(TestAsNPeers):
+class TestVOD(TestAsNPeers):
     """
-    Test that starts 2 swift process which do a live streaming transfer
+    Test that starts 2 swift process which do a video-on-demand streaming transfer
     """
+
     def setUpPreSession(self):
         TestAsNPeers.setUpPreSession(self)
 
         # Setup peer0 as source
         self.peers[0].destdir = '.'
 
-        f = open("liveinput.dat","wb")
-        for i in range(0,1017):
+        self.vodinputsize = 1017*1024+17
+
+        f = open("vodinput.dat","wb")
+        for i in range(0,self.vodinputsize/1024):
             data = chr((ord('a')+i)%256) * 1024
             f.write(data)
+        tail = 'x' * 17
+        f.write(tail)
         f.close()
 
-        self.peers[0].livesourceinput = "liveinput.dat"
-        self.peers[0].filename = "storage.dat"
+        self.peers[0].filename = "vodinput.dat"
+
+        # Pre hash check and checkpoint
+        sdef = SwiftDef()
+        sdef.add_content(self.peers[0].filename)
+        sdef.finalize(self.peers[0].binpath)
+        self.swarmid = sdef.get_id() # save roothash
+
         
-        # Start peer1 as live downloader
+        # Start peer1 as VOD downloader
         self.peers[1].destdir = '.'
         #self.peers[1].usegtest = False
         #self.peers[1].binpath = os.path.join("..","Debug","SwiftPPSP.exe")
@@ -57,35 +69,30 @@ class TestLive(TestAsNPeers):
     def tearDown(self):
         TestAsNPeers.tearDown(self)
         try:
-            os.remove(self.peers[0].livesourceinput)
-        except:
-            pass
-        try:
             os.remove(self.peers[0].filename)
         except:
             pass
 
 
-    def test_live_download(self):
-        # Start peer1 as live downloader
-        liveswarmid = "e5a12c7ad2d8fab33c699d1e198d66f79fa610c3"
-        CMD = "START tswift://127.0.0.1:"+str(self.peers[0].listenport)+"/"+liveswarmid+"@-1 "+self.peers[1].destdir+"\r\n"
+    def test_vod_download(self):
+        # Start peer1 as VOD downloader
+        CMD = "START tswift://127.0.0.1:"+str(self.peers[0].listenport)+"/"+binascii.hexlify(self.swarmid)+" "+self.peers[1].destdir+"\r\n"
         self.peers[1].cmdsock.send(CMD)
 
         # Let peers interact
         self.gotcallback = False
-        self.got10k = False
+        self.gotall = False
         self.count = 0
-        self.process_cmdsock(self.peers[1].cmdsock,self.live_readline)
+        self.process_cmdsock(self.peers[1].cmdsock,self.vod_readline)
         self.assertTrue(self.gotcallback)
-        self.assertTrue(self.got10k)
+        self.assertTrue(self.gotall)
         
-    def live_readline(self,caller,cmd):
+    def vod_readline(self,caller,cmd):
         self.gotcallback = True
-        print >>sys.stderr,"test: live_readline: Got",`cmd`
+        print >>sys.stderr,"test: vod_readline: Got",`cmd`
         if cmd.startswith("INFO"):
             
-            # Safety catch
+            # Safety catch. Assuming speed will be high enough
             self.count += 1
             if self.count > 100:
                 self.stop = True
@@ -107,8 +114,8 @@ class TestLive(TestAsNPeers):
                 numseeds = int(words[7])
                 
                 # Very conservative, client sometimes slow to hookin on paella
-                if seqcomp > 10*1024:
-                    self.got10k = True
+                if seqcomp > 0 and seqcomp == self.vodinputsize and dynasize == self.vodinputsize:
+                    self.gotall = True
                     self.stop = True
                 
             except:
@@ -163,7 +170,7 @@ class TestLive(TestAsNPeers):
     
 def test_suite():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(TestLive))
+    suite.addTest(unittest.makeSuite(TestVOD))
     
     return suite
 
