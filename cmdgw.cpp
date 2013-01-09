@@ -271,7 +271,11 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 	return; // Arno: swarm deleted, ignore
 
     uint64_t size = swift::Size(req->td);
-    uint64_t complete = swift::Complete(req->td);
+    uint64_t complete = 0;
+    if (swift::ttype(req->td) == LIVE_TRANSFER)
+	complete = swift::SeqComplete(req->td,swift::GetHookinOffset(req->td));
+    else
+	complete = swift::Complete(req->td);
     if (size > 0 && size == complete)
         dlstatus = DLSTATUS_SEEDING;
     if (!swift::IsOperational(req->td))

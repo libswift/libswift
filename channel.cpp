@@ -150,6 +150,10 @@ HashTree * Channel::hashtree()
 }
 
 bool Channel::IsComplete() {
+
+    if (transfer()->ttype() == LIVE_TRANSFER)
+	return peer_is_source_;
+
     // Check if peak hash bins are filled.
     if (hashtree()->peak_count() == 0)
         return false;

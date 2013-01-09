@@ -17,11 +17,12 @@ from traceback import print_exc
 
 DEBUG=True
 
-class TestAsServer(unittest.TestCase):
+class TestServerFramework:
     """ 
-    Parent class for testing the server-side of Tribler
+    Framework class for testing the server-side of Tribler. Can be used to
+    control 1 or more swift processes from Python.
     """
-    def setUpPreSession(self):
+    def mixSetUpPreSession(self):
    
         self.listenport = random.randint(10001,10999)  
         # NSSA control socket
@@ -51,10 +52,9 @@ class TestAsServer(unittest.TestCase):
         
 
     
-    def setUp(self):
+    def mixSetUp(self):
         """ unittest test setup code """
         # Main UDP listen socket
-        self.setUpPreSession()
 
         if self.family == socket.AF_INET:
             self.inaddrany = "0.0.0.0"
@@ -76,7 +76,8 @@ class TestAsServer(unittest.TestCase):
         args.append(str(self.binpath))
 
         if self.usegtest:
-            xmlfile = 'arno.out.xml'
+            r = "%05d" % ( random.randint(0,99999))
+            xmlfile = 'arno'+r+'.out.xml'
             args.append('--gtest_output=xml:'+xmlfile)
             args.append("-G") # less strict cmdline testing
         
@@ -132,13 +133,12 @@ class TestAsServer(unittest.TestCase):
             self.cmdsock.connect(self.hiscmdgwaddr)
 
         
-        self.setUpPostSession()
 
 
-    def setUpPostSession(self):
+    def mixSetUpPostSession(self):
         pass
 
-    def tearDown(self):
+    def mixTearDown(self):
         """ unittest test tear down code """
         # Causes swift to end, and swift4gtest to exit TEST() call.
         if self.cmdsock is not None:
@@ -160,3 +160,49 @@ class TestAsServer(unittest.TestCase):
         print >>sys.stderr,"TestAsServer: tearDown: EXIT"
 
         
+        
+class TestAsServer(unittest.TestCase,TestServerFramework):
+    """ 
+    Parent class for testing the server-side of Tribler
+    """
+    def setUpPreSession(self):
+        return TestServerFramework.mixSetUpPreSession(self)
+    
+    def setUp(self):
+        self.setUpPreSession()
+        TestServerFramework.mixSetUp(self)
+        self.setUpPostSession()
+
+    def setUpPostSession(self):
+        return TestServerFramework.mixSetUpPostSession(self)
+
+    def tearDown(self):
+        return TestServerFramework.mixTearDown(self)
+
+
+class TestAsNPeers(unittest.TestCase):
+    """ 
+    Parent class for testing the server-side of Tribler
+    """
+    def setUpPreSession(self):
+        self.N = 2
+        self.peers = []
+        for i in range(0,self.N):
+            self.peers.append(None)
+            self.peers[i] = TestServerFramework()
+            self.peers[i].mixSetUpPreSession()
+    
+    def setUp(self):
+        self.setUpPreSession()
+        for i in range(0,self.N):
+            self.peers[i].mixSetUp()
+        self.setUpPostSession()
+
+    def setUpPostSession(self):
+        for i in range(0,self.N):
+            self.peers[i].mixSetUpPostSession()
+
+    def tearDown(self):
+        for i in range(0,self.N):
+            self.peers[i].mixTearDown()
+
