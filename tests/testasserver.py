@@ -148,6 +148,9 @@ class TestServerFramework:
         # Causes swift to end, and swift4gtest to exit TEST() call.
         if self.cmdsock is not None:
             self.cmdsock.close()
+            # Arno: must sleep to avoid two swift processing using
+            # code coverage from writing to the same .gcdna file.
+            # http://gcc.gnu.org/onlinedocs/gcc/Invoking-Gcov.html#Invoking-Gcov
             time.sleep(5)
         
         if self.popen is not None:
@@ -158,9 +161,7 @@ class TestServerFramework:
                     self.popen.kill()
                 except:
                     print_exc()
-
-        if self.cmdsock is not None:
-            time.sleep(5)
+                time.sleep(5)
             
         print >>sys.stderr,"TestAsServer: tearDown: EXIT"
 
