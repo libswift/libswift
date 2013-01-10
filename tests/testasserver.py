@@ -30,6 +30,7 @@ class TestServerFramework:
         self.cmdport = random.randint(11001,11999)  
         # content web server
         self.httpport = random.randint(12001,12999)
+        self.statshttpport = None
             
         self.workdir = '.' 
         self.destdir = None
@@ -107,7 +108,10 @@ class TestServerFramework:
             args.append("-i") 
             args.append(self.livesourceinput)
         if self.progress is not None:
-            args.append("-p") 
+            args.append("-p")
+        if self.statshttpport is not None:
+            args.append("-s") 
+            args.append(cllocalhost+":"+str(self.statshttpport))
             
         #args.append("-B") # DEBUG Hack        
         
