@@ -68,10 +68,14 @@ class TestVOD(TestAsNPeers):
 
     def tearDown(self):
         TestAsNPeers.tearDown(self)
-        try:
-            os.remove(self.peers[0].filename)
-        except:
-            pass
+        fn = self.peers[0].filename
+        sfn = binascii.hexlify(self.swarmid)
+        fnlist = [fn,fn+".mhash",fn+".mbinmap",sfn,sfn+".mhash"]
+        for fn in fnlist:
+            try:
+                os.remove(fn)
+            except:
+                pass
 
 
     def test_vod_download(self):
