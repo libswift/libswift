@@ -160,7 +160,7 @@ class TestZeroSeedFramework(TestAsServer):
         
 
     def tearDown(self):
-        # For zerostate cleanup code
+        # Wait 30+ second such  that zerostate cleanup code gets covered.
         time.sleep(self.exitwait)
         
         TestAsServer.tearDown(self)
@@ -576,7 +576,9 @@ class TestRequestFramework: # subclassed below
 
 
 class TestRequestFullState(TestDirSeedFramework,TestRequestFramework):
-
+    """ 
+    Do request test on normal swarms, activated in memory.
+    """
     def test_request_one(self):
         return self.tst_request_one()
     
@@ -597,7 +599,10 @@ class TestRequestFullState(TestDirSeedFramework,TestRequestFramework):
 
 
 class TestRequestZeroState(TestZeroSeedFramework,TestRequestFramework):
-
+    """ 
+    Do same request test on zero-state swarms, where hashes 
+    are served directly from disk.
+    """
     def test_request_one(self):
         return self.tst_request_one()
     

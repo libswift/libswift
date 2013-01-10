@@ -24,7 +24,7 @@ DEBUG=False
 
 class TestDirSeedFramework(TestAsServer):
     """
-    Framework for multi-file tests.
+    Framework for multi-swarm tests.
     """
 
     def setUpPreSession(self):
@@ -58,7 +58,7 @@ class TestDirSeedFramework(TestAsServer):
             self.filelist[i][2] = sdef.get_id() # save roothash
 
         for i in range(len(self.filelist)):
-            print >>sys.stderr,"GOT ROOTHASH",binascii.hexlify(self.filelist[i][2])
+            print >>sys.stderr,"test: Configured from filelist",binascii.hexlify(self.filelist[i][2])
 
 
     def setUpScanDir(self):
@@ -72,22 +72,20 @@ class TestDirSeedFramework(TestAsServer):
     def setUpPostSession(self):
         TestAsServer.setUpPostSession(self)
         
-        # Allow it to write root hash
-        time.sleep(2)
-        
-        f = open(self.stdoutfile.name,"rb")
-        output = f.read(1024)
-        f.close()
-
-        print >>sys.stderr,"STDOUT",output
-
     def tearDown(self):
         TestAsServer.tearDown(self)
-        #time.sleep(1)
-        #shutil.rmtree(self.scandir)
+        time.sleep(1)
+        try:
+            shutil.rmtree(self.scandir)
+        except:
+            pass
 
 
 class TestDirSeed(TestDirSeedFramework):
+    """
+    Basic test for the SwarmManager activation code to see if it found the
+    swarms in the scandir.
+    """
 
     def test_connect_one(self):
         myaddr = ("127.0.0.1",15353)

@@ -184,8 +184,12 @@ class TestAsNPeers(unittest.TestCase):
     """ 
     Parent class for testing the server-side of Tribler
     """
+    def getNumPeers(self):
+        """ Override this method to increase the number of peers """
+        return 2
+    
     def setUpPreSession(self):
-        self.N = 2
+        self.N = self.getNumPeers()
         self.peers = []
         for i in range(0,self.N):
             self.peers.append(None)

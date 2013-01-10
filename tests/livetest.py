@@ -24,13 +24,17 @@ DEBUG=False
 
 
 class TestLive(TestAsServer):
+    """
+    Basic test that starts a live source which generates ~1000 chunks.
+    """
     def setUpPreSession(self):
         TestAsServer.setUpPreSession(self)
 
         self.destdir = '.'
 
         f = open("liveinput.dat","wb")
-        for i in range(0,1017):
+        self.nchunks = 1017
+        for i in range(0,self.nchunks):
             data = chr((ord('a')+i)%256) * 1024
             f.write(data)
         f.close()
@@ -45,10 +49,6 @@ class TestLive(TestAsServer):
         
 
     def tearDown(self):
-        
-        # Let source generate chunks
-        time.sleep(15)
-        
         TestAsServer.tearDown(self)
         try:
             os.remove(self.livesourceinput)
@@ -60,8 +60,21 @@ class TestLive(TestAsServer):
             pass
 
 
-    def test_connect_one(self):
-        pass
+    def test_live_source(self):
+        # Let source generate chunks
+        time.sleep(20)
+        
+        print >>sys.stderr,"test: Comparing input to storage.dat"
+        f = open(self.livesourceinput,"rb")
+        g = open(self.filename,"rb")
+        for i in range(0,self.nchunks):
+            gotdata = f.read(1024)
+            expdata = g.read(1024)
+            self.assertEquals(gotdata,expdata)
+        f.close()
+        g.close()
+        
+
 
     
 def test_suite():

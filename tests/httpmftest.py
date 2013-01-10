@@ -81,7 +81,7 @@ def rangestr2triple(rangestr,length):
 
 class TstMultiFileSeekFramework(TestAsServer):
     """
-    Framework for multi-file tests.
+    Framework for multi-file swarm tests.
     """
 
     def setUpPreSession(self):
