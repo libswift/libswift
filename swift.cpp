@@ -378,9 +378,13 @@ int utf8main (int argc, char** argv)
     if (cmdgw_enabled)
         InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr);
 
+// Arno, 2013-01-10: Cannot use while GTesting because statsgw is not part of
+// libswift, but considered part of an app on top.
+#ifndef SWIFTGTEST
     // TRIALM36: Allow browser to retrieve stats via AJAX and as HTML page
     if (statsaddr != Address())
         InstallStatsGateway(Channel::evbase,statsaddr);
+#endif
   
     // ZEROSTATE
     ZeroState *zs = ZeroState::GetInstance();
