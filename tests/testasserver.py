@@ -134,7 +134,7 @@ class TestServerFramework:
         self.cmdsock = None
         if self.cmdport is not None and self.hiscmdgwaddr is not None:
             print >>sys.stderr,"test: Connect CMDGW",self.hiscmdgwaddr
-            self.cmdsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.cmdsock = socket.socket(self.family, socket.SOCK_STREAM)
             self.cmdsock.connect(self.hiscmdgwaddr)
 
         

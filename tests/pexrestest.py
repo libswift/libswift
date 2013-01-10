@@ -126,8 +126,6 @@ class TestPexRes4cert(TstPexResFramework):
 
 
 
-"""
-ARNOTODO: When jenkins gets IPV6, reenable
 class TestPexRes6(TstPexResFramework):
 
     def setUpPreSession(self):
@@ -141,12 +139,11 @@ class TestPexRes6(TstPexResFramework):
         # Fake peer to send as PEX_RES
         myaddr2 = ("::1",5354)
         self.do_tst_reply(socket.AF_INET6,myaddr,myaddr2)
-"""
     
 def test_suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(TestPexRes4cert))
-    #suite.addTest(unittest.makeSuite(TestPexRes6))
+    suite.addTest(unittest.makeSuite(TestPexRes6))
     return suite
 
 
