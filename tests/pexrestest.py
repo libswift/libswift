@@ -24,7 +24,10 @@ DEBUG=False
 
 
 class TstPexResFramework(TestAsServer):
-
+    """
+    Framework for PEX_RES (reply) tests, IP protocol family independent (i.e. 
+    supports IPv4+IPv6)
+    """
     def do_tst_reply(self,family,myaddr,myaddr2,cert=None):     
            
         swarmid = binascii.unhexlify('24aa9484fbee33564fc197252c7c837ce4ce449a')

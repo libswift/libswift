@@ -20,7 +20,8 @@ DEBUG=True
 class TestServerFramework:
     """ 
     Framework class for testing the server-side of Tribler. Can be used to
-    control 1 or more swift processes from Python.
+    control 1 or more swift processes from Python. Subclassed into a 
+    unittest.TestCase below.
     """
     def mixSetUpPreSession(self):
    
@@ -163,7 +164,7 @@ class TestServerFramework:
         
 class TestAsServer(unittest.TestCase,TestServerFramework):
     """ 
-    Parent class for testing the server-side of Tribler
+    Parent class for testing the server-side of swift
     """
     def setUpPreSession(self):
         return TestServerFramework.mixSetUpPreSession(self)
@@ -182,7 +183,8 @@ class TestAsServer(unittest.TestCase,TestServerFramework):
 
 class TestAsNPeers(unittest.TestCase):
     """ 
-    Parent class for testing the server-side of Tribler
+    Parent class for doing tests with multiple swift processes controlled via
+    the CMDGW TCP socket interface.
     """
     def getNumPeers(self):
         """ Override this method to increase the number of peers """

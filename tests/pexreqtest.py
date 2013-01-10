@@ -15,13 +15,13 @@ import string
 import binascii
 from traceback import print_exc
 
-from activatetest import TestDirSeedFramework
+from activatetest import TestPexReqFramework
 from swiftconn import *
 
 DEBUG=False
 
 
-class TestDirSeed(TestDirSeedFramework):
+class TestPexReq(TestPexReqFramework):
 
     def test_pex_req(self):
         myaddr = ("127.0.0.1",15353)
@@ -74,7 +74,7 @@ class TestDirSeed(TestDirSeedFramework):
     
 def test_suite():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(TestDirSeed))
+    suite.addTest(unittest.makeSuite(TestPexReq))
     
     return suite
 

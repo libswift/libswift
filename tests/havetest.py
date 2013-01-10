@@ -24,6 +24,10 @@ DEBUG=False
 
 
 class TestHave(TestAsServer):
+    """
+    Let swift connect to us, a pretend seeder. Send HAVE, and respond
+    to its REQUEST.
+    """
     def setUpPreSession(self):
         TestAsServer.setUpPreSession(self)
 
@@ -85,13 +89,14 @@ class TestHave(TestAsServer):
         # Process his handshake and other
         s.c.recv(d)
         
-        # Send HAVE
+        # Send HANDSHAKE and HAVE
         d = s.makeDatagram()
         d.add( HandshakeMessage(s.c.get_my_chanid(),POPT_VER_PPSP,None,swarmid) )
 
         d.add( HaveMessage(ChunkRange(0,6)) )
         s.send(d)
         
+        # Wait for REQUEST
         d = s.recv()
         responded = False
         while True:

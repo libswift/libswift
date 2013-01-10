@@ -172,6 +172,9 @@ class TestZeroSeedFramework(TestAsServer):
 
 
 class TestRequestFramework: # subclassed below
+    """
+    Framework of tests doing REQUESTs (and CANCELs) to a swift process. 
+    """
 
     def tst_request_one(self):
         myaddr = ("127.0.0.1",15357)
@@ -186,7 +189,7 @@ class TestRequestFramework: # subclassed below
         d = s.recv()
         s.c.recv(d)
         
-        # Request DATA
+        # Request single chunk DATA
         d = s.makeDatagram()
         #killer = ChannelID.from_bytes('\x05\xacH\xa0')
         #d.add( killer )
@@ -341,7 +344,7 @@ class TestRequestFramework: # subclassed below
         d = s.recv()
         s.c.recv(d)
         
-        # Request DATA
+        # Request 2 chunks of DATA
         d = s.makeDatagram()
         d.add( RequestMessage(ChunkRange(67,68)) )  # ask 2 chunks
         s.c.send(d)

@@ -1,3 +1,10 @@
+# Written by Arno Bakker
+# see LICENSE.txt for license information
+#
+# Python implementation of the on-the-wire part of the swift protocol 
+# (PPSP-04 draft) for simple tests. 
+#
+
 import sys
 import socket
 import struct

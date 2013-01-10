@@ -53,7 +53,7 @@ class UDPListener(Thread):
 
 class TestTunnel(TestAsServer):
     """
-    Test for swift ability to tunnel data from CMD TCP connections over UDP.
+    Test for swift's ability to tunnel data from CMD TCP connections over UDP.
     """
     
     def setUpPreSession(self):
