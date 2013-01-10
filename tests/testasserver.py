@@ -107,11 +107,11 @@ class TestServerFramework:
         if self.livesourceinput is not None:
             args.append("-i") 
             args.append(self.livesourceinput)
-        if self.progress is not None:
-            args.append("-p")
         if self.statshttpport is not None:
             args.append("-s") 
             args.append(cllocalhost+":"+str(self.statshttpport))
+        if self.progress is not None:
+            args.append("-p")
             
         #args.append("-B") # DEBUG Hack        
         

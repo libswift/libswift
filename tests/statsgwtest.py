@@ -37,6 +37,8 @@ class TestStatsGW(TestAsServer):
     def setUpPostSession(self):
         TestAsServer.setUpPostSession(self)
         
+        time.sleep(2)
+        
 
     def tearDown(self):
         TestAsServer.tearDown(self)
