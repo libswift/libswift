@@ -61,6 +61,7 @@ class TestStatsGW(TestAsServer):
     def test_stats_get_speed_info(self):
         url = "http://127.0.0.1:"+str(self.statshttpport)+"/webUI?&{%22method%22:%22get_speed_info%22}"
 
+        print >>sys.stderr,"TEST URL",url
         req = urllib2.Request(url)
         resp = urllib2.urlopen(req)
         

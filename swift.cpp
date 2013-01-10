@@ -378,11 +378,9 @@ int utf8main (int argc, char** argv)
     if (cmdgw_enabled)
         InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr);
 
-#ifndef SWIFTGTEST  
     // TRIALM36: Allow browser to retrieve stats via AJAX and as HTML page
     if (statsaddr != Address())
         InstallStatsGateway(Channel::evbase,statsaddr);
-#endif
   
     // ZEROSTATE
     ZeroState *zs = ZeroState::GetInstance();
