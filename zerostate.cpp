@@ -177,7 +177,7 @@ void Channel::OnDataZeroState(struct evbuffer *evb)
 
 void Channel::OnHaveZeroState(struct evbuffer *evb)
 {
-    uint32_t binint = evbuffer_remove_32be(evb);
+    binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
     // Forget about it, i.e.. don't build peer binmap.
 }
 
