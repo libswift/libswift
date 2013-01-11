@@ -195,8 +195,8 @@ void    Channel::AddHandshake (struct evbuffer *evb)
 	evbuffer_add_32be(evb, encoded);
 
 	// Send protocol options
+	std::ostringstream cross;
 	if (send_control_ !=CLOSE_CONTROL) {
-	    std::ostringstream cross;
 	    evbuffer_add_8(evb, POPT_VERSION);
 	    evbuffer_add_8(evb, hs_out_->version_);
 	    cross << "v" << hs_out_->version_ << " ";
@@ -233,8 +233,9 @@ void    Channel::AddHandshake (struct evbuffer *evb)
 		    evbuffer_add_64be(evb, hs_out_->live_disc_wnd_);
 		cross << "ldw " << std::hex << hs_out_->live_disc_wnd_ << std::dec << " ";
 	    }
-	    dprintf("%s #%u +hs %x ppsp %s\n",tintstr(),id_,encoded, cross.str().c_str() );
 	}
+	dprintf("%s #%u +hs %x ppsp %s\n",tintstr(),id_,encoded, cross.str().c_str() );
+
 	evbuffer_add_8(evb, POPT_END);
     }
 
@@ -250,11 +251,15 @@ void    Channel::Send () {
     uint32_t pcid = 0;
     if (hs_in_ != NULL)
 	pcid =  hs_in_->peer_channel_id_;
+
     evbuffer_add_32be(evb,pcid);
     bin_t data = bin_t::NONE;
     int evbnonadplen = 0;
-    if (is_established()) {
-        if (send_control_!=CLOSE_CONTROL) {
+    if (send_control_==CLOSE_CONTROL) // Arno: send explicit close
+        AddHandshake(evb);
+    else
+    {
+	if (is_established()) {
             // FIXME: seeder check
             AddHave(evb);
             AddAck(evb);
@@ -270,17 +275,13 @@ void    Channel::Send () {
             AddPex(evb);
             TimeoutDataOut();
             data = AddData(evb);
-        } else {
-            // Arno: send explicit close
+        } else  {
             AddHandshake(evb);
+            AddHave(evb); // Arno, 2011-10-28: from AddHandShake. Why double?
+            AddHave(evb);
+            AddAck(evb);
         }
-    } else {
-        AddHandshake(evb);
-        AddHave(evb); // Arno, 2011-10-28: from AddHandShake. Why double?
-        AddHave(evb);
-        AddAck(evb);
     }
-
     lastsendwaskeepalive_ = (evbuffer_get_length(evb) == 4);
 
     if (evbuffer_get_length(evb)==4) {// only the channel id; bare keep-alive
@@ -290,7 +291,7 @@ void    Channel::Send () {
             tintstr(),id_,(int)evbuffer_get_length(evb),peer().str().c_str(),
             pcid);
 
-	int r = SendTo(socket_,peer(),evb);
+    int r = SendTo(socket_,peer(),evb);
     if (r==-1)
         print_error("swift can't send datagram");
     else
@@ -623,7 +624,7 @@ void    Channel::Recv (struct evbuffer *evb) {
 	else
 	    OnHandshake(hishs);
     }
-    while (evbuffer_get_length(evb)) {
+    while (evbuffer_get_length(evb) && send_control_!=CLOSE_CONTROL) {
         uint8_t type = evbuffer_remove_8(evb);
 
         if (DEBUGTRAFFIC)
@@ -1221,6 +1222,9 @@ void Channel::OnHandshake(Handshake *hishs) {
 	return;
     }
 
+    hs_in_ = hishs;
+    hs_in_->ReleaseSwarmID(); // save mem per channel
+
     // Self-connection check
     if (!SELF_CONN_OK) {
         uint32_t try_id = DecodeID(hishs->peer_channel_id_);
@@ -1229,13 +1233,11 @@ void Channel::OnHandshake(Handshake *hishs) {
             // this is a self-connection
             dprintf("%s #%u -hs closing self\n",tintstr(),id_);
             Close(CLOSE_SEND);
+            hs_in_ = NULL;
             delete hishs;
             return;
         }
     }
-
-    hs_in_ = hishs;
-    hs_in_->ReleaseSwarmID(); // save mem per channel
 
     if (hs_in_->version_ == VER_SWIFT_LEGACY)
 	hs_out_->ResetToLegacy(); // he speaks legacy, so will I
@@ -1607,7 +1609,9 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
 
     //dprintf("%s #%u peer %s recv_peer %s addr %s\n", tintstr(),mych, channel->peer().str().c_str(), channel->recv_peer().str(), addr.str() );
 
-    channel->Recv(evb);
+    // Process messages
+    if (channel->send_control_!=CLOSE_CONTROL)
+	channel->Recv(evb);
 
     evbuffer_free(evb);
 

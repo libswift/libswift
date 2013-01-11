@@ -112,7 +112,7 @@ class TstMultiFileSeekFramework(TestAsServer):
             
             sdef.add_content(fullpath,fn)
 
-        self.specfn = sdef.finalize(self.binpath)
+        self.specfn = sdef.finalize(self.binpath,destdir=self.destdir)
         f = open(self.specfn,"rb")
         self.spec = f.read()
         f.close()
@@ -139,6 +139,7 @@ class TstMultiFileSeekFramework(TestAsServer):
         self.urlprefix = "http://127.0.0.1:"+str(self.httpport)+"/"+binascii.hexlify(self.swarmid)
 
     def tst_read_all(self):
+        print >>sys.stderr,"test: tst_read_all"
         
         url = self.urlprefix        
         req = urllib2.Request(url)
@@ -165,15 +166,20 @@ class TstMultiFileSeekFramework(TestAsServer):
         
 
     def tst_read_file0(self):
+        print >>sys.stderr,"test: tst_read_file0"
+        
         wanttup = self.filelist[0]
         self._tst_read_file(wanttup)
 
     def tst_read_file1(self):
+        print >>sys.stderr,"test: tst_read_file1"
+        
         if len(self.filelist) > 1:
             wanttup = self.filelist[1]
             self._tst_read_file(wanttup)
         
     def tst_read_file2(self):
+        print >>sys.stderr,"test: tst_read_file2"
         if len(self.filelist) > 2:
             wanttup = self.filelist[2]
             self._tst_read_file(wanttup)
@@ -197,6 +203,8 @@ class TstMultiFileSeekFramework(TestAsServer):
         self.assertEqual(len(content), len(data), "returned less content than expected" )
 
     def tst_read_file0_range(self):
+        print >>sys.stderr,"test: tst_read_file0_range"
+        
         wanttup = self.filelist[0]
         self._tst_read_file_range(wanttup,"-2")
         self._tst_read_file_range(wanttup,"0-2")
@@ -204,6 +212,8 @@ class TstMultiFileSeekFramework(TestAsServer):
         self._tst_read_file_range(wanttup,"4-10")
 
     def tst_read_file1_range(self):
+        print >>sys.stderr,"test: tst_read_file1_range"
+        
         if len(self.filelist) > 1:
             wanttup = self.filelist[1]
             self._tst_read_file_range(wanttup,"-2")
@@ -212,6 +222,8 @@ class TstMultiFileSeekFramework(TestAsServer):
             self._tst_read_file_range(wanttup,"4-10")
 
     def tst_read_file2_range(self):
+        print >>sys.stderr,"test: tst_read_file2_range"
+        
         if len(self.filelist) > 2:
             wanttup = self.filelist[2]
             self._tst_read_file_range(wanttup,"-2")
