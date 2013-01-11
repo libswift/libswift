@@ -48,9 +48,6 @@ ZeroHashTree::ZeroHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
         dprintf("%s zero hashtree could not recover peak hashes, fatal\n",tintstr() );
         SetBroken();
     }
-
-    complete_ = size_;
-    completec_ = sizec_;
 }
 
 /** Precondition: root hash known */
@@ -75,6 +72,9 @@ bool ZeroHashTree::RecoverPeakHashes()
     }
     if (!this->size())
         return false; // if no valid peak hashes found
+
+    // Arno, 2012-09-26: Reset by OfferPeakHash
+    complete_ = size_ = size;
 
     return true;
 }
