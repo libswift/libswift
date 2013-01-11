@@ -52,6 +52,8 @@ class TestServerFramework:
 
         self.livesourceinput = None
         
+        self.debug = True
+        
 
     
     def mixSetUp(self):
@@ -112,8 +114,9 @@ class TestServerFramework:
             args.append(cllocalhost+":"+str(self.statshttpport))
         if self.progress is not None:
             args.append("-p")
-            
-        #args.append("-B") # DEBUG Hack        
+          
+        if self.debug:  
+            args.append("-B") # DEBUG Hack        
         
         if DEBUG:
             print >>sys.stderr,"SwiftProcess: __init__: Running",args,"workdir",self.workdir
