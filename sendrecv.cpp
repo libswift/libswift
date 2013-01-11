@@ -481,7 +481,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         return bin_t::NONE;
     }
 
-    size_t r = transfer()->GetStorage()->Read((char *)vec.iov_base,
+    ssize_t r = transfer()->GetStorage()->Read((char *)vec.iov_base,
              transfer()->chunk_size(),tosend.base_offset()*transfer()->chunk_size());
     // TODO: corrupted data, retries, caching
     if (r<0) {
