@@ -79,6 +79,14 @@ env.Program(
     LIBPATH=libpath )
 
 env.Program( 
+    target='chunkaddrtest',
+    source=['chunkaddrtest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+
+env.Program( 
     target='binfragtest',
     source=['binfragtest.cpp'],
     CPPPATH=cpppath,

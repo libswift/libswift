@@ -149,6 +149,42 @@ TEST(BinsTest,FindEmptyStart4)
     EXPECT_EQ(bin_t(0,8),f); // binmap_t has minimal tree height of 6, take into account.
 }
 
+/*
+ * Tests of find_filled. But apparently never used in the engine.
+ */
+TEST(BinsTest,FindFilled1)
+{
+    binmap_t hole;
+
+    hole.set(bin_t(3,0));
+    hole.reset(bin_t(0,0));
+    bin_t f = hole.find_filled();
+    EXPECT_EQ(bin_t(0,1),f);
+}
+
+
+TEST(BinsTest,FindFilled2)
+{
+    binmap_t hole;
+
+    hole.set(bin_t(3,0));
+    hole.reset(bin_t(0,1));
+    bin_t f = hole.find_filled();
+    EXPECT_EQ(bin_t(0,0),f);
+}
+
+
+TEST(BinsTest,FindFilled3)
+{
+    binmap_t hole;
+
+    hole.set(bin_t(3,0));
+    hole.reset(bin_t(2,0));
+    bin_t f = hole.find_filled().base_left();
+    EXPECT_EQ(bin_t(0,4),f);
+}
+
+
 
 int main (int argc, char** argv) {
     testing::InitGoogleTest(&argc, argv);

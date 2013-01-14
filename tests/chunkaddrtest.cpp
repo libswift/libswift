@@ -7,7 +7,7 @@
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
-#include "binmap.h"
+#include "swift.h"
 
 #include <gtest/gtest.h>
 
@@ -74,7 +74,7 @@ TEST(ChunkAddrTest,Chunk32ToBin32a)
     for (iter=bv.begin(); iter != bv.end(); iter++)
     {
 	bin_t b = *iter;
-	fprintf(stderr,"%s\n", b.str().c_str() );
+	//fprintf(stderr,"%s\n", b.str().c_str() );
 	binmap.set(b);
     }
 
@@ -97,7 +97,7 @@ TEST(ChunkAddrTest,Chunk32ToBin32b)
     {
 	for (uint32_t e=s; e<s+em; e++)
 	{
-	    fprintf(stderr,"\ns %u e %u\n", s, e );
+	    //fprintf(stderr,"\ns %u e %u\n", s, e );
 	    binvector bv;
 
 	    swift::chunk32_to_bin32(s,e,&bv);
@@ -107,7 +107,7 @@ TEST(ChunkAddrTest,Chunk32ToBin32b)
 	    for (iter=bv.begin(); iter != bv.end(); iter++)
 	    {
 		bin_t b = *iter;
-		fprintf(stderr,"%s\n", b.str().c_str() );
+		//fprintf(stderr,"%s\n", b.str().c_str() );
 		binmap.set(b);
 	    }
 
@@ -119,6 +119,7 @@ TEST(ChunkAddrTest,Chunk32ToBin32b)
 
 	    compare_binmaps(chunkmap, binmap, s, e);
 	}
+	fprintf(stderr,"." );
     }
 }
 

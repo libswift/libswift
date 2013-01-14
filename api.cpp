@@ -15,7 +15,7 @@ using namespace std;
 using namespace swift;
 
 
-static bool api_debug=false;
+#define api_debug	false
 
 /*
  * Global Operations
