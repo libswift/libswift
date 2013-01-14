@@ -1235,7 +1235,7 @@ namespace swift {
 
 } // namespace end
 
-// #define SWIFT_MUTE
+#define SWIFT_MUTE
 
 #ifndef SWIFT_MUTE
 #define dprintf(...) do { if (Channel::debug_file) fprintf(Channel::debug_file,__VA_ARGS__); } while (0)
