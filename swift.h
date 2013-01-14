@@ -19,7 +19,7 @@
  *  from disk.
  *
  *  Created by Victor Grishchenko, Arno Bakker
- *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
+ *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
 /*

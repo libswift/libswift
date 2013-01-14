@@ -4,7 +4,7 @@
  *  Test for chunk32 (start,end) to bin32 (b) conversion
  *
  *  Created by Arno Bakker
- *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
+ *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
 #include "binmap.h"

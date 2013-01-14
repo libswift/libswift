@@ -3,7 +3,7 @@
  *  congestion control logic for the swift protocol
  *
  *  Created by Victor Grishchenko on 12/10/09.
- *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
+ *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
 

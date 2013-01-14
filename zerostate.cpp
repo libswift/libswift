@@ -5,8 +5,11 @@
  *  as roothash-in-hex), hashes (roothash-in-hex.mhash file) and checkpoint
  *  (roothash-in-hex.mbinmap) to be present on disk.
  *
+ *  Note: currently zero-state implementations do not respond to PEX_REQ,
+ *  there is no tracker functionality.
+ *
  *  Created by Arno Bakker
- *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
+ *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
 #include "swift.h"

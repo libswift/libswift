@@ -3,7 +3,7 @@
  *  swift the multiparty transport protocol
  *
  *  Created by Victor Grishchenko on 2/15/10.
- *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
+ *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
 #include <stdio.h>

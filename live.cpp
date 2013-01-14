@@ -10,7 +10,7 @@
  *  This overwriting can be done both at the source and in a client.
  *
  *  Created by Arno Bakker.
- *  Copyright 2009-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
+ *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  */
 //LIVE
 #include "swift.h"
