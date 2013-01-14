@@ -396,6 +396,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
 void    Channel::AddCancel (struct evbuffer *evb) {
 
+	// ARNO FIXME: size of CANCEL msg no longer 5, depends on chunkaddr
 	while (SWIFT_MAX_NONDATA_DGRAM_SIZE-evbuffer_get_length(evb) >= 5 && !cancel_out_.empty()) {
 		bin_t cancel = cancel_out_.front();
 		cancel_out_.pop_front();

@@ -149,7 +149,7 @@ class TestHave(TestZeroSeedFramework):
         self.stop = True
         return 0
 
-    # TODO CHECKPOINT
+    # CHECKPOINT tested in vodmftest.py
     
     def test_maxspeed(self):
 
@@ -213,6 +213,7 @@ class TestHave(TestZeroSeedFramework):
             self.stop = True
         return 0
 
+    # MOREINFO with channels tested in vodmftest.py
 
     def test_error(self):
 

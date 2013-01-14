@@ -109,6 +109,18 @@ class TestDirSeed(TestDirSeedFramework):
         
         time.sleep(10)
     
+
+    def test_connect_reactivate(self):
+        
+        self.test_connect_one()
+        
+        print >>sys.stderr,"test: Now sleeping so swift deactivates swarm"
+        time.sleep(60)
+        # Should be deactivated
+        
+        print >>sys.stderr,"test: Testing if reactivate works"
+        self.test_connect_one()
+
     
 def test_suite():
     suite = unittest.TestSuite()
