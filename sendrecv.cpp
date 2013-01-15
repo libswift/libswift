@@ -394,10 +394,28 @@ void    Channel::AddHint (struct evbuffer *evb) {
     }
 }
 
+static int ChunkAddrSize(popt_chunk_addr_t ca)
+{
+    switch(ca)
+    {
+        case POPT_CHUNK_ADDR_BIN32:
+            return 4;
+        case POPT_CHUNK_ADDR_BYTE64:
+            return 2*8;
+        case POPT_CHUNK_ADDR_CHUNK32:
+            return 2*4;
+        case POPT_CHUNK_ADDR_BIN64:
+            return 8;
+        case POPT_CHUNK_ADDR_CHUNK64:
+            return 2*8;
+    }
+    return 0;
+}
+
 void    Channel::AddCancel (struct evbuffer *evb) {
 
-	// ARNO FIXME: size of CANCEL msg no longer 5, depends on chunkaddr
-	while (SWIFT_MAX_NONDATA_DGRAM_SIZE-evbuffer_get_length(evb) >= 5 && !cancel_out_.empty()) {
+	// Arno, 2013-01-15: take into account chunk addressing scheme
+	while (SWIFT_MAX_NONDATA_DGRAM_SIZE-evbuffer_get_length(evb) >= 1+ChunkAddrSize(hs_out_->chunk_addr_) && !cancel_out_.empty()) {
 		bin_t cancel = cancel_out_.front();
 		cancel_out_.pop_front();
 		evbuffer_add_8(evb, SWIFT_CANCEL);
