@@ -5,6 +5,7 @@ import sys
 import os
 
 Import("DEBUG")
+Import("CODECOVERAGE")
 Import("env")
 Import("libs")
 Import("linkflags")
@@ -28,7 +29,7 @@ libpath = env["LIBPATH"].split(os.pathsep)
 libpath.append('..')
 libpath.append(".")
 
-if DEBUG and sys.platform == "linux2":
+if CODECOVERAGE and sys.platform == "linux2":
     #Enable profiling
     env.Append(CXXFLAGS="-fprofile-arcs -ftest-coverage")
     linkflags += " -lgcov -fprofile-arcs"

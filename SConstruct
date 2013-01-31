@@ -16,6 +16,7 @@ import re
 import sys
 
 DEBUG = True
+CODECOVERAGE = (DEBUG and True)
 
 TestDir='tests'
 
@@ -139,5 +140,6 @@ Export("env")
 Export("libs")
 Export("linkflags")
 Export("DEBUG")
+Export("CODECOVERAGE")
 # Arno: uncomment to build tests
 #SConscript('tests/SConscript')
