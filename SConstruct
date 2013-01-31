@@ -98,11 +98,16 @@ else:
     env.Append(CPPPATH=".:"+cpppath)
     #env.Append(LINKFLAGS="--static")
 
-    #if DEBUG:
-    #    env.Append(CXXFLAGS="-g")
+    if 'CXXFLAGS' in os.environ:
+        cxxflags = os.environ['CXXFLAGS']
+    else:
+        cxxflags = ""
+    if DEBUG:
+        cxxflags += " -g "
 
     # Large-file support always
-    env.Append(CXXFLAGS="-D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE")
+    cxxflags += " -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE "
+    env.Append(CXXFLAGS=cxxflags)
 
     # Set libs to link to
     libs = ['stdc++','libevent','pthread']
