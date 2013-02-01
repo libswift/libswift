@@ -71,7 +71,7 @@ if sys.platform == "win32":
         libs += ['gtestd']
         
     # Update lib search path
-    libpath = os.environ['LIBPATH']
+    libpath = os.environ.get('LIBPATH','')
     libpath += libevent2path+';'
     if DEBUG:
         libpath += '\\build\\gtest-1.4.0\\msvc\\gtest\\Debug;'
