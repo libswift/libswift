@@ -192,9 +192,11 @@ void Channel::LiveSend()
     //fprintf(stderr,"live: LiveSend: channel %d\n", id() );
 
     if (evsendlive_ptr_ == NULL)
+    {
         evsendlive_ptr_ = new struct event;
-
-    evtimer_assign(evsendlive_ptr_,evbase,&Channel::LibeventSendCallback,this);
+        // Arno, 2013-02-01: Don't reassign, causes crashes.
+        evtimer_assign(evsendlive_ptr_,evbase,&Channel::LibeventSendCallback,this);
+    }
     //fprintf(stderr,"live: LiveSend: next %lld\n", next_send_time_ );
     evtimer_add(evsendlive_ptr_,tint2tv(next_send_time_));
 }

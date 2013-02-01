@@ -127,15 +127,16 @@ Channel::~Channel () {
 
 void Channel::ClearEvents()
 {
-    if (evsend_ptr_ != NULL) {
-        if (evtimer_pending(evsend_ptr_,NULL))
-            evtimer_del(evsend_ptr_);
+    // Arno, 2013-02-01: Be safer, _del not just on pending.
+    if (evsend_ptr_ != NULL) 
+    {
+        evtimer_del(evsend_ptr_);
         delete evsend_ptr_;
         evsend_ptr_ = NULL;
     }
-    if (evsendlive_ptr_ != NULL) {
-        if (evtimer_pending(evsendlive_ptr_,NULL))
-            evtimer_del(evsendlive_ptr_);
+    if (evsendlive_ptr_ != NULL)
+    {
+        evtimer_del(evsendlive_ptr_);
         delete evsendlive_ptr_;
         evsendlive_ptr_ = NULL;
     }
