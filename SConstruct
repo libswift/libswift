@@ -4,7 +4,7 @@
 # Requirements:
 #  - scons: Cross-platform build system    http://www.scons.org/
 #  - libevent2: Event driven network I/O   http://www.libevent.org/
-#    * Set install path below
+#    * Set install path below >= 2.0.17
 # For unittests:
 #  - googletest: Google C++ Test Framework http://code.google.com/p/googletest/
 #       * Set install path in tests/SConscript
