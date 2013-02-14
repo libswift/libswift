@@ -343,7 +343,6 @@ void ContentTransfer::Progress(bin_t bin) {
     }
 }
 
-
 void ContentTransfer::SetTD(int td)
 {
     td_ = td;

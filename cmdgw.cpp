@@ -6,7 +6,6 @@
  *  Copyright 2010-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
-#include <math.h>
 #include <iostream>
 #include <sstream>
 
@@ -16,7 +15,6 @@
 #endif
 
 #include "swift.h"
-#include "compat.h"
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
 #include <event2/listener.h>

@@ -47,6 +47,7 @@ typedef unsigned __int64 uint64_t;
 #include <cstdlib>
 #include <string>
 #include <errno.h>
+#include <math.h>
 
 #ifdef _MSC_VER
 #include "getopt_win.h"
@@ -95,7 +96,7 @@ typedef void* setsockoptptr_t;
 #define LONG_MAX	numeric_limits<int>::max()
 #endif
 
-#ifdef _WIN32
+#ifndef log2
 // log2 is C99 which is not fully supported by MS VS
 #define log2(x)		(log(x)/log(2.0))
 #endif

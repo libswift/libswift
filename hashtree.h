@@ -36,7 +36,8 @@ struct Sha1Hash {
         { return 0==memcmp(bits,b.bits,SIZE); }
     bool    operator != (const Sha1Hash& b) const { return !(*this==b); }
     const char* operator * () const { return (char*) bits; }
-    
+    Sha1Hash & operator = (const Sha1Hash &source);
+
     const static Sha1Hash ZERO;
     const static size_t SIZE = HASHSZ;
 };

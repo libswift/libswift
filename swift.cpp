@@ -90,7 +90,7 @@ void LiveSourceHTTPResponseCallback(struct evhttp_request *req, void *arg);
 void LiveSourceHTTPDownloadChunkCallback(struct evhttp_request *req, void *arg);
 
 // Gateway stuff
-bool InstallHTTPGateway(struct event_base *evbase,Address addr,uint32_t chunk_size, double *maxspeed);
+bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf );
 bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr);
 bool HTTPIsSending();
 #ifndef SWIFTGTEST
@@ -374,7 +374,7 @@ int utf8main (int argc, char** argv)
     }
 
     if (httpgw_enabled)
-        InstallHTTPGateway(Channel::evbase,httpaddr,chunk_size,maxspeed);
+        InstallHTTPGateway(Channel::evbase,httpaddr,chunk_size,maxspeed,"",-1,-1);
     if (cmdgw_enabled)
         InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr);
 
@@ -523,7 +523,7 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, Address &tracker, 
         std::ostringstream oss;
         oss << "tswift:";
         if (trackerargstr != "")
-           oss << "//" << trackerargstr; // the unresolved tracker hostname as specified on cmd line
+           oss << "//" << trackerargstr; // use unresolved tracker hostname here as specified on cmd line
         oss << "/" << swift::SwarmID(single_td).hex();
         if (chunk_size != SWIFT_DEFAULT_CHUNK_SIZE)
            oss << "$" << chunk_size;
