@@ -92,7 +92,6 @@ TEST(ChunkAddrTest,Chunk32ToBin32b)
 {
     uint32_t sm = 269;
     uint32_t em = 312;
-    char binstr[32];
     for (uint32_t s=0; s<sm; s++)
     {
 	for (uint32_t e=s; e<s+em; e++)

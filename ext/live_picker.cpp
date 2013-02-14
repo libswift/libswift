@@ -76,14 +76,12 @@ public:
             hint_out_.pop_front();
         }
 
-        char binstr[32];
-
         // Advance ptr
         //dprintf("live: pp: new cur start\n" );
         while (transfer_->ack_out()->is_filled(current_bin_))
         {
             current_bin_ = bin_t(0,current_bin_.layer_offset()+1);
-            //fprintf(stderr,"live: pp: new cur is %s\n", current_bin_.str(binstr) );
+            //fprintf(stderr,"live: pp: new cur is %s\n", current_bin_.str().c_str() );
         }
         //dprintf("live: pp: new cur end\n" );
 
@@ -92,10 +90,10 @@ public:
         bin_t hint = pickLargestBin(offer,current_bin_);
         if (hint == bin_t::NONE)
         {
-            //dprintf("live: pp: Look beyond %s\n", current_bin_.str(binstr) );
+            //dprintf("live: pp: Look beyond %s\n", current_bin_.str().c_str() );
             // See if there is stuff to download beyond current bin
             hint = ack_hint_out_.find_empty(current_bin_);
-            //dprintf("live: pp: Empty is %s boe %llu boc %llu\n", hint.str(binstr), hint.toUInt(), current_bin_.toUInt() );
+            //dprintf("live: pp: Empty is %s boe %llu boc %llu\n", hint.str().c_str(), hint.toUInt(), current_bin_.toUInt() );
 
             // Safety catch, find_empty(offset) apparently buggy.
             if (hint.base_offset() <= current_bin_.base_offset())
@@ -108,7 +106,7 @@ public:
         if (hint == bin_t::NONE)
             return hint;
 
-        //dprintf("live: pp: Picked %s\n", hint.str(binstr) );
+        //dprintf("live: pp: Picked %s\n", hint.str().c_str() );
 
 	assert(ack_hint_out_.is_empty(hint));
 	ack_hint_out_.set(hint);
@@ -119,14 +117,13 @@ public:
 
     bin_t pickLargestBin(binmap_t& offer, bin_t starthint)
     {
-        char binstr[32];
 	bin_t hint;
         if (offer.is_filled(starthint) && ack_hint_out_.is_empty(starthint))
         {
             // See which is the largest bin that covers starthint
             bin_t goodhint = starthint;
             hint = starthint;
-            //dprintf("live: pp: new hint is %s\n", hint.str(binstr) );
+            //dprintf("live: pp: new hint is %s\n", hint.str().c_str() );
 
 	    while (hint.is_left() && offer.is_filled(hint.sibling()) && ack_hint_out_.is_empty(hint.sibling()))
 	    {
@@ -134,7 +131,7 @@ public:
 		// request the parent too.
 		goodhint = hint;
 	        hint = hint.parent();
-	        //dprintf("live: pp: Going to parent %s\n", hint.str(binstr) );
+	        //dprintf("live: pp: Going to parent %s\n", hint.str().c_str() );
 	    }
 	    // Previous one was the max.
 	    return goodhint;
@@ -192,8 +189,6 @@ public:
 
     void EndAddPeerPos(uint32_t channelid)
     {
-    	char binstr[32];
-
     	if (!hooking_in_)
     	    return;
 

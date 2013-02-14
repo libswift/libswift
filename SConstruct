@@ -30,7 +30,6 @@ source = [ 'bin.cpp', 'binmap.cpp', 'sha1.cpp','hashtree.cpp',
 
 env = Environment()
 if sys.platform == "win32":
-    #libevent2path = '\\build\\libevent-2.0.19-stable'
     libevent2path = '\\build\\libevent-2.0.20-stable-debug'
 
     # "MSVC works out of the box". Sure.
@@ -74,9 +73,6 @@ if sys.platform == "win32":
     # Somehow linker can't find uuid.lib
     libpath += 'C:\\Program Files\\Microsoft SDKs\\Windows\\v6.0A\\Lib;'
 
-    linkflags = '-Wl,-rpath,'+libevent2path+'/lib'
-    env.Append(LINKFLAGS=linkflags);
-
     # Make the swift.exe a Windows program not a Console program when used inside another prog
     linkflags = '/SUBSYSTEM:WINDOWS'
     if not DEBUG:
@@ -87,6 +83,8 @@ if sys.platform == "win32":
     APPSOURCE=['swift.cpp','statsgw.cpp','getopt.c','getopt_long.c']
     
 else:
+    # Linux or Mac build
+    
     libevent2path = '/arno/pkgs/libevent-2.0.15-arno-http'
 
     # Enable the user defining external includes

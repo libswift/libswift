@@ -68,8 +68,6 @@ TEST(BinsTest,FindFiltered1c) {
     filter.reset(bin_t(1,4));
     //filter.reset(bin_t(0,13));
 
-    char binstr[32];
-
     bin_t s = bin_t(3,1);
     fprintf(stderr,"Searching 0,12x from %s ", s.base_left().str().c_str() );
     fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
@@ -411,8 +409,6 @@ TEST(BinsTest,FindFiltered17) {
 	bin_t hint = bin_t::NONE;
 	while (hint.is_none() && layer <10)
 	{
-		char binstr[32];
-
 		bin_t curr = bin_t(layer++,0);
 		binmap.fill(offer);
 		binmap_t::copy(binmap, ack_hint_out, curr);
@@ -446,8 +442,6 @@ TEST(BinsTest,FindFiltered19) {
 	bin_t hint = bin_t::NONE;
 	while (!hint.contains(bin_t(292)))
 	{
-		char binstr[32];
-
 		twist = rand();
 
 		bin_t curr = bin_t(layer,0);
@@ -466,7 +460,6 @@ TEST(BinsTest,FindFiltered19) {
 		ack_hint_out.set(hint);
 	}
 
-	char binstr[32],binstr2[32];
 	EXPECT_EQ(bin_t(292),hint);
 }
 
@@ -506,8 +499,6 @@ TEST(BinsTest,FindFiltered20) {
 		fprintf(stderr,"Layer %d\n", layer );
 		while (!hint.contains(bin_t(292)))
 		{
-			char binstr[32];
-
 			twist = rand();
 
 			bin_t curr = bin_t(0,292/2);
@@ -538,8 +529,6 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
 
     for(int i=0; i<1024; i+=2)
         filter.set(bin_t(0,i));
-
-    char binstr[32];
 
     // Case 1
     bin_t s(1,2);
