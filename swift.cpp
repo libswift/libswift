@@ -126,6 +126,8 @@ long long int cmdgw_report_counter=0;
 long long int cmdgw_report_interval=REPORT_INTERVAL; // seconds
 
 
+#include "livetree.h"
+
 // UNICODE: TODO, convert to std::string carrying UTF-8 arguments. Problem is
 // a string based getopt_long type parser.
 int utf8main (int argc, char** argv)
@@ -175,6 +177,32 @@ int utf8main (int argc, char** argv)
 
     LibraryInit();
     Channel::evbase = event_base_new();
+
+
+    LiveHashTree *umt = new LiveHashTree();
+    for (int i=0; i<10; i++)
+    {
+	char data[1024];
+	memset(data,i%255,1024);
+	fprintf(stderr,"\nAdd %u\n", i);
+	//umt->AddData(data,1024);
+	umt->OfferData(bin_t(0,i),data,1024);
+    }
+
+    fprintf(stderr,"EXIT\n");
+    exit(-1);
+
+
+
+
+
+
+
+
+
+
+
+
 
     int c,n;
     while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:ji:kC:1:2:3:T:G", long_options, 0)) ) {
