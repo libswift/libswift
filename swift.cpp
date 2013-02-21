@@ -195,12 +195,16 @@ int utf8main (int argc, char** argv)
 
     for (int i=0; i<NCHUNKS; i++)
     {
-	fprintf(stderr,"\nAdd %u\n", i);
+	//int r=NCHUNKS-1-i;
+	int r=i;
+	fprintf(stderr,"\nAdd %u\n", r);
 
-	bin_t pos(0,i);
+	bin_t orig(0,r);
+	bin_t pos = orig;
 	bin_t peak = umt->peak_for(pos);
-	fprintf(stderr,"\nAdd: %u peak %s\n", i, peak.str().c_str() );
+	fprintf(stderr,"\nAdd: %u peak %s\n", r, peak.str().c_str() );
 
+	// Sending uncles
 	binvector bv;
 	while (pos!=peak)
 	{
@@ -212,9 +216,13 @@ int utf8main (int argc, char** argv)
 	for (iter=bv.rbegin(); iter != bv.rend(); iter++)
 	{
 	    bin_t uncle = *iter;
-	    fprintf(stderr,"\nAdd %u uncle %s\n", i, uncle.str().c_str() );
+	    fprintf(stderr,"\nAdd %u uncle %s\n", r, uncle.str().c_str() );
 	    umt->OfferHash(uncle,Sha1Hash::ZERO);
 	}
+
+	// Sending actual
+	fprintf(stderr,"\nAdd %u orig %s\n", r, orig.str().c_str() );
+	umt->OfferHash(orig,Sha1Hash::ZERO);
     }
 
     fprintf(stderr,"EXIT\n");
