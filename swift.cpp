@@ -127,6 +127,7 @@ long long int cmdgw_report_interval=REPORT_INTERVAL; // seconds
 
 
 #include "livetree.h"
+#include "bin_utils.h"
 
 // UNICODE: TODO, convert to std::string carrying UTF-8 arguments. Problem is
 // a string based getopt_long type parser.
@@ -178,15 +179,42 @@ int utf8main (int argc, char** argv)
     LibraryInit();
     Channel::evbase = event_base_new();
 
+    int NCHUNKS = 10;
+    bin_t peak_bins_[64];
+    int peak_count = gen_peaks(NCHUNKS,peak_bins_);
+    fprintf(stderr,"peak count %d\n", peak_count );
 
+    // Send peaks
     LiveHashTree *umt = new LiveHashTree();
-    for (int i=0; i<10; i++)
+    fprintf(stderr,"\nSending Peaks\n");
+    for (int i=0; i<peak_count; i++)
     {
-	char data[1024];
-	memset(data,i%255,1024);
-	fprintf(stderr,"\nAdd %u\n", i);
 	//umt->AddData(data,1024);
-	umt->OfferData(bin_t(0,i),data,1024);
+	umt->OfferHash(peak_bins_[i],Sha1Hash::ZERO);
+    }
+
+    for (int i=0; i<NCHUNKS; i++)
+    {
+	fprintf(stderr,"\nAdd %u\n", i);
+
+	bin_t pos(0,i);
+	bin_t peak = umt->peak_for(pos);
+	fprintf(stderr,"\nAdd: %u peak %s\n", i, peak.str().c_str() );
+
+	binvector bv;
+	while (pos!=peak)
+	{
+	    bin_t uncle = pos.sibling();
+	    bv.push_back(uncle);
+	    pos = pos.parent();
+	}
+	binvector::reverse_iterator iter;
+	for (iter=bv.rbegin(); iter != bv.rend(); iter++)
+	{
+	    bin_t uncle = *iter;
+	    fprintf(stderr,"\nAdd %u uncle %s\n", i, uncle.str().c_str() );
+	    umt->OfferHash(uncle,Sha1Hash::ZERO);
+	}
     }
 
     fprintf(stderr,"EXIT\n");

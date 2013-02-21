@@ -59,7 +59,7 @@ void Node::SetBin(bin_t &b)
 
 
 
-LiveHashTree::LiveHashTree() : root_(NULL), addcursor_(NULL), peak_count_(0), size_(0), chunk_size_(0)
+LiveHashTree::LiveHashTree() : root_(NULL), addcursor_(NULL), peak_count_(0), size_(0), chunk_size_(SWIFT_DEFAULT_CHUNK_SIZE)
 {
 }
 
@@ -211,6 +211,28 @@ bool LiveHashTree::OfferHash (bin_t pos, const Sha1Hash& hash)
     // This adds hashes on client side
     fprintf(stderr,"OfferHash: %s\n", pos.str().c_str() );
 
+    // State: Waiting for peak hashes
+    if (size_ == 0)
+    {
+	if (peak_count_ > 0)
+	{
+	    // Assumption: peaks and uncle sent in descending order, peaks first
+	    if (peak_bins_[peak_count_].layer() < pos.layer())
+	    {
+		// End of peaks
+		size_ = peak_bins_[peak_count_].base_right().layer_offset() * chunk_size_;
+	    }
+	}
+	if (size_ == 0)
+	{
+	    fprintf(stderr,"OfferHash: offer is peak %s\n", pos.str().c_str() );
+	    peak_bins_[peak_count_++] = pos;
+
+	    // TODO: check if peaks make root, if so end-of-peaks. Or wait till
+	    // higher layer hash
+	}
+    }
+
     // Find or create node
     Node *iter = root_;
     Node *parent = NULL;
@@ -270,7 +292,7 @@ bool LiveHashTree::OfferHash (bin_t pos, const Sha1Hash& hash)
 	{
 	    // Offered pos not a child, error or create new root
 	    Node *newroot = new Node();
-	    newroot->SetBin(bin_t(iter->GetBin().layer()+1,0));
+	    newroot->SetBin(iter->GetBin().parent());
 
 	    fprintf(stderr,"OfferHash: new root no cover %s\n", newroot->GetBin().str().c_str() );
 
