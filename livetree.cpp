@@ -268,9 +268,10 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 		root_ = new Node();
 		root_->SetBin(pos);
 
-		fprintf(stderr,"OfferHash: new root %s\n", root_->GetBin().str().c_str() );
+		fprintf(stderr,"OfferHash: new root %s %s\n", root_->GetBin().str().c_str(), hash.hex().c_str() );
 
 		root_->SetHash(hash);
+		root_->SetVerified(verified);
 		return false;
 	    }
 	    else
@@ -344,14 +345,15 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     }
 
 
-    // TODO Test if known
     if (iter == NULL)
     {
 	fprintf(stderr,"OfferHash: internal error, couldn't find or create node\n" );
 	return false;
     }
 
-    // From MmapHashTree
+    //
+    // From MmapHashTree::OfferHash
+    //
 
     //NETWVSHASH
     if (!check_netwvshash_)
@@ -362,6 +364,7 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
         return false;
     if (peak==pos)
     {
+	// Diff from MmapHashTree: store peak here
 	if (verified)
 	{
 	    iter->SetHash(hash);

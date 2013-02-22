@@ -96,13 +96,13 @@ void do_download(LiveHashTree *umt, int nchunks, hmap_t &hmap)
 }
 
 
-TEST(LiveTreeTest,Download10)
+LiveHashTree *prepare_do_download(int nchunks)
 {
-    int NCHUNKS = 10;
+    fprintf(stderr,"\nprepare_do_download(%d)\n", nchunks);
 
     // Create chunks
     clist_t	clist;
-    for (int i=0; i<NCHUNKS; i++)
+    for (int i=0; i<nchunks; i++)
     {
 	char *data = new char[1024];
 	memset(data,i%255,1024);
@@ -111,21 +111,27 @@ TEST(LiveTreeTest,Download10)
 
     // Create leaves
     hmap_t hmap;
-    for (int i=0; i<NCHUNKS; i++)
+    for (int i=0; i<nchunks; i++)
     {
 	hmap[bin_t(0,i)] = Sha1Hash(clist[i],1024);
+	fprintf(stderr,"Hash leaf %s\n", bin_t(0,i).str().c_str() );
+
     }
 
     // Pad with zero hashes
-    int height = ceil(log2((double)NCHUNKS));
+    int height = ceil(log2((double)nchunks));
+
+    fprintf(stderr,"Hash height %d\n", height );
+
     int width = pow(2.0,height);
-    for (int i=NCHUNKS; i<width; i++)
+    for (int i=nchunks; i<width; i++)
     {
 	hmap[bin_t(0,i)] = Sha1Hash::ZERO;
+	fprintf(stderr,"Hash empty %s\n", bin_t(0,i).str().c_str() );
     }
 
     // Calc hashtree
-    for (int h=1; h<height; h++)
+    for (int h=1; h<height+1; h++)
     {
 	int step = pow(2.0,h);
 	int npairs = width/step;
@@ -134,21 +140,62 @@ TEST(LiveTreeTest,Download10)
 	    bin_t b(h,i);
 	    Sha1Hash parhash(hmap[b.left()],hmap[b.right()]);
 	    hmap[b] = parhash;
+
+	    fprintf(stderr,"Hash parent %s\n", b.str().c_str() );
 	}
     }
 
-    fprintf(stderr,"(1,4) HASH %s\n", hmap[bin_t(1,4)].hex().c_str() );
-    fprintf(stderr,"(0,8) HASH %s\n", hmap[bin_t(0,8)].hex().c_str() );
-    fprintf(stderr,"(0,9) HASH %s\n", hmap[bin_t(0,9)].hex().c_str() );
-
-
     LiveHashTree *umt = new LiveHashTree(481,true); // pubkey
-    do_download(umt,NCHUNKS,hmap);
+    do_download(umt,nchunks,hmap);
+
+    for (int i=0; i<nchunks; i++)
+    {
+	delete clist[i];
+    }
+
+    return umt;
+}
+
+
+TEST(LiveTreeTest,Download8)
+{
+    LiveHashTree *umt = prepare_do_download(8);
+
+    // asserts
+    ASSERT_EQ(umt->peak_count(), 1);
+    ASSERT_EQ(umt->peak(0), bin_t(3,0));
+}
+
+
+TEST(LiveTreeTest,Download10)
+{
+    LiveHashTree *umt = prepare_do_download(10);
 
     // asserts
     ASSERT_EQ(umt->peak_count(), 2);
     ASSERT_EQ(umt->peak(0), bin_t(3,0));
     ASSERT_EQ(umt->peak(1), bin_t(1,4));
+
+}
+
+TEST(LiveTreeTest,Download11)
+{
+    LiveHashTree *umt = prepare_do_download(11);
+
+    // asserts
+    ASSERT_EQ(umt->peak_count(), 3);
+    ASSERT_EQ(umt->peak(0), bin_t(3,0));
+    ASSERT_EQ(umt->peak(1), bin_t(1,4));
+    ASSERT_EQ(umt->peak(2), bin_t(0,10));
+}
+
+
+TEST(LiveTreeTest,DownloadIter)
+{
+    for (int i=0; i<17; i++)
+    {
+	LiveHashTree *umt = prepare_do_download(i);
+    }
 }
 
 
