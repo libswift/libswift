@@ -8,6 +8,9 @@
 #include "livetree.h"
 #include "bin_utils.h"
 #include <gtest/gtest.h>
+#include <algorithm>    // std::reverse
+#include <ctime>        // std::time
+#include <cstdlib>      // std::rand, std::srand
 
 
 using namespace swift;
@@ -15,8 +18,14 @@ using namespace swift;
 typedef std::vector<char *>	    clist_t;
 typedef std::map<bin_t,Sha1Hash>  hmap_t;
 
+/* Simple simulated PiecePicker */
+typedef enum {
+    PICK_INORDER,
+    PICK_REVERSE,
+    PICK_RANDOM
+} pickpolicy_t;
 
-
+typedef std::vector<int>  	pickorder_t;
 
 void do_add_data(LiveHashTree *umt, int nchunks)
 {
@@ -44,7 +53,7 @@ TEST(LiveTreeTest,AddData10)
 }
 #endif
 
-void do_download(LiveHashTree *umt, int nchunks, hmap_t &hmap)
+void do_download(LiveHashTree *umt, int nchunks, hmap_t &hmap, pickorder_t pickorder)
 {
     bin_t peak_bins_[64];
     int peak_count = gen_peaks(nchunks,peak_bins_);
@@ -62,8 +71,7 @@ void do_download(LiveHashTree *umt, int nchunks, hmap_t &hmap)
 
     for (int i=0; i<nchunks; i++)
     {
-	//int r=nchunks-1-i;
-	int r=i;
+	int r = pickorder[i];
 	fprintf(stderr,"\nAdd %u\n", r);
 
 	bin_t orig(0,r);
@@ -96,7 +104,7 @@ void do_download(LiveHashTree *umt, int nchunks, hmap_t &hmap)
 }
 
 
-LiveHashTree *prepare_do_download(int nchunks)
+LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy)
 {
     fprintf(stderr,"\nprepare_do_download(%d)\n", nchunks);
 
@@ -146,7 +154,25 @@ LiveHashTree *prepare_do_download(int nchunks)
     }
 
     LiveHashTree *umt = new LiveHashTree(481,true); // pubkey
-    do_download(umt,nchunks,hmap);
+
+
+    /*
+     * Create PiecePicker
+     */
+    pickorder_t pickvector;
+
+    for (int i=0; i<nchunks; ++i)
+        pickvector.push_back(i);
+
+    if (piecepickpolicy == PICK_REVERSE)
+	std::reverse(pickvector.begin(),pickvector.end());
+    else if (piecepickpolicy == PICK_RANDOM)
+    {
+	std::srand ( unsigned ( std::time(0) ) );
+	std::random_shuffle( pickvector.begin(), pickvector.end() );
+    }
+
+    do_download(umt,nchunks,hmap,pickvector);
 
     for (int i=0; i<nchunks; i++)
     {
@@ -159,7 +185,7 @@ LiveHashTree *prepare_do_download(int nchunks)
 
 TEST(LiveTreeTest,Download8)
 {
-    LiveHashTree *umt = prepare_do_download(8);
+    LiveHashTree *umt = prepare_do_download(8,PICK_INORDER);
 
     // asserts
     ASSERT_EQ(umt->peak_count(), 1);
@@ -169,7 +195,7 @@ TEST(LiveTreeTest,Download8)
 
 TEST(LiveTreeTest,Download10)
 {
-    LiveHashTree *umt = prepare_do_download(10);
+    LiveHashTree *umt = prepare_do_download(10,PICK_INORDER);
 
     // asserts
     ASSERT_EQ(umt->peak_count(), 2);
@@ -180,7 +206,7 @@ TEST(LiveTreeTest,Download10)
 
 TEST(LiveTreeTest,Download11)
 {
-    LiveHashTree *umt = prepare_do_download(11);
+    LiveHashTree *umt = prepare_do_download(11,PICK_INORDER);
 
     // asserts
     ASSERT_EQ(umt->peak_count(), 3);
@@ -194,10 +220,30 @@ TEST(LiveTreeTest,DownloadIter)
 {
     for (int i=0; i<17; i++)
     {
-	LiveHashTree *umt = prepare_do_download(i);
+	LiveHashTree *umt = prepare_do_download(i,PICK_INORDER);
+	delete umt;
     }
 }
 
+
+TEST(LiveTreeTest,DownloadIterReverse)
+{
+    for (int i=0; i<17; i++)
+    {
+	LiveHashTree *umt = prepare_do_download(i,PICK_REVERSE);
+	delete umt;
+    }
+}
+
+
+TEST(LiveTreeTest,DownloadIterRandom)
+{
+    for (int i=0; i<17; i++)
+    {
+	LiveHashTree *umt = prepare_do_download(i,PICK_RANDOM);
+	delete umt;
+    }
+}
 
 int main (int argc, char** argv) {
     testing::InitGoogleTest(&argc, argv);
