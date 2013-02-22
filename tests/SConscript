@@ -51,6 +51,7 @@ env.StaticLibrary(
     LIBS=libs,
     LIBPATH=libpath)
 
+"""
 env.Program( 
     target='addrtest',
     source=['addrtest.cpp'],
@@ -108,24 +109,6 @@ env.Program(
     LIBS=libs,
     LIBPATH=libpath )
 
-# Arno: must be rewritten to libevent
-#env.Program( 
-#    target='ledbattest',
-#    source=['ledbattest.cpp'],
-#    CPPPATH=cpppath,
-#    LIBS=libs,
-#    LIBPATH=libpath )
-
-# Arno: must be rewritten to libevent
-#if sys.platform != "win32":
-#    # Arno: Needs getopt
-#    env.Program( 
-#        target='ledbattest2',
-#        source=['ledbattest2.cpp'],
-#        CPPPATH=cpppath,
-#        LIBS=libs,
-#        LIBPATH=libpath )
-
 env.Program( 
     target='freemap',
     source=['freemap.cpp'],
@@ -157,6 +140,14 @@ env.Program(
 env.Program( 
     target='apitest',
     source=['apitest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+"""
+
+env.Program( 
+    target='livetreetest',
+    source=['livetreetest.cpp'],
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )

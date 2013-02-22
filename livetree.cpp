@@ -96,14 +96,11 @@ bin_t LiveHashTree::AddData(const char* data, size_t length)
     Node *next = CreateNext();
     next->SetHash(hash);
 
-
-    sane_tree();
-
     fprintf(stderr,"AddData: set hash\n");
 
     // Calc new peaks
     size_ += length;
-    //peak_count_ = gen_peaks(size_in_chunks(),peak_bins_);
+    peak_count_ = gen_peaks(size_in_chunks(),peak_bins_);
 
     return next->GetBin();
 }
