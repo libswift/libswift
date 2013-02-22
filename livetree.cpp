@@ -1,3 +1,10 @@
+/*
+ *  livetree.cpp
+ *
+ *  Created by Arno Bakker, Victor Grishchenko
+ *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
+ *
+ */
 
 #include "livetree.h"
 #include "bin_utils.h"
@@ -67,35 +74,52 @@ void Node::SetVerified(bool val)
 }
 
 
-LiveHashTree::LiveHashTree(privkey_t privkey) : state_(LHT_STATE_SIGN_EMPTY), root_(NULL), addcursor_(NULL), peak_count_(0), size_(0), chunk_size_(SWIFT_DEFAULT_CHUNK_SIZE), privkey_(privkey), check_netwvshash_(false)
+LiveHashTree::LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_size, bool check_netwvshash) :
+ HashTree(), state_(LHT_STATE_SIGN_EMPTY), root_(NULL), addcursor_(NULL), privkey_(privkey), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
+ chunk_size_(chunk_size), storage_(storage), check_netwvshash_(check_netwvshash)
 {
 }
 
-LiveHashTree::LiveHashTree(pubkey_t swarmid, bool check_netwvshash) : state_(LHT_STATE_VER_AWAIT_PEAK), root_(NULL), addcursor_(NULL), peak_count_(0), size_(0), chunk_size_(SWIFT_DEFAULT_CHUNK_SIZE), pubkey_(swarmid), check_netwvshash_(check_netwvshash)
-{
-
-}
-
-LiveHashTree::~LiveHashTree ()
+LiveHashTree::LiveHashTree(Storage *storage, pubkey_t swarmid, uint32_t chunk_size, bool check_netwvshash) :
+ HashTree(), state_(LHT_STATE_VER_AWAIT_PEAK), root_(NULL), addcursor_(NULL), pubkey_(swarmid), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
+ chunk_size_(chunk_size), storage_(storage), check_netwvshash_(check_netwvshash)
 {
 }
 
-Node *LiveHashTree::GetRoot()
+LiveHashTree::~LiveHashTree()
 {
-    return root_; // TODOinline
+    // TODO free nodes
+    if (root_ == NULL)
+	return;
+    else
+    {
+	FreeTree(root_);
+    }
 }
 
-void LiveHashTree::SetRoot(Node *r)
+void LiveHashTree::FreeTree(Node *n)
 {
-    root_ = r;
+    if (n->GetLeft() != NULL)
+    {
+	FreeTree(n->GetLeft());
+    }
+    if (n->GetRight() != NULL)
+    {
+	FreeTree(n->GetRight());
+    }
+    delete n;
 }
-void LiveHashTree::PurgeTree(Node *r)
+
+
+void LiveHashTree::PurgeTree(bin_t pos)
 {
-
 }
 
 
-// Live source specific
+/*
+ * Live source specific
+ */
+
 bin_t LiveHashTree::AddData(const char* data, size_t length)
 {
     // Source adds new data
@@ -113,6 +137,9 @@ bin_t LiveHashTree::AddData(const char* data, size_t length)
 
     // Calc new peaks
     size_ += length;
+    sizec_++;
+    complete_ += length;
+    completec_++;
     peak_count_ = gen_peaks(size_in_chunks(),peak_bins_);
 
     state_ = LHT_STATE_SIGN_DATA;
@@ -216,6 +243,41 @@ Node *LiveHashTree::CreateNext()
 }
 
 
+Sha1Hash  LiveHashTree::DeriveRoot()
+{
+    // From MmapHashTree
+
+    int c = peak_count_-1;
+    bin_t p = peak_bins_[c];
+    Sha1Hash hash = this->hash(p);
+    c--;
+    // Arno, 2011-10-14: Root hash = top of smallest tree covering content IMHO.
+    //while (!p.is_all()) {
+    while (c >= 0) {
+        if (p.is_left()) {
+            p = p.parent();
+            hash = Sha1Hash(hash,Sha1Hash::ZERO);
+        } else {
+            if (c<0 || peak_bins_[c]!=p.sibling())
+                return Sha1Hash::ZERO;
+            hash = Sha1Hash(this->hash(peak_bins_[c]),hash);
+            p = p.parent();
+            c--;
+        }
+    }
+
+    //fprintf(stderr,"DeriveRoot: root hash is %s\n", hash.hex().c_str() );
+    //fprintf(stderr,"DeriveRoot: bin is %s\n", p.str().c_str() );
+    return hash;
+}
+
+
+
+
+/*
+ * Live client specific
+ */
+
 bool LiveHashTree::OfferSignedPeakHash(bin_t pos, const uint8_t *signedhash)
 {
     // TODO check sig
@@ -233,6 +295,10 @@ bool LiveHashTree::OfferSignedPeakHash(bin_t pos, const uint8_t *signedhash)
 
     // Insert into tree
     (void)CreateAndVerifyNode(pos,peakhash,true);
+
+    // Could recalc root hash here, but never really used. Doing it on-demand
+    // in root_hash() conflicts with const def :-(
+    root_->SetHash(DeriveRoot());
 
     return true;
 }
@@ -446,8 +512,9 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 }
 
 
-
-// HashTree interface
+/*
+ * HashTree interface
+ */
 
 bool LiveHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
 {
@@ -485,14 +552,10 @@ bool LiveHashTree::OfferData(bin_t pos, const char* data, size_t length)
     // Arno,2011-10-03: appease g++
     if (storage_->Write(data,length,pos.base_offset()*chunk_size_) < 0)
         print_error("pwrite failed");
+#endif
     complete_ += length;
     completec_++;
-    if (pos.base_offset()==sizec_-1) {
-        size_ = ((sizec_-1)*chunk_size_) + length;
-        if (storage_->GetReservedSize()!=size_)
-            storage_->ResizeReserved(size_);
-    }
-#endif
+
     return true;
 
 }
@@ -561,12 +624,12 @@ uint64_t LiveHashTree::size_in_chunks() const
 
 uint64_t LiveHashTree::complete() const
 {
-    return 0;
+    return complete_;
 }
 
 uint64_t LiveHashTree::chunks_complete() const
 {
-    return 0;
+    return completec_;
 }
 
 uint64_t LiveHashTree::seq_complete(int64_t offset)
@@ -590,15 +653,16 @@ uint32_t LiveHashTree::chunk_size()
 
 bool LiveHashTree::get_check_netwvshash(void)
 {
-    return false;
+    return check_netwvshash_;
 }
 Storage *LiveHashTree::get_storage()
 {
-    return NULL;
+    return storage_;
 }
 void LiveHashTree::set_size(uint64_t)
 {
 }
+
 int LiveHashTree::TESTGetFD()
 {
     return 481;

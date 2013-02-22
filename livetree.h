@@ -1,3 +1,17 @@
+/*
+ *  livetree.h
+ *
+ *  Implementation of the Unified Merkle Tree approach for content
+ *  integrity protection during live streaming
+ *
+ *  Created by Arno Bakker, Victor Grishchenko
+ *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
+ *
+ */
+#ifndef SWIFT_LIVE_HASH_TREE_H
+#define SWIFT_LIVE_HASH_TREE_H
+
+
 #include "swift.h"
 #include "hashtree.h"
 
@@ -40,24 +54,26 @@ typedef enum {
 } lht_state_t;
 
 typedef int privkey_t;
-typedef int pubkey_t;
+typedef long pubkey_t;
 
 class LiveHashTree: public HashTree
 {
    public:
-     LiveHashTree(privkey_t privkey); // live source
-     LiveHashTree(pubkey_t swarmid, bool check_netwvshash); // live client
+     /** live source */
+     LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_size, bool check_netwvshash);
+     /** live client */
+     LiveHashTree(Storage *storage, pubkey_t swarmid, uint32_t chunk_size, bool check_netwvshash);
      ~LiveHashTree();
 
-     Node *GetRoot();
-     void SetRoot(Node *r);
-     void PurgeTree(Node *r);
+
+     void PurgeTree(bin_t pos);
 
      bin_t AddData(const char* data, size_t length);
      Node *CreateNext();
      bool OfferSignedPeakHash(bin_t pos,const uint8_t *signedhash);
      bool CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified);
 
+     // Sanity checks
      void sane_tree();
      void sane_node(Node *n, Node *parent);
 
@@ -95,17 +111,33 @@ class LiveHashTree: public HashTree
      privkey_t	     privkey_;
      pubkey_t	     pubkey_;
 
-
+     // From MmapHashTree
+     /** Merkle hash tree: peak hashes */
      bin_t           peak_bins_[64];
      int             peak_count_;
-     uint64_t	     size_;
-     uint64_t	     sizec_;
-     uint32_t        chunk_size_;
-
+     /** Base size, as derived from the hashes. */
+     uint64_t        size_;
+     uint64_t        sizec_;
+     /** Part of the tree currently checked. */
+     uint64_t        complete_;
+     uint64_t        completec_;
      /**    Binmap of own chunk availability */
      binmap_t        ack_out_;
 
+     // CHUNKSIZE
+     /** Arno: configurable fixed chunk size in bytes */
+     uint32_t        chunk_size_;
+
+     //MULTIFILE
+     Storage *	    storage_;
+
+     //NETWVSHASH
      bool            check_netwvshash_;
+
+     void 	     FreeTree(Node *n);
+     Sha1Hash        DeriveRoot();
 };
 
 }
+
+#endif

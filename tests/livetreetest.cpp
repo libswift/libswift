@@ -15,7 +15,11 @@
 
 using namespace swift;
 
-typedef std::vector<char *>	    clist_t;
+/** List of chunks */
+typedef std::vector<char *>	  clist_t;
+
+/** Hash tree of a clist, used as ground truth to set peak and test other
+ * hashes in LiveHashTree. */
 typedef std::map<bin_t,Sha1Hash>  hmap_t;
 
 /* Simple simulated PiecePicker */
@@ -26,6 +30,11 @@ typedef enum {
 } pickpolicy_t;
 
 typedef std::vector<int>  	pickorder_t;
+
+
+/*
+ * Live source tests
+ */
 
 void do_add_data(LiveHashTree *umt, int nchunks)
 {
@@ -39,10 +48,10 @@ void do_add_data(LiveHashTree *umt, int nchunks)
     }
 }
 
-#ifdef LATER
 TEST(LiveTreeTest,AddData10)
 {
-    LiveHashTree *umt = new LiveHashTree(481);
+    LiveHashTree *umt = new LiveHashTree(NULL, (privkey_t)482, SWIFT_DEFAULT_CHUNK_SIZE, false); // privkey
+
     do_add_data(umt,10);
 
     // asserts
@@ -51,9 +60,17 @@ TEST(LiveTreeTest,AddData10)
     ASSERT_EQ(umt->peak(1), bin_t(1,4));
 
 }
-#endif
 
-void do_download(LiveHashTree *umt, int nchunks, hmap_t &hmap, pickorder_t pickorder)
+
+/*
+ * Live client tests
+ */
+
+
+/** Pretend we're downloading from a source with nchunks available using a
+ * piece picking policy that resulted in pickorder.
+ */
+void do_download(LiveHashTree *umt, int nchunks, hmap_t &truthhashmap, pickorder_t pickorder)
 {
     bin_t peak_bins_[64];
     int peak_count = gen_peaks(nchunks,peak_bins_);
@@ -64,7 +81,7 @@ void do_download(LiveHashTree *umt, int nchunks, hmap_t &hmap, pickorder_t picko
     for (int i=0; i<peak_count; i++)
     {
 	//umt->AddData(data,1024);
-	Sha1Hash peakhash = hmap[peak_bins_[i]];
+	Sha1Hash peakhash = truthhashmap[peak_bins_[i]];
 	ASSERT_TRUE(umt->OfferSignedPeakHash(peak_bins_[i],peakhash.bits));
 	umt->sane_tree();
     }
@@ -92,18 +109,22 @@ void do_download(LiveHashTree *umt, int nchunks, hmap_t &hmap, pickorder_t picko
 	{
 	    bin_t uncle = *iter;
 	    fprintf(stderr,"Add %u uncle %s\n", r, uncle.str().c_str() );
-	    umt->OfferHash(uncle,hmap[uncle]);
+	    umt->OfferHash(uncle,truthhashmap[uncle]);
 	    umt->sane_tree();
 	}
 
 	// Sending actual
 	fprintf(stderr,"Add %u orig %s\n", r, orig.str().c_str() );
-	ASSERT_TRUE(umt->OfferHash(orig,hmap[orig]));
+	ASSERT_TRUE(umt->OfferHash(orig,truthhashmap[orig]));
 	umt->sane_tree();
     }
 }
 
-
+/**
+ * Create hashtree for nchunks, then emulate that a client is downloading
+ * these chunks using the piecepickpolicy and see of the right LiveHashTree
+ * gets built.
+ */
 LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy)
 {
     fprintf(stderr,"\nprepare_do_download(%d)\n", nchunks);
@@ -118,10 +139,10 @@ LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy)
     }
 
     // Create leaves
-    hmap_t hmap;
+    hmap_t truthhashmap;
     for (int i=0; i<nchunks; i++)
     {
-	hmap[bin_t(0,i)] = Sha1Hash(clist[i],1024);
+	truthhashmap[bin_t(0,i)] = Sha1Hash(clist[i],1024);
 	fprintf(stderr,"Hash leaf %s\n", bin_t(0,i).str().c_str() );
 
     }
@@ -134,7 +155,7 @@ LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy)
     int width = pow(2.0,height);
     for (int i=nchunks; i<width; i++)
     {
-	hmap[bin_t(0,i)] = Sha1Hash::ZERO;
+	truthhashmap[bin_t(0,i)] = Sha1Hash::ZERO;
 	fprintf(stderr,"Hash empty %s\n", bin_t(0,i).str().c_str() );
     }
 
@@ -146,15 +167,14 @@ LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy)
 	for (int i=0; i<npairs; i++)
 	{
 	    bin_t b(h,i);
-	    Sha1Hash parhash(hmap[b.left()],hmap[b.right()]);
-	    hmap[b] = parhash;
+	    Sha1Hash parhash(truthhashmap[b.left()],truthhashmap[b.right()]);
+	    truthhashmap[b] = parhash;
 
 	    fprintf(stderr,"Hash parent %s\n", b.str().c_str() );
 	}
     }
 
-    LiveHashTree *umt = new LiveHashTree(481,true); // pubkey
-
+    LiveHashTree *umt = new LiveHashTree(NULL, (pubkey_t)481, SWIFT_DEFAULT_CHUNK_SIZE, true); //pubkey
 
     /*
      * Create PiecePicker
@@ -172,7 +192,7 @@ LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy)
 	std::random_shuffle( pickvector.begin(), pickvector.end() );
     }
 
-    do_download(umt,nchunks,hmap,pickvector);
+    do_download(umt,nchunks,truthhashmap,pickvector);
 
     for (int i=0; i<nchunks; i++)
     {
