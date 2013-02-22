@@ -12,6 +12,12 @@
 
 using namespace swift;
 
+typedef std::vector<char *>	    clist_t;
+typedef std::map<bin_t,Sha1Hash>  hmap_t;
+
+
+
+
 void do_add_data(LiveHashTree *umt, int nchunks)
 {
     for (int i=0; i<nchunks; i++)
@@ -24,10 +30,10 @@ void do_add_data(LiveHashTree *umt, int nchunks)
     }
 }
 
-
+#ifdef LATER
 TEST(LiveTreeTest,AddData10)
 {
-    LiveHashTree *umt = new LiveHashTree();
+    LiveHashTree *umt = new LiveHashTree(481);
     do_add_data(umt,10);
 
     // asserts
@@ -36,9 +42,9 @@ TEST(LiveTreeTest,AddData10)
     ASSERT_EQ(umt->peak(1), bin_t(1,4));
 
 }
+#endif
 
-
-void do_download(LiveHashTree *umt, int nchunks)
+void do_download(LiveHashTree *umt, int nchunks, hmap_t &hmap)
 {
     bin_t peak_bins_[64];
     int peak_count = gen_peaks(nchunks,peak_bins_);
@@ -49,7 +55,8 @@ void do_download(LiveHashTree *umt, int nchunks)
     for (int i=0; i<peak_count; i++)
     {
 	//umt->AddData(data,1024);
-	umt->OfferHash(peak_bins_[i],Sha1Hash::ZERO);
+	Sha1Hash peakhash = hmap[peak_bins_[i]];
+	ASSERT_TRUE(umt->OfferSignedPeakHash(peak_bins_[i],peakhash.bits));
 	umt->sane_tree();
     }
 
@@ -77,21 +84,66 @@ void do_download(LiveHashTree *umt, int nchunks)
 	{
 	    bin_t uncle = *iter;
 	    fprintf(stderr,"Add %u uncle %s\n", r, uncle.str().c_str() );
-	    umt->OfferHash(uncle,Sha1Hash::ZERO);
+	    umt->OfferHash(uncle,hmap[uncle]);
 	    umt->sane_tree();
 	}
 
 	// Sending actual
 	fprintf(stderr,"Add %u orig %s\n", r, orig.str().c_str() );
-	umt->OfferHash(orig,Sha1Hash::ZERO);
+	ASSERT_TRUE(umt->OfferHash(orig,hmap[orig]));
 	umt->sane_tree();
     }
 }
 
+
 TEST(LiveTreeTest,Download10)
 {
-    LiveHashTree *umt = new LiveHashTree();
-    do_download(umt,10);
+    int NCHUNKS = 10;
+
+    // Create chunks
+    clist_t	clist;
+    for (int i=0; i<NCHUNKS; i++)
+    {
+	char *data = new char[1024];
+	memset(data,i%255,1024);
+	clist.push_back(data);
+    }
+
+    // Create leaves
+    hmap_t hmap;
+    for (int i=0; i<NCHUNKS; i++)
+    {
+	hmap[bin_t(0,i)] = Sha1Hash(clist[i],1024);
+    }
+
+    // Pad with zero hashes
+    int height = ceil(log2((double)NCHUNKS));
+    int width = pow(2.0,height);
+    for (int i=NCHUNKS; i<width; i++)
+    {
+	hmap[bin_t(0,i)] = Sha1Hash::ZERO;
+    }
+
+    // Calc hashtree
+    for (int h=1; h<height; h++)
+    {
+	int step = pow(2.0,h);
+	int npairs = width/step;
+	for (int i=0; i<npairs; i++)
+	{
+	    bin_t b(h,i);
+	    Sha1Hash parhash(hmap[b.left()],hmap[b.right()]);
+	    hmap[b] = parhash;
+	}
+    }
+
+    fprintf(stderr,"(1,4) HASH %s\n", hmap[bin_t(1,4)].hex().c_str() );
+    fprintf(stderr,"(0,8) HASH %s\n", hmap[bin_t(0,8)].hex().c_str() );
+    fprintf(stderr,"(0,9) HASH %s\n", hmap[bin_t(0,9)].hex().c_str() );
+
+
+    LiveHashTree *umt = new LiveHashTree(481,true); // pubkey
+    do_download(umt,NCHUNKS,hmap);
 
     // asserts
     ASSERT_EQ(umt->peak_count(), 2);

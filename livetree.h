@@ -18,6 +18,8 @@ class Node
     void SetHash(const Sha1Hash &hash);
     bin_t &GetBin();
     void SetBin(bin_t &b);
+    void SetVerified(bool val);
+    bool GetVerified();
 
 
   protected:
@@ -26,19 +28,36 @@ class Node
     Node *rightc_;
     bin_t b_;
     Sha1Hash h_;
+    bool  verified_;
 };
 
+
+typedef enum {
+    LHT_STATE_SIGN_EMPTY,      // live source, no data yet
+    LHT_STATE_SIGN_DATA,       // live source, some data, so peaks and transient root known
+    LHT_STATE_VER_AWAIT_PEAK, // live client, has root key, needs peak
+    LHT_STATE_VER_AWAIT_DATA,  // live client
+} lht_state_t;
+
+typedef int privkey_t;
+typedef int pubkey_t;
 
 class LiveHashTree: public HashTree
 {
    public:
-     LiveHashTree();
+     LiveHashTree(privkey_t privkey); // live source
+     LiveHashTree(pubkey_t swarmid, bool check_netwvshash); // live client
      ~LiveHashTree();
+
      Node *GetRoot();
      void SetRoot(Node *r);
      void PurgeTree(Node *r);
+
      bin_t AddData(const char* data, size_t length);
      Node *CreateNext();
+     bool OfferSignedPeakHash(bin_t pos,const uint8_t *signedhash);
+     bool CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified);
+
      void sane_tree();
      void sane_node(Node *n, Node *parent);
 
@@ -68,14 +87,25 @@ class LiveHashTree: public HashTree
 
 
    protected:
-     Node *root_;
-     /** Right-most base layer node */
-     Node *addcursor_;
+     lht_state_t     state_;
+     Node 	     *root_;
+     /** Live source: Right-most base layer node */
+     Node 	     *addcursor_;
+
+     privkey_t	     privkey_;
+     pubkey_t	     pubkey_;
+
 
      bin_t           peak_bins_[64];
      int             peak_count_;
      uint64_t	     size_;
+     uint64_t	     sizec_;
      uint32_t        chunk_size_;
+
+     /**    Binmap of own chunk availability */
+     binmap_t        ack_out_;
+
+     bool            check_netwvshash_;
 };
 
 }
