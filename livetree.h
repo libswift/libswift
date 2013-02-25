@@ -68,8 +68,11 @@ class LiveHashTree: public HashTree
 
      void PurgeTree(bin_t pos);
 
+     /** Called when a chunk is added */
      bin_t AddData(const char* data, size_t length);
-     Node *CreateNext();
+     /** Called after N chunks have been added, following -06 */
+     binvector_t UpdateSignedPeaks();
+
      bool OfferSignedPeakHash(bin_t pos,const uint8_t *signedhash);
      bool CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified);
 
@@ -133,6 +136,18 @@ class LiveHashTree: public HashTree
 
      //NETWVSHASH
      bool            check_netwvshash_;
+
+     // SIGNEDPEAK
+     /** List of currently signed peak hashes. Updated every N chunks */
+     bin_t           signed_peak_bins_[64];
+     int             signed_peak_count_;
+     /** Actual signatures */
+     uint8_t *       signed_peak_hashes_[64];
+
+     /** Create a new leaf Node next to the current latest leaf (pointed to by
+      * addcursor_). This may involve creating a new root and subtree to
+      * accommodate it. */
+     Node *	     CreateNext();
 
      void 	     FreeTree(Node *n);
      Sha1Hash        DeriveRoot();

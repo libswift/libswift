@@ -78,12 +78,16 @@ LiveHashTree::LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_s
  HashTree(), state_(LHT_STATE_SIGN_EMPTY), root_(NULL), addcursor_(NULL), privkey_(privkey), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
  chunk_size_(chunk_size), storage_(storage), check_netwvshash_(check_netwvshash)
 {
+    for (int i=0; i<64; i++)
+	signed_peak_hashes_[i] = NULL;
 }
 
 LiveHashTree::LiveHashTree(Storage *storage, pubkey_t swarmid, uint32_t chunk_size, bool check_netwvshash) :
  HashTree(), state_(LHT_STATE_VER_AWAIT_PEAK), root_(NULL), addcursor_(NULL), pubkey_(swarmid), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
  chunk_size_(chunk_size), storage_(storage), check_netwvshash_(check_netwvshash)
 {
+    for (int i=0; i<64; i++)
+	signed_peak_hashes_[i] = NULL;
 }
 
 LiveHashTree::~LiveHashTree()
@@ -243,6 +247,58 @@ Node *LiveHashTree::CreateNext()
 }
 
 
+binvector_t LiveHashTree::UpdateSignedPeaks()
+{
+    // Calc peak diffs
+    bool changed=false;
+    int i=0;
+    if (signed_peak_count_ == peak_count_)
+    {
+	for (i=0; i<signed_peak_count_; i++)
+	{
+	    if (signed_peak_bins_[i] != peak_bins_[i])
+	    {
+		changed = true;
+		break;
+	    }
+	}
+    }
+    else
+	changed = true;
+
+    binvector newpeaks;
+    if (!changed)
+	return newpeaks;
+
+    // Got new or extra peak hash
+    for (i=0; i<peak_count_; i++)
+    {
+	if (peak_bins_[i] != signed_peak_bins_[i])
+	{
+	    // Sign new peak
+	    Sha1Hash hash = hash(peak_bins_[i]);
+	    uint8_t* signedhash = new uint8_t[20]; // placeholder
+	    if (signed_peak_hashes[i] != NULL)
+		delete signed_peak_hashes[i];
+	    signed_peak_hashes[i] = signedhash;
+	    signed_peak_bins_[i] = peak_bins_[i];
+	    newpeaks.pushback(peak_bins_[i]);
+	}
+    }
+    // Clear old hashes
+    for (i=peak_count_; i<signed_peak_count_; i++)
+    {
+	if (signed_peak_hashes[i] != NULL)
+	{
+	    delete signed_peak_hashes[i];
+	    signed_peak_hashes[i] = NULL;
+	}
+    }
+
+    return newpeaks;
+}
+
+
 Sha1Hash  LiveHashTree::DeriveRoot()
 {
     // From MmapHashTree
@@ -273,7 +329,6 @@ Sha1Hash  LiveHashTree::DeriveRoot()
 
 
 
-
 /*
  * Live client specific
  */
@@ -298,7 +353,7 @@ bool LiveHashTree::OfferSignedPeakHash(bin_t pos, const uint8_t *signedhash)
 
     // Could recalc root hash here, but never really used. Doing it on-demand
     // in root_hash() conflicts with const def :-(
-    root_->SetHash(DeriveRoot());
+    //root_->SetHash(DeriveRoot());
 
     return true;
 }
