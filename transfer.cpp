@@ -48,9 +48,18 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
     binmap_filename.assign(filename);
     binmap_filename.append(".mbinmap");
 
+    Handshake hs;
+    if (check_netwvshash)
+	hs.cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
+    else
+	hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
+    SetDefaultHandshake(hs);
+
+    // Arno, 2013-02-25: Create HashTree even when PROT_NONE to enable
+    // automatic size determination via peak hashes.
     if (!zerostate_)
     {
-        hashtree_ = (HashTree *)new MmapHashTree(storage_,root_hash,chunk_size,hash_filename,force_check_diskvshash,check_netwvshash,binmap_filename);
+        hashtree_ = (HashTree *)new MmapHashTree(storage_,root_hash,chunk_size,hash_filename,force_check_diskvshash,binmap_filename);
         if (ENABLE_VOD_PIECEPICKER) {
             // Ric: init availability
             availability_ = new Availability();

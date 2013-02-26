@@ -6,10 +6,13 @@
  *
  */
 
-#include "livetree.h"
+#include "swift.h"
 #include "bin_utils.h"
 
 using namespace swift;
+
+#define DUMMY_DEFAULT_SIG_LENGTH	20
+
 
 Node::Node() : parent_(NULL), leftc_(NULL), rightc_(NULL), b_(bin_t::NONE), h_(Sha1Hash::ZERO), verified_(false)
 {
@@ -74,20 +77,20 @@ void Node::SetVerified(bool val)
 }
 
 
-LiveHashTree::LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_size, bool check_netwvshash) :
+LiveHashTree::LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_size) :
  HashTree(), state_(LHT_STATE_SIGN_EMPTY), root_(NULL), addcursor_(NULL), privkey_(privkey), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
- chunk_size_(chunk_size), storage_(storage), check_netwvshash_(check_netwvshash)
+ chunk_size_(chunk_size), storage_(storage)
 {
     for (int i=0; i<64; i++)
-	signed_peak_hashes_[i] = NULL;
+	signed_peak_sigs_[i] = NULL;
 }
 
-LiveHashTree::LiveHashTree(Storage *storage, pubkey_t swarmid, uint32_t chunk_size, bool check_netwvshash) :
+LiveHashTree::LiveHashTree(Storage *storage, pubkey_t swarmid, uint32_t chunk_size) :
  HashTree(), state_(LHT_STATE_VER_AWAIT_PEAK), root_(NULL), addcursor_(NULL), pubkey_(swarmid), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
- chunk_size_(chunk_size), storage_(storage), check_netwvshash_(check_netwvshash)
+ chunk_size_(chunk_size), storage_(storage)
 {
     for (int i=0; i<64; i++)
-	signed_peak_hashes_[i] = NULL;
+	signed_peak_sigs_[i] = NULL;
 }
 
 LiveHashTree::~LiveHashTree()
@@ -247,7 +250,7 @@ Node *LiveHashTree::CreateNext()
 }
 
 
-binvector_t LiveHashTree::UpdateSignedPeaks()
+int LiveHashTree::UpdateSignedPeaks()
 {
     // Calc peak diffs
     bool changed=false;
@@ -266,9 +269,11 @@ binvector_t LiveHashTree::UpdateSignedPeaks()
     else
 	changed = true;
 
-    binvector newpeaks;
     if (!changed)
-	return newpeaks;
+	return 0;
+
+    int startidx=0;
+    changed = false;
 
     // Got new or extra peak hash
     for (i=0; i<peak_count_; i++)
@@ -276,26 +281,51 @@ binvector_t LiveHashTree::UpdateSignedPeaks()
 	if (peak_bins_[i] != signed_peak_bins_[i])
 	{
 	    // Sign new peak
-	    Sha1Hash hash = hash(peak_bins_[i]);
-	    uint8_t* signedhash = new uint8_t[20]; // placeholder
-	    if (signed_peak_hashes[i] != NULL)
-		delete signed_peak_hashes[i];
-	    signed_peak_hashes[i] = signedhash;
+	    Sha1Hash h = hash(peak_bins_[i]);
+	    uint8_t* signedhash = new uint8_t[DUMMY_DEFAULT_SIG_LENGTH]; // placeholder
+	    if (signed_peak_sigs_[i] != NULL)
+		delete signed_peak_sigs_[i];
+	    signed_peak_sigs_[i] = signedhash;
 	    signed_peak_bins_[i] = peak_bins_[i];
-	    newpeaks.pushback(peak_bins_[i]);
+
+	    if (!changed)
+	    {
+		startidx = i;
+		changed = true;
+	    }
 	}
     }
     // Clear old hashes
     for (i=peak_count_; i<signed_peak_count_; i++)
     {
-	if (signed_peak_hashes[i] != NULL)
+	if (signed_peak_sigs_[i] != NULL)
 	{
-	    delete signed_peak_hashes[i];
-	    signed_peak_hashes[i] = NULL;
+	    delete signed_peak_sigs_[i];
+	    signed_peak_sigs_[i] = NULL;
 	}
     }
 
-    return newpeaks;
+    return startidx;
+}
+
+int LiveHashTree::signed_peak_count()
+{
+    return signed_peak_count_;
+}
+
+bin_t LiveHashTree::signed_peak(int i)
+{
+    return signed_peak_bins_[i];
+}
+
+uint8_t *LiveHashTree::signed_peak_sig(int i)
+{
+    return signed_peak_sigs_[i];
+}
+
+int LiveHashTree::signed_peak_sig_length(int i)
+{
+    return DUMMY_DEFAULT_SIG_LENGTH;
 }
 
 
@@ -475,10 +505,6 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     //
     // From MmapHashTree::OfferHash
     //
-
-    //NETWVSHASH
-    if (!check_netwvshash_)
-    	return true;
 
     bin_t peak = peak_for(pos);
     if (peak.is_none())
@@ -706,10 +732,6 @@ uint32_t LiveHashTree::chunk_size()
 }
 
 
-bool LiveHashTree::get_check_netwvshash(void)
-{
-    return check_netwvshash_;
-}
 Storage *LiveHashTree::get_storage()
 {
     return storage_;

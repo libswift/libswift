@@ -68,6 +68,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     scheduled4del_(false),
     direct_sending_(false),
     peer_is_source_(peerissource),
+    live_new_signed_peak_idx_(-1),
     hs_out_(NULL), hs_in_(NULL)
 {
     if (peer_==Address())
@@ -90,7 +91,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     // RATELIMIT
     transfer_->GetChannels()->push_back(this);
 
-    hs_out_ = new Handshake();
+    hs_out_ = new Handshake(transfer->GetDefaultHandshake());
     if (transfer_->ttype() == FILE_TRANSFER)
 	hs_out_->cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
     else

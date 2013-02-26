@@ -6,8 +6,8 @@
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
-#include "bin_utils.h"
 #include "swift.h"
+#include "bin_utils.h"
 #include <algorithm>  // kill it
 #include <cassert>
 #include <cfloat>
@@ -46,6 +46,7 @@ struct event Channel::evrecv;
 
 
 void    Channel::AddPeakHashes (struct evbuffer *evb) {
+
     for(int i=0; i<hashtree()->peak_count(); i++) {
         bin_t peak = hashtree()->peak(i);
         evbuffer_add_8(evb, SWIFT_INTEGRITY);
@@ -54,6 +55,33 @@ void    Channel::AddPeakHashes (struct evbuffer *evb) {
         dprintf("%s #%u +phash %s\n",tintstr(),id_,peak.str().c_str());
     }
 }
+
+
+void    Channel::AddSignedPeakHashes(struct evbuffer *evb) {
+
+    LiveHashTree *umt = (LiveHashTree *)hashtree();
+    AddSignedPeakHashRange(evb,0,umt->signed_peak_count());
+}
+
+// SIGNPEAK
+void    Channel::AddSignedPeakHashRange(struct evbuffer *evb, int start, int end)
+{
+    LiveHashTree *umt = (LiveHashTree *)hashtree();
+    for(int i=start; i<end; i++) {
+        bin_t peak = umt->signed_peak(i);
+        evbuffer_add_8(evb, SWIFT_INTEGRITY);
+        evbuffer_add_chunkaddr(evb,peak,hs_out_->chunk_addr_);
+        evbuffer_add_hash(evb, umt->hash(peak));
+        if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+        {
+            evbuffer_add_8(evb, SWIFT_SIGNED_INTEGRITY);
+            evbuffer_add_chunkaddr(evb,peak,hs_out_->chunk_addr_);
+            evbuffer_add(evb, umt->signed_peak_sig(i), umt->signed_peak_sig_length(i));
+        }
+        dprintf("%s #%u +sphash %s\n",tintstr(),id_,peak.str().c_str());
+    }
+}
+
 
 
 void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
@@ -272,6 +300,11 @@ void    Channel::Send () {
                 AddCancel(evb);
             }
             AddPex(evb);
+            // SIGNPEAK
+            if (hashtree() != NULL && GetNextSendSignedPeakFromIdx() != -1)
+            {
+        	AddSignedPeakHashRange(evb,GetNextSendSignedPeakFromIdx(),hashtree()->peak_count());
+            }
             TimeoutDataOut();
             data = AddData(evb);
         } else  {
@@ -458,12 +491,19 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
 
 
     //LIVE
-    if (transfer()->ttype() == FILE_TRANSFER) {
-        if (ack_in_.is_empty() && hashtree()->size())
-            AddPeakHashes(evb);
-        //NETWVSHASH
-        if (hashtree()->get_check_netwvshash())
-            AddUncleHashes(evb,tosend);
+    // Arno, 2013-02-25: Need to send these always to communicate tree size
+    if (hashtree() != NULL)
+    {
+	if (ack_in_.is_empty() && hashtree()->peak_count() > 0)
+	{
+	    if (transfer()->ttype() == LIVE_TRANSFER)
+		AddSignedPeakHashes(evb);
+	    else
+		AddPeakHashes(evb);
+	}
+	//SIGNPEAK
+	if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+	    AddUncleHashes(evb,tosend);
     }
 
     if (!ack_in_.is_empty()) // TODO: cwnd_>1
@@ -758,6 +798,12 @@ void   Channel::CloseOnError()
  * hashes check out should they be stored in the hashtree, otherwise revert.
  */
 void    Channel::OnHash (struct evbuffer *evb) {
+    if (hs_in_->cont_int_prot_ != POPT_CONT_INT_PROT_MERKLE && hs_in_->cont_int_prot_ != POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+    {
+	dprintf("%s #%u ?hash but no integrity prot\n",tintstr(),id_);
+	return;
+    }
+
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
     if (bv.size() == 0 || bv.size() > 1)
     {
@@ -769,7 +815,8 @@ void    Channel::OnHash (struct evbuffer *evb) {
     bin_t pos = bv.front();
     Sha1Hash hash = evbuffer_remove_hash(evb);
 
-    hashtree()->OfferHash(pos,hash);
+    if (hashtree() != NULL && (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE))
+	hashtree()->OfferHash(pos,hash);
     dprintf("%s #%u -hash %s\n",tintstr(),id_,pos.str().c_str());
 
     //fprintf(stderr,"HASH %lli hex %s\n",pos.toUInt(), hash.hex().c_str() );
@@ -843,8 +890,9 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 
     //fprintf(stderr,"OnData: Got chunk %d / %lli\n", length, swift::SeqComplete(transfer()->fd()) );
 
-    //LIVE
-    if (transfer()->ttype() == FILE_TRANSFER) {
+    // SIGNPEAK
+    if (hashtree() != NULL && (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE))
+    {
         if (!hashtree()->OfferData(pos, (char*)data, length)) {
             evbuffer_drain(evb, length);
             dprintf("%s #%u !data %s\n",tintstr(),id_,pos.str().c_str());
@@ -856,8 +904,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     }
     else
     {
-        //LIVE: actually write data to storage
-        // LIVETODO: content integrity checking
+        // No content integrity checking, just write (TODO SIGN_ALL)
         int ret = transfer()->GetStorage()->Write(data,length,pos.base_offset()*transfer()->chunk_size());
         if (ret < 0)
         {
@@ -925,8 +972,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
 	// FIXME FIXME: wrap around here
 	if (ackd_pos.is_none()) // safety catch
 	    return; // likely, broken chunk/ insufficient hashes
-	//LIVE
-	if (transfer()->ttype() == FILE_TRANSFER && hashtree()->size() && ackd_pos.base_offset()>=hashtree()->size_in_chunks()) {
+	if (hashtree()->size() && ackd_pos.base_offset()>=hashtree()->size_in_chunks()) {
 	    eprintf("invalid ack: %s\n",ackd_pos.str().c_str());
 	    return;
 	}

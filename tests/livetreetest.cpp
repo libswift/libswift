@@ -5,7 +5,7 @@
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
-#include "livetree.h"
+#include "swift.h"
 #include "bin_utils.h"
 #include <gtest/gtest.h>
 #include <algorithm>    // std::reverse
@@ -50,7 +50,7 @@ void do_add_data(LiveHashTree *umt, int nchunks)
 
 TEST(LiveTreeTest,AddData10)
 {
-    LiveHashTree *umt = new LiveHashTree(NULL, (privkey_t)482, SWIFT_DEFAULT_CHUNK_SIZE, false); // privkey
+    LiveHashTree *umt = new LiveHashTree(NULL, (privkey_t)482, SWIFT_DEFAULT_CHUNK_SIZE); // privkey
 
     do_add_data(umt,10);
 
@@ -174,7 +174,8 @@ LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy)
 	}
     }
 
-    LiveHashTree *umt = new LiveHashTree(NULL, (pubkey_t)481, SWIFT_DEFAULT_CHUNK_SIZE, true); //pubkey
+
+    LiveHashTree *umt = new LiveHashTree(NULL, Sha1Hash::ZERO, SWIFT_DEFAULT_CHUNK_SIZE); //pubkey
 
     /*
      * Create PiecePicker

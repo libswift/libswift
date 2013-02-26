@@ -86,10 +86,10 @@ Sha1Hash & Sha1Hash::operator= (const Sha1Hash & source)
 /**     H a s h   t r e e       */
 
 
-MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool force_check_diskvshash, bool check_netwvshash, std::string binmap_filename) :
+MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool force_check_diskvshash,std::string binmap_filename) :
  HashTree(), root_hash_(root_hash), hashes_(NULL),
  peak_count_(0), hash_fd_(-1), hash_filename_(hash_filename), size_(0), sizec_(0), complete_(0), completec_(0),
- chunk_size_(chunk_size), storage_(storage), check_netwvshash_(check_netwvshash)
+ chunk_size_(chunk_size), storage_(storage)
 {
     // MULTIFILE
     storage_->SetHashTree(this);
@@ -175,7 +175,7 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
 MmapHashTree::MmapHashTree(bool dummy, std::string binmap_filename) :
 HashTree(), root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), hash_fd_(0),
 hash_filename_(""), filename_(""), size_(0), sizec_(0), complete_(0), completec_(0),
-chunk_size_(0), check_netwvshash_(false)
+chunk_size_(0)
 {
     FILE *fp = fopen_utf8(binmap_filename.c_str(),"rb");
     if (!fp) {
@@ -526,10 +526,6 @@ bool            MmapHashTree::OfferHash (bin_t pos, const Sha1Hash& hash) {
         dprintf("%s hashtree never loaded correctly from disk\n",tintstr() );
         return false;
     }
-
-    //NETWVSHASH
-    if (!check_netwvshash_)
-    	return true;
 
     bin_t peak = peak_for(pos);
     if (peak.is_none())

@@ -7,6 +7,9 @@
  *  Created by Arno Bakker, Victor Grishchenko
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
+ *  TODO:
+ *  - what is SIGNED_INTEGRITY gets lost on UDP?
+ *  - When new client joins half-way epoch, mustn't send HAVEs for new, or don't reply to REQUESTs?
  */
 #ifndef SWIFT_LIVE_HASH_TREE_H
 #define SWIFT_LIVE_HASH_TREE_H
@@ -53,25 +56,31 @@ typedef enum {
     LHT_STATE_VER_AWAIT_DATA,  // live client
 } lht_state_t;
 
+#ifndef ARNOCRYPTO
 typedef int privkey_t;
-typedef long pubkey_t;
+typedef Sha1Hash pubkey_t;
+#endif
 
 class LiveHashTree: public HashTree
 {
    public:
      /** live source */
-     LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_size, bool check_netwvshash);
+     LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_size);
      /** live client */
-     LiveHashTree(Storage *storage, pubkey_t swarmid, uint32_t chunk_size, bool check_netwvshash);
+     LiveHashTree(Storage *storage, pubkey_t swarmid, uint32_t chunk_size);
      ~LiveHashTree();
 
 
-     void PurgeTree(bin_t pos);
+     void           PurgeTree(bin_t pos);
 
      /** Called when a chunk is added */
-     bin_t AddData(const char* data, size_t length);
-     /** Called after N chunks have been added, following -06 */
-     binvector_t UpdateSignedPeaks();
+     bin_t          AddData(const char* data, size_t length);
+     /** Called after N chunks have been added, following -06. Returns start idx of new peaks */
+     int	    UpdateSignedPeaks();
+     int            signed_peak_count();
+     bin_t          signed_peak(int i);
+     uint8_t *      signed_peak_sig(int i);
+     int            signed_peak_sig_length(int i);
 
      bool OfferSignedPeakHash(bin_t pos,const uint8_t *signedhash);
      bool CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified);
@@ -99,7 +108,6 @@ class LiveHashTree: public HashTree
      binmap_t *      ack_out ();
      uint32_t        chunk_size();
 
-     bool 	     get_check_netwvshash();
      Storage *       get_storage();
      void            set_size(uint64_t);
      int             TESTGetFD();
@@ -132,17 +140,15 @@ class LiveHashTree: public HashTree
      uint32_t        chunk_size_;
 
      //MULTIFILE
-     Storage *	    storage_;
+     Storage *	     storage_;
 
-     //NETWVSHASH
-     bool            check_netwvshash_;
-
-     // SIGNEDPEAK
+     // SIGNPEAK
      /** List of currently signed peak hashes. Updated every N chunks */
      bin_t           signed_peak_bins_[64];
      int             signed_peak_count_;
      /** Actual signatures */
-     uint8_t *       signed_peak_hashes_[64];
+     uint8_t *       signed_peak_sigs_[64];
+     // TODO: cache peak hashes
 
      /** Create a new leaf Node next to the current latest leaf (pointed to by
       * addcursor_). This may involve creating a new root and subtree to

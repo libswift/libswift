@@ -32,36 +32,70 @@ std::vector<LiveTransfer*> LiveTransfer::liveswarms;
  */
 #define TRANSFER_DESCR_LIVE_OFFSET	4000000
 
-// Ric: tmp => changed from size_t to uint32_t to avoid compilation problems (otherwise change the def in swift.h)
-LiveTransfer::LiveTransfer(std::string filename, const Sha1Hash& swarm_id,bool amsource,uint32_t chunk_size) :
-        ContentTransfer(LIVE_TRANSFER), swarm_id_(swarm_id), chunk_size_(chunk_size), am_source_(amsource), 
+
+/** A constructor for a live source. */
+LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash, uint32_t chunk_size) :
+	ContentTransfer(LIVE_TRANSFER), pubkey_(pubkey), privkey_(privkey), chunk_size_(chunk_size), am_source_(true),
+	filename_(filename), last_chunkid_(0), offset_(0)
+{
+    Initialize(check_netwvshash);
+
+    picker_ = NULL;
+}
+
+
+/** A constructor for live client. */
+LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, bool check_netwvshash, uint32_t chunk_size) :
+        ContentTransfer(LIVE_TRANSFER), pubkey_(pubkey), chunk_size_(chunk_size), am_source_(false),
         filename_(filename), last_chunkid_(0), offset_(0)
 {
-    GlobalAdd();
+    Initialize(check_netwvshash);
 
     picker_ = new SimpleLivePiecePicker(this);
     picker_->Randomize(rand()&63);
 
+
+}
+
+
+void LiveTransfer::Initialize(bool check_netwvshash)
+{
+    GlobalAdd();
+
     std::string destdir;
-    int ret = file_exists_utf8(filename);
-    if (ret == 2 && swarm_id != Sha1Hash::ZERO) {
+    int ret = file_exists_utf8(filename_);
+    if (ret == 2) {
         // Filename is a directory, download to swarmid-as-hex file there
-        destdir = filename;
-        filename = destdir+FILE_SEP+swarm_id.hex();
+        destdir = filename_;
+        filename_ = destdir+FILE_SEP+pubkey_.hex();
     } else {
-        destdir = dirname_utf8(filename);
+        destdir = dirname_utf8(filename_);
         if (destdir == "")
             destdir = ".";
     }
 
     // MULTIFILE
-    storage_ = new Storage(filename,destdir,td_);
+    storage_ = new Storage(filename_,destdir,td_);
+
+    Handshake hs;
+    if (check_netwvshash)
+	hs.cont_int_prot_ = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
+    else
+	hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
+    SetDefaultHandshake(hs);
+    if (hs.cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+    {
+	hashtree_ = new LiveHashTree(storage_,481,chunk_size_);
+    }
+    else
+	hashtree_ = NULL;
 }
 
 
 LiveTransfer::~LiveTransfer()
 {
-    delete picker_;
+    if (picker_ != NULL)
+	delete picker_;
 
     GlobalDel();
 }
@@ -153,6 +187,8 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         fprintf(stderr,"live: AddData: stored " PRISIZET " bytes\n", nbyte);
 
     uint64_t till = std::max((size_t)1,nbyte/chunk_size_);
+    int newpeakstartidx = -1;
+    bool newepoch=false;
     for (uint64_t c=0; c<till; c++)
     {
         // New chunk is here
@@ -161,10 +197,38 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
 
         last_chunkid_++;
         offset_ += chunk_size_;
+
+        // SIGNPEAK
+        if (def_hs_out_.cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+        {
+            LiveHashTree *umt = (LiveHashTree *)hashtree();
+            size_t bufidx = c*chunk_size_;
+            char *bufptr = ((char *)buf)+bufidx;
+            size_t s = std::min(chunk_size_,nbyte-bufidx);
+            // Build dynamic hash tree
+            umt->AddData(bufptr,s);
+
+            // Create new signed peaks after N chunks
+            chunks_since_sign_++;
+            if (chunks_since_sign_ == nchunks_per_sign_)
+            {
+        	newpeakstartidx = umt->UpdateSignedPeaks();
+        	chunks_since_sign_ = 0;
+        	newepoch = true;
+            }
+        }
+        else
+            newepoch = true;
     }
 
     fprintf(stderr,"live: AddData: added till chunkid %lli\n", last_chunkid_);
     dprintf("%s %%0 live: AddData: added till chunkid %lli\n", tintstr(), last_chunkid_);
+
+    // Arno, 2013-02-26: When UNIFIED_MERKLE chunks are published in batches
+    // of nchunks_per_sign_
+    if (!newepoch)
+	return 0;
+
 
     // Announce chunks to peers
     //fprintf(stderr,"live: AddData: announcing to %d channel\n", mychannels_.size() );
@@ -177,7 +241,10 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         dprintf("%s %%0 live: AddData: announce to channel %d\n", tintstr(), c->id() );
         //DDOS
         if (c->is_established())
+        {
+            c->SetNextSendSignedPeakFromIdx(newpeakstartidx);
             c->LiveSend();
+        }
     }
 
     return 0;

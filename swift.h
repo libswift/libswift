@@ -79,6 +79,7 @@
 #include "bin.h"
 #include "binmap.h"
 #include "hashtree.h"
+#include "livetree.h"
 #include "avgspeed.h"
 // Arno, 2012-05-21: MacOS X has an Availability.h :-(
 #include "avail.h"
@@ -319,6 +320,17 @@ namespace swift {
 #else
 	Handshake() : version_(VER_SWIFT_LEGACY), min_version_(VER_SWIFT_LEGACY), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_sig_alg_(POPT_LIVE_SIG_ALG_PRIVATEDNS), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
 #endif
+	Handshake(Handshake &c)
+	{
+	    version_ = c.version_;
+	    min_version_ = c.min_version_;
+	    cont_int_prot_ = c.cont_int_prot_;
+	    merkle_func_ = c.merkle_func_;
+	    live_sig_alg_ = c.live_sig_alg_;
+	    chunk_addr_ = c.chunk_addr_;
+	    live_disc_wnd_ = c.live_disc_wnd_;
+
+	}
 	~Handshake() { ReleaseSwarmID(); }
 	void SetSwarmID(Sha1Hash &swarmid) { swarm_id_ptr_ = new Sha1Hash(swarmid); }
 	const Sha1Hash &GetSwarmID() { return (swarm_id_ptr_ == NULL) ? Sha1Hash::ZERO : *swarm_id_ptr_; }
@@ -389,7 +401,9 @@ namespace swift {
         virtual binmap_t *  ack_out() = 0;
         /** Returns the number of bytes in a chunk for this transfer */
         virtual uint32_t chunk_size() = 0;
-	/** Check whether all components still in working state */
+	/** Integrity protection via Hash tree */
+        HashTree *      hashtree() { return hashtree_; }
+        /** Check whether all components still in working state */
 	virtual void 	UpdateOperational() = 0;
 
         /** Piece picking strategy used by this transfer. */
@@ -434,7 +448,8 @@ namespace swift {
 
         /** Add a peer to the set of addresses to connect to */
         void            AddPeer(Address &peer);
-
+        void		SetDefaultHandshake(Handshake &default_hs_out) { def_hs_out_ = default_hs_out; }
+        Handshake &	GetDefaultHandshake(){ return def_hs_out_; }
 
         /** Arno: set the tracker for this transfer. Reseting it won't kill
          * any existing connections. */
@@ -458,6 +473,7 @@ namespace swift {
       protected:
         transfer_t      ttype_;
         int             td_;	// transfer descriptor as used by swift API.
+        Handshake 	def_hs_out_;
 
         /** Channels working for this transfer. */
         channels_t    	mychannels_;
@@ -475,6 +491,9 @@ namespace swift {
 
         // MULTIFILE
         Storage         *storage_;
+
+        /** HashTree for transfer (either MmapHashTree, ZeroHashTree or LiveHashTree) */
+        HashTree*       hashtree_;
 
         Address         tracker_; // Tracker for this transfer
         tint            tracker_retry_interval_;
@@ -512,8 +531,6 @@ namespace swift {
 
 	// FileTransfer specific methods
 
-	/** Hash tree checked file; all the hashes and data are kept here. */
-        HashTree *      hashtree() { return hashtree_; }
         /** Ric: the availability in the swarm */
         Availability*   availability() { return availability_; }
         //ZEROSTATE
@@ -524,9 +541,6 @@ namespace swift {
         bool 		IsZeroState() { return zerostate_; }
 
       protected:
-        /** HashTree for transfer (either MmapHashTree or ZeroHashTree) */
-        HashTree*       hashtree_;
-
         // Ric: PPPLUG
         /** Availability in the swarm */
         Availability*   availability_;
@@ -539,11 +553,17 @@ namespace swift {
     class    LiveTransfer : public ContentTransfer {
        public:
 
-        /** A constructor. */
-        LiveTransfer(std::string filename, const Sha1Hash& swarm_id=Sha1Hash::ZERO,bool amsource=false,uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+        /** A constructor for a live source. */
+	LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+
+	/** A constructor for live client. */
+	LiveTransfer(std::string filename, const pubkey_t &pubkey, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
         /**  Close everything. */
         ~LiveTransfer();
+
+        /** Joint constructor code between source and client */
+        void Initialize(bool check_netwvshash);
 
         // ContentTransfer overrides
 
@@ -590,7 +610,7 @@ namespace swift {
         binmap_t        ack_out_;
         // CHUNKSIZE
         /** Arno: configurable fixed chunk size in bytes */
-       uint32_t        chunk_size_;
+       uint32_t         chunk_size_;
 
         /** Source: Am I a source */
         bool            am_source_;
@@ -601,7 +621,15 @@ namespace swift {
         /** Source: Current write position in storage file */
         uint64_t        offset_;
 
-        /** Arno: global list of LiveTransfers, which are not managed */
+        /** Source: Count of chunks generated since last signed peak epoch */
+        uint32_t        chunks_since_sign_;
+        /** Source: Number of chunks before signing new peaks (N param in -06) */
+        uint32_t        nchunks_per_sign_;
+
+        privkey_t	privkey_;
+        pubkey_t	pubkey_;
+
+        /** Arno: global list of LiveTransfers, which are not managed via SwarmManager */
         static std::vector<LiveTransfer*> liveswarms;
     };
 
@@ -727,6 +755,8 @@ namespace swift {
         void        AddCancel (struct evbuffer *evb);
         void        AddUncleHashes (struct evbuffer *evb, bin_t pos);
         void        AddPeakHashes (struct evbuffer *evb);
+        void        AddSignedPeakHashes(struct evbuffer *evb); // SIGNPEAK
+        void        AddSignedPeakHashRange(struct evbuffer *evb, int start, int end); // SIGNPEAK
         void        AddPex (struct evbuffer *evb);
         void        OnPexReq(void);
         void        AddPexReq(struct evbuffer *evb);
@@ -802,6 +832,8 @@ namespace swift {
         // LIVE
         /** Arno: Called when source generates chunk. */
         void        LiveSend();
+        void	    SetNextSendSignedPeakFromIdx(int startidx) { live_new_signed_peak_idx_=startidx; }
+        int	    GetNextSendSignedPeakFromIdx() { return live_new_signed_peak_idx_; }
 
         void 	    CloseOnError();
 
@@ -902,6 +934,8 @@ namespace swift {
 
         //LIVE
         bool        peer_is_source_;
+        /** If != -1 send signed peak hashes from this idx till peak_count_ in next datagram */
+        int	    live_new_signed_peak_idx_;
 
         // PPSP
         /** Handshake I sent to peer. swarmid not set. */
@@ -1126,9 +1160,10 @@ namespace swift {
         fails, it will hashcheck anyway. Roothash is optional for new files or
         files already hashchecked and checkpointed. If "check_netwvshash" is
         false, no uncle hashes will be sent and no data will be verified against
-        then on receipt. In this mode, checking disk contents against hashes
+        them on receipt. In this mode, checking disk contents against hashes
         no longer works on restarts, unless checkpoints are used.
         */
+        // TODO: replace check_netwvshash with full set of protocol options
     int     Open( std::string filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(), bool force_check_diskvshash=true, bool check_netwvshash=true, bool zerostate=false, bool activate=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** Get the root hash for the transmission. */
     const Sha1Hash& SwarmID (int file) ;
@@ -1171,11 +1206,11 @@ namespace swift {
 
     // LIVE
     /** To create a live stream as source */
-    LiveTransfer *LiveCreate(std::string filename, const Sha1Hash& swarmid, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    LiveTransfer *LiveCreate(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** To add chunks to a live stream as source */
     int     LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte);
     /** To open a live stream as peer */
-    int     LiveOpen(std::string filename, const Sha1Hash& swarmid=Sha1Hash::ZERO,Address tracker=Address(), bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     LiveOpen(std::string filename, const pubkey_t &pubkey, Address tracker, bool check_netwvshash, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
     /** Register a callback for when the download of another pow(2,agg) chunks
         is finished. So agg = 0 = 2^0 = 1, means every chunk. */
