@@ -50,10 +50,10 @@ class Node
 
 
 typedef enum {
-    LHT_STATE_SIGN_EMPTY,      // live source, no data yet
-    LHT_STATE_SIGN_DATA,       // live source, some data, so peaks and transient root known
-    LHT_STATE_VER_AWAIT_PEAK, // live client, has root key, needs peak
-    LHT_STATE_VER_AWAIT_DATA,  // live client
+    LHT_STATE_SIGN_EMPTY,      // live source, no chunks yet
+    LHT_STATE_SIGN_DATA,       // live source, some chunks, so peaks and transient root known
+    LHT_STATE_VER_AWAIT_PEAK,  // live client, has pub key, needs peak
+    LHT_STATE_VER_AWAIT_DATA,  // live client, has pub key, needs chunks
 } lht_state_t;
 
 #ifndef ARNOCRYPTO

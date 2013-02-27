@@ -300,11 +300,6 @@ void    Channel::Send () {
                 AddCancel(evb);
             }
             AddPex(evb);
-            // SIGNPEAK
-            if (hashtree() != NULL && GetNextSendSignedPeakFromIdx() != -1)
-            {
-        	AddSignedPeakHashRange(evb,GetNextSendSignedPeakFromIdx(),hashtree()->peak_count());
-            }
             TimeoutDataOut();
             data = AddData(evb);
         } else  {
@@ -336,6 +331,10 @@ void    Channel::Send () {
 }
 
 void    Channel::AddHint (struct evbuffer *evb) {
+
+    // LIVE source
+    if (transfer()->picker() == NULL) 
+        return;
 
     // RATELIMIT
     // Policy is to not send hints when we are above speed limit
@@ -490,15 +489,13 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         return bin_t::NONE; // once in a while, empty data is sent just to check rtt FIXED
 
 
-    //LIVE
-    // Arno, 2013-02-25: Need to send these always to communicate tree size
+    // Add required hashes first
     if (hashtree() != NULL)
     {
+	// Arno, 2013-02-25: Need to send peak bins always to cold clients to communicate tree size
 	if (ack_in_.is_empty() && hashtree()->peak_count() > 0)
 	{
-	    if (transfer()->ttype() == LIVE_TRANSFER)
-		AddSignedPeakHashes(evb);
-	    else
+	    if (transfer()->ttype() == FILE_TRANSFER)
 		AddPeakHashes(evb);
 	}
 	//SIGNPEAK
@@ -601,6 +598,17 @@ void    Channel::AddAck (struct evbuffer *evb) {
 
 
 void    Channel::AddHave (struct evbuffer *evb) {
+    // SIGNPEAK
+
+    fprintf(stderr,"AddHave: hashtree %p signed till %d\n", hashtree(), GetNextSendSignedPeakFromIdx() );
+
+    if (hashtree() != NULL && GetNextSendSignedPeakFromIdx() != -1)
+    {
+	LiveHashTree *umt = (LiveHashTree *)hashtree();
+	fprintf(stderr,"AddHave: Adding signed peaks %d till %d\n", GetNextSendSignedPeakFromIdx(),umt->signed_peak_count());
+      	AddSignedPeakHashRange(evb,GetNextSendSignedPeakFromIdx(),umt->signed_peak_count());
+    }
+
     if (!data_in_dbl_.is_none()) { // TODO: do redundancy better
         evbuffer_add_8(evb, SWIFT_HAVE);
         evbuffer_add_chunkaddr(evb,data_in_dbl_,hs_out_->chunk_addr_);
@@ -625,11 +633,18 @@ void    Channel::AddHave (struct evbuffer *evb) {
         return;
     }
 
+    binmap_t *transfer_ack_out_ptr = transfer()->ack_out();
+    if (hs_in_ != NULL && hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+    {
+	// Arno, 2013-02-26: LIVE SIGNPEAK Cannot send HAVEs not covered by signed peak
+	LiveTransfer *lt = (LiveTransfer *)transfer();
+	transfer_ack_out_ptr = lt->ack_out_signed();
+    }
     for(int count=0; count<4; count++) {
-        bin_t ack = binmap_t::find_complement(have_out_, *(transfer()->ack_out()), 0); // FIXME: do rotating queue
+        bin_t ack = binmap_t::find_complement(have_out_, *(transfer_ack_out_ptr), 0); // FIXME: do rotating queue
         if (ack.is_none())
             break;
-        ack = transfer()->ack_out()->cover(ack);
+        ack = transfer_ack_out_ptr->cover(ack);
         have_out_.set(ack);
         evbuffer_add_8(evb, SWIFT_HAVE);
         evbuffer_add_chunkaddr(evb,ack,hs_out_->chunk_addr_);
@@ -972,7 +987,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
 	// FIXME FIXME: wrap around here
 	if (ackd_pos.is_none()) // safety catch
 	    return; // likely, broken chunk/ insufficient hashes
-	if (hashtree()->size() && ackd_pos.base_offset()>=hashtree()->size_in_chunks()) {
+	if (hashtree() != NULL && hashtree()->size() && ackd_pos.base_offset()>=hashtree()->size_in_chunks()) {
 	    eprintf("invalid ack: %s\n",ackd_pos.str().c_str());
 	    return;
 	}

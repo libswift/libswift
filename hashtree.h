@@ -30,6 +30,7 @@ struct Sha1Hash {
     Sha1Hash(const uint8_t* data, size_t length);
     /** Either parse hash from hex representation of read in raw format. */
     Sha1Hash(bool hex, const char* hash);
+    Sha1Hash(const Sha1Hash& h) { memcpy(bits,h.bits,SIZE);}
     
     std::string    hex() const;
     bool    operator == (const Sha1Hash& b) const

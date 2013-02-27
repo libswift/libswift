@@ -329,6 +329,10 @@ namespace swift {
 	    live_sig_alg_ = c.live_sig_alg_;
 	    chunk_addr_ = c.chunk_addr_;
 	    live_disc_wnd_ = c.live_disc_wnd_;
+            if (c.swarm_id_ptr_ == NULL)
+                swarm_id_ptr_ = NULL;
+            else
+                swarm_id_ptr_ = new Sha1Hash(*(c.swarm_id_ptr_));
 
 	}
 	~Handshake() { ReleaseSwarmID(); }
@@ -567,7 +571,7 @@ namespace swift {
 
         // ContentTransfer overrides
 
-        const Sha1Hash& swarm_id() const { return swarm_id_; }
+        const Sha1Hash& swarm_id() const { return pubkey_; }
         /** The binmap for data already retrieved and checked. */
         binmap_t *      ack_out ()  { return &ack_out_; }
         /** Returns the number of bytes in a chunk for this transmission */
@@ -587,6 +591,9 @@ namespace swift {
         /** Source: add a chunk to the swarm */
         int             AddData(const void *buf, size_t nbyte);
 
+        /** Source: SIGNPEAK Return all chunks in ack_out_ covered by peaks */
+        binmap_t *      ack_out_signed();
+
         /** Returns the byte offset at which we hooked into the live stream */
         uint64_t        GetHookinOffset();
 
@@ -604,10 +611,14 @@ namespace swift {
         void GlobalDel();
 
       protected:
+
+        //SIGNPEAKTODO REMOVE
         /** Swarm Identifier. E.g hash of public key */
         Sha1Hash 	swarm_id_;
         /**    Binmap of own chunk availability */
         binmap_t        ack_out_;
+        /**    Binmap of own chunk availability restricted to current signed peaks SIGNPEAK */
+        binmap_t	signed_ack_out_;
         // CHUNKSIZE
         /** Arno: configurable fixed chunk size in bytes */
        uint32_t         chunk_size_;
@@ -1206,11 +1217,11 @@ namespace swift {
 
     // LIVE
     /** To create a live stream as source */
-    LiveTransfer *LiveCreate(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    LiveTransfer *LiveCreate(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** To add chunks to a live stream as source */
     int     LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte);
     /** To open a live stream as peer */
-    int     LiveOpen(std::string filename, const pubkey_t &pubkey, Address tracker, bool check_netwvshash, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     LiveOpen(std::string filename, const pubkey_t &pubkey, Address &tracker, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
     /** Register a callback for when the download of another pow(2,agg) chunks
         is finished. So agg = 0 = 2^0 = 1, means every chunk. */

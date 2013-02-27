@@ -13,6 +13,8 @@ using namespace swift;
 
 #define DUMMY_DEFAULT_SIG_LENGTH	20
 
+#define  tree_debug	false
+
 
 Node::Node() : parent_(NULL), leftc_(NULL), rightc_(NULL), b_(bin_t::NONE), h_(Sha1Hash::ZERO), verified_(false)
 {
@@ -79,7 +81,7 @@ void Node::SetVerified(bool val)
 
 LiveHashTree::LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_size) :
  HashTree(), state_(LHT_STATE_SIGN_EMPTY), root_(NULL), addcursor_(NULL), privkey_(privkey), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
- chunk_size_(chunk_size), storage_(storage)
+ chunk_size_(chunk_size), storage_(storage), signed_peak_count_(0)
 {
     for (int i=0; i<64; i++)
 	signed_peak_sigs_[i] = NULL;
@@ -87,7 +89,7 @@ LiveHashTree::LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_s
 
 LiveHashTree::LiveHashTree(Storage *storage, pubkey_t swarmid, uint32_t chunk_size) :
  HashTree(), state_(LHT_STATE_VER_AWAIT_PEAK), root_(NULL), addcursor_(NULL), pubkey_(swarmid), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
- chunk_size_(chunk_size), storage_(storage)
+ chunk_size_(chunk_size), storage_(storage), signed_peak_count_(0)
 {
     for (int i=0; i<64; i++)
 	signed_peak_sigs_[i] = NULL;
@@ -131,16 +133,20 @@ bin_t LiveHashTree::AddData(const char* data, size_t length)
 {
     // Source adds new data
 
-    if (addcursor_ == NULL)
-	fprintf(stderr,"AddData: addcursor_ NULL\n");
-    else
-	fprintf(stderr,"AddData: addcursor_: %s\n", addcursor_->GetBin().str().c_str() );
+    if (tree_debug)
+    {
+	if (addcursor_ == NULL)
+	    fprintf(stderr,"AddData: addcursor_ NULL\n");
+	else
+	    fprintf(stderr,"AddData: addcursor_: %s\n", addcursor_->GetBin().str().c_str() );
+    }
 
     Sha1Hash hash(data,length);
     Node *next = CreateNext();
     next->SetHash(hash);
 
-    fprintf(stderr,"AddData: set hash\n");
+    if (tree_debug)
+	fprintf(stderr,"AddData: set hash\n");
 
     // Calc new peaks
     size_ += length;
@@ -159,7 +165,8 @@ Node *LiveHashTree::CreateNext()
 {
     if (addcursor_ == NULL)
     {
-	fprintf(stderr,"CreateNext: create root\n" );
+	if (tree_debug)
+	    fprintf(stderr,"CreateNext: create root\n" );
 	root_ = new Node();
 	root_->SetBin(bin_t(0,0));
 	addcursor_ = root_;
@@ -170,7 +177,8 @@ Node *LiveHashTree::CreateNext()
 	Node *newright = new Node();
 	newright->SetBin(addcursor_->GetBin().sibling());
 
-	fprintf(stderr,"CreateNext: create sibling %s\n", newright->GetBin().str().c_str() );
+	if (tree_debug)
+	    fprintf(stderr,"CreateNext: create sibling %s\n", newright->GetBin().str().c_str() );
 
 	Node *par = addcursor_->GetParent();
 	if (par == NULL)
@@ -180,7 +188,8 @@ Node *LiveHashTree::CreateNext()
 	    par->SetBin(bin_t(addcursor_->GetBin().layer()+1,0));
 	    root_ = par;
 
-	    fprintf(stderr,"CreateNext: create new root %s\n", root_->GetBin().str().c_str() );
+	    if (tree_debug)
+		fprintf(stderr,"CreateNext: create new root %s\n", root_->GetBin().str().c_str() );
 	}
 	par->SetChildren(addcursor_,newright);
 	newright->SetParent(par);
@@ -189,14 +198,16 @@ Node *LiveHashTree::CreateNext()
     }
     else
     {
-	fprintf(stderr,"CreateNext: create tree\n");
+	if (tree_debug)
+	    fprintf(stderr,"CreateNext: create tree\n");
 
 	// We right child, need next
 	Node *iter = addcursor_;
 	while(true)
 	{
 	    iter = iter->GetParent();
-	    fprintf(stderr,"CreateNext: create tree: check %s\n", iter->GetBin().str().c_str() );
+	    if (tree_debug)
+		fprintf(stderr,"CreateNext: create tree: check %s\n", iter->GetBin().str().c_str() );
 
 	    if (iter == root_)
 	    {
@@ -204,7 +215,8 @@ Node *LiveHashTree::CreateNext()
 		Node *newroot = new Node();
 		newroot->SetBin(bin_t(iter->GetBin().layer()+1,0));
 
-		fprintf(stderr,"CreateNext: create tree: new root %s\n", newroot->GetBin().str().c_str() );
+		if (tree_debug)
+		    fprintf(stderr,"CreateNext: create tree: new root %s\n", newroot->GetBin().str().c_str() );
 
 		newroot->SetChildren(iter,NULL);
 		root_ = newroot;
@@ -217,7 +229,8 @@ Node *LiveHashTree::CreateNext()
 		Node *newright = new Node();
 		newright->SetBin(iter->GetBin().right());
 
-		fprintf(stderr,"CreateNext: create tree: new right %s\n", newright->GetBin().str().c_str() );
+		if (tree_debug)
+		    fprintf(stderr,"CreateNext: create tree: new right %s\n", newright->GetBin().str().c_str() );
 
 		iter->SetChildren(iter->GetLeft(),newright);
 		newright->SetParent(iter);
@@ -232,7 +245,8 @@ Node *LiveHashTree::CreateNext()
 		    newleft = new Node();
 		    newleft->SetBin(iter->GetBin().left());
 
-		    fprintf(stderr,"CreateNext: create tree: new left down %s\n", newleft->GetBin().str().c_str() );
+		    if (tree_debug)
+			fprintf(stderr,"CreateNext: create tree: new left down %s\n", newleft->GetBin().str().c_str() );
 
 		    iter->SetChildren(newleft,NULL);
 		    newleft->SetParent(iter);
@@ -369,7 +383,9 @@ bool LiveHashTree::OfferSignedPeakHash(bin_t pos, const uint8_t *signedhash)
     // TODO store sig
     Sha1Hash peakhash(false,(const char *)signedhash);
 
-    fprintf(stderr,"OfferHash: offer is peak %s\n", pos.str().c_str() );
+    if (tree_debug)
+	fprintf(stderr,"OfferHash: offer is peak %s\n", pos.str().c_str() );
+
     peak_bins_[peak_count_++] = pos;
 
     sizec_ = peak_bins_[peak_count_].base_right().layer_offset();
@@ -392,11 +408,13 @@ bool LiveHashTree::OfferSignedPeakHash(bin_t pos, const uint8_t *signedhash)
 bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified)
 {
     // This adds hashes on client side
-    fprintf(stderr,"OfferHash: %s\n", pos.str().c_str() );
+    if (tree_debug)
+	fprintf(stderr,"OfferHash: %s\n", pos.str().c_str() );
 
     if (state_ == LHT_STATE_VER_AWAIT_PEAK)
     {
-	fprintf(stderr,"OfferHash: No peak yet, can't verify!" );
+	if (tree_debug)
+	    fprintf(stderr,"OfferHash: No peak yet, can't verify!" );
 	return false;
     }
 
@@ -405,10 +423,13 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     Node *parent = NULL;
     while (true)
     {
-	if (iter == NULL)
-	    fprintf(stderr,"OfferHash: iter NULL\n");
-	else
-	    fprintf(stderr,"OfferHash: iter %s\n", iter->GetBin().str().c_str() );
+	if (tree_debug)
+	{
+	    if (iter == NULL)
+	       fprintf(stderr,"OfferHash: iter NULL\n");
+	    else
+	        fprintf(stderr,"OfferHash: iter %s\n", iter->GetBin().str().c_str() );
+	}
 
 	if (iter == NULL)
 	{
@@ -419,7 +440,8 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 		root_ = new Node();
 		root_->SetBin(pos);
 
-		fprintf(stderr,"OfferHash: new root %s %s\n", root_->GetBin().str().c_str(), hash.hex().c_str() );
+		if (tree_debug)
+		    fprintf(stderr,"OfferHash: new root %s %s\n", root_->GetBin().str().c_str(), hash.hex().c_str() );
 
 		root_->SetHash(hash);
 		root_->SetVerified(verified);
@@ -434,7 +456,8 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 		    Node *newleft = new Node();
 		    newleft->SetBin(parent->GetBin().left());
 
-		    fprintf(stderr,"OfferHash: create left %s\n", newleft->GetBin().str().c_str() );
+		    if (tree_debug)
+			fprintf(stderr,"OfferHash: create left %s\n", newleft->GetBin().str().c_str() );
 
 		    newleft->SetParent(parent);
 
@@ -447,7 +470,8 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 		    Node *newright = new Node();
 		    newright->SetBin(parent->GetBin().right());
 
-		    fprintf(stderr,"OfferHash: create right %s\n", newright->GetBin().str().c_str() );
+		    if (tree_debug)
+			fprintf(stderr,"OfferHash: create right %s\n", newright->GetBin().str().c_str() );
 
 		    newright->SetParent(parent);
 
@@ -462,7 +486,8 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 	    Node *newroot = new Node();
 	    newroot->SetBin(iter->GetBin().parent());
 
-	    fprintf(stderr,"OfferHash: new root no cover %s\n", newroot->GetBin().str().c_str() );
+	    if (tree_debug)
+		fprintf(stderr,"OfferHash: new root no cover %s\n", newroot->GetBin().str().c_str() );
 
 	    if (pos.layer_offset() < iter->GetBin().layer_offset())
 		newroot->SetChildren(NULL,iter);
@@ -476,19 +501,22 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 	if (pos.toUInt() == iter->GetBin().toUInt())
 	{
 	    // Found it
-	    fprintf(stderr,"OfferHash: found node %s\n", iter->GetBin().str().c_str() );
+	    if (tree_debug)
+		fprintf(stderr,"OfferHash: found node %s\n", iter->GetBin().str().c_str() );
 	    break;
 	}
 	else if (pos.toUInt() < iter->GetBin().toUInt())
 	{
-	    fprintf(stderr,"OfferHash: go left\n" );
+	    if (tree_debug)
+		fprintf(stderr,"OfferHash: go left\n" );
 
 	    parent = iter;
 	    iter = iter->GetLeft();
 	}
 	else
 	{
-	    fprintf(stderr,"OfferHash: go right\n" );
+	    if (tree_debug)
+		fprintf(stderr,"OfferHash: go right\n" );
 
 	    parent = iter;
 	    iter = iter->GetRight();
@@ -498,7 +526,8 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 
     if (iter == NULL)
     {
-	fprintf(stderr,"OfferHash: internal error, couldn't find or create node\n" );
+	if (tree_debug)
+	    fprintf(stderr,"OfferHash: internal error, couldn't find or create node\n" );
 	return false;
     }
 
@@ -533,7 +562,8 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     Node *piter = iter;
     Sha1Hash uphash = hash;
 
-    fprintf(stderr,"OfferHash: verifying %s\n", pos.str().c_str() );
+    if (tree_debug)
+	fprintf(stderr,"OfferHash: verifying %s\n", pos.str().c_str() );
     // Walk to the nearest proven hash
     while ( p!=peak && ack_out_.is_empty(p) && !piter->GetVerified() ) {
         piter->SetHash(uphash);
@@ -547,19 +577,22 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
         // as SHA1(zero+zero) != zero (but b80de5...)
         //
 
-        fprintf(stderr,"OfferHash: squirrel %s %p %p\n", p.str().c_str(), piter->GetLeft(), piter->GetRight() );
+        if (tree_debug)
+            fprintf(stderr,"OfferHash: squirrel %s %p %p\n", p.str().c_str(), piter->GetLeft(), piter->GetRight() );
 
         if (piter->GetLeft() == NULL || piter->GetRight() == NULL)
             return false; // tree still incomplete
 
-        fprintf(stderr,"OfferHash: hashsquirrel %s %s %s\n", p.str().c_str(), piter->GetLeft()->GetHash().hex().c_str(), piter->GetRight()->GetHash().hex().c_str() );
+        if (tree_debug)
+            fprintf(stderr,"OfferHash: hashsquirrel %s %s %s\n", p.str().c_str(), piter->GetLeft()->GetHash().hex().c_str(), piter->GetRight()->GetHash().hex().c_str() );
 
         if (piter->GetLeft()->GetHash() == Sha1Hash::ZERO || piter->GetRight()->GetHash() == Sha1Hash::ZERO)
             break;
         uphash = Sha1Hash(piter->GetLeft()->GetHash(),piter->GetRight()->GetHash());
     }
 
-    fprintf(stderr,"OfferHash: verify computed against %s %s\n", piter->GetBin().str().c_str(), piter->GetHash().hex().c_str() );
+    if (tree_debug)
+	fprintf(stderr,"OfferHash: verify computed against %s %s\n", piter->GetBin().str().c_str(), piter->GetHash().hex().c_str() );
 
     bool success = (uphash==piter->GetHash());
     // LESSHASH

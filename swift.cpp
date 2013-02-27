@@ -74,9 +74,10 @@ void usage(void)
 }
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
 int HandleSwiftFile(std::string filename, Sha1Hash root_hash, Address &tracker, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
-int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate);
+int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address &tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate);
 int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool activate);
-void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Hash root_hash);
+// SIGNPEAKTODO replace root_hash with generic swarm ID
+void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Hash root_hash, uint32_t chunk_size);
 
 void ReportCallback(int fd, short event, void *arg);
 void EndCallback(int fd, short event, void *arg);
@@ -444,7 +445,7 @@ int utf8main (int argc, char** argv)
     {
         // LIVE
         // Act as live source
-        HandleLiveSource(livesource_input,filename,root_hash);
+        HandleLiveSource(livesource_input,filename,root_hash,chunk_size);
     }
     else if (!cmdgw_enabled && !httpgw_enabled && zerostatedir == "")
         quit("Not client, not live server, not a gateway, not zero state seeder?");
@@ -558,7 +559,7 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, Address &tracker, 
 }
 
 
-int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate)
+int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address &tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate)
 {
     if (!quiet)
 	fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
@@ -571,7 +572,7 @@ int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, b
     if (!livestream)
 	td = swift::Open(filename,hash,tracker,force_check_diskvshash,true,false,activate,chunk_size);
     else
-	td = swift::LiveOpen(filename,hash,Address(),false,chunk_size);
+	td = swift::LiveOpen(filename,hash,tracker,true,chunk_size);
     return td;
 }
 
@@ -633,7 +634,7 @@ int CleanSwiftDirectory(std::string dirname)
 }
 
 
-void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Hash root_hash)
+void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Hash root_hash, uint32_t chunk_size)
 {
     // LIVE
     // Server mode: read from http source or pipe or file
@@ -676,7 +677,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
         }
 
         // Create swarm
-        livesource_lt = swift::LiveCreate(filename,swarmid,481); // SIGNPEAKTODO
+        livesource_lt = swift::LiveCreate(filename,swarmid,481,true,chunk_size); // SIGNPEAKTODO
 
         // Periodically create chunks by reading from source
         evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);

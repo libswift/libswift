@@ -15,7 +15,7 @@ using namespace std;
 using namespace swift;
 
 
-#define api_debug	false
+#define api_debug	true
 
 /*
  * Global Operations
@@ -688,14 +688,14 @@ int swift::HashCheckOffline( std::string filename, Sha1Hash *calchashptr, uint32
  */
 
 
-LiveTransfer *swift::LiveCreate(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, uint32_t chunk_size)
+LiveTransfer *swift::LiveCreate(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash, uint32_t chunk_size)
 {
     if (api_debug)
 	fprintf(stderr,"swift::LiveCreate %s hash %d cs %u\n", filename.c_str(), pubkey, chunk_size );
 
     // Arno: LIVE streams are not managed by SwarmManager
     fprintf(stderr,"swift::LiveCreate: swarmid: %d\n",pubkey );
-    LiveTransfer *lt = new LiveTransfer(filename,pubkey,privkey,true,chunk_size);
+    LiveTransfer *lt = new LiveTransfer(filename,pubkey,privkey,check_netwvshash,chunk_size);
 
     if (lt->IsOperational())
 	return lt;
@@ -717,12 +717,12 @@ int swift::LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte)
 }
 
 
-int swift::LiveOpen(std::string filename, const pubkey_t &pubkey, Address tracker, bool check_netwvshash, uint32_t chunk_size)
+int swift::LiveOpen(std::string filename, const pubkey_t &pubkey, Address &tracker, bool check_netwvshash, uint32_t chunk_size)
 {
     if (api_debug)
-	fprintf(stderr,"swift::LiveOpen %s hash %d addr %s cnet %d cs %u\n", filename.c_str(), pubkey, tracker.str().c_str(), check_netwvshash, chunk_size );
+	fprintf(stderr,"swift::LiveOpen %s hash %s addr %s cnet %d cs %u\n", filename.c_str(), pubkey.hex().c_str(), tracker.str().c_str(), check_netwvshash, chunk_size );
 
-    LiveTransfer *lt = new LiveTransfer(filename,pubkey,true,chunk_size);
+    LiveTransfer *lt = new LiveTransfer(filename,pubkey,check_netwvshash,chunk_size);
 
     // initiate tracker connections
     // SWIFTPROC

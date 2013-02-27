@@ -68,7 +68,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     scheduled4del_(false),
     direct_sending_(false),
     peer_is_source_(peerissource),
-    live_new_signed_peak_idx_(-1),
+    live_new_signed_peak_idx_(0),
     hs_out_(NULL), hs_in_(NULL)
 {
     if (peer_==Address())
@@ -146,10 +146,7 @@ void Channel::ClearEvents()
 
 HashTree * Channel::hashtree()
 {
-    if (transfer()->ttype() == LIVE_TRANSFER)
-        return NULL;
-    else
-        return ((FileTransfer *)transfer_)->hashtree();
+    return transfer()->hashtree();
 }
 
 bool Channel::IsComplete() {

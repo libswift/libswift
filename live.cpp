@@ -82,6 +82,9 @@ void LiveTransfer::Initialize(bool check_netwvshash)
 	hs.cont_int_prot_ = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
     else
 	hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
+
+    fprintf(stderr,"LiveTransfer::Initialize: cipm %d\n", hs.cont_int_prot_);
+
     SetDefaultHandshake(hs);
     if (hs.cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
@@ -215,6 +218,14 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         	newpeakstartidx = umt->UpdateSignedPeaks();
         	chunks_since_sign_ = 0;
         	newepoch = true;
+
+		// Arno, 2013-02-26: Cannot send HAVEs not covered by signed peak
+		LiveHashTree *umt = (LiveHashTree *)hashtree();
+		signed_ack_out_.clear();
+		for (int i=0; i<umt->signed_peak_count(); i++)
+		{
+		    signed_ack_out_.set(umt->signed_peak(i));
+		}
             }
         }
         else
@@ -255,6 +266,15 @@ void LiveTransfer::UpdateOperational()
 {
 }
 
+
+binmap_t *LiveTransfer::ack_out_signed()
+{
+    if (!am_source_ || hashtree() == NULL)
+	return &ack_out_;
+
+    // Arno, 2013-02-26: Cannot send HAVEs not covered by signed peak
+    return &signed_ack_out_;
+}
 
 void Channel::LiveSend()
 {
