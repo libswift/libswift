@@ -677,7 +677,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
         }
 
         // Create swarm
-        livesource_lt = swift::LiveCreate(filename,swarmid,481,true,chunk_size); // SIGNPEAKTODO
+        livesource_lt = swift::LiveCreate(filename,swarmid,481,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,chunk_size); // SIGNPEAKTODO
 
         // Periodically create chunks by reading from source
         evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
@@ -709,7 +709,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
         fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str() );
 
         // Create swarm
-        livesource_lt = swift::LiveCreate(filename,swarmid,481); // SIGNPEAKTODO
+        livesource_lt = swift::LiveCreate(filename,swarmid,481,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,chunk_size); // SIGNPEAKTODO
 
         // Create HTTP client
         struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, httpservname.c_str(), httpport);

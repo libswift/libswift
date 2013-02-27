@@ -92,10 +92,6 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     transfer_->GetChannels()->push_back(this);
 
     hs_out_ = new Handshake(transfer->GetDefaultHandshake());
-    if (transfer_->ttype() == FILE_TRANSFER)
-	hs_out_->cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
-    else
-	hs_out_->cont_int_prot_ = POPT_CONT_INT_PROT_NONE; // PPSPTODO implement live schemes
 
     dprintf("%s #%u init channel %s transfer %d\n",tintstr(),id_,peer_.str().c_str(), transfer_->td() );
     //fprintf(stderr,"new Channel %d %s\n", id_, peer_.str().c_str() );

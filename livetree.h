@@ -20,6 +20,8 @@
 
 namespace swift {
 
+#define DUMMY_DEFAULT_SIG_LENGTH	20	// SIGNPEAKTODO
+
 class Node;
 
 class Node

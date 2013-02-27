@@ -113,6 +113,9 @@ namespace swift {
 // Max size of a X.509 certificate in a PEX_REScert message.
 #define PEX_RES_MAX_CERT_SIZE		     1024
 
+// Live streaming via Unified Merkle Tree: The number of chunks per signature
+#define SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN	32
+
 
 /** IPv4/6 address, just a nice wrapping around struct sockaddr_storage. */
     struct Address {
@@ -558,7 +561,7 @@ namespace swift {
        public:
 
         /** A constructor for a live source. */
-	LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+	LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
 	/** A constructor for live client. */
 	LiveTransfer(std::string filename, const pubkey_t &pubkey, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
@@ -766,7 +769,6 @@ namespace swift {
         void        AddCancel (struct evbuffer *evb);
         void        AddUncleHashes (struct evbuffer *evb, bin_t pos);
         void        AddPeakHashes (struct evbuffer *evb);
-        void        AddSignedPeakHashes(struct evbuffer *evb); // SIGNPEAK
         void        AddSignedPeakHashRange(struct evbuffer *evb, int start, int end); // SIGNPEAK
         void        AddPex (struct evbuffer *evb);
         void        OnPexReq(void);
@@ -1217,7 +1219,7 @@ namespace swift {
 
     // LIVE
     /** To create a live stream as source */
-    LiveTransfer *LiveCreate(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    LiveTransfer *LiveCreate(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** To add chunks to a live stream as source */
     int     LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte);
     /** To open a live stream as peer */

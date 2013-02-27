@@ -57,12 +57,6 @@ void    Channel::AddPeakHashes (struct evbuffer *evb) {
 }
 
 
-void    Channel::AddSignedPeakHashes(struct evbuffer *evb) {
-
-    LiveHashTree *umt = (LiveHashTree *)hashtree();
-    AddSignedPeakHashRange(evb,0,umt->signed_peak_count());
-}
-
 // SIGNPEAK
 void    Channel::AddSignedPeakHashRange(struct evbuffer *evb, int start, int end)
 {
@@ -598,15 +592,17 @@ void    Channel::AddAck (struct evbuffer *evb) {
 
 
 void    Channel::AddHave (struct evbuffer *evb) {
+
     // SIGNPEAK
-
     fprintf(stderr,"AddHave: hashtree %p signed till %d\n", hashtree(), GetNextSendSignedPeakFromIdx() );
-
-    if (hashtree() != NULL && GetNextSendSignedPeakFromIdx() != -1)
+    if (hs_in_ != NULL && hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
-	LiveHashTree *umt = (LiveHashTree *)hashtree();
-	fprintf(stderr,"AddHave: Adding signed peaks %d till %d\n", GetNextSendSignedPeakFromIdx(),umt->signed_peak_count());
-      	AddSignedPeakHashRange(evb,GetNextSendSignedPeakFromIdx(),umt->signed_peak_count());
+	if (GetNextSendSignedPeakFromIdx() != -1)
+	{
+	    LiveHashTree *umt = (LiveHashTree *)hashtree();
+	    fprintf(stderr,"AddHave: Adding signed peaks %d till %d\n", GetNextSendSignedPeakFromIdx(),umt->signed_peak_count());
+	    AddSignedPeakHashRange(evb,GetNextSendSignedPeakFromIdx(),umt->signed_peak_count());
+	}
     }
 
     if (!data_in_dbl_.is_none()) { // TODO: do redundancy better
@@ -1478,7 +1474,11 @@ void Channel::OnSignedHash(struct evbuffer *evb)
 
     // PPSPTODO
     //if (hs_in_->live_sig_alg_ == POPT_LIVE_SIG_ALG_PRIVATEDNS)
-    //evbuffer_drain(evb, size);
+    evbuffer_drain(evb, DUMMY_DEFAULT_SIG_LENGTH);
+
+    dprintf("%s #%u -sphash %s\n",tintstr(),id_,pos.str().c_str());
+
+    // SIGNPEAKTODO store sigs
 }
 
 

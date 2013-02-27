@@ -32,11 +32,12 @@ std::vector<LiveTransfer*> LiveTransfer::liveswarms;
  */
 #define TRANSFER_DESCR_LIVE_OFFSET	4000000
 
-
 /** A constructor for a live source. */
-LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash, uint32_t chunk_size) :
-	ContentTransfer(LIVE_TRANSFER), pubkey_(pubkey), privkey_(privkey), chunk_size_(chunk_size), am_source_(true),
-	filename_(filename), last_chunkid_(0), offset_(0)
+LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash, uint32_t nchunks_per_sign, uint32_t chunk_size) :
+	ContentTransfer(LIVE_TRANSFER), chunk_size_(chunk_size), am_source_(true),
+	filename_(filename), last_chunkid_(0), offset_(0),
+	chunks_since_sign_(0),nchunks_per_sign_(nchunks_per_sign),
+	pubkey_(pubkey), privkey_(privkey)
 {
     Initialize(check_netwvshash);
 
@@ -47,7 +48,8 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const p
 /** A constructor for live client. */
 LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, bool check_netwvshash, uint32_t chunk_size) :
         ContentTransfer(LIVE_TRANSFER), pubkey_(pubkey), chunk_size_(chunk_size), am_source_(false),
-        filename_(filename), last_chunkid_(0), offset_(0)
+        filename_(filename), last_chunkid_(0), offset_(0),
+        chunks_since_sign_(0),nchunks_per_sign_(0)
 {
     Initialize(check_netwvshash);
 
@@ -86,6 +88,9 @@ void LiveTransfer::Initialize(bool check_netwvshash)
     fprintf(stderr,"LiveTransfer::Initialize: cipm %d\n", hs.cont_int_prot_);
 
     SetDefaultHandshake(hs);
+
+    fprintf(stderr,"LiveTransfer::Initialize: def cipm %d\n", def_hs_out_.cont_int_prot_ );
+
     if (hs.cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
 	hashtree_ = new LiveHashTree(storage_,481,chunk_size_);
@@ -215,7 +220,12 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
             chunks_since_sign_++;
             if (chunks_since_sign_ == nchunks_per_sign_)
             {
+        	int old = umt->signed_peak_count();
+
         	newpeakstartidx = umt->UpdateSignedPeaks();
+
+        	fprintf(stderr,"live: AddData: UMT: signed peaks old %d new %d\n", old, umt->signed_peak_count() );
+
         	chunks_since_sign_ = 0;
         	newepoch = true;
 

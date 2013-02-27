@@ -11,7 +11,6 @@
 
 using namespace swift;
 
-#define DUMMY_DEFAULT_SIG_LENGTH	20
 
 #define  tree_debug	false
 
@@ -269,7 +268,7 @@ int LiveHashTree::UpdateSignedPeaks()
     // Calc peak diffs
     bool changed=false;
     int i=0;
-    if (signed_peak_count_ == peak_count_)
+    if (signed_peak_count_ == peak_count_ && peak_count_ != 0)
     {
 	for (i=0; i<signed_peak_count_; i++)
 	{
@@ -290,6 +289,7 @@ int LiveHashTree::UpdateSignedPeaks()
     changed = false;
 
     // Got new or extra peak hash
+    signed_peak_count_ = peak_count_;
     for (i=0; i<peak_count_; i++)
     {
 	if (peak_bins_[i] != signed_peak_bins_[i])
