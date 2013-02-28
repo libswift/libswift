@@ -1,0 +1,8 @@
+*.pyc
+*.pyo
+*.o
+*.a
+*.dll
+*.so
+.sconsign.dblite
+swift
