@@ -79,7 +79,7 @@
 #include "bin.h"
 #include "binmap.h"
 #include "hashtree.h"
-#include "livetree.h"
+#include "livehashtree.h"
 #include "avgspeed.h"
 // Arno, 2012-05-21: MacOS X has an Availability.h :-(
 #include "avail.h"

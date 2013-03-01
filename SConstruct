@@ -26,7 +26,7 @@ source = [ 'bin.cpp', 'binmap.cpp', 'sha1.cpp','hashtree.cpp',
     	   'compat.cpp','avgspeed.cpp', 'avail.cpp', 'cmdgw.cpp', 'httpgw.cpp',
            'storage.cpp', 'zerostate.cpp', 'zerohashtree.cpp',
            'api.cpp', 'content.cpp', 'live.cpp', 'swarmmanager.cpp', 
-           'address.cpp', 'livetree.cpp']
+           'address.cpp', 'livehashtree.cpp']
 # cmdgw.cpp now in there for SOCKTUNNEL
 
 env = Environment()

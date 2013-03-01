@@ -1,5 +1,5 @@
 /*
- *  livetree.cpp
+ *  livehashtree.cpp
  *
  *  Created by Arno Bakker, Victor Grishchenko
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.

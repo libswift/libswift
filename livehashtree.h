@@ -1,5 +1,5 @@
 /*
- *  livetree.h
+ *  livehashtree.h
  *
  *  Implementation of the Unified Merkle Tree approach for content
  *  integrity protection during live streaming
