@@ -55,10 +55,6 @@ Sha1Hash &Node::GetHash()
 void Node::SetHash(const Sha1Hash &hash)
 {
     h_ = hash;
-
-    if (b_ == bin_t(2,0))
-	fprintf(stderr,"SetHash: ************* STORE %s %s\n",b_.str().c_str(),hash.hex().c_str() );
-
 }
 
 bin_t &Node::GetBin()
@@ -453,9 +449,13 @@ bool LiveHashTree::OfferSignedPeakHash(bin_t pos, const uint8_t *signedhash)
     if (state_ == LHT_STATE_VER_AWAIT_PEAK)
 	state_ = LHT_STATE_VER_AWAIT_DATA;
 
-    // Node already created by preceding INTEGRITY message
-    Node *peaknode = FindNode(pos);
-    peaknode->SetVerified(true);
+
+    if (pos == cand_peak_bin_)
+    {
+	CreateAndVerifyNode(cand_peak_bin_,cand_peak_hash_,true);
+    }
+    else
+	fprintf(stderr,"UpdateSignedPeakHash: message mixup!\n");
 
     // Could recalc root hash here, but never really used. Doing it on-demand
     // in root_hash() conflicts with const def :-(
@@ -470,13 +470,6 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     // This adds hashes on client side
     if (tree_debug)
 	fprintf(stderr,"OfferHash: %s %s\n", pos.str().c_str(), hash.hex().c_str() );
-
-    if (state_ == LHT_STATE_VER_AWAIT_PEAK)
-    {
-	if (tree_debug)
-	    fprintf(stderr,"OfferHash: No peak yet, can't verify!" );
-	return false;
-    }
 
     // Find or create node
     Node *iter = root_;
@@ -591,6 +584,14 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 	return false;
     }
 
+    if (state_ == LHT_STATE_VER_AWAIT_PEAK)
+    {
+	if (tree_debug)
+	    fprintf(stderr,"OfferHash: No peak yet, can't verify!\n" );
+	return false;
+    }
+
+
     //
     // From MmapHashTree::OfferHash
     //
@@ -695,10 +696,15 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 
 bool LiveHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
 {
-    fprintf(stderr,"OfferHash: INTERFACE %s %s\n", pos.str().c_str(), hash.hex().c_str() );
-
-    return CreateAndVerifyNode(pos,hash,false);
-
+    bin_t peak = peak_for(pos);
+    if (peak.is_none())
+    {
+        cand_peak_bin_ = pos;
+        cand_peak_hash_ = hash;
+        return false;
+    }
+    else
+	return CreateAndVerifyNode(pos,hash,false);
 }
 
 
@@ -774,10 +780,8 @@ const Sha1Hash& LiveHashTree::peak_hash(int i) const
 
 bin_t LiveHashTree::peak_for(bin_t pos) const
 {
-    fprintf(stderr,"peak_for: %s got %d\n", pos.str().c_str(), peak_count_ );
     for (int i=0; i<peak_count_; i++)
     {
-	fprintf(stderr,"peak_for: %s contains %s %d\n", peak_bins_[i].str().c_str(), pos.str().c_str(), (int)peak_bins_[i].contains(pos) );
 	if (peak_bins_[i].contains(pos))
 	    return peak_bins_[i];
     }

@@ -82,7 +82,9 @@ void do_download(LiveHashTree *umt, int nchunks, hmap_t &truthhashmap, pickorder
     {
 	//umt->AddData(data,1024);
 	Sha1Hash peakhash = truthhashmap[peak_bins_[i]];
-	ASSERT_TRUE(umt->OfferSignedPeakHash(peak_bins_[i],peakhash.bits));
+	umt->OfferHash(peak_bins_[i],peakhash);
+	uint8_t dummy[DUMMY_DEFAULT_SIG_LENGTH];
+	ASSERT_TRUE(umt->OfferSignedPeakHash(peak_bins_[i],dummy));
 	umt->sane_tree();
     }
 

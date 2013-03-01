@@ -153,6 +153,10 @@ class LiveHashTree: public HashTree
      uint8_t *       signed_peak_sigs_[64];
      // TODO: cache peak sigs
 
+     /** Temp storage for candidate peak */
+     bin_t	     cand_peak_bin_;
+     Sha1Hash	     cand_peak_hash_;
+
      /** Create a new leaf Node next to the current latest leaf (pointed to by
       * addcursor_). This may involve creating a new root and subtree to
       * accommodate it. */
