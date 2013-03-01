@@ -37,6 +37,7 @@ class Node
     void SetHash(const Sha1Hash &hash);
     bin_t &GetBin();
     void SetBin(bin_t &b);
+    /** whether hash checked against signed peak (client) or calculated (source) */
     void SetVerified(bool val);
     bool GetVerified();
 
@@ -150,12 +151,14 @@ class LiveHashTree: public HashTree
      int             signed_peak_count_;
      /** Actual signatures */
      uint8_t *       signed_peak_sigs_[64];
-     // TODO: cache peak hashes
+     // TODO: cache peak sigs
 
      /** Create a new leaf Node next to the current latest leaf (pointed to by
       * addcursor_). This may involve creating a new root and subtree to
       * accommodate it. */
      Node *	     CreateNext();
+     Node *	     FindNode(bin_t pos) const;
+     void	     ComputeTree(Node *start);
 
      void 	     FreeTree(Node *n);
      Sha1Hash        DeriveRoot();

@@ -12,7 +12,7 @@
 using namespace swift;
 
 
-#define  tree_debug	false
+#define  tree_debug	true
 
 
 Node::Node() : parent_(NULL), leftc_(NULL), rightc_(NULL), b_(bin_t::NONE), h_(Sha1Hash::ZERO), verified_(false)
@@ -143,9 +143,10 @@ bin_t LiveHashTree::AddData(const char* data, size_t length)
     Sha1Hash hash(data,length);
     Node *next = CreateNext();
     next->SetHash(hash);
+    next->SetVerified(true); // Mark node as computed
 
     if (tree_debug)
-	fprintf(stderr,"AddData: set hash\n");
+	fprintf(stderr,"AddData: set %s hash %s\n", next->GetBin().str().c_str(), next->GetHash().hex().c_str() );
 
     // Calc new peaks
     size_ += length;
@@ -319,8 +320,41 @@ int LiveHashTree::UpdateSignedPeaks()
 	}
     }
 
+
+    // Now the trees below peaks are stable, so we can calculate the hash tree
+    // for them.
+    for (i=startidx; i<signed_peak_count_; i++)
+    {
+	Node *spnode = FindNode(signed_peak_bins_[i]);
+	if (spnode == NULL)
+	{
+	    fprintf(stderr,"UpdateSignedPeaks: cannot find peak?!\n");
+	    return -1;
+	}
+	ComputeTree(spnode);
+    }
+
     return startidx;
 }
+
+
+void LiveHashTree::ComputeTree(Node *start)
+{
+    if (!start->GetVerified())
+    {
+	ComputeTree(start->GetLeft());
+	ComputeTree(start->GetRight());
+	if (!start->GetLeft()->GetVerified())
+	    fprintf(stderr,"ComputeTree: left failed to become verified!");
+	if (!start->GetRight()->GetVerified())
+	    fprintf(stderr,"ComputeTree: right failed to become verified!");
+	Sha1Hash h(start->GetLeft()->GetHash(),start->GetRight()->GetHash());
+	start->SetHash(h);
+	start->SetVerified(true);
+    }
+}
+
+
 
 int LiveHashTree::signed_peak_count()
 {
@@ -386,7 +420,29 @@ bool LiveHashTree::OfferSignedPeakHash(bin_t pos, const uint8_t *signedhash)
     if (tree_debug)
 	fprintf(stderr,"OfferHash: offer is peak %s\n", pos.str().c_str() );
 
-    peak_bins_[peak_count_++] = pos;
+    // TODO: must remove old peaks if consumed by new
+    int i=0;
+    bool stored=false;
+    while (i<peak_count_)
+    {
+	if (pos.contains(peak_bins_[i]))
+	{
+	    if (!stored)
+		peak_bins_[i] = pos;
+	    else
+	    {
+		// This peak subsumed by new peak
+		peak_count_--;
+		for (int j=i; j<peak_count_; j++)
+		{
+		    peak_bins_[j] = peak_bins_[j+1];
+		}
+	    }
+	}
+	i++;
+    }
+    if (!stored)
+	peak_bins_[peak_count_++] = pos;
 
     sizec_ = peak_bins_[peak_count_].base_right().layer_offset();
     size_ = sizec_ * chunk_size_;
@@ -640,18 +696,35 @@ bool LiveHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
 bool LiveHashTree::OfferData(bin_t pos, const char* data, size_t length)
 {
     if (state_ == LHT_STATE_VER_AWAIT_PEAK)
+    {
+	fprintf(stderr,"OfferData: await peak\n");
         return false;
+    }
     if (!pos.is_base())
+    {
+	fprintf(stderr,"OfferData: not base\n");
         return false;
+    }
     if (length<chunk_size_ && pos!=bin_t(0,sizec_-1))
+    {
+	fprintf(stderr,"OfferData: bad len %d\n", length);
         return false;
+    }
     if (ack_out_.is_filled(pos))
+    {
+	fprintf(stderr,"OfferData: already have\n");
         return true; // to set data_in_
+    }
     bin_t peak = peak_for(pos);
     if (peak.is_none())
+    {
+	fprintf(stderr,"OfferData: couldn't find peak\n");
         return false;
-
+    }
     Sha1Hash data_hash(data,length);
+
+    fprintf(stderr,"OfferData: %s hash %s\n", pos.str().c_str(), data_hash.hex().c_str() );
+
     if (!OfferHash(pos, data_hash)) {
         //printf("invalid hash for %s: %s\n",pos.str(bin_name_buf),data_hash.hex().c_str()); // paranoid
         //fprintf(stderr,"INVALID HASH FOR %lli layer %d\n", pos.toUInt(), pos.layer() );
@@ -692,8 +765,10 @@ const Sha1Hash& LiveHashTree::peak_hash(int i) const
 
 bin_t LiveHashTree::peak_for(bin_t pos) const
 {
+    fprintf(stderr,"peak_for: %s got %d\n", pos.str().c_str(), peak_count_ );
     for (int i=0; i<peak_count_; i++)
     {
+	fprintf(stderr,"peak_for: %s contains %s %d\n", peak_bins_[i].str().c_str(), pos.str().c_str(), (int)peak_bins_[i].contains(pos) );
 	if (peak_bins_[i].contains(pos))
 	    return peak_bins_[i];
     }
@@ -703,19 +778,29 @@ bin_t LiveHashTree::peak_for(bin_t pos) const
 const Sha1Hash& LiveHashTree::hash(bin_t pos) const
 {
     // This API may not be fastest with dynamic tree.
+    Node *n = FindNode(pos);
+    if (n == NULL)
+	return Sha1Hash::ZERO;
+    else
+	return n->GetHash();
+}
+
+Node *LiveHashTree::FindNode(bin_t pos) const
+{
     Node *iter = root_;
     while (true)
     {
 	if (iter == NULL)
-	    return Sha1Hash::ZERO;
+	    return NULL;
 	else if (pos.toUInt() == iter->GetBin().toUInt())
-	    return iter->GetHash();
+	    return iter;
 	else if (pos.toUInt() < iter->GetBin().toUInt())
 	    iter = iter->GetLeft();
 	else
 	    iter = iter->GetRight();
     }
 }
+
 
 const Sha1Hash& LiveHashTree::root_hash() const
 {

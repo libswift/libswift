@@ -113,8 +113,8 @@ namespace swift {
 // Max size of a X.509 certificate in a PEX_REScert message.
 #define PEX_RES_MAX_CERT_SIZE		     1024
 
-// Live streaming via Unified Merkle Tree: The number of chunks per signature
-#define SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN	32
+// Live streaming via Unified Merkle Tree: The number of chunks per signature (power of 2)
+#define SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN	4 // SIGPEAKTODO 32
 
 
 /** IPv4/6 address, just a nice wrapping around struct sockaddr_storage. */

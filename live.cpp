@@ -76,12 +76,20 @@ void LiveTransfer::Initialize(bool check_netwvshash)
             destdir = ".";
     }
 
+    // Live, delete any existing storage
+    (void)remove_utf8(filename_);
+
     // MULTIFILE
     storage_ = new Storage(filename_,destdir,td_);
 
     Handshake hs;
     if (check_netwvshash)
-	hs.cont_int_prot_ = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
+    {
+	if (nchunks_per_sign_ == 1)
+	    hs.cont_int_prot_ = POPT_CONT_INT_PROT_SIGNALL;
+	else
+	    hs.cont_int_prot_ = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
+    }
     else
 	hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
 

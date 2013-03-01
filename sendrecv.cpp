@@ -52,6 +52,10 @@ void    Channel::AddPeakHashes (struct evbuffer *evb) {
         evbuffer_add_8(evb, SWIFT_INTEGRITY);
         evbuffer_add_chunkaddr(evb,peak,hs_out_->chunk_addr_);
         evbuffer_add_hash(evb, hashtree()->peak_hash(i));
+
+        fprintf(stderr,"AddHash: peak  %s %s\n", peak.str().c_str(), hashtree()->peak_hash(i).hex().c_str() );
+
+
         dprintf("%s #%u +phash %s\n",tintstr(),id_,peak.str().c_str());
     }
 }
@@ -66,6 +70,9 @@ void    Channel::AddSignedPeakHashRange(struct evbuffer *evb, int start, int end
         evbuffer_add_8(evb, SWIFT_INTEGRITY);
         evbuffer_add_chunkaddr(evb,peak,hs_out_->chunk_addr_);
         evbuffer_add_hash(evb, umt->hash(peak));
+
+        fprintf(stderr,"AddHash: speak %s %s\n", peak.str().c_str(), umt->hash(peak).hex().c_str() );
+
         if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
         {
             evbuffer_add_8(evb, SWIFT_SIGNED_INTEGRITY);
@@ -99,6 +106,9 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
         evbuffer_add_8(evb, SWIFT_INTEGRITY);
         evbuffer_add_chunkaddr(evb,uncle,hs_out_->chunk_addr_);
         evbuffer_add_hash(evb, hashtree()->hash(uncle) );
+
+        fprintf(stderr,"AddHash: uncle %s %s\n", uncle.str().c_str(), hashtree()->hash(uncle).hex().c_str() );
+
         dprintf("%s #%u +hash %s\n",tintstr(),id_,uncle.str().c_str());
         pos = pos.parent();
     }
@@ -830,6 +840,8 @@ void    Channel::OnHash (struct evbuffer *evb) {
 	hashtree()->OfferHash(pos,hash);
     dprintf("%s #%u -hash %s\n",tintstr(),id_,pos.str().c_str());
 
+    fprintf(stderr,"OnHash: %s %s\n", pos.str().c_str(), hash.hex().c_str() );
+
     //fprintf(stderr,"HASH %lli hex %s\n",pos.toUInt(), hash.hex().c_str() );
 }
 
@@ -1474,11 +1486,19 @@ void Channel::OnSignedHash(struct evbuffer *evb)
 
     // PPSPTODO
     //if (hs_in_->live_sig_alg_ == POPT_LIVE_SIG_ALG_PRIVATEDNS)
+
+    // SIGNPEAKTODO copy sig
     evbuffer_drain(evb, DUMMY_DEFAULT_SIG_LENGTH);
 
-    dprintf("%s #%u -sphash %s\n",tintstr(),id_,pos.str().c_str());
-
-    // SIGNPEAKTODO store sigs
+    if (hashtree() != NULL)
+    {
+	LiveHashTree *umt = (LiveHashTree *)hashtree();
+	uint8_t dummy[DUMMY_DEFAULT_SIG_LENGTH];
+	if (umt->OfferSignedPeakHash(pos, dummy))
+	    dprintf("%s #%u -sphash %s\n",tintstr(),id_,pos.str().c_str());
+	else
+	    dprintf("%s #%u !sphash %s\n",tintstr(),id_,pos.str().c_str());
+    }
 }
 
 
