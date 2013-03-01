@@ -55,6 +55,10 @@ Sha1Hash &Node::GetHash()
 void Node::SetHash(const Sha1Hash &hash)
 {
     h_ = hash;
+
+    if (b_ == bin_t(2,0))
+	fprintf(stderr,"SetHash: ************* STORE %s %s\n",b_.str().c_str(),hash.hex().c_str() );
+
 }
 
 bin_t &Node::GetBin()
@@ -415,10 +419,9 @@ bool LiveHashTree::OfferSignedPeakHash(bin_t pos, const uint8_t *signedhash)
 {
     // TODO check sig
     // TODO store sig
-    Sha1Hash peakhash(false,(const char *)signedhash);
 
     if (tree_debug)
-	fprintf(stderr,"OfferHash: offer is peak %s\n", pos.str().c_str() );
+	fprintf(stderr,"OfferSignedPeakHash: peak %s\n", pos.str().c_str() );
 
     // TODO: must remove old peaks if consumed by new
     int i=0;
@@ -450,8 +453,9 @@ bool LiveHashTree::OfferSignedPeakHash(bin_t pos, const uint8_t *signedhash)
     if (state_ == LHT_STATE_VER_AWAIT_PEAK)
 	state_ = LHT_STATE_VER_AWAIT_DATA;
 
-    // Insert into tree
-    (void)CreateAndVerifyNode(pos,peakhash,true);
+    // Node already created by preceding INTEGRITY message
+    Node *peaknode = FindNode(pos);
+    peaknode->SetVerified(true);
 
     // Could recalc root hash here, but never really used. Doing it on-demand
     // in root_hash() conflicts with const def :-(
@@ -465,7 +469,7 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 {
     // This adds hashes on client side
     if (tree_debug)
-	fprintf(stderr,"OfferHash: %s\n", pos.str().c_str() );
+	fprintf(stderr,"OfferHash: %s %s\n", pos.str().c_str(), hash.hex().c_str() );
 
     if (state_ == LHT_STATE_VER_AWAIT_PEAK)
     {
@@ -599,6 +603,9 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 	// Diff from MmapHashTree: store peak here
 	if (verified)
 	{
+	    if (tree_debug)
+		fprintf(stderr,"OfferHash: setting peak %s %s\n",pos.str().c_str(),hash.hex().c_str() );
+
 	    iter->SetHash(hash);
 	    iter->SetVerified(verified);
 	}
@@ -612,18 +619,19 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
         return hash == iter->GetHash();
 
     iter->SetHash(hash);
+    fprintf(stderr,"OfferHash: setting hash %s %s\n",pos.str().c_str(),hash.hex().c_str() );
+
     if (!pos.is_base())
         return false; // who cares?
-    bin_t p = pos;
+
     Node *piter = iter;
     Sha1Hash uphash = hash;
 
     if (tree_debug)
 	fprintf(stderr,"OfferHash: verifying %s\n", pos.str().c_str() );
     // Walk to the nearest proven hash
-    while ( p!=peak && ack_out_.is_empty(p) && !piter->GetVerified() ) {
+    while ( piter->GetBin()!=peak && ack_out_.is_empty(piter->GetBin()) && !piter->GetVerified() ) {
         piter->SetHash(uphash);
-        p = p.parent();
         piter = piter->GetParent();
 
         // Arno: Prevent poisoning the tree with bad values:
@@ -634,13 +642,13 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
         //
 
         if (tree_debug)
-            fprintf(stderr,"OfferHash: squirrel %s %p %p\n", p.str().c_str(), piter->GetLeft(), piter->GetRight() );
+            fprintf(stderr,"OfferHash: squirrel %s %p %p\n", piter->GetBin().str().c_str(), piter->GetLeft(), piter->GetRight() );
 
         if (piter->GetLeft() == NULL || piter->GetRight() == NULL)
             return false; // tree still incomplete
 
         if (tree_debug)
-            fprintf(stderr,"OfferHash: hashsquirrel %s %s %s\n", p.str().c_str(), piter->GetLeft()->GetHash().hex().c_str(), piter->GetRight()->GetHash().hex().c_str() );
+            fprintf(stderr,"OfferHash: hashsquirrel %s %s %s\n", piter->GetBin().str().c_str(), piter->GetLeft()->GetHash().hex().c_str(), piter->GetRight()->GetHash().hex().c_str() );
 
         if (piter->GetLeft()->GetHash() == Sha1Hash::ZERO || piter->GetRight()->GetHash() == Sha1Hash::ZERO)
             break;
@@ -648,36 +656,35 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     }
 
     if (tree_debug)
-	fprintf(stderr,"OfferHash: verify computed against %s %s\n", piter->GetBin().str().c_str(), piter->GetHash().hex().c_str() );
+	fprintf(stderr,"OfferHash: %s computed %s truth %s\n", piter->GetBin().str().c_str(), uphash.hex().c_str(), piter->GetHash().hex().c_str() );
 
     bool success = (uphash==piter->GetHash());
     // LESSHASH
     if (success) {
-        // Arno: The hash checks out. Mark all hashes on the uncle path as
-        // being verified, so we don't have to go higher than them on a next
-        // check.
-        p = pos;
-        piter = iter;
-        piter->SetVerified(true);
-        while (p.layer() != peak.layer()) {
-            p = p.parent().sibling();
-            if (piter->GetParent()->GetBin().is_left())
-        	piter = piter->GetParent()->GetRight();
-            else
-        	piter = piter->GetParent()->GetLeft();
-            piter->SetVerified(true);
-        }
-        // Also mark hashes on direct path to root as verified. Doesn't decrease
-        // #checks, but does increase the number of verified hashes faster.
-        p = pos;
-        piter = iter;
-        while (p != peak) {
-            p = p.parent();
-            piter = piter->GetParent();
-            piter->SetVerified(true);
-        }
+	// Arno: The hash checks out. Mark all hashes on the uncle path as
+	// being verified, so we don't have to go higher than them on a next
+	// check.
+	bin_t p = pos;
+	piter = iter;
+	piter->SetVerified(true);
+	while (p.layer() != peak.layer()) {
+	    p = p.parent().sibling();
+	    if (piter->GetParent()->GetBin().is_left())
+	    piter = piter->GetParent()->GetRight();
+	    else
+	    piter = piter->GetParent()->GetLeft();
+	    piter->SetVerified(true);
+	}
+	// Also mark hashes on direct path to root as verified. Doesn't decrease
+	// #checks, but does increase the number of verified hashes faster.
+	p = pos;
+	piter = iter;
+	while (p != peak) {
+	    p = p.parent();
+	    piter = piter->GetParent();
+	    piter->SetVerified(true);
+	}
     }
-
     return success;
 }
 
@@ -688,6 +695,8 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 
 bool LiveHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
 {
+    fprintf(stderr,"OfferHash: INTERFACE %s %s\n", pos.str().c_str(), hash.hex().c_str() );
+
     return CreateAndVerifyNode(pos,hash,false);
 
 }

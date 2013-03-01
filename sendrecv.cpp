@@ -71,6 +71,8 @@ void    Channel::AddSignedPeakHashRange(struct evbuffer *evb, int start, int end
         evbuffer_add_chunkaddr(evb,peak,hs_out_->chunk_addr_);
         evbuffer_add_hash(evb, umt->hash(peak));
 
+        dprintf("%s #%u +phash %s\n",tintstr(),id_,peak.str().c_str());
+
         fprintf(stderr,"AddHash: speak %s %s\n", peak.str().c_str(), umt->hash(peak).hex().c_str() );
 
         if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
@@ -79,7 +81,7 @@ void    Channel::AddSignedPeakHashRange(struct evbuffer *evb, int start, int end
             evbuffer_add_chunkaddr(evb,peak,hs_out_->chunk_addr_);
             evbuffer_add(evb, umt->signed_peak_sig(i), umt->signed_peak_sig_length(i));
         }
-        dprintf("%s #%u +sphash %s\n",tintstr(),id_,peak.str().c_str());
+        dprintf("%s #%u +shash %s\n",tintstr(),id_,peak.str().c_str());
     }
 }
 
@@ -836,11 +838,13 @@ void    Channel::OnHash (struct evbuffer *evb) {
     bin_t pos = bv.front();
     Sha1Hash hash = evbuffer_remove_hash(evb);
 
+    fprintf(stderr,"OnHash: BEFORE %s %s\n", pos.str().c_str(), hash.hex().c_str() );
+
     if (hashtree() != NULL && (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE))
 	hashtree()->OfferHash(pos,hash);
     dprintf("%s #%u -hash %s\n",tintstr(),id_,pos.str().c_str());
 
-    fprintf(stderr,"OnHash: %s %s\n", pos.str().c_str(), hash.hex().c_str() );
+    fprintf(stderr,"OnHash: AFTER %s %s\n", pos.str().c_str(), hash.hex().c_str() );
 
     //fprintf(stderr,"HASH %lli hex %s\n",pos.toUInt(), hash.hex().c_str() );
 }
@@ -930,10 +934,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
         // No content integrity checking, just write (TODO SIGN_ALL)
         int ret = transfer()->GetStorage()->Write(data,length,pos.base_offset()*transfer()->chunk_size());
         if (ret < 0)
-        {
             print_error("storage Write failed");
-                exit(-1);
-        }
         else
             transfer()->ack_out()->set(pos);
     }
@@ -1478,7 +1479,7 @@ void Channel::OnSignedHash(struct evbuffer *evb)
     if (bv.size() == 0 || bv.size() > 1)
     {
     	// chunk spec for hash must be power-of-2 range, so must fit in single bin
-    	dprintf("%s #%u ?sighash bad chunk spec\n",tintstr(),id_);
+    	dprintf("%s #%u ?shash bad chunk spec\n",tintstr(),id_);
     	Close(CLOSE_DO_NOT_SEND);
     	return;
     }
@@ -1495,9 +1496,9 @@ void Channel::OnSignedHash(struct evbuffer *evb)
 	LiveHashTree *umt = (LiveHashTree *)hashtree();
 	uint8_t dummy[DUMMY_DEFAULT_SIG_LENGTH];
 	if (umt->OfferSignedPeakHash(pos, dummy))
-	    dprintf("%s #%u -sphash %s\n",tintstr(),id_,pos.str().c_str());
+	    dprintf("%s #%u -shash %s\n",tintstr(),id_,pos.str().c_str());
 	else
-	    dprintf("%s #%u !sphash %s\n",tintstr(),id_,pos.str().c_str());
+	    dprintf("%s #%u !shash %s\n",tintstr(),id_,pos.str().c_str());
     }
 }
 
