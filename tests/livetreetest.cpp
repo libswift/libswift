@@ -26,7 +26,7 @@ typedef std::map<bin_t,Sha1Hash>  hmap_t;
 typedef enum {
     PICK_INORDER,
     PICK_REVERSE,
-    PICK_RANDOM
+    PICK_RANDOM,
 } pickpolicy_t;
 
 typedef std::vector<int>  	pickorder_t;
@@ -48,6 +48,7 @@ void do_add_data(LiveHashTree *umt, int nchunks)
     }
 }
 
+/*
 TEST(LiveTreeTest,AddData10)
 {
     LiveHashTree *umt = new LiveHashTree(NULL, (privkey_t)482, SWIFT_DEFAULT_CHUNK_SIZE); // privkey
@@ -60,7 +61,7 @@ TEST(LiveTreeTest,AddData10)
     ASSERT_EQ(umt->peak(1), bin_t(1,4));
 
 }
-
+*/
 
 /*
  * Live client tests
@@ -88,9 +89,10 @@ void do_download(LiveHashTree *umt, int nchunks, hmap_t &truthhashmap, pickorder
 	umt->sane_tree();
     }
 
-    for (int i=0; i<nchunks; i++)
+    pickorder_t::iterator citer;
+    for (citer=pickorder.begin(); citer != pickorder.end(); citer++)
     {
-	int r = pickorder[i];
+	int r = *citer;
 	fprintf(stderr,"\nAdd %u\n", r);
 
 	bin_t orig(0,r);
@@ -127,7 +129,7 @@ void do_download(LiveHashTree *umt, int nchunks, hmap_t &truthhashmap, pickorder
  * these chunks using the piecepickpolicy and see of the right LiveHashTree
  * gets built.
  */
-LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy)
+LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy,int startchunk=0)
 {
     fprintf(stderr,"\nprepare_do_download(%d)\n", nchunks);
 
@@ -184,7 +186,7 @@ LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy)
      */
     pickorder_t pickvector;
 
-    for (int i=0; i<nchunks; ++i)
+    for (int i=startchunk; i<nchunks; ++i)
         pickvector.push_back(i);
 
     if (piecepickpolicy == PICK_REVERSE)
@@ -206,6 +208,7 @@ LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy)
 }
 
 
+/*
 TEST(LiveTreeTest,Download8)
 {
     LiveHashTree *umt = prepare_do_download(8,PICK_INORDER);
@@ -267,6 +270,33 @@ TEST(LiveTreeTest,DownloadIterRandom)
 	delete umt;
     }
 }
+
+
+
+TEST(LiveTreeTest,Download11Start5)
+{
+    LiveHashTree *umt = prepare_do_download(11,PICK_INORDER,5);
+
+    // asserts
+    ASSERT_EQ(umt->peak_count(), 3);
+    ASSERT_EQ(umt->peak(0), bin_t(3,0));
+    ASSERT_EQ(umt->peak(1), bin_t(1,4));
+    ASSERT_EQ(umt->peak(2), bin_t(0,10));
+}
+
+
+TEST(LiveTreeTest,Download137Start85)
+{
+    LiveHashTree *umt = prepare_do_download(137,PICK_INORDER,85);
+}
+*/
+
+TEST(LiveTreeTest,Download600Start489)
+{
+    LiveHashTree *umt = prepare_do_download(600,PICK_INORDER,489);
+}
+
+
 
 int main (int argc, char** argv) {
     testing::InitGoogleTest(&argc, argv);

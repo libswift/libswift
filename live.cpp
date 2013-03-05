@@ -232,7 +232,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
 
         	newpeakstartidx = umt->UpdateSignedPeaks();
 
-        	fprintf(stderr,"live: AddData: UMT: signed peaks old %d new %d\n", old, umt->signed_peak_count() );
+        	fprintf(stderr,"live: AddData: UMT: signed peaks old %d new %d start %d\n", old, umt->signed_peak_count(), newpeakstartidx );
 
         	chunks_since_sign_ = 0;
         	newepoch = true;

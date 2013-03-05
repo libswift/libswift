@@ -81,7 +81,7 @@ void    Channel::AddSignedPeakHashRange(struct evbuffer *evb, int start, int end
             evbuffer_add_chunkaddr(evb,peak,hs_out_->chunk_addr_);
             evbuffer_add(evb, umt->signed_peak_sig(i), umt->signed_peak_sig_length(i));
         }
-        dprintf("%s #%u +shash %s\n",tintstr(),id_,peak.str().c_str());
+        dprintf("%s #%u +sigh %s\n",tintstr(),id_,peak.str().c_str());
     }
 }
 
@@ -90,7 +90,13 @@ void    Channel::AddSignedPeakHashRange(struct evbuffer *evb, int start, int end
 void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
 
     dprintf("%s #%u +uncle hash for %s\n",tintstr(),id_,pos.str().c_str());
-    bin_t peak = hashtree()->peak_for(pos);
+
+    // TRYOUT:
+
+    LiveHashTree *umt = (LiveHashTree *)hashtree();
+    bin_t peak = umt->signed_peak_for(pos);
+    //bin_t peak = hashtree()->peak_for(pos);
+
     // Ric: TODO check (remove data_out_cap??)
     //      For the moment lets keep the old behaviour
     binvector bv;
@@ -153,6 +159,7 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
 	}
 	else {
 	    send = tb.bin;
+	    dprintf("%s #%u dequeuing timed-out %s\n",tintstr(),id_, send.str().c_str() );
 	    *retransmitptr = true;
 	    break;
 	}
@@ -167,8 +174,12 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
         }
     }
     
+    dprintf("%s #%u dequeue empty %d\n",tintstr(),id_, (int)hint_in_.empty() );
+
     while (!hint_in_.empty() && send.is_none()) {
         bin_t hint = hint_in_.front().bin;
+        dprintf("%s #%u dequeuing cand %s\n",tintstr(),id_, hint.str().c_str() );
+
         tint time = hint_in_.front().time;
         hint_in_size_ -= hint_in_.front().bin.base_length();
         hint_in_.pop_front();
@@ -452,15 +463,19 @@ static int ChunkAddrSize(popt_chunk_addr_t ca)
 
 void    Channel::AddCancel (struct evbuffer *evb) {
 
-	// Arno, 2013-01-15: take into account chunk addressing scheme
-	while (SWIFT_MAX_NONDATA_DGRAM_SIZE-evbuffer_get_length(evb) >= 1+ChunkAddrSize(hs_out_->chunk_addr_) && !cancel_out_.empty()) {
-		bin_t cancel = cancel_out_.front();
-		cancel_out_.pop_front();
-		evbuffer_add_8(evb, SWIFT_CANCEL);
-                evbuffer_add_chunkaddr(evb,cancel,hs_out_->chunk_addr_);
-		dprintf("%s #%u +cancel %s\n",
-			tintstr(),id_,cancel.str().c_str());
-	}
+    // SIGNPEAKTODO
+    return;
+
+
+    // Arno, 2013-01-15: take into account chunk addressing scheme
+    while (SWIFT_MAX_NONDATA_DGRAM_SIZE-evbuffer_get_length(evb) >= 1+ChunkAddrSize(hs_out_->chunk_addr_) && !cancel_out_.empty()) {
+	bin_t cancel = cancel_out_.front();
+	cancel_out_.pop_front();
+	evbuffer_add_8(evb, SWIFT_CANCEL);
+	evbuffer_add_chunkaddr(evb,cancel,hs_out_->chunk_addr_);
+	dprintf("%s #%u +cancel %s\n",
+		tintstr(),id_,cancel.str().c_str());
+    }
 }
 
 bin_t        Channel::AddData (struct evbuffer *evb) {
@@ -838,13 +853,9 @@ void    Channel::OnHash (struct evbuffer *evb) {
     bin_t pos = bv.front();
     Sha1Hash hash = evbuffer_remove_hash(evb);
 
-    fprintf(stderr,"OnHash: BEFORE %s %s\n", pos.str().c_str(), hash.hex().c_str() );
-
     if (hashtree() != NULL && (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE))
 	hashtree()->OfferHash(pos,hash);
     dprintf("%s #%u -hash %s\n",tintstr(),id_,pos.str().c_str());
-
-    fprintf(stderr,"OnHash: AFTER %s %s\n", pos.str().c_str(), hash.hex().c_str() );
 
     //fprintf(stderr,"HASH %lli hex %s\n",pos.toUInt(), hash.hex().c_str() );
 }
@@ -925,6 +936,8 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
             dprintf("%s #%u !data %s\n",tintstr(),id_,pos.str().c_str());
             return bin_t::NONE;
         }
+        else
+            fprintf(stderr,"HIT\n");
 
         // Arno: If we are getting content, keep activated
         swift::Touch(transfer()->td());
@@ -1479,7 +1492,7 @@ void Channel::OnSignedHash(struct evbuffer *evb)
     if (bv.size() == 0 || bv.size() > 1)
     {
     	// chunk spec for hash must be power-of-2 range, so must fit in single bin
-    	dprintf("%s #%u ?shash bad chunk spec\n",tintstr(),id_);
+    	dprintf("%s #%u ?sigh bad chunk spec\n",tintstr(),id_);
     	Close(CLOSE_DO_NOT_SEND);
     	return;
     }
@@ -1496,9 +1509,9 @@ void Channel::OnSignedHash(struct evbuffer *evb)
 	LiveHashTree *umt = (LiveHashTree *)hashtree();
 	uint8_t dummy[DUMMY_DEFAULT_SIG_LENGTH];
 	if (umt->OfferSignedPeakHash(pos, dummy))
-	    dprintf("%s #%u -shash %s\n",tintstr(),id_,pos.str().c_str());
+	    dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
 	else
-	    dprintf("%s #%u !shash %s\n",tintstr(),id_,pos.str().c_str());
+	    dprintf("%s #%u !sigh %s\n",tintstr(),id_,pos.str().c_str());
     }
 }
 

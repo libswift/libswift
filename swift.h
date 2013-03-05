@@ -846,7 +846,8 @@ namespace swift {
         /** Arno: Called when source generates chunk. */
         void        LiveSend();
         void	    SetNextSendSignedPeakFromIdx(int startidx) { live_new_signed_peak_idx_=startidx; }
-        int	    GetNextSendSignedPeakFromIdx() { return live_new_signed_peak_idx_; }
+        //int	    GetNextSendSignedPeakFromIdx() { return live_new_signed_peak_idx_; }
+        int	    GetNextSendSignedPeakFromIdx() { return 0; }
 
         void 	    CloseOnError();
 

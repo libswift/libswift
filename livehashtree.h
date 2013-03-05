@@ -10,6 +10,9 @@
  *  TODO:
  *  - what is SIGNED_INTEGRITY gets lost on UDP?
  *  - When new client joins half-way epoch, mustn't send HAVEs for new, or don't reply to REQUESTs?
+ *  - purge subtree, source and client
+ *  - Get rid of GetNextSendSignedPeakFromIdx() and check if peer ack-d chunks
+ *    which required peak X to decide if X should be sent.
  */
 #ifndef SWIFT_LIVE_HASH_TREE_H
 #define SWIFT_LIVE_HASH_TREE_H
@@ -84,6 +87,7 @@ class LiveHashTree: public HashTree
      bin_t          signed_peak(int i);
      uint8_t *      signed_peak_sig(int i);
      int            signed_peak_sig_length(int i);
+     bin_t          signed_peak_for (bin_t pos) const;
 
      bool OfferSignedPeakHash(bin_t pos,const uint8_t *signedhash);
      bool CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified);
@@ -166,6 +170,9 @@ class LiveHashTree: public HashTree
 
      void 	     FreeTree(Node *n);
      Sha1Hash        DeriveRoot();
+
+     void check_peak_coverage();
+     void check_signed_peak_coverage();
 };
 
 }

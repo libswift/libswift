@@ -321,6 +321,9 @@ int LiveHashTree::UpdateSignedPeaks()
     }
 
 
+    check_signed_peak_coverage();
+
+
     // Now the trees below peaks are stable, so we can calculate the hash tree
     // for them.
     for (i=startidx; i<signed_peak_count_; i++)
@@ -377,6 +380,21 @@ int LiveHashTree::signed_peak_sig_length(int i)
 }
 
 
+// TRYOUT
+bin_t LiveHashTree::signed_peak_for(bin_t pos) const
+{
+    for (int i=0; i<signed_peak_count_; i++)
+    {
+	fprintf(stderr,"signed_peak_for: %s covers %s to %s\n", signed_peak_bins_[i].str().c_str(), signed_peak_bins_[i].base_left().str().c_str(), signed_peak_bins_[i].base_right().str().c_str());
+
+	if (signed_peak_bins_[i].contains(pos))
+	    return signed_peak_bins_[i];
+    }
+    return bin_t::NONE;
+}
+
+
+
 Sha1Hash  LiveHashTree::DeriveRoot()
 {
     // From MmapHashTree
@@ -419,23 +437,46 @@ bool LiveHashTree::OfferSignedPeakHash(bin_t pos, const uint8_t *signedhash)
     if (tree_debug)
 	fprintf(stderr,"OfferSignedPeakHash: peak %s\n", pos.str().c_str() );
 
+    if (pos != cand_peak_bin_)
+    {
+	// Ignore duplicate (or message mixup)
+	fprintf(stderr,"OfferSignedPeakHash: message mixup! %s %s\n", pos.str().c_str(), cand_peak_bin_.str().c_str() );
+	return true;
+    }
+
     // TODO: must remove old peaks if consumed by new
     int i=0;
     bool stored=false;
     while (i<peak_count_)
     {
-	if (pos.contains(peak_bins_[i]))
+	if (pos == peak_bins_[i])
 	{
+	    stored = true;
+	    break;
+	}
+	else if (pos.contains(peak_bins_[i]))
+	{
+	    fprintf(stderr,"OfferSignedPeakHash: %s contains %s, update\n", pos.str().c_str(), peak_bins_[i].str().c_str() );
+
 	    if (!stored)
+	    {
+		fprintf(stderr,"OfferSignedPeakHash: overwriting\n" );
 		peak_bins_[i] = pos;
+		stored = true;
+	    }
 	    else
 	    {
+		fprintf(stderr,"OfferSignedPeakHash: subsume %i\n", i );
+
 		// This peak subsumed by new peak
 		peak_count_--;
 		for (int j=i; j<peak_count_; j++)
 		{
+		    fprintf(stderr,"OfferSignedPeakHash: copy %d to %d\n", j, j+1 );
 		    peak_bins_[j] = peak_bins_[j+1];
 		}
+		// Retest current i as it has been replaced
+		continue;
 	    }
 	}
 	i++;
@@ -443,25 +484,76 @@ bool LiveHashTree::OfferSignedPeakHash(bin_t pos, const uint8_t *signedhash)
     if (!stored)
 	peak_bins_[peak_count_++] = pos;
 
+    check_peak_coverage();
+
+
+
     sizec_ = peak_bins_[peak_count_].base_right().layer_offset();
     size_ = sizec_ * chunk_size_;
 
     if (state_ == LHT_STATE_VER_AWAIT_PEAK)
 	state_ = LHT_STATE_VER_AWAIT_DATA;
 
-
-    if (pos == cand_peak_bin_)
-    {
-	CreateAndVerifyNode(cand_peak_bin_,cand_peak_hash_,true);
-    }
-    else
-	fprintf(stderr,"UpdateSignedPeakHash: message mixup!\n");
+    CreateAndVerifyNode(cand_peak_bin_,cand_peak_hash_,true);
 
     // Could recalc root hash here, but never really used. Doing it on-demand
     // in root_hash() conflicts with const def :-(
     //root_->SetHash(DeriveRoot());
 
     return true;
+}
+
+
+void LiveHashTree::check_peak_coverage()
+{
+    // Sanity check
+    bin_t::uint_t end = 0;
+    for (int i=0; i<peak_count_; i++)
+    {
+	if (i == 0)
+	{
+	    end = peak_bins_[i].base_right().layer_offset();
+	    continue;
+	}
+	bin_t::uint_t start = peak_bins_[i].base_left().layer_offset();
+	if (start != end+1)
+	{
+	    fprintf(stderr,"peak broken!\n");
+	    for (int j=0; j<peak_count_; j++)
+	    {
+		fprintf(stderr,"peak bork: %s covers %s to %s\n", peak_bins_[j].str().c_str(), peak_bins_[j].base_left().str().c_str(), peak_bins_[j].base_right().str().c_str());
+	    }
+	    exit(-1);
+	}
+	end = peak_bins_[i].base_right().layer_offset();
+    }
+}
+
+
+void LiveHashTree::check_signed_peak_coverage()
+{
+    // Sanity check
+    bin_t::uint_t end = 0;
+    for (int i=0; i<signed_peak_count_; i++)
+    {
+	fprintf(stderr,"signed peak is: %s\n", signed_peak_bins_[i].str().c_str() );
+	if (i == 0)
+	{
+	    end = signed_peak_bins_[i].base_right().layer_offset();
+	    continue;
+	}
+	bin_t::uint_t start = signed_peak_bins_[i].base_left().layer_offset();
+	if (start != end+1)
+	{
+	    fprintf(stderr,"signed peak broken!\n");
+	    for (int j=0; j<signed_peak_count_; j++)
+	    {
+		fprintf(stderr,"signed peak bork: %s covers %s to %s\n", signed_peak_bins_[j].str().c_str(), signed_peak_bins_[j].base_left().str().c_str(), signed_peak_bins_[j].base_right().str().c_str());
+	    }
+	    exit(-1);
+	}
+	end = signed_peak_bins_[i].base_right().layer_offset();
+    }
 }
 
 
@@ -704,7 +796,11 @@ bool LiveHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
         return false;
     }
     else
+    {
+	cand_peak_bin_ = bin_t::NONE;
+	fprintf(stderr,"OfferHash: %s has peak %s\n", pos.str().c_str(), peak.str().c_str() );
 	return CreateAndVerifyNode(pos,hash,false);
+    }
 }
 
 
@@ -782,6 +878,8 @@ bin_t LiveHashTree::peak_for(bin_t pos) const
 {
     for (int i=0; i<peak_count_; i++)
     {
+	fprintf(stderr,"peak_for: %s covers %s to %s\n", peak_bins_[i].str().c_str(), peak_bins_[i].base_left().str().c_str(), peak_bins_[i].base_right().str().c_str());
+
 	if (peak_bins_[i].contains(pos))
 	    return peak_bins_[i];
     }
