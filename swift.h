@@ -736,7 +736,7 @@ namespace swift {
     class StorageFile : public Operational
     {
        public:
-    	 StorageFile(std::string specpath, int64_t start, int64_t size, std::string ospath);
+    	 StorageFile(std::string specpath, int64_t start, int64_t size, std::string ospath, int openflags);
     	 ~StorageFile();
     	 int64_t GetStart() { return start_; }
     	 int64_t GetEnd() { return end_; }
@@ -798,7 +798,7 @@ namespace swift {
 		static std::string os2specpn(std::string ospn);
 
 		/** Create Storage from specified path and destination dir if content turns about to be a multi-file */
-		Storage(std::string ospathname, std::string destdir,int transferfd);
+		Storage(std::string ospathname, std::string destdir,int transferfd,uint64_t complete=0);
 		~Storage();
 
 		/** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
@@ -860,7 +860,10 @@ namespace swift {
 			int transfer_fd_;
 			ProgressCallback alloc_cb_;
 
-			int WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
+			int open_flags_;
+
+                        void DetermineReadOnly(int64_t fsize, uint64_t complete);
+                        int WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
 			std::pair<int64_t,int64_t> WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
 			StorageFile * FindStorageFile(int64_t offset);
 			int ParseSpec(StorageFile *sf);

@@ -38,47 +38,58 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
     files[fd()] = this;
 
     std::string destdir;
-	int ret = file_exists_utf8(filename);
-	if (ret == 2 && root_hash != Sha1Hash::ZERO) {
-		// Filename is a directory, download root_hash there
-		destdir = filename;
-		filename = destdir+FILE_SEP+root_hash.hex();
-	} else {
-		destdir = dirname_utf8(filename);
-		if (destdir == "")
-			destdir = ".";
-	}
+    int ret = file_exists_utf8(filename);
+    if (ret == 2 && root_hash != Sha1Hash::ZERO) {
+	    // Filename is a directory, download root_hash there
+	    destdir = filename;
+	    filename = destdir+FILE_SEP+root_hash.hex();
+    } else {
+	    destdir = dirname_utf8(filename);
+	    if (destdir == "")
+		    destdir = ".";
+    }
+
+    std::string hash_filename;
+    hash_filename.assign(filename);
+    hash_filename.append(".mhash");
+
+    std::string binmap_filename;
+    binmap_filename.assign(filename);
+    binmap_filename.append(".mbinmap");
+
+    // Arno, 2013-03-06: Try to open content read-only when seeding to avoid certain locking problems on
+    // Win32 when opening the content with a different application in parallel
+    uint64_t complete = 0;
+    if (!zerostate_)
+    {
+	MmapHashTree *ht = new MmapHashTree(true,binmap_filename);
+	if (root_hash == ht->root_hash())
+	    complete = ht->complete();
+	delete ht;
+    }
 
 	// MULTIFILE
-    storage_ = new Storage(filename,destdir,fd());
+    storage_ = new Storage(filename,destdir,fd(),complete);
 
-	std::string hash_filename;
-	hash_filename.assign(filename);
-	hash_filename.append(".mhash");
+    if (!zerostate_)
+    {
+	    hashtree_ = (HashTree *)new MmapHashTree(storage_,root_hash,chunk_size,hash_filename,force_check_diskvshash,check_netwvshash,binmap_filename);
 
-	std::string binmap_filename;
-	binmap_filename.assign(filename);
-	binmap_filename.append(".mbinmap");
-
-	if (!zerostate_)
-	{
-		hashtree_ = (HashTree *)new MmapHashTree(storage_,root_hash,chunk_size,hash_filename,force_check_diskvshash,check_netwvshash,binmap_filename);
-
-		if (ENABLE_VOD_PIECEPICKER) {
-			// Ric: init availability
-			availability_ = new Availability();
-			// Ric: TODO assign picker based on input params...
-			picker_ = new VodPiecePicker(this);
-		}
-		else
-			picker_ = new SeqPiecePicker(this);
-		picker_->Randomize(rand()&63);
-	}
-	else
-	{
-		// ZEROHASH
-		hashtree_ = (HashTree *)new ZeroHashTree(storage_,root_hash,chunk_size,hash_filename,binmap_filename);
-	}
+	    if (ENABLE_VOD_PIECEPICKER) {
+		    // Ric: init availability
+		    availability_ = new Availability();
+		    // Ric: TODO assign picker based on input params...
+		    picker_ = new VodPiecePicker(this);
+	    }
+	    else
+		    picker_ = new SeqPiecePicker(this);
+	    picker_->Randomize(rand()&63);
+    }
+    else
+    {
+	    // ZEROHASH
+	    hashtree_ = (HashTree *)new ZeroHashTree(storage_,root_hash,chunk_size,hash_filename,binmap_filename);
+    }
 
     init_time_ = Channel::Time();
     cur_speed_[DDIR_UPLOAD] = MovingAverageSpeed();
