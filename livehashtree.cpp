@@ -899,9 +899,11 @@ bool LiveHashTree::OfferData(bin_t pos, const char* data, size_t length)
     }
 
     //printf("g %lli %s\n",(uint64_t)pos,hash.hex().c_str());
-    fprintf(stderr,"OfferData: set ack_out_ %s %p\n", pos.str().c_str(), &ack_out_ );
+    fprintf(stderr,"OfferData: set ack_out_ %s\n", pos.str().c_str() );
+
     ack_out_.set(pos);
-#ifdef TODO
+
+#ifdef SIGNPEAKTODO
     // Arno,2011-10-03: appease g++
     if (storage_->Write(data,length,pos.base_offset()*chunk_size_) < 0)
         print_error("pwrite failed");
