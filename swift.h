@@ -187,7 +187,6 @@ namespace swift {
 
     typedef std::deque<tintbin> tbqueue;
     typedef std::deque<bin_t> binqueue;
-    typedef std::vector<bin_t> binvector;
     typedef Address   Address;
 
 
@@ -769,7 +768,8 @@ namespace swift {
         void        AddCancel (struct evbuffer *evb);
         void        AddUncleHashes (struct evbuffer *evb, bin_t pos);
         void        AddPeakHashes (struct evbuffer *evb);
-        void        AddSignedPeakHashRange(struct evbuffer *evb, int start, int end); // SIGNPEAK
+        void        AddSignedPeakHashes(struct evbuffer *evb); // SIGNPEAK
+        void        AddLiveRightHashes (struct evbuffer *evb, bin_t pos); // SIGNPEAK
         void        AddPex (struct evbuffer *evb);
         void        OnPexReq(void);
         void        AddPexReq(struct evbuffer *evb);
@@ -845,9 +845,8 @@ namespace swift {
         // LIVE
         /** Arno: Called when source generates chunk. */
         void        LiveSend();
-        void	    SetNextSendSignedPeakFromIdx(int startidx) { live_new_signed_peak_idx_=startidx; }
-        //int	    GetNextSendSignedPeakFromIdx() { return live_new_signed_peak_idx_; }
-        int	    GetNextSendSignedPeakFromIdx() { return 0; }
+        void	    SetSignedPeaksSubsumed(binvector &sbv);
+        binvector   GetSignedPeaksSubsumed();
 
         void 	    CloseOnError();
 
@@ -948,8 +947,8 @@ namespace swift {
 
         //LIVE
         bool        peer_is_source_;
-        /** If != -1 send signed peak hashes from this idx till peak_count_ in next datagram */
-        int	    live_new_signed_peak_idx_;
+        /** SIGNPEAKTODO */
+        binvector subsumed_signed_peak_bins_;
 
         // PPSP
         /** Handshake I sent to peer. swarmid not set. */

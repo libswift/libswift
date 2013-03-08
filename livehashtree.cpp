@@ -264,10 +264,11 @@ Node *LiveHashTree::CreateNext()
 }
 
 
-int LiveHashTree::UpdateSignedPeaks()
+binvector LiveHashTree::UpdateSignedPeaks()
 {
     // Calc peak diffs
     bool changed=false;
+
     int i=0;
     if (signed_peak_count_ == peak_count_ && peak_count_ != 0)
     {
@@ -283,8 +284,23 @@ int LiveHashTree::UpdateSignedPeaks()
     else
 	changed = true;
 
+    binvector subsumedbins;
     if (!changed)
-	return 0;
+	return subsumedbins;
+
+    // Arno, 2013-03-06: Determine which peaks have been subsumed by new ones.
+    for (i=0; i<peak_count_; i++)
+    {
+	bin_t peak = peak_bins_[i];
+	for (int j=0; j<signed_peak_count_; j++)
+	{
+	    bin_t signed_peak = signed_peak_bins_[j];
+	    if (peak != signed_peak && peak.contains(signed_peak))
+	    {
+		subsumedbins.push_back(signed_peak);
+	    }
+	}
+    }
 
     int startidx=0;
     changed = false;
@@ -321,7 +337,7 @@ int LiveHashTree::UpdateSignedPeaks()
     }
 
 
-    check_signed_peak_coverage();
+    check_signed_peak_coverage(subsumedbins);
 
 
     // Now the trees below peaks are stable, so we can calculate the hash tree
@@ -332,12 +348,12 @@ int LiveHashTree::UpdateSignedPeaks()
 	if (spnode == NULL)
 	{
 	    fprintf(stderr,"UpdateSignedPeaks: cannot find peak?!\n");
-	    return -1;
+	    return subsumedbins;
 	}
 	ComputeTree(spnode);
     }
 
-    return startidx;
+    return subsumedbins;
 }
 
 
@@ -380,7 +396,7 @@ int LiveHashTree::signed_peak_sig_length(int i)
 }
 
 
-// TRYOUT
+// TRYOUT signed_peak_for pos will be lower than peak_for, so just optimization
 bin_t LiveHashTree::signed_peak_for(bin_t pos) const
 {
     for (int i=0; i<signed_peak_count_; i++)
@@ -530,13 +546,13 @@ void LiveHashTree::check_peak_coverage()
 }
 
 
-void LiveHashTree::check_signed_peak_coverage()
+void LiveHashTree::check_signed_peak_coverage(binvector subsumedbins)
 {
     // Sanity check
     bin_t::uint_t end = 0;
     for (int i=0; i<signed_peak_count_; i++)
     {
-	fprintf(stderr,"signed peak is: %s\n", signed_peak_bins_[i].str().c_str() );
+	fprintf(stderr,"UpdateSignedPeaks: signed peak is: %s\n", signed_peak_bins_[i].str().c_str() );
 	if (i == 0)
 	{
 	    end = signed_peak_bins_[i].base_right().layer_offset();
@@ -545,14 +561,22 @@ void LiveHashTree::check_signed_peak_coverage()
 	bin_t::uint_t start = signed_peak_bins_[i].base_left().layer_offset();
 	if (start != end+1)
 	{
-	    fprintf(stderr,"signed peak broken!\n");
+	    fprintf(stderr,"UpdateSignedPeaks: signed peak broken!\n");
 	    for (int j=0; j<signed_peak_count_; j++)
 	    {
-		fprintf(stderr,"signed peak bork: %s covers %s to %s\n", signed_peak_bins_[j].str().c_str(), signed_peak_bins_[j].base_left().str().c_str(), signed_peak_bins_[j].base_right().str().c_str());
+		fprintf(stderr,"UpdateSignedPeaks: signed peak bork: %s covers %s to %s\n", signed_peak_bins_[j].str().c_str(), signed_peak_bins_[j].base_left().str().c_str(), signed_peak_bins_[j].base_right().str().c_str());
 	    }
 	    exit(-1);
 	}
 	end = signed_peak_bins_[i].base_right().layer_offset();
+    }
+
+
+    binvector::iterator iter;
+    for (iter=subsumedbins.begin(); iter!=subsumedbins.end(); iter++)
+    {
+	bin_t pos = *iter;
+	fprintf(stderr,"UpdateSignedPeaks: signed peak subsumed: %s\n", pos.str().c_str() );
     }
 }
 
@@ -688,9 +712,14 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     // From MmapHashTree::OfferHash
     //
 
+    fprintf(stderr,"OfferHash: found node %s isverified %d\n",iter->GetBin().str().c_str(),iter->GetVerified() );
+
     bin_t peak = peak_for(pos);
     if (peak.is_none())
+    {
+	fprintf(stderr,"OfferHash: no peak for %s\n",pos.str().c_str() );
         return false;
+    }
     if (peak==pos)
     {
 	// Diff from MmapHashTree: store peak here
@@ -704,8 +733,14 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 	}
         return hash == iter->GetHash();
     }
-    if (!ack_out_.is_empty(pos.parent()))
+    // AddLiveRightHashes
+    /*if (!ack_out_.is_empty(pos.parent()))
+    {
+	fprintf(stderr,"OfferHash: think I have hash already %s\n",iter->GetBin().str().c_str() );
+
         return hash == iter->GetHash(); // have this hash already, even accptd data
+    }*/
+
     // LESSHASH
     // Arno: if we already verified this hash against the root, don't replace
     if (iter->GetVerified())
@@ -749,9 +784,19 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     }
 
     if (tree_debug)
+    {
+	fprintf(stderr,"OfferHash: while %d %d %d\n", piter->GetBin()!=peak, ack_out_.is_empty(piter->GetBin()),  !piter->GetVerified() );
 	fprintf(stderr,"OfferHash: %s computed %s truth %s\n", piter->GetBin().str().c_str(), uphash.hex().c_str(), piter->GetHash().hex().c_str() );
+    }
 
     bool success = (uphash==piter->GetHash());
+
+    //TEMP
+    //if (!success)
+//	exit(-1);
+
+
+
     // LESSHASH
     if (success) {
 	// Arno: The hash checks out. Mark all hashes on the uncle path as
@@ -763,9 +808,10 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 	while (p.layer() != peak.layer()) {
 	    p = p.parent().sibling();
 	    if (piter->GetParent()->GetBin().is_left())
-	    piter = piter->GetParent()->GetRight();
+		piter = piter->GetParent()->GetRight();
 	    else
-	    piter = piter->GetParent()->GetLeft();
+		piter = piter->GetParent()->GetLeft();
+	    fprintf(stderr,"OfferHash: SetVerified %s\n", piter->GetBin().str().c_str() );
 	    piter->SetVerified(true);
 	}
 	// Also mark hashes on direct path to root as verified. Doesn't decrease
@@ -776,6 +822,7 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 	    p = p.parent();
 	    piter = piter->GetParent();
 	    piter->SetVerified(true);
+	    fprintf(stderr,"OfferHash: SetVerified2 %s\n", piter->GetBin().str().c_str() );
 	}
     }
     return success;
@@ -845,6 +892,7 @@ bool LiveHashTree::OfferData(bin_t pos, const char* data, size_t length)
     }
 
     //printf("g %lli %s\n",(uint64_t)pos,hash.hex().c_str());
+    fprintf(stderr,"OfferData: set ack_out_ %s %d\n", pos.str().c_str(), pos.contains((bin_t(4,87))));
     ack_out_.set(pos);
 #ifdef TODO
     // Arno,2011-10-03: appease g++

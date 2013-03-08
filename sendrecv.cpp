@@ -62,10 +62,10 @@ void    Channel::AddPeakHashes (struct evbuffer *evb) {
 
 
 // SIGNPEAK
-void    Channel::AddSignedPeakHashRange(struct evbuffer *evb, int start, int end)
+void    Channel::AddSignedPeakHashes(struct evbuffer *evb)
 {
     LiveHashTree *umt = (LiveHashTree *)hashtree();
-    for(int i=start; i<end; i++) {
+    for(int i=0; i<umt->signed_peak_count(); i++) {
         bin_t peak = umt->signed_peak(i);
         evbuffer_add_8(evb, SWIFT_INTEGRITY);
         evbuffer_add_chunkaddr(evb,peak,hs_out_->chunk_addr_);
@@ -83,6 +83,11 @@ void    Channel::AddSignedPeakHashRange(struct evbuffer *evb, int start, int end
         }
         dprintf("%s #%u +sigh %s\n",tintstr(),id_,peak.str().c_str());
     }
+    for(int i=0; i<umt->signed_peak_count(); i++)
+    {
+        bin_t peak = umt->signed_peak(i);
+        AddLiveRightHashes(evb,peak);
+    }
 }
 
 
@@ -91,12 +96,7 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
 
     dprintf("%s #%u +uncle hash for %s\n",tintstr(),id_,pos.str().c_str());
 
-    // TRYOUT:
-
-    LiveHashTree *umt = (LiveHashTree *)hashtree();
-    bin_t peak = umt->signed_peak_for(pos);
-    //bin_t peak = hashtree()->peak_for(pos);
-
+    bin_t peak = hashtree()->peak_for(pos);
     // Ric: TODO check (remove data_out_cap??)
     //      For the moment lets keep the old behaviour
     binvector bv;
@@ -113,7 +113,7 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
         bin_t uncle = *iter;
         evbuffer_add_8(evb, SWIFT_INTEGRITY);
         evbuffer_add_chunkaddr(evb,uncle,hs_out_->chunk_addr_);
-        evbuffer_add_hash(evb, hashtree()->hash(uncle) );
+    evbuffer_add_hash(evb, hashtree()->hash(uncle) );
 
         fprintf(stderr,"AddHash: uncle %s %s\n", uncle.str().c_str(), hashtree()->hash(uncle).hex().c_str() );
 
@@ -122,6 +122,26 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
     }
 
 }
+
+
+void    Channel::AddLiveRightHashes (struct evbuffer *evb, bin_t pos) {
+
+    dprintf("%s #%u +right hash for %s\n",tintstr(),id_,pos.str().c_str());
+
+    bin_t p = pos;
+    while (!p.is_base())
+    {
+        p = p.right();
+	evbuffer_add_8(evb, SWIFT_INTEGRITY);
+	evbuffer_add_chunkaddr(evb,p,hs_out_->chunk_addr_);
+	evbuffer_add_hash(evb, hashtree()->hash(p) );
+
+	fprintf(stderr,"AddHash: right %s %s\n", p.str().c_str(), hashtree()->hash(p).hex().c_str() );
+	dprintf("%s #%u +hash %s\n",tintstr(),id_,p.str().c_str());
+
+    }
+}
+
 
 
 bin_t    Channel::ImposeHint () {
@@ -621,15 +641,27 @@ void    Channel::AddAck (struct evbuffer *evb) {
 void    Channel::AddHave (struct evbuffer *evb) {
 
     // SIGNPEAK
-    fprintf(stderr,"AddHave: hashtree %p signed till %d\n", hashtree(), GetNextSendSignedPeakFromIdx() );
     if (hs_in_ != NULL && hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
-	if (GetNextSendSignedPeakFromIdx() != -1)
+	LiveHashTree *umt = (LiveHashTree *)hashtree();
+	fprintf(stderr,"AddHave: Adding signed peaks %d\n", umt->signed_peak_count());
+	AddSignedPeakHashes(evb);
+
+	// Deep sh*t
+	/*binvector::iterator iter;
+	binvector subsumedsignedpeakbins = GetSignedPeaksSubsumed();
+
+	for (iter=subsumedsignedpeakbins.begin(); iter != subsumedsignedpeakbins.end(); iter++)
 	{
-	    LiveHashTree *umt = (LiveHashTree *)hashtree();
-	    fprintf(stderr,"AddHave: Adding signed peaks %d till %d\n", GetNextSendSignedPeakFromIdx(),umt->signed_peak_count());
-	    AddSignedPeakHashRange(evb,GetNextSendSignedPeakFromIdx(),umt->signed_peak_count());
+	    bin_t pos = *iter;
+	    fprintf(stderr,"AddHave: Adding uncles of signed peaks subsumed by new %s\n", pos.str().c_str() );
 	}
+
+	for (iter=subsumedsignedpeakbins.begin(); iter != subsumedsignedpeakbins.end(); iter++)
+	{
+	    bin_t pos = *iter;
+	    AddUncleHashes(evb,pos);
+	}*/
     }
 
     if (!data_in_dbl_.is_none()) { // TODO: do redundancy better

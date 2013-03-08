@@ -13,6 +13,9 @@
  *  - purge subtree, source and client
  *  - Get rid of GetNextSendSignedPeakFromIdx() and check if peer ack-d chunks
  *    which required peak X to decide if X should be sent.
+ *  - Storage layer that remembers just part.
+ *
+ *  - Problem with hook in and missing hashtree?
  */
 #ifndef SWIFT_LIVE_HASH_TREE_H
 #define SWIFT_LIVE_HASH_TREE_H
@@ -81,8 +84,8 @@ class LiveHashTree: public HashTree
 
      /** Called when a chunk is added */
      bin_t          AddData(const char* data, size_t length);
-     /** Called after N chunks have been added, following -06. Returns start idx of new peaks */
-     int	    UpdateSignedPeaks();
+     /** Called after N chunks have been added, following -06. Returns subsumed peaks */
+     binvector	    UpdateSignedPeaks();
      int            signed_peak_count();
      bin_t          signed_peak(int i);
      uint8_t *      signed_peak_sig(int i);
@@ -172,7 +175,7 @@ class LiveHashTree: public HashTree
      Sha1Hash        DeriveRoot();
 
      void check_peak_coverage();
-     void check_signed_peak_coverage();
+     void check_signed_peak_coverage(binvector subsumedbins);
 };
 
 }

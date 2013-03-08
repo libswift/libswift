@@ -203,7 +203,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         fprintf(stderr,"live: AddData: stored " PRISIZET " bytes\n", nbyte);
 
     uint64_t till = std::max((size_t)1,nbyte/chunk_size_);
-    int newpeakstartidx = -1;
+    binvector subsumedbins;
     bool newepoch=false;
     for (uint64_t c=0; c<till; c++)
     {
@@ -230,9 +230,10 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
             {
         	int old = umt->signed_peak_count();
 
-        	newpeakstartidx = umt->UpdateSignedPeaks();
+        	binvector newsubsumedbins = umt->UpdateSignedPeaks();
+        	subsumedbins.insert(subsumedbins.end(), newsubsumedbins.begin(), newsubsumedbins.end() );
 
-        	fprintf(stderr,"live: AddData: UMT: signed peaks old %d new %d start %d\n", old, umt->signed_peak_count(), newpeakstartidx );
+        	fprintf(stderr,"live: AddData: UMT: signed peaks old %d new %d\n", old, umt->signed_peak_count() );
 
         	chunks_since_sign_ = 0;
         	newepoch = true;
@@ -271,7 +272,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         //DDOS
         if (c->is_established())
         {
-            c->SetNextSendSignedPeakFromIdx(newpeakstartidx);
+            c->SetSignedPeaksSubsumed(subsumedbins);
             c->LiveSend();
         }
     }

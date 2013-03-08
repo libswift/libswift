@@ -62,6 +62,10 @@ Storage::Storage(std::string ospathname, std::string destdir, int td) :
     if (!strncmp(readbuf,MULTIFILE_PATHNAME.c_str(),MULTIFILE_PATHNAME.length()))
     {
         // Pathname points to a multi-file spec, assume we're seeding
+	// Arno, 2013-03-06: Not correct for a spec that doesn't fit in chunk 0,
+	// should attempt to parse spec, if good then _COMPLETE otherwise wait
+	// for chunks 1,2... and reparse.
+	//
         state_ = STOR_STATE_MFSPEC_COMPLETE;
 
         dprintf("%s %s storage: Found multifile-spec, will seed it.\n", tintstr(), roothashhex().c_str() );

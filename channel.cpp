@@ -68,7 +68,6 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     scheduled4del_(false),
     direct_sending_(false),
     peer_is_source_(peerissource),
-    live_new_signed_peak_idx_(0),
     hs_out_(NULL), hs_in_(NULL)
 {
     if (peer_==Address())
@@ -623,6 +622,29 @@ binvector swift::bin_fragment(bin_t &origbin, bin_t &cancelbin)
 	bv.push_back(curbin);
 	curbin = bin_t(0,curbin.base_offset()+1);
     }
+
+    return bv;
+}
+
+
+void Channel::SetSignedPeaksSubsumed(binvector &sbv)
+{
+    binvector::iterator iter;
+    for (iter=sbv.begin(); iter!=sbv.end(); iter++)
+    {
+	bin_t pos = *iter;
+	fprintf(stderr,"SetSignedPeaksSubsumed: add %s\n", pos.str().c_str() );
+	subsumed_signed_peak_bins_.push_back(pos);
+    }
+    // subsumed_signed_peak_bins_.insert( subsumed_signed_peak_bins_.end(), sbv.begin(), sbv.end() );
+    fprintf(stderr,"SetSignedPeaksSubsumed: total %d\n", subsumed_signed_peak_bins_.size() );
+}
+
+
+binvector   Channel::GetSignedPeaksSubsumed()
+{
+    binvector bv = subsumed_signed_peak_bins_;
+    subsumed_signed_peak_bins_.clear();
 
     return bv;
 }

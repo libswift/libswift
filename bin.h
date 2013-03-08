@@ -778,5 +778,8 @@ inline bool bin_t::contains(const bin_t& bin) const
     return (v_ & (v_ + 1)) <= bin.v_ && bin.v_ < (v_ | (v_ + 1));
 }
 
+// Arno, 2013-03-06: Define here as livehashtree.h needs it.
+#include <vector>
+typedef std::vector<bin_t> binvector;
 
 #endif /*_bin_h__*/
