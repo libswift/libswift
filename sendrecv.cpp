@@ -135,14 +135,13 @@ void    Channel::AddLiveRightHashes (struct evbuffer *evb, bin_t pos) {
     bin_t p = pos;
     while (!p.is_base())
     {
-        p = p.right();
 	evbuffer_add_8(evb, SWIFT_INTEGRITY);
 	evbuffer_add_chunkaddr(evb,p,hs_out_->chunk_addr_);
 	evbuffer_add_hash(evb, hashtree()->hash(p) );
 
 	fprintf(stderr,"AddHash: right %s %s\n", p.str().c_str(), hashtree()->hash(p).hex().c_str() );
 	dprintf("%s #%u +hash %s\n",tintstr(),id_,p.str().c_str());
-
+	p = p.right();
     }
 }
 
@@ -652,20 +651,20 @@ void    Channel::AddHave (struct evbuffer *evb) {
 	AddSignedPeakHashes(evb);
 
 	// Deep sh*t
-	/*binvector::iterator iter;
+	binvector::iterator iter;
 	binvector subsumedsignedpeakbins = GetSignedPeaksSubsumed();
 
 	for (iter=subsumedsignedpeakbins.begin(); iter != subsumedsignedpeakbins.end(); iter++)
 	{
 	    bin_t pos = *iter;
-	    fprintf(stderr,"AddHave: Adding uncles of signed peaks subsumed by new %s\n", pos.str().c_str() );
+	    fprintf(stderr,"AddHave: Adding rights of signed peaks subsumed by new %s\n", pos.str().c_str() );
 	}
 
 	for (iter=subsumedsignedpeakbins.begin(); iter != subsumedsignedpeakbins.end(); iter++)
 	{
 	    bin_t pos = *iter;
-	    AddUncleHashes(evb,pos);
-	}*/
+	    AddLiveRightHashes(evb,pos);
+	}
     }
 
     if (!data_in_dbl_.is_none()) { // TODO: do redundancy better
