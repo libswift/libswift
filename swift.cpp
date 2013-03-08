@@ -752,10 +752,10 @@ void ReportCallback(int fd, short event, void *arg) {
 		fprintf(stderr,"dwload %lf\n",swift::GetCurrentSpeed(single_td,DDIR_DOWNLOAD));
 		// Ric: remove. LEDBAT tests
 		Channel* c = swift::Channel::channel(1);
-		if (c!=NULL) {
+		/*if (c!=NULL) {
 			fprintf(stderr,"ledbat %3.2f\n",c->GetCwnd());
 			fprintf(stderr,"hints_in %lu\n",c->GetHintSize());
-		}
+		}*/
 		//fprintf(stderr,"npeers %d\n",ft->GetNumLeechers()+ft->GetNumSeeders() );
 	}
 

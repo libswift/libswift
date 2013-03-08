@@ -12,7 +12,7 @@
 using namespace swift;
 
 
-#define  tree_debug	true
+#define  tree_debug	false
 
 
 Node::Node() : parent_(NULL), leftc_(NULL), rightc_(NULL), b_(bin_t::NONE), h_(Sha1Hash::ZERO), verified_(false)
@@ -401,8 +401,7 @@ bin_t LiveHashTree::signed_peak_for(bin_t pos) const
 {
     for (int i=0; i<signed_peak_count_; i++)
     {
-	fprintf(stderr,"signed_peak_for: %s covers %s to %s\n", signed_peak_bins_[i].str().c_str(), signed_peak_bins_[i].base_left().str().c_str(), signed_peak_bins_[i].base_right().str().c_str());
-
+	//fprintf(stderr,"signed_peak_for: %s covers %s to %s\n", signed_peak_bins_[i].str().c_str(), signed_peak_bins_[i].base_left().str().c_str(), signed_peak_bins_[i].base_right().str().c_str());
 	if (signed_peak_bins_[i].contains(pos))
 	    return signed_peak_bins_[i];
     }
@@ -456,7 +455,8 @@ bool LiveHashTree::OfferSignedPeakHash(bin_t pos, const uint8_t *signedhash)
     if (pos != cand_peak_bin_)
     {
 	// Ignore duplicate (or message mixup)
-	fprintf(stderr,"OfferSignedPeakHash: message mixup! %s %s\n", pos.str().c_str(), cand_peak_bin_.str().c_str() );
+        if (tree_debug)
+	    fprintf(stderr,"OfferSignedPeakHash: message mixup! %s %s\n", pos.str().c_str(), cand_peak_bin_.str().c_str() );
 	return true;
     }
 
@@ -472,23 +472,27 @@ bool LiveHashTree::OfferSignedPeakHash(bin_t pos, const uint8_t *signedhash)
 	}
 	else if (pos.contains(peak_bins_[i]))
 	{
-	    fprintf(stderr,"OfferSignedPeakHash: %s contains %s, update\n", pos.str().c_str(), peak_bins_[i].str().c_str() );
+            if (tree_debug)
+	        fprintf(stderr,"OfferSignedPeakHash: %s contains %s, update\n", pos.str().c_str(), peak_bins_[i].str().c_str() );
 
 	    if (!stored)
 	    {
-		fprintf(stderr,"OfferSignedPeakHash: overwriting\n" );
+                if (tree_debug)
+		    fprintf(stderr,"OfferSignedPeakHash: overwriting\n" );
 		peak_bins_[i] = pos;
 		stored = true;
 	    }
 	    else
 	    {
-		fprintf(stderr,"OfferSignedPeakHash: subsume %i\n", i );
+                if (tree_debug)
+		    fprintf(stderr,"OfferSignedPeakHash: subsume %i\n", i );
 
 		// This peak subsumed by new peak
 		peak_count_--;
 		for (int j=i; j<peak_count_; j++)
 		{
-		    fprintf(stderr,"OfferSignedPeakHash: copy %d to %d\n", j, j+1 );
+                    if (tree_debug)
+		        fprintf(stderr,"OfferSignedPeakHash: copy %d to %d\n", j, j+1 );
 		    peak_bins_[j] = peak_bins_[j+1];
 		}
 		// Retest current i as it has been replaced
@@ -552,7 +556,8 @@ void LiveHashTree::check_signed_peak_coverage(binvector subsumedbins)
     bin_t::uint_t end = 0;
     for (int i=0; i<signed_peak_count_; i++)
     {
-	fprintf(stderr,"UpdateSignedPeaks: signed peak is: %s\n", signed_peak_bins_[i].str().c_str() );
+        if (tree_debug)
+	    fprintf(stderr,"UpdateSignedPeaks: signed peak is: %s\n", signed_peak_bins_[i].str().c_str() );
 	if (i == 0)
 	{
 	    end = signed_peak_bins_[i].base_right().layer_offset();
@@ -571,12 +576,14 @@ void LiveHashTree::check_signed_peak_coverage(binvector subsumedbins)
 	end = signed_peak_bins_[i].base_right().layer_offset();
     }
 
-
-    binvector::iterator iter;
-    for (iter=subsumedbins.begin(); iter!=subsumedbins.end(); iter++)
+    if (tree_debug)
     {
-	bin_t pos = *iter;
-	fprintf(stderr,"UpdateSignedPeaks: signed peak subsumed: %s\n", pos.str().c_str() );
+        binvector::iterator iter;
+        for (iter=subsumedbins.begin(); iter!=subsumedbins.end(); iter++)
+        {    
+	    bin_t pos = *iter;
+	    fprintf(stderr,"UpdateSignedPeaks: signed peak subsumed: %s\n", pos.str().c_str() );
+        }
     }
 }
 
@@ -712,14 +719,12 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     // From MmapHashTree::OfferHash
     //
 
-    fprintf(stderr,"OfferHash: found node %s isverified %d\n",iter->GetBin().str().c_str(),iter->GetVerified() );
+    if (tree_debug)
+        fprintf(stderr,"OfferHash: found node %s isverified %d\n",iter->GetBin().str().c_str(),iter->GetVerified() );
 
     bin_t peak = peak_for(pos);
     if (peak.is_none())
-    {
-	fprintf(stderr,"OfferHash: no peak for %s\n",pos.str().c_str() );
         return false;
-    }
     if (peak==pos)
     {
 	// Diff from MmapHashTree: store peak here
@@ -747,7 +752,9 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
         return hash == iter->GetHash();
 
     iter->SetHash(hash);
-    fprintf(stderr,"OfferHash: setting hash %s %s\n",pos.str().c_str(),hash.hex().c_str() );
+
+    if (tree_debug)
+        fprintf(stderr,"OfferHash: setting hash %s %s\n",pos.str().c_str(),hash.hex().c_str() );
 
     if (!pos.is_base())
         return false; // who cares?
@@ -792,8 +799,11 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     bool success = (uphash==piter->GetHash());
 
     //TEMP
-    //if (!success)
-//	exit(-1);
+    if (!success)
+    {
+	fprintf(stderr,"OfferHash: !success data %s\n", pos.str().c_str() );
+	exit(-1);
+    }
 
 
 
@@ -807,28 +817,44 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 	piter->SetVerified(true);
 	while (p.layer() != peak.layer()) {
 	    p = p.parent().sibling();
+	    if (piter->GetParent() == NULL)
+		break;
+	    if (piter->GetParent()->GetParent() == NULL)
+		break;
 	    if (piter->GetParent()->GetBin().is_left())
-		piter = piter->GetParent()->GetRight();
+		piter = piter->GetParent()->GetParent()->GetRight();
 	    else
-		piter = piter->GetParent()->GetLeft();
-	    fprintf(stderr,"OfferHash: SetVerified %s\n", piter->GetBin().str().c_str() );
-	    piter->SetVerified(true);
+		piter = piter->GetParent()->GetParent()->GetLeft();
+            if (tree_debug)
+	        fprintf(stderr,"OfferHash: SetVerified %s\n", piter->GetBin().str().c_str() );
+            if (piter == NULL)
+                fprintf(stderr,"OfferHash: SetVerified %s has NULL node!!!\n", p.str().c_str() );
+            else
+	        piter->SetVerified(true);
 	}
 	// Also mark hashes on direct path to root as verified. Doesn't decrease
 	// #checks, but does increase the number of verified hashes faster.
+        // Arno, 2013-03-08: Only holds if hashes are permanent (i.e., not parents of peaks
+        // while live streaming with Unified Merkle Trees.
 	p = pos;
 	piter = iter;
 	while (p != peak) {
 	    p = p.parent();
 	    piter = piter->GetParent();
-	    if (piter->GetHash() == Sha1Hash::ZERO)
+            if (piter == NULL)
+            {
+                fprintf(stderr,"OfferHash: SetVerified2 %s has NULL node!!!\n", p.str().c_str() );
+            }
+	    else if (piter->GetHash() == Sha1Hash::ZERO)
 	    {
-		fprintf(stderr,"OfferHash: SetVerified2 %s ZERO!!!\n", piter->GetBin().str().c_str() );
+                if (tree_debug)
+		    fprintf(stderr,"OfferHash: SetVerified2 %s ZERO!!!\n", piter->GetBin().str().c_str() );
 	    }
 	    else
 	    {
 		piter->SetVerified(true);
-		fprintf(stderr,"OfferHash: SetVerified2 %s\n", piter->GetBin().str().c_str() );
+                if (tree_debug)
+		    fprintf(stderr,"OfferHash: SetVerified2 %s\n", piter->GetBin().str().c_str() );
 	    }
 	}
     }
@@ -852,7 +878,8 @@ bool LiveHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
     else
     {
 	cand_peak_bin_ = bin_t::NONE;
-	fprintf(stderr,"OfferHash: %s has peak %s\n", pos.str().c_str(), peak.str().c_str() );
+        if (tree_debug)
+	    fprintf(stderr,"OfferHash: %s has peak %s\n", pos.str().c_str(), peak.str().c_str() );
 	return CreateAndVerifyNode(pos,hash,false);
     }
 }
@@ -862,33 +889,39 @@ bool LiveHashTree::OfferData(bin_t pos, const char* data, size_t length)
 {
     if (state_ == LHT_STATE_VER_AWAIT_PEAK)
     {
-	fprintf(stderr,"OfferData: await peak\n");
+        if (tree_debug)
+	    fprintf(stderr,"OfferData: await peak\n");
         return false;
     }
     if (!pos.is_base())
     {
-	fprintf(stderr,"OfferData: not base\n");
+        if (tree_debug)
+	    fprintf(stderr,"OfferData: not base\n");
         return false;
     }
     if (length<chunk_size_ && pos!=bin_t(0,sizec_-1))
     {
-	fprintf(stderr,"OfferData: bad len %d\n", length);
+        if (tree_debug)
+	    fprintf(stderr,"OfferData: bad len %d\n", length);
         return false;
     }
     if (ack_out_.is_filled(pos))
     {
-	fprintf(stderr,"OfferData: already have\n");
+        if (tree_debug)
+	    fprintf(stderr,"OfferData: already have\n");
         return true; // to set data_in_
     }
     bin_t peak = peak_for(pos);
     if (peak.is_none())
     {
-	fprintf(stderr,"OfferData: couldn't find peak\n");
+        if (tree_debug)
+	    fprintf(stderr,"OfferData: couldn't find peak\n");
         return false;
     }
     Sha1Hash data_hash(data,length);
 
-    fprintf(stderr,"OfferData: %s hash %s\n", pos.str().c_str(), data_hash.hex().c_str() );
+    if (tree_debug)
+        fprintf(stderr,"OfferData: %s hash %s\n", pos.str().c_str(), data_hash.hex().c_str() );
 
     if (!OfferHash(pos, data_hash)) {
         //printf("invalid hash for %s: %s\n",pos.str(bin_name_buf),data_hash.hex().c_str()); // paranoid
@@ -899,7 +932,8 @@ bool LiveHashTree::OfferData(bin_t pos, const char* data, size_t length)
     }
 
     //printf("g %lli %s\n",(uint64_t)pos,hash.hex().c_str());
-    fprintf(stderr,"OfferData: set ack_out_ %s\n", pos.str().c_str() );
+    if (tree_debug)
+        fprintf(stderr,"OfferData: set ack_out_ %s\n", pos.str().c_str() );
 
     ack_out_.set(pos);
 
@@ -935,8 +969,6 @@ bin_t LiveHashTree::peak_for(bin_t pos) const
 {
     for (int i=0; i<peak_count_; i++)
     {
-	fprintf(stderr,"peak_for: %s covers %s to %s\n", peak_bins_[i].str().c_str(), peak_bins_[i].base_left().str().c_str(), peak_bins_[i].base_right().str().c_str());
-
 	if (peak_bins_[i].contains(pos))
 	    return peak_bins_[i];
     }

@@ -599,6 +599,9 @@ namespace swift {
         /** Returns the byte offset at which we hooked into the live stream */
         uint64_t        GetHookinOffset();
 
+        /** Returns the number of live chunks generated before a new peak is signed */
+        uint32_t        GetNChunksPerSign() { return nchunks_per_sign_; }
+
         // Arno: FileTransfers are managed by the SwarmManager which
         // activates/deactivates them as required. LiveTransfers are unmanaged.
         /** Find transfer by the transfer descriptor. */

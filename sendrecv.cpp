@@ -83,11 +83,6 @@ void    Channel::AddSignedPeakHashes(struct evbuffer *evb)
         }
         dprintf("%s #%u +sigh %s\n",tintstr(),id_,peak.str().c_str());
     }
-    for(int i=0; i<umt->signed_peak_count(); i++)
-    {
-        bin_t peak = umt->signed_peak(i);
-        AddLiveRightHashes(evb,peak);
-    }
 }
 
 
@@ -113,7 +108,7 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
         bin_t uncle = *iter;
         evbuffer_add_8(evb, SWIFT_INTEGRITY);
         evbuffer_add_chunkaddr(evb,uncle,hs_out_->chunk_addr_);
-    evbuffer_add_hash(evb, hashtree()->hash(uncle) );
+        evbuffer_add_hash(evb, hashtree()->hash(uncle) );
 
         fprintf(stderr,"AddHash: uncle %s %s\n", uncle.str().c_str(), hashtree()->hash(uncle).hex().c_str() );
 
@@ -128,8 +123,15 @@ void    Channel::AddLiveRightHashes (struct evbuffer *evb, bin_t pos) {
 
     dprintf("%s #%u +right hash for %s\n",tintstr(),id_,pos.str().c_str());
 
+    // Only need to send down to smallest peak subtree
+    LiveTransfer *lt = (LiveTransfer *)transfer();
+    uint32_t nchunks_per_sign = lt->GetNChunksPerSign();
+    bin_t::uint_t nchunks_per_sign_layer = (bin_t::uint_t)log2((double)nchunks_per_sign);
+    //fprintf(stderr,"AddLiveRightHashes: layer %d\n", nchunks_per_sign_layer );
+
     bin_t p = pos;
-    while (!p.is_base())
+    //while (!p.is_base())
+    while (p.layer() >= nchunks_per_sign_layer)
     {
 	evbuffer_add_8(evb, SWIFT_INTEGRITY);
 	evbuffer_add_chunkaddr(evb,p,hs_out_->chunk_addr_);
@@ -643,7 +645,7 @@ void    Channel::AddHave (struct evbuffer *evb) {
     if (hs_in_ != NULL && hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
 	LiveHashTree *umt = (LiveHashTree *)hashtree();
-	fprintf(stderr,"AddHave: Adding signed peaks %d\n", umt->signed_peak_count());
+	//fprintf(stderr,"AddHave: Adding signed peaks %d\n", umt->signed_peak_count());
 	AddSignedPeakHashes(evb);
 
 	// Deep sh*t
@@ -970,8 +972,6 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
             dprintf("%s #%u !data %s\n",tintstr(),id_,pos.str().c_str());
             return bin_t::NONE;
         }
-        else
-            fprintf(stderr,"HIT\n");
 
         // Arno: If we are getting content, keep activated
         swift::Touch(transfer()->td());

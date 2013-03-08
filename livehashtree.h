@@ -17,6 +17,7 @@
  *  - What if signed peak or right hashes lost?
  *  - SetVerified repeated for same bin?!
  *  - right hashes not till base, but till log(NCHUNKS_PER_SIGN) layer
+ *  - Add unittest that expands tree and see if all hashes are there and verified bits set correctly
  *
  *  - Problem with hook in and missing hashtree?
  */
