@@ -708,7 +708,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     bytes_down_ += length;
     global_bytes_down += length;
     // Arno, 2013-03-08: per-swarm
-    transfer().AddBytes(DDIR_DOWNLOAD,length);
+    transfer().AddBytes(DDIR_DOWNLOAD,length); // should be same as hashtree().complete()
 
     return pos;
 }
