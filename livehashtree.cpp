@@ -821,8 +821,15 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 	while (p != peak) {
 	    p = p.parent();
 	    piter = piter->GetParent();
-	    piter->SetVerified(true);
-	    fprintf(stderr,"OfferHash: SetVerified2 %s\n", piter->GetBin().str().c_str() );
+	    if (piter->GetHash() == Sha1Hash::ZERO)
+	    {
+		fprintf(stderr,"OfferHash: SetVerified2 %s ZERO!!!\n", piter->GetBin().str().c_str() );
+	    }
+	    else
+	    {
+		piter->SetVerified(true);
+		fprintf(stderr,"OfferHash: SetVerified2 %s\n", piter->GetBin().str().c_str() );
+	    }
 	}
     }
     return success;

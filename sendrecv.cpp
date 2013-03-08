@@ -100,8 +100,12 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
     // Ric: TODO check (remove data_out_cap??)
     //      For the moment lets keep the old behaviour
     binvector bv;
-    while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
-            ack_in_.is_empty(pos.parent()) ) {
+    //while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
+    //        ack_in_.is_empty(pos.parent()) ) {
+
+    // TEMP FORCE
+    while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) ) {
+
     //while (pos!=peak && ack_in_.is_empty(pos.parent()) ) {
         bin_t uncle = pos.sibling();
         bv.push_back(uncle);
