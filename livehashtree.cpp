@@ -899,7 +899,7 @@ bool LiveHashTree::OfferData(bin_t pos, const char* data, size_t length)
     }
 
     //printf("g %lli %s\n",(uint64_t)pos,hash.hex().c_str());
-    fprintf(stderr,"OfferData: set ack_out_ %s %d\n", pos.str().c_str(), pos.contains((bin_t(4,87))));
+    fprintf(stderr,"OfferData: set ack_out_ %s %p\n", pos.str().c_str(), &ack_out_ );
     ack_out_.set(pos);
 #ifdef TODO
     // Arno,2011-10-03: appease g++

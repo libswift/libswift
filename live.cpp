@@ -164,7 +164,7 @@ uint64_t      LiveTransfer::SeqComplete() {
 
     if (am_source_)
     {
-        uint64_t seqc = ack_out_.find_empty().base_offset();
+        uint64_t seqc = ack_out()->find_empty().base_offset();
 	return seqc*chunk_size_;
     }
     bin_t hpos = ((LivePiecePicker *)picker())->GetHookinPos();
@@ -295,6 +295,19 @@ binmap_t *LiveTransfer::ack_out_signed()
     return &signed_ack_out_;
 }
 
+binmap_t *LiveTransfer::ack_out()
+{
+    if (GetDefaultHandshake().cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+	return hashtree_->ack_out();
+    else
+	return &ack_out_; // tree less, use local binmap.
+}
+
+
+/*
+ * Channel extensions for live
+ */
+
 void Channel::LiveSend()
 {
     //fprintf(stderr,"live: LiveSend: channel %d\n", id() );
@@ -308,3 +321,5 @@ void Channel::LiveSend()
     //fprintf(stderr,"live: LiveSend: next %lld\n", next_send_time_ );
     evtimer_add(evsendlive_ptr_,tint2tv(next_send_time_));
 }
+
+

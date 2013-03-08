@@ -575,7 +575,7 @@ namespace swift {
 
         const Sha1Hash& swarm_id() const { return pubkey_; }
         /** The binmap for data already retrieved and checked. */
-        binmap_t *      ack_out ()  { return &ack_out_; }
+        binmap_t *      ack_out ();
         /** Returns the number of bytes in a chunk for this transmission */
         uint32_t        chunk_size() { return chunk_size_; }
 	/** Check whether all components still in working state */
@@ -617,7 +617,7 @@ namespace swift {
         //SIGNPEAKTODO REMOVE
         /** Swarm Identifier. E.g hash of public key */
         Sha1Hash 	swarm_id_;
-        /**    Binmap of own chunk availability */
+        /**    Binmap of own chunk availability, when not POPT_CONT_INT_PROT_UNIFIED_MERKLE (so _NONE or _SIGNALL) */
         binmap_t        ack_out_;
         /**    Binmap of own chunk availability restricted to current signed peaks SIGNPEAK */
         binmap_t	signed_ack_out_;

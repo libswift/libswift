@@ -454,12 +454,12 @@ void    Channel::AddHint (struct evbuffer *evb) {
             //fprintf(stderr,"HL %i ", hint.base_length());
 
             // Ric: final cancel the hints that have been removed
-			while (!tbc.empty()) {
-				bin_t b = tbc.front();
-				if (!b.contains(hint) && !hint.contains(b))
-					cancel_out_.push_back(b);
-				tbc.pop_front();
-			}
+	    while (!tbc.empty()) {
+		bin_t b = tbc.front();
+		if (!b.contains(hint) && !hint.contains(b))
+		    cancel_out_.push_back(b);
+		tbc.pop_front();
+	    }
         }
         else
             dprintf("%s #%u Xhint\n",tintstr(),id_);

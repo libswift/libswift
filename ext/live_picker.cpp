@@ -77,23 +77,23 @@ public:
         }
 
         // Advance ptr
-        //dprintf("live: pp: new cur start\n" );
+        dprintf("live: pp: new cur start %p\n", transfer_->ack_out() );
         while (transfer_->ack_out()->is_filled(current_bin_))
         {
             current_bin_ = bin_t(0,current_bin_.layer_offset()+1);
-            //fprintf(stderr,"live: pp: new cur is %s\n", current_bin_.str().c_str() );
+            fprintf(stderr,"live: pp: new cur is %s\n", current_bin_.str().c_str() );
         }
-        //dprintf("live: pp: new cur end\n" );
+        dprintf("live: pp: new cur end\n" );
 
 
         // Request next from this peer, if not already requested
         bin_t hint = pickLargestBin(offer,current_bin_);
         if (hint == bin_t::NONE)
         {
-            //dprintf("live: pp: Look beyond %s\n", current_bin_.str().c_str() );
+            dprintf("live: pp: Look beyond %s\n", current_bin_.str().c_str() );
             // See if there is stuff to download beyond current bin
             hint = ack_hint_out_.find_empty(current_bin_);
-            //dprintf("live: pp: Empty is %s boe %llu boc %llu\n", hint.str().c_str(), hint.toUInt(), current_bin_.toUInt() );
+            dprintf("live: pp: Empty is %s boe %llu boc %llu\n", hint.str().c_str(), hint.toUInt(), current_bin_.toUInt() );
 
             // Safety catch, find_empty(offset) apparently buggy.
             if (hint.base_offset() <= current_bin_.base_offset())
@@ -106,7 +106,7 @@ public:
         if (hint == bin_t::NONE)
             return hint;
 
-        //dprintf("live: pp: Picked %s\n", hint.str().c_str() );
+        dprintf("live: pp: Picked %s\n", hint.str().c_str() );
 
 	assert(ack_hint_out_.is_empty(hint));
 	ack_hint_out_.set(hint);
