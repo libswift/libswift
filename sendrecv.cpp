@@ -218,7 +218,11 @@ void    Channel::Send () {
     if (r==-1)
         print_error("swift can't send datagram");
     else
+    {
     	raw_bytes_up_ += r;
+    	// Arno, 2013-03-08: per-swarm
+    	transfer().AddRawBytes(DDIR_UPLOAD,r);
+    }
     last_send_time_ = NOW;
     sent_since_recv_++;
     dgrams_sent_++;
@@ -355,7 +359,11 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
                 peer_channel_id_);
     	int ret = Channel::SendTo(socket_,peer(),evb); // kind of fragmentation
     	if (ret > 0)
-    		raw_bytes_up_ += ret;
+    	{
+	    raw_bytes_up_ += ret;
+	    // Arno, 2013-03-08: per-swarm
+	    transfer().AddRawBytes(DDIR_UPLOAD,ret);
+    	}
         evbuffer_add_32be(evb, peer_channel_id_);
     }
 
@@ -405,6 +413,8 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     data_out_.push_back(tosend);
     bytes_up_ += r;
     global_bytes_up += r;
+    // Arno, 2013-03-08: per-swarm
+    transfer().AddBytes(DDIR_UPLOAD,r);
 
     char bin_name_buf[32];
     dprintf("%s #%u +data %s\n",tintstr(),id_,tosend.str(bin_name_buf));
@@ -694,8 +704,12 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 
     UpdateDIP(pos);
     CleanHintOut(pos);
+
     bytes_down_ += length;
     global_bytes_down += length;
+    // Arno, 2013-03-08: per-swarm
+    transfer().AddBytes(DDIR_DOWNLOAD,length);
+
     return pos;
 }
 
@@ -1095,6 +1109,10 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         channel->own_id_mentioned_ = true;
     }
     channel->raw_bytes_down_ += evboriglen;
+    // Arno, 2013-03-08: per-swarm
+    channel->transfer().AddRawBytes(DDIR_DOWNLOAD,evboriglen);
+
+
     //dprintf("recvd %i bytes for %i\n",data.size(),channel->id);
     bool wasestablished = channel->is_established();
 

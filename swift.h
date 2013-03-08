@@ -369,6 +369,11 @@ namespace swift {
 		/** Check whether all components still in working state */
 		void UpdateOperational();
 
+		uint64_t GetBytes(data_direction_t ddir);
+		void AddBytes(data_direction_t ddir, uint32_t a);
+		uint64_t GetRawBytes(data_direction_t ddir);
+		void AddRawBytes(data_direction_t ddir, uint32_t a);
+
     protected:
 
         HashTree*		hashtree_;
@@ -412,6 +417,10 @@ namespace swift {
 
         //ZEROSTATE
         bool				zerostate_;
+
+        // Arno, 2013-03-08: for per-swarm stats.
+        uint64_t raw_bytes_[2], bytes_[2];
+
 
     public:
         void            OnDataIn (bin_t pos);

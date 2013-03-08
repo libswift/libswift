@@ -312,7 +312,7 @@ void CmdGwSendINFOHashChecking(evutil_socket_t cmdsock, Sha1Hash root_hash)
 	// Send INFO DLSTATUS_HASHCHECKING message.
 
     char cmd[MAX_CMD_MESSAGE];
-	sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",root_hash.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,3.14,0,0);
+	sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u %llu %llu\r\n",root_hash.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,(double)0.0,(double)0.0,0,0,(uint64_t)0,(uint64_t)0);
 
     //fprintf(stderr,"cmd: SendINFO: %s", cmd);
     send(cmdsock,cmd,strlen(cmd),0);
@@ -345,7 +345,7 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 
     double dlspeed = ft->GetCurrentSpeed(DDIR_DOWNLOAD);
     double ulspeed = ft->GetCurrentSpeed(DDIR_UPLOAD);
-    sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",root_hash.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds);
+    sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u %llu %llu\r\n",root_hash.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds,ft->GetBytes(DDIR_DOWNLOAD),ft->GetBytes(DDIR_UPLOAD));
 
     send(req->cmdsock,cmd,strlen(cmd),0);
 

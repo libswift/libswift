@@ -97,6 +97,12 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
     max_speed_[DDIR_UPLOAD] = DBL_MAX;
     max_speed_[DDIR_DOWNLOAD] = DBL_MAX;
 
+    // Per-swarm stats
+    raw_bytes_[DDIR_UPLOAD] = 0;
+    raw_bytes_[DDIR_DOWNLOAD] = 0;
+    bytes_[DDIR_UPLOAD] = 0;
+    bytes_[DDIR_DOWNLOAD] = 0;
+
     // SAFECLOSE
     evtimer_assign(&evclean_,Channel::evbase,&FileTransfer::LibeventCleanCallback,this);
     evtimer_add(&evclean_,tint2tv(5*TINT_SEC));
@@ -423,4 +429,26 @@ uint32_t	FileTransfer::GetNumSeeders()
 void FileTransfer::AddPeer(Address &peer)
 {
 	Channel *c = new Channel(this,INVALID_SOCKET,peer);
+}
+
+
+uint64_t FileTransfer::GetBytes(data_direction_t ddir)
+{
+    return bytes_[ddir];
+}
+
+uint64_t FileTransfer::GetRawBytes(data_direction_t ddir)
+{
+    return raw_bytes_[ddir];
+}
+
+
+void FileTransfer::AddBytes(data_direction_t ddir,uint32_t a)
+{
+    bytes_[ddir] += a;
+}
+
+void FileTransfer::AddRawBytes(data_direction_t ddir,uint32_t a)
+{
+    raw_bytes_[ddir] += a;
 }
