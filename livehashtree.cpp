@@ -396,7 +396,7 @@ int LiveHashTree::signed_peak_sig_length(int i)
 }
 
 
-// TRYOUT signed_peak_for pos will be lower than peak_for, so just optimization
+// TEMP FORCE TRYOUT signed_peak_for pos will be lower than peak_for, so just optimization
 bin_t LiveHashTree::signed_peak_for(bin_t pos) const
 {
     for (int i=0; i<signed_peak_count_; i++)

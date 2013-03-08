@@ -14,6 +14,9 @@
  *  - Get rid of GetNextSendSignedPeakFromIdx() and check if peer ack-d chunks
  *    which required peak X to decide if X should be sent.
  *  - Storage layer that remembers just part.
+ *  - What if signed peak or right hashes lost?
+ *  - SetVerified repeated for same bin?!
+ *  - right hashes not till base, but till log(NCHUNKS_PER_SIGN) layer
  *
  *  - Problem with hook in and missing hashtree?
  */

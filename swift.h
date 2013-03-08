@@ -847,6 +847,7 @@ namespace swift {
         void        LiveSend();
         void	    SetSignedPeaksSubsumed(binvector &sbv);
         binvector   GetSignedPeaksSubsumed();
+        void 	    ClearSignedPeaksSubsumed();
 
         void 	    CloseOnError();
 

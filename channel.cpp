@@ -629,22 +629,17 @@ binvector swift::bin_fragment(bin_t &origbin, bin_t &cancelbin)
 
 void Channel::SetSignedPeaksSubsumed(binvector &sbv)
 {
-    binvector::iterator iter;
-    for (iter=sbv.begin(); iter!=sbv.end(); iter++)
-    {
-	bin_t pos = *iter;
-	fprintf(stderr,"SetSignedPeaksSubsumed: add %s\n", pos.str().c_str() );
-	subsumed_signed_peak_bins_.push_back(pos);
-    }
-    // subsumed_signed_peak_bins_.insert( subsumed_signed_peak_bins_.end(), sbv.begin(), sbv.end() );
-    fprintf(stderr,"SetSignedPeaksSubsumed: total %d\n", subsumed_signed_peak_bins_.size() );
+    subsumed_signed_peak_bins_.insert( subsumed_signed_peak_bins_.end(), sbv.begin(), sbv.end() );
 }
 
 
 binvector   Channel::GetSignedPeaksSubsumed()
 {
-    binvector bv = subsumed_signed_peak_bins_;
-    subsumed_signed_peak_bins_.clear();
-
-    return bv;
+    return subsumed_signed_peak_bins_;
 }
+
+void Channel::ClearSignedPeaksSubsumed()
+{
+    subsumed_signed_peak_bins_.clear();
+}
+
