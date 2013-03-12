@@ -446,8 +446,8 @@ void    swift::Shutdown (int sock_des) {
     Channel::Shutdown();
 }
 
-int      swift::Open (std::string filename, const Sha1Hash& roothash, Address tracker, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size) {
-    FileTransfer* ft = new FileTransfer(filename, roothash, force_check_diskvshash, check_netwvshash, chunk_size);
+int      swift::Open (std::string filename, const Sha1Hash& roothash, std::string metadir, Address tracker, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size) {
+    FileTransfer* ft = new FileTransfer(filename, roothash, metadir, force_check_diskvshash, check_netwvshash, chunk_size);
     if (ft->fd() && ft->IsOperational()) {
 
         // initiate tracker connections
@@ -557,8 +557,7 @@ int swift::Checkpoint(int transfer) {
 	     return -1;
     }
 
-	std::string binmap_filename = ft->GetStorage()->GetOSPathName();
-	binmap_filename.append(".mbinmap");
+	std::string binmap_filename = ft->hashtree()->get_binmap_filename();
 	//fprintf(stderr,"swift: HACK checkpointing %s at %lli\n", binmap_filename.c_str(), Complete(transfer));
 	FILE *fp = fopen_utf8(binmap_filename.c_str(),"wb");
 	if (!fp) {

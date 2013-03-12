@@ -79,7 +79,8 @@ std::string    Sha1Hash::hex() const {
 
 MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool force_check_diskvshash, bool check_netwvshash, std::string binmap_filename) :
  HashTree(), root_hash_(root_hash), hashes_(NULL),
- peak_count_(0), hash_fd_(-1), hash_filename_(hash_filename), size_(0), sizec_(0), complete_(0), completec_(0),
+ peak_count_(0), hash_fd_(-1), hash_filename_(hash_filename),
+ binmap_filename_(binmap_filename), size_(0), sizec_(0), complete_(0), completec_(0),
  chunk_size_(chunk_size), storage_(storage), check_netwvshash_(check_netwvshash)
 {
     // MULTIFILE

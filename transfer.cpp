@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <string>
 #include <sstream>
+#include <vector>
 #include <cfloat>
 #include "swift.h"
 
@@ -28,7 +29,7 @@ std::vector<FileTransfer*> FileTransfer::files(20);
 
 // FIXME: separate Bootstrap() and Download(), then Size(), Progress(), SeqProgress()
 
-FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size, bool zerostate) :
+FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, std::string metadir, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size, bool zerostate) :
 	Operational(), fd_(files.size()+1), cb_installed(0), mychannels_(),
     speedzerocount_(0), tracker_(), tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START),
     tracker_retry_time_(NOW), zerostate_(zerostate)
@@ -37,24 +38,20 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, bool
         files.resize(fd()+1);
     files[fd()] = this;
 
-    std::string destdir;
-    int ret = file_exists_utf8(filename);
-    if (ret == 2 && root_hash != Sha1Hash::ZERO) {
-	    // Filename is a directory, download root_hash there
-	    destdir = filename;
-	    filename = destdir+FILE_SEP+root_hash.hex();
-    } else {
-	    destdir = dirname_utf8(filename);
-	    if (destdir == "")
-		    destdir = ".";
-    }
+    std::vector<std::string> p = filename2storagefns(filename,root_hash,metadir);
+    // final filename, is destdir+roothash if orig filename was dir
+    filename = p[0];
+    // dir where data is saved, derived from filename
+    std::string destdir = p[1];
+    // full path for metadata files, append .m* etc for complete filename
+    std::string metaprefix = p[2];
 
     std::string hash_filename;
-    hash_filename.assign(filename);
+    hash_filename.assign(metaprefix);
     hash_filename.append(".mhash");
 
     std::string binmap_filename;
-    binmap_filename.assign(filename);
+    binmap_filename.assign(metaprefix);
     binmap_filename.append(".mbinmap");
 
     // Arno, 2013-03-06: Try to open content read-only when seeding to avoid certain locking problems on
@@ -451,4 +448,48 @@ void FileTransfer::AddBytes(data_direction_t ddir,uint32_t a)
 void FileTransfer::AddRawBytes(data_direction_t ddir,uint32_t a)
 {
     raw_bytes_[ddir] += a;
+}
+
+
+
+std::vector<std::string> swift::filename2storagefns(std::string filename,const Sha1Hash &root_hash,std::string metadir)
+{
+    std::string destdir;
+    std::string metaprefix;
+    int ret = file_exists_utf8(filename);
+    if (ret == 2 && root_hash != Sha1Hash::ZERO) {
+	    // Filename is a directory, download root_hash there
+	    destdir = filename;
+	    filename = destdir+FILE_SEP+root_hash.hex();
+	    if (!metadir.compare(""))
+		metaprefix = filename;
+	    else
+		metaprefix = metadir+root_hash.hex();
+    } else {
+	    destdir = dirname_utf8(filename);
+	    if (!destdir.compare(""))
+	    {
+		// Filename without dir
+		destdir = ".";
+		// filename is basename
+		if (!metadir.compare(""))
+		    metaprefix = filename;
+		else
+		    metaprefix = metadir+FILE_SEP+filename;
+	    }
+	    else
+	    {
+		// Filename with directory
+		std::string basename = basename_utf8(filename);
+		if (!metadir.compare(""))
+		    metaprefix = filename;
+		else
+		    metaprefix = metadir+basename;
+	    }
+    }
+    std::vector<std::string> svec;
+    svec.push_back(filename);
+    svec.push_back(destdir);
+    svec.push_back(metaprefix);
+    return svec;
 }

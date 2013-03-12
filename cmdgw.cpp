@@ -82,6 +82,7 @@ evutil_socket_t   cmd_tunnel_sock=INVALID_SOCKET;
 
 // HTTP gateway address for PLAY cmd
 Address cmd_gw_httpaddr;
+std::string cmd_gw_metadir;
 
 bool cmd_gw_debug=false;
 
@@ -219,11 +220,11 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 
 	if (removestate)
 	{
-		std::string mhashfilename = contentfilename + ".mhash";
+		std::string mhashfilename = ft->hashtree()->get_hash_filename();
 		delset.insert(mhashfilename);
 
 		// Arno, 2012-01-10: .mbinmap gots to go too.
-		std::string mbinmapfilename = contentfilename + ".mbinmap";
+		std::string mbinmapfilename = ft->hashtree()->get_binmap_filename();;
 		delset.insert(mbinmapfilename);
 	}
 
@@ -851,7 +852,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         		filename = storagepath;
         	else
         		filename = hashstr;
-            transfer = swift::Open(filename,root_hash,trackaddr,false,true,chunksize);
+            transfer = swift::Open(filename,root_hash,cmd_gw_metadir,trackaddr,false,true,chunksize);
             if (transfer == -1)
             {
             	CmdGwSendERRORBySocket(cmdsock,"bad swarm",root_hash);
@@ -1082,7 +1083,7 @@ void CmdGwListenErrorCallback(struct evconnlistener *listener, void *ctx)
 }
 
 
-bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr)
+bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr, std::string metadir)
 {
 	// Allocate libevent listener for cmd connections
 	// From http://www.wangafu.net/~nickm/libevent-book/Ref8_listener.html
@@ -1101,6 +1102,7 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
     evconnlistener_set_error_cb(cmd_evlistener, CmdGwListenErrorCallback);
 
     cmd_gw_httpaddr = httpaddr;
+    cmd_gw_metadir = metadir;
 
     cmd_evbuffer = evbuffer_new();
 

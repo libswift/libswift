@@ -23,9 +23,9 @@ using namespace swift;
 
 // Local prototypes
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
-int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, std::string urlfilename, double *maxspeed);
-int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size);
-int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size);
+int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, std::string urlfilename, double *maxspeed, std::string metadir);
+int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, std::string metadir);
+int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, std::string metadir);
 
 void ReportCallback(int fd, short event, void *arg);
 void EndCallback(int fd, short event, void *arg);
@@ -33,9 +33,9 @@ void RescanDirCallback(int fd, short event, void *arg);
 int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int argidx);
 
 // Gateway stuff
-bool InstallHTTPGateway(struct event_base *evbase,Address addr,uint32_t chunk_size, double *maxspeed);
+bool InstallHTTPGateway(struct event_base *evbase,Address addr,uint32_t chunk_size, double *maxspeed,std::string metadir);
 bool InstallStatsGateway(struct event_base *evbase,Address addr);
-bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr);
+bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr,std::string metadir);
 bool HTTPIsSending();
 bool StatsQuit();
 void CmdGwUpdateDLStatesCallback();
@@ -54,7 +54,7 @@ bool httpgw_enabled=false,cmdgw_enabled=false;
 bool do_nat_test = false;
 bool generate_multifile=false;
 
-std::string scan_dirname="";
+std::string scan_dirname="",metadir="";
 uint32_t chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;
 Address tracker;
 
@@ -90,9 +90,11 @@ int utf8main (int argc, char** argv)
         {"zerosdir",required_argument, 0, 'e'},  // ZEROSTATE
         {"dummy",no_argument, 0, 'j'},  // WIN32
         {"cmdgwint",required_argument, 0, 'C'}, // SWIFTPROC
+        {"metadir",required_argument, 0, 'n'},  // METADIR
         {"filehex",    required_argument, 0, '1'},  // SWIFTPROCUNICODE
         {"urlfilehex",required_argument, 0, '2'},   // SWIFTPROCUNICODE
         {"zerosdirhex",required_argument, 0, '3'},  // SWIFTPROCUNICODE
+        {"metadirhex",required_argument, 0, '4'},  // SWIFTPROCUNICODE
         {"zerostimeout",required_argument, 0, 'T'},  // ZEROSTATE
         {0, 0, 0, 0}
     };
@@ -112,7 +114,7 @@ int utf8main (int argc, char** argv)
     Channel::evbase = event_base_new();
 
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:jC:1:2:3:T:", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:jC:1:2:3:T:n:", long_options, 0)) ) {
         switch (c) {
             case 'h':
                 if (strlen(optarg)!=40)
@@ -233,6 +235,11 @@ int utf8main (int argc, char** argv)
                 if (sscanf(optarg,"%lli",&cmdgw_report_interval)!=1)
                 	quit("report interval must be int\n");
                 break;
+            case 'n': // METADIR
+                metadir = strdup(optarg); // UNICODE
+                if (metadir.substr(metadir.length()-std::string(FILE_SEP).length()).compare(FILE_SEP))
+                    metadir += FILE_SEP;
+                break;
             case '1': // SWIFTPROCUNICODE
 				// Swift on Windows expects command line arguments as UTF-16.
 				// When swift is run with Python's popen, however, popen
@@ -245,6 +252,11 @@ int utf8main (int argc, char** argv)
            		break;
             case '3': // ZEROSTATE // SWIFTPROCUNICODE
                 zerostatedir = hex2bin(strdup(optarg));
+                break;
+            case '4': // METADIR // SWIFTPROCUNICODE
+                metadir = hex2bin(strdup(optarg));
+                if (metadir.substr(metadir.length()-std::string(FILE_SEP).length()).compare(FILE_SEP))
+                    metadir += FILE_SEP;
                 break;
             case 'T': // ZEROSTATE
             	double t=0.0;
@@ -292,9 +304,9 @@ int utf8main (int argc, char** argv)
         SetTracker(tracker);
 
     if (httpgw_enabled)
-        InstallHTTPGateway(Channel::evbase,httpaddr,chunk_size,maxspeed);
+        InstallHTTPGateway(Channel::evbase,httpaddr,chunk_size,maxspeed,metadir);
     if (cmdgw_enabled)
-		InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr);
+		InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr,metadir);
 
     // TRIALM36: Allow browser to retrieve stats via AJAX and as HTML page
     if (statsaddr != Address())
@@ -303,6 +315,7 @@ int utf8main (int argc, char** argv)
     // ZEROSTATE
     ZeroState *zs = ZeroState::GetInstance();
     zs->SetContentDir(zerostatedir);
+    zs->SetMetaDir(metadir);
     zs->SetConnectTimeout(zerostimeout);
 
 
@@ -314,10 +327,10 @@ int utf8main (int argc, char** argv)
 			if (filename != "" || root_hash != Sha1Hash::ZERO) {
 
 				// Single file
-				ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,urlfilename,maxspeed);
+				ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,urlfilename,maxspeed,metadir);
 			}
 			else if (scan_dirname != "")
-				ret = OpenSwiftDirectory(scan_dirname,Address(),false,chunk_size);
+				ret = OpenSwiftDirectory(scan_dirname,Address(),false,chunk_size,metadir);
 			else
 				ret = -1;
 		}
@@ -330,7 +343,7 @@ int utf8main (int argc, char** argv)
 			    quit("Cannot generate multi-file spec")
 			else
 			    // Calc roothash
-			    ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,urlfilename,maxspeed);
+			    ret = HandleSwiftFile(filename,root_hash,trackerargstr,printurl,urlfilename,maxspeed,metadir);
 		}
 
 		// For testing
@@ -358,6 +371,7 @@ int utf8main (int argc, char** argv)
 			fprintf(stderr,"  -z, --chunksize\tchunk size in bytes (default: %d)\n", SWIFT_DEFAULT_CHUNK_SIZE);
 			fprintf(stderr,"  -m, --printurl\tcompose URL from tracker, file and chunksize\n");
 			fprintf(stderr,"  -M, --multifile\tcreate multi-file spec with given files\n");
+			fprintf(stderr,"  -n, --metadir\tdir for .m* files\n");
 			fprintf(stderr, "%s\n", SubversionRevisionString.c_str() );
 			return 1;
 		}
@@ -411,12 +425,12 @@ int utf8main (int argc, char** argv)
 }
 
 
-int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, std::string urlfilename, double *maxspeed)
+int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string trackerargstr, bool printurl, std::string urlfilename, double *maxspeed, std::string metadir)
 {
 	if (root_hash!=Sha1Hash::ZERO && filename == "")
 		filename = strdup(root_hash.hex().c_str());
 
-	single_fd = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size);
+	single_fd = OpenSwiftFile(filename,root_hash,Address(),false,chunk_size,metadir);
 	if (single_fd < 0)
 		quit("cannot open file %s",filename.c_str());
 	if (printurl) {
@@ -477,9 +491,13 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, std::string tracke
 }
 
 
-int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size)
+int OpenSwiftFile(std::string filename, const Sha1Hash& root_hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, std::string metadir)
 {
-	std::string binmap_filename = filename;
+	// METADIR
+	std::vector<std::string> p = filename2storagefns(filename,root_hash,metadir);
+	std::string metaprefix = p[2];
+
+	std::string binmap_filename = metaprefix;
 	binmap_filename.append(".mbinmap");
 
 	// Arno, 2012-01-03: Hack to discover root hash of a file on disk, such that
@@ -494,7 +512,7 @@ int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, b
 		if (!quiet)
 			fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
 
-		fd = swift::Open(filename,hash,tracker,force_check_diskvshash,true,chunk_size);
+		fd = swift::Open(filename,root_hash,metadir,tracker,force_check_diskvshash,true,chunk_size);
 	}
 	else if (!quiet)
 		fprintf(stderr,"swift: parsedir: Ignoring loaded %s\n", filename.c_str() );
@@ -502,7 +520,7 @@ int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, b
 }
 
 
-int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size)
+int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, std::string metadir)
 {
 	DirEntry *de = opendir_utf8(dirname);
 	if (de == NULL)
@@ -516,7 +534,7 @@ int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_di
 			std::string path = dirname;
 			path.append(FILE_SEP);
 			path.append(de->filename_);
-			int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,force_check_diskvshash,chunk_size);
+			int fd = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,force_check_diskvshash,chunk_size,metadir);
 			if (fd >= 0)
 				Checkpoint(fd);
 		}
@@ -596,8 +614,7 @@ void ReportCallback(int fd, short event, void *arg) {
     	// CHECKPOINT
     	if (file_enable_checkpoint && !file_checkpointed && IsComplete(single_fd))
     	{
-    		std::string binmap_filename = ft->GetStorage()->GetOSPathName();
-    		binmap_filename.append(".mbinmap");
+    		std::string binmap_filename = ft->hashtree()->get_binmap_filename();
     		fprintf(stderr,"swift: Complete, checkpointing %s\n", binmap_filename.c_str() );
 
     		if (swift::Checkpoint(single_fd) >= 0)
@@ -655,7 +672,7 @@ void RescanDirCallback(int fd, short event, void *arg) {
 	// by running swift separately and then copy content + *.m* to scanned dir,
 	// such that a fast restore from checkpoint is done.
 	//
-	OpenSwiftDirectory(scan_dirname,tracker,false,chunk_size);
+	OpenSwiftDirectory(scan_dirname,tracker,false,chunk_size,metadir);
 
 	CleanSwiftDirectory(scan_dirname);
 

@@ -31,7 +31,7 @@ using namespace swift;
 ZeroHashTree::ZeroHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, std::string binmap_filename) :
 HashTree(), storage_(storage), root_hash_(root_hash), peak_count_(0), hash_fd_(0),
  size_(0), sizec_(0), complete_(0), completec_(0),
-chunk_size_(chunk_size)
+chunk_size_(chunk_size), hash_filename_(hash_filename), binmap_filename_(binmap_filename)
 {
 	// MULTIFILE
 	storage_->SetHashTree(this);

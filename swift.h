@@ -275,7 +275,7 @@ namespace swift {
 	 	 *  @param chunk_size				size of chunk to use
 	 	 *  @param zerostate				whether to serve the hashes + content directly from disk
 	 	 */
-        FileTransfer(std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO, bool force_check_diskvshash=true, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, bool zerostate=false);
+        FileTransfer(std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO, std::string metadir="", bool force_check_diskvshash=true, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, bool zerostate=false);
 
         /**    Close everything. */
         ~FileTransfer();
@@ -437,7 +437,7 @@ namespace swift {
         friend bool      IsComplete (int fdes);
         friend uint64_t  Complete (int fdes);
         friend uint64_t  SeqComplete (int fdes, int64_t offset);
-        friend int     Open (const char* filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size);
+        friend int     Open (const char* filename, const Sha1Hash& hash, std::string metadir, Address tracker, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size);
         friend void    Close (int fd) ;
         friend void AddProgressCallback (int transfer,ProgressCallback cb,uint8_t agg);
         friend void RemoveProgressCallback (int transfer,ProgressCallback cb);
@@ -732,7 +732,7 @@ namespace swift {
         friend void     Shutdown (int sock_des);
         friend void     AddPeer (Address address, const Sha1Hash& root);
         friend void     SetTracker(const Address& tracker);
-        friend int      Open (const char*, const Sha1Hash&, Address tracker, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size) ; // FIXME
+        friend int      Open (const char*, const Sha1Hash&, std::string metadir, Address tracker, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size) ; // FIXME
         // SOCKTUNNEL
         friend void 	CmdGwTunnelSendUDP(struct evbuffer *evb);
     };
@@ -887,6 +887,7 @@ namespace swift {
     	~ZeroState();
     	static ZeroState *GetInstance();
     	void SetContentDir(std::string contentdir);
+    	void SetMetaDir(std::string metadir);
     	void SetConnectTimeout(tint timeout);
     	FileTransfer * Find(Sha1Hash &root_hash);
 
@@ -898,6 +899,7 @@ namespace swift {
 
     	struct event 		evclean_;
         std::string 		contentdir_;
+        std::string 		metadir_;
 
         /* Arno, 2012-07-20: A very slow peer can keep a transfer alive
           for a long time (3 minute channel close timeout not reached).
@@ -921,14 +923,15 @@ namespace swift {
         If not, open will try to reconstruct the hashtree state from
         the .mhash and .mbinmap files on disk. .mhash files are created
         automatically, .mbinmap files must be written by checkpointing the
-        transfer by calling FileTransfer::serialize(). If the reconstruction
+        transfer by calling FileTransfer::serialize(). These files are written
+        in the specified metadir, if not "". If the reconstruction
         fails, it will hashcheck anyway. Roothash is optional for new files or
         files already hashchecked and checkpointed. If "check_netwvshash" is
         false, no uncle hashes will be sent and no data will be verified against
         then on receipt. In this mode, checking disk contents against hashes
         no longer works on restarts, unless checkpoints are used.
         */
-    int     Open (std::string filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(), bool force_check_diskvshash=true, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     Open (std::string filename, const Sha1Hash& hash=Sha1Hash::ZERO,std::string metadir="",Address tracker=Address(), bool force_check_diskvshash=true, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** Get the root hash for the transmission. */
     const Sha1Hash& RootMerkleHash (int file) ;
     /** Close a file and a transmission. */
@@ -1002,6 +1005,12 @@ namespace swift {
     // SOCKTUNNEL
     void CmdGwTunnelUDPDataCameIn(Address srcaddr, uint32_t srcchan, struct evbuffer* evb);
     void CmdGwTunnelSendUDP(struct evbuffer *evb); // for friendship with Channel
+
+    /** Utility function that returns a vector with:
+    - final filename, is destdir+roothash if orig filename was dir
+    - dir where data is saved, derived from filename
+    - full path for metadata files, append .m* etc for complete filename */
+    std::vector<std::string> filename2storagefns(std::string filename,const Sha1Hash &root_hash,std::string metadir);
 
 } // namespace end
 
