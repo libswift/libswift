@@ -79,7 +79,7 @@ Storage::Storage(std::string ospathname, std::string destdir, int transferfd, ui
 	else
 	{
 		// Normal swarm
-		dprintf("%s %s storage: Found single file, will check it.\n", tintstr(), roothashhex().c_str() );
+		dprintf("%s %s storage: Found single file.\n", tintstr(), roothashhex().c_str() );
 
                 DetermineReadOnly(fsize,complete);
 

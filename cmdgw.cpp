@@ -779,21 +779,40 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
     	// New START request
         //fprintf(stderr,"cmd: START: new request %i\n",cmd_gw_reqs_count+1);
 
-        // Format: START url destdir\r\n
-        // Arno, 2012-04-13: See if URL followed by storagepath for seeding
-        std::string pstr = paramstr;
-        std::string url="",storagepath="";
+        // Format: START url [destdir [metadir]]\r\n
+        // Arno, 2012-04-13: See if URL followed by destpath for seeding
+	// Arno, 2013-03-12: See if destpath followed by metadir
+	std::string pstr = paramstr;
+        std::string url="",storagepath="", metadir="";
         int sidx = pstr.find(" ");
         if (sidx == std::string::npos)
         {
-        	url = pstr;
-        	storagepath = "";
+            // No storage path or metadir
+	    url = pstr;
         }
         else
         {
-        	url = pstr.substr(0,sidx);
-        	storagepath = pstr.substr(sidx+1);
+	    url = pstr.substr(0,sidx);
+	    std::string qstr = pstr.substr(sidx+1);
+	    sidx = qstr.find(" ");
+	    if (sidx == std::string::npos)
+	    {
+		// Only storage path
+		storagepath = qstr;
+	    }
+	    else
+	    {
+		// Storage path and metadir
+		storagepath = qstr.substr(0,sidx);
+		metadir = qstr.substr(sidx+1);
+	    }
         }
+
+        // If no metadir in command, but one is set on swift command line use latter.
+        if (cmd_gw_metadir.compare("") && !metadir.compare(""))
+            metadir = cmd_gw_metadir;
+        if (metadir.substr(metadir.length()-std::string(FILE_SEP).length()).compare(FILE_SEP))
+            metadir += FILE_SEP;
 
         // Parse URL
         parseduri_t puri;
@@ -817,18 +836,18 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         if (durationstr.length() > 0)
         	std::istringstream(durationstr) >> duration;
 
-        dprintf("cmd: START: %s with tracker %s chunksize %i duration %i\n",hashstr.c_str(),trackerstr.c_str(),chunksize,duration);
+        dprintf("cmd: START: %s with tracker %s chunksize %i duration %i storage %s metadir %s\n",hashstr.c_str(),trackerstr.c_str(),chunksize,duration,storagepath.c_str(),metadir.c_str() );
 
         // ARNOTODO: return duration in HTTPGW
 
         Address trackaddr;
-		trackaddr = Address(trackerstr.c_str());
-		if (trackaddr==Address())
-		{
-			dprintf("cmd: START: tracker address must be hostname:port, ip:port or just port\n");
-	        return ERROR_BAD_ARG;
-		}
-		// SetTracker(trackaddr); == set default tracker
+	trackaddr = Address(trackerstr.c_str());
+	if (trackaddr==Address())
+	{
+		dprintf("cmd: START: tracker address must be hostname:port, ip:port or just port\n");
+	return ERROR_BAD_ARG;
+	}
+	// SetTracker(trackaddr); == set default tracker
 
         // initiate transmission
         Sha1Hash root_hash = Sha1Hash(true,hashstr.c_str());
@@ -842,9 +861,9 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         }
 
         // Send INFO DLSTATUS_HASHCHECKING
-		CmdGwSendINFOHashChecking(cmdsock,root_hash);
+	CmdGwSendINFOHashChecking(cmdsock,root_hash);
 
-		// ARNOSMPTODO: disable/interleave hashchecking at startup
+	// ARNOSMPTODO: disable/interleave hashchecking at startup
         int transfer = swift::Find(root_hash);
         if (transfer==-1) {
         	std::string filename;
@@ -852,7 +871,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         		filename = storagepath;
         	else
         		filename = hashstr;
-            transfer = swift::Open(filename,root_hash,cmd_gw_metadir,trackaddr,false,true,chunksize);
+            transfer = swift::Open(filename,root_hash,metadir,trackaddr,false,true,chunksize);
             if (transfer == -1)
             {
             	CmdGwSendERRORBySocket(cmdsock,"bad swarm",root_hash);
