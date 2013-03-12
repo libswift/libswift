@@ -84,7 +84,7 @@ evutil_socket_t   cmd_tunnel_sock=INVALID_SOCKET;
 Address cmd_gw_httpaddr;
 std::string cmd_gw_metadir;
 
-bool cmd_gw_debug=false;
+bool cmd_gw_debug=true;
 
 tint cmd_gw_last_open=0;
 
@@ -441,8 +441,8 @@ void CmdGwSwiftPrebufferProgressCallback (int transfer, bin_t bin)
 	//
 	// Subsequent bytes of content downloaded
 	//
-	if (cmd_gw_debug)
-		fprintf(stderr,"cmd: SwiftPrebuffProgress: %d\n", transfer );
+	//if (cmd_gw_debug)
+	//	fprintf(stderr,"cmd: SwiftPrebuffProgress: %d\n", transfer );
 
 	cmd_gw_t* req = CmdGwFindRequestByTransfer(transfer);
 	if (req == NULL)
@@ -454,8 +454,8 @@ void CmdGwSwiftPrebufferProgressCallback (int transfer, bin_t bin)
         int64_t wantsize = std::min(req->endoff+1-req->startoff,(uint64_t)CMDGW_MAX_PREBUF_BYTES);
 #endif
 
-	if (cmd_gw_debug)
-		fprintf(stderr,"cmd: SwiftPrebuffProgress: want %lld got %lld\n", swift::SeqComplete(req->transfer,req->startoff), wantsize );
+	//if (cmd_gw_debug)
+	//	fprintf(stderr,"cmd: SwiftPrebuffProgress: want %lld got %lld\n", swift::SeqComplete(req->transfer,req->startoff), wantsize );
 
 
 	if (swift::SeqComplete(req->transfer,req->startoff) >= wantsize)
@@ -811,8 +811,11 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         // If no metadir in command, but one is set on swift command line use latter.
         if (cmd_gw_metadir.compare("") && !metadir.compare(""))
             metadir = cmd_gw_metadir;
-        if (metadir.substr(metadir.length()-std::string(FILE_SEP).length()).compare(FILE_SEP))
-            metadir += FILE_SEP;
+        if (metadir.length() > 0)
+        {
+            if (metadir.substr(metadir.length()-std::string(FILE_SEP).length()).compare(FILE_SEP))
+                metadir += FILE_SEP;
+        }
 
         // Parse URL
         parseduri_t puri;

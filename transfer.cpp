@@ -46,10 +46,9 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, std:
     // full path for metadata files, append .m* etc for complete filename
     std::string metaprefix = p[2];
 
-    fprintf(stderr,"FileTransfer: filename %s\n", filename.c_str() );
+    /*fprintf(stderr,"FileTransfer: filename %s\n", filename.c_str() );
     fprintf(stderr,"FileTransfer: destdir  %s\n", destdir.c_str() );
-    fprintf(stderr,"FileTransfer: metapref %s\n", metaprefix.c_str() );
-
+    fprintf(stderr,"FileTransfer: metapref %s\n", metaprefix.c_str() );*/
 
     std::string hash_filename;
     hash_filename.assign(metaprefix);

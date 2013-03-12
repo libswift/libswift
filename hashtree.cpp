@@ -154,7 +154,7 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
     		Submit();
     	}
     	fclose(fp);
-    } else {
+    } else if (mhash_exists) {
     	// Arno: no data on disk, or mhash on disk, but no binmap. In latter
     	// case recreate binmap by reading content again. Historic optimization
     	// of Submit.
