@@ -228,19 +228,19 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
             chunks_since_sign_++;
             if (chunks_since_sign_ == nchunks_per_sign_)
             {
-        	int old = umt->GetSignedPeakTuples().size();
+        	int old = umt->GetCurrentSignedPeakTuples().size();
 
         	bhstvector newsubsumedpeaktuples = umt->UpdateSignedPeaks();
         	subsumedpeaktuples.insert(subsumedpeaktuples.end(), newsubsumedpeaktuples.begin(), newsubsumedpeaktuples.end() );
 
-        	fprintf(stderr,"live: AddData: UMT: signed peaks old %d new %d\n", old, umt->GetSignedPeakTuples().size() );
+        	fprintf(stderr,"live: AddData: UMT: signed peaks old %d new %d\n", old, umt->GetCurrentSignedPeakTuples().size() );
 
         	chunks_since_sign_ = 0;
         	newepoch = true;
 
 		// Arno, 2013-02-26: Cannot send HAVEs not covered by signed peak
 		signed_ack_out_.clear();
-		bhstvector cursignpeaktuples = umt->GetSignedPeakTuples();
+		bhstvector cursignpeaktuples = umt->GetCurrentSignedPeakTuples();
 		bhstvector::iterator iter;
 		for (iter= cursignpeaktuples.begin(); iter != cursignpeaktuples.end(); iter++)
 		{

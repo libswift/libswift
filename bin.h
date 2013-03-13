@@ -782,4 +782,7 @@ inline bool bin_t::contains(const bin_t& bin) const
 #include <vector>
 typedef std::vector<bin_t> binvector;
 
+
+bool bin_sort_on_layer_cmp(bin_t i, bin_t j);
+
 #endif /*_bin_h__*/

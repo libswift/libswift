@@ -20,6 +20,8 @@
  *  - Add unittest that expands tree and see if all hashes are there and verified bits set correctly
  *  - Make sure AddHave peak messages not too big
  *  - Remove old peaks from list when ack.
+ *  - Split signed peaks into multiple datagrams when too big
+ *  - Split uncle hashes into multiple datagrams when too big
  *
  *  - Problem with hook in and missing hashtree?
  */
@@ -125,12 +127,12 @@ class LiveHashTree: public HashTree
 
      /** Called when a chunk is added */
      bin_t          AddData(const char* data, size_t length);
-     /** Called after N chunks have been added, following -06. Returns subsumed peaks */
+     /** Called after N chunks have been added, following -06. Returns new peaks */
      bhstvector	    UpdateSignedPeaks();
      /*int            signed_peak_count();
      bin_t          signed_peak(int i);
      bin_t          signed_peak_for (bin_t pos) const; */
-     bhstvector	    GetSignedPeakTuples();
+     bhstvector	    GetCurrentSignedPeakTuples();
 
      bool OfferSignedPeakHash(bin_t pos,const uint8_t *signedhash);
      bool CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified);

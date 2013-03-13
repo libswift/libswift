@@ -423,7 +423,7 @@ bhstvector LiveHashTree::UpdateSignedPeaks()
 }
 
 
-bhstvector LiveHashTree::GetSignedPeakTuples()
+bhstvector LiveHashTree::GetCurrentSignedPeakTuples()
 {
     bhstvector peaktuples;
 
