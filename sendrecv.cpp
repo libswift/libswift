@@ -78,7 +78,6 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
         evbuffer_add_chunkaddr(evb,uncle,hs_out_->chunk_addr_);
         evbuffer_add_hash(evb, hashtree()->hash(uncle) );
         dprintf("%s #%u +hash %s\n",tintstr(),id_,uncle.str().c_str());
-        pos = pos.parent();
     }
 
 }
