@@ -627,19 +627,18 @@ binvector swift::bin_fragment(bin_t &origbin, bin_t &cancelbin)
 }
 
 
-void Channel::AddSignedPeakSubsumedTuples(bhstvector &sbv)
+void Channel::AddSinceSignedPeakTuples(bhstvector &sbv)
 {
-    subsumed_signed_peak_tuples_.insert( subsumed_signed_peak_tuples_.end(), sbv.begin(), sbv.end() );
+    since_signed_peak_tuples_.insert( since_signed_peak_tuples_.end(), sbv.begin(), sbv.end() );
 }
 
-
-bhstvector   &Channel::GetSignedPeakSubsumedTuples()
+bhstvector   &Channel::GetSinceSignedPeakTuples()
 {
-    return subsumed_signed_peak_tuples_;
+    return since_signed_peak_tuples_;
 }
 
-void Channel::ClearSignedPeakSubsumedTuples()
+void Channel::ClearSinceSignedPeakTuples()
 {
-    subsumed_signed_peak_tuples_.clear();
+    since_signed_peak_tuples_.clear();
 }
 

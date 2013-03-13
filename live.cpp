@@ -203,7 +203,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         fprintf(stderr,"live: AddData: stored " PRISIZET " bytes\n", nbyte);
 
     uint64_t till = std::max((size_t)1,nbyte/chunk_size_);
-    bhstvector subsumedpeaktuples;
+    bhstvector totalnewpeaktuples;
     bool newepoch=false;
     for (uint64_t c=0; c<till; c++)
     {
@@ -230,15 +230,15 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
             {
         	int old = umt->GetCurrentSignedPeakTuples().size();
 
-        	bhstvector newsubsumedpeaktuples = umt->UpdateSignedPeaks();
-        	subsumedpeaktuples.insert(subsumedpeaktuples.end(), newsubsumedpeaktuples.begin(), newsubsumedpeaktuples.end() );
+        	bhstvector newpeaktuples = umt->UpdateSignedPeaks();
+        	totalnewpeaktuples.insert(totalnewpeaktuples.end(), newpeaktuples.begin(), newpeaktuples.end() );
 
         	fprintf(stderr,"live: AddData: UMT: signed peaks old %d new %d\n", old, umt->GetCurrentSignedPeakTuples().size() );
 
         	chunks_since_sign_ = 0;
         	newepoch = true;
 
-		// Arno, 2013-02-26: Cannot send HAVEs not covered by signed peak
+		// Arno, 2013-02-26: Can only send HAVEs covered by signed peaks
 		signed_ack_out_.clear();
 		bhstvector cursignpeaktuples = umt->GetCurrentSignedPeakTuples();
 		bhstvector::iterator iter;
@@ -274,7 +274,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         //DDOS
         if (c->is_established())
         {
-            c->AddSignedPeakSubsumedTuples(subsumedpeaktuples);
+            c->AddSinceSignedPeakTuples(totalnewpeaktuples);
             c->LiveSend();
         }
     }

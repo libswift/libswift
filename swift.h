@@ -848,9 +848,9 @@ namespace swift {
         // LIVE
         /** Arno: Called when source generates chunk. */
         void        LiveSend();
-        void	    AddSignedPeakSubsumedTuples(bhstvector &sbv);
-        bhstvector &GetSignedPeakSubsumedTuples();
-        void 	    ClearSignedPeakSubsumedTuples();
+        void	    AddSinceSignedPeakTuples(bhstvector &sbv);
+        bhstvector &GetSinceSignedPeakTuples();
+        void 	    ClearSinceSignedPeakTuples();
 
         void 	    CloseOnError();
 
@@ -952,7 +952,7 @@ namespace swift {
         //LIVE
         bool        peer_is_source_;
         /** SIGNPEAKTODO */
-        bhstvector subsumed_signed_peak_tuples_;
+        bhstvector since_signed_peak_tuples_;
 
         // PPSP
         /** Handshake I sent to peer. swarmid not set. */

@@ -77,14 +77,11 @@ void    Channel::AddSignedPeakHashes(struct evbuffer *evb, bhstvector &peaktuple
 
         fprintf(stderr,"AddHash: speak %s %s\n", bhst.bin().str().c_str(), bhst.hash().hex().c_str() );
 
-        if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
-        {
-            evbuffer_add_8(evb, SWIFT_SIGNED_INTEGRITY);
-            evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
-            evbuffer_add(evb, bhst.sig().bits(), bhst.sig().length() );
+	evbuffer_add_8(evb, SWIFT_SIGNED_INTEGRITY);
+	evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
+	evbuffer_add(evb, bhst.sig().bits(), bhst.sig().length() );
 
-            dprintf("%s #%u +sigh %s %d\n",tintstr(),id_,bhst.bin().str().c_str(), bhst.sig().length() );
-        }
+	dprintf("%s #%u +sigh %s %d\n",tintstr(),id_,bhst.bin().str().c_str(), bhst.sig().length() );
     }
 }
 
@@ -688,25 +685,19 @@ void    Channel::AddHave (struct evbuffer *evb) {
 
 	// Deep sh*t
 	bhstvector::iterator iter;
-	bhstvector subsumedsignedpeaks = GetSignedPeakSubsumedTuples();
+	bhstvector sincesignedpeaktuples = GetSinceSignedPeakTuples();
 
-	// SIGNPEAKTODO: don't clear until somehow receipt acknowledged.
-	ClearSignedPeakSubsumedTuples();
-
-	for (iter=subsumedsignedpeaks.begin(); iter != subsumedsignedpeaks.end(); iter++)
+	for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
 	{
 	    BinHashSigTuple bhst = *iter;
-	    fprintf(stderr,"AddHave: Adding subsumed signed peak %s\n", bhst.bin().str().c_str() );
+	    fprintf(stderr,"AddHave: Adding since signed peak %s\n", bhst.bin().str().c_str() );
 	}
 
-	// SIGNPEAKTODO: remove duplicates
+	// Send signed peaks generated since last send
+	AddSignedPeakHashes(evb,sincesignedpeaktuples);
 
-	// Send old subsumed peaks
-	AddSignedPeakHashes(evb,subsumedsignedpeaks);
-
-	// Send current peaks
-	AddSignedPeakHashes(evb,umt->GetCurrentSignedPeakTuples());
-
+	// SIGNPEAKTODO: don't clear until somehow receipt acknowledged.
+	ClearSinceSignedPeakTuples();
     }
 
     if (!data_in_dbl_.is_none()) { // TODO: do redundancy better
@@ -1434,6 +1425,14 @@ void Channel::OnHandshake(Handshake *hishs) {
     // FUTURE: channel forking
     if (is_established()) // when this was reply to our HS
         dprintf("%s #%u established %s\n", tintstr(), id_, peer().str().c_str());
+
+    // SIGNPEAK
+    if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+    {
+	LiveHashTree *umt = (LiveHashTree *)hashtree();
+	// Initialize with current signed peaks
+    	AddSinceSignedPeakTuples(umt->GetCurrentSignedPeakTuples());
+    }
 }
 
 
