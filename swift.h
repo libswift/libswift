@@ -850,8 +850,12 @@ namespace swift {
         // LIVE
         /** Arno: Called when source generates chunk. */
         void        LiveSend();
+        /** Add new signed peaks, to be sent to peer on next send */
         void	    AddSinceSignedPeakTuples(bhstvector &sbv);
+        /** Get list of new signed peaks to send */
         bhstvector &GetSinceSignedPeakTuples();
+        /** Remove peak from list that contains hint, means sig checked */
+        void 	    RemoveSinceSignedPeakTuples(bin_t hint);
         void 	    ClearSinceSignedPeakTuples();
 
         void 	    CloseOnError();

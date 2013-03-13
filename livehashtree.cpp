@@ -627,6 +627,7 @@ void LiveHashTree::check_peak_coverage()
 	    {
 		fprintf(stderr,"peak bork: %s covers %s to %s\n", peak_bins_[j].str().c_str(), peak_bins_[j].base_left().str().c_str(), peak_bins_[j].base_right().str().c_str());
 	    }
+            getchar();
 	    exit(-1);
 	}
 	end = peak_bins_[i].base_right().layer_offset();
@@ -655,6 +656,8 @@ void LiveHashTree::check_signed_peak_coverage()
 	    {
 		fprintf(stderr,"UpdateSignedPeaks: signed peak bork: %s covers %s to %s\n", signed_peak_bins_[j].str().c_str(), signed_peak_bins_[j].base_left().str().c_str(), signed_peak_bins_[j].base_right().str().c_str());
 	    }
+            fprintf(stderr,"Press...\n");
+            getchar();
 	    exit(-1);
 	}
 	end = signed_peak_bins_[i].base_right().layer_offset();
@@ -875,7 +878,17 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
             fprintf(stderr,"OfferHash: squirrel %s %p %p\n", piter->GetBin().str().c_str(), piter->GetLeft(), piter->GetRight() );
 
         if (piter->GetLeft() == NULL || piter->GetRight() == NULL)
+        {
+            if (tree_debug)
+            {
+        	if (piter->GetLeft() == NULL)
+        	    fprintf(stderr,"OfferHash: Error! Missing left child of %s\n", piter->GetBin().str().c_str() );
+        	if (piter->GetRight() == NULL)
+        	    fprintf(stderr,"OfferHash: Error! Missing right child of %s\n", piter->GetBin().str().c_str() );
+            }
+
             return false; // tree still incomplete
+        }
 
         if (tree_debug)
             fprintf(stderr,"OfferHash: hashsquirrel %s %s %s\n", piter->GetBin().str().c_str(), piter->GetLeft()->GetHash().hex().c_str(), piter->GetRight()->GetHash().hex().c_str() );
@@ -897,6 +910,7 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     if (!success)
     {
 	fprintf(stderr,"OfferHash: !success data %s\n", pos.str().c_str() );
+        getchar();
 	exit(-1);
     }
 
@@ -920,12 +934,16 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 		piter = piter->GetParent()->GetParent()->GetRight();
 	    else
 		piter = piter->GetParent()->GetParent()->GetLeft();
-            if (tree_debug)
-	        fprintf(stderr,"OfferHash: SetVerified %s\n", piter->GetBin().str().c_str() );
             if (piter == NULL)
+            {
                 fprintf(stderr,"OfferHash: SetVerified %s has NULL node!!!\n", p.str().c_str() );
+                return false;
+            }
             else
+            {
+	        fprintf(stderr,"OfferHash: SetVerified %s\n", piter->GetBin().str().c_str() );
 	        piter->SetVerified(true);
+            }
 	}
 	// Also mark hashes on direct path to root as verified. Doesn't decrease
 	// #checks, but does increase the number of verified hashes faster.
@@ -968,6 +986,8 @@ bool LiveHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
     {
         cand_peak_bin_ = pos;
         cand_peak_hash_ = hash;
+        if (tree_debug)
+	    fprintf(stderr,"OfferData: no peak\n");
         return false;
     }
     else

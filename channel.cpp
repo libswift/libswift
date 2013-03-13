@@ -637,8 +637,25 @@ bhstvector   &Channel::GetSinceSignedPeakTuples()
     return since_signed_peak_tuples_;
 }
 
-void Channel::ClearSinceSignedPeakTuples()
+void Channel::RemoveSinceSignedPeakTuples(bin_t hint)
 {
-    since_signed_peak_tuples_.clear();
+    // TODO: perhaps hashtable index on bin_t to make this faster
+    bhstvector::iterator iter;
+
+    for (iter=since_signed_peak_tuples_.begin(); iter != since_signed_peak_tuples_.end(); iter++)
+    {
+	BinHashSigTuple bhst = *iter;
+	if (bhst.bin().contains(hint))
+	{
+	    fprintf(stderr,"RemoveSinceSignedPeakTuples: removing %s containing %s\n", bhst.bin().str().c_str(), hint.str().c_str() );
+	    since_signed_peak_tuples_.erase(iter);
+	    break;
+	}
+    }
 }
 
+void Channel::ClearSinceSignedPeakTuples()
+{
+    fprintf(stderr,"ClearSinceSignedPeakTuples\n");
+    since_signed_peak_tuples_.clear();
+}

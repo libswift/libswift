@@ -45,20 +45,18 @@ struct event Channel::evrecv;
 
 
 
-void    Channel::AddPeakHashes (struct evbuffer *evb) {
-
-    if (hs_out_ == NULL)
-	return;
-
+void    Channel::AddPeakHashes (struct evbuffer *evb)
+{
     // We're either seeder or know what content integrity protection method
     // is because seeder told us, so hs_out_ is guiding here so we can
     // send peak hashes in first datagram.
     // TODO: adjust DefaultHandshake from which hs_out_ is derived when
     // an authoritative source proves the CIPM is UNIFIED_MERKLE.
     //
-    if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE)
+    if (hs_out_->cont_int_prot_ != POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
-	// Arno, 2013-02-25: Need to send peak bins always to cold clients to communicate tree size
+	// Arno, 2013-02-25: Need to send peak bins always (also CIPM None)
+	// to cold clients to communicate tree size
 	if (ack_in_.is_empty() && hashtree()->peak_count() > 0)
 	{
 	    AddUnsignedPeakHashes(evb);
@@ -90,19 +88,19 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
     LiveHashTree *umt = (LiveHashTree *)hashtree();
 
     bhstvector::iterator iter;
-    bhstvector sincesignedpeaktuples = GetSinceSignedPeakTuples();
+    //bhstvector sincesignedpeaktuples = GetSinceSignedPeakTuples();
+    bhstvector sincesignedpeaktuples = umt->GetCurrentSignedPeakTuples();
 
     for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
     {
 	BinHashSigTuple bhst = *iter;
-	fprintf(stderr,"AddHave: Adding since signed peak %s\n", bhst.bin().str().c_str() );
+	fprintf(stderr,"AddLiveSignedPeakHashes: Adding since signed peak %s\n", bhst.bin().str().c_str() );
     }
 
     // Put in datagram
     AddLiveSignedPeakHashes(evb,sincesignedpeaktuples);
 
-    // SIGNPEAKTODO: don't clear until somehow receipt acknowledged.
-    ClearSinceSignedPeakTuples();
+    //ClearSinceSignedPeakTuples();
 }
 
 
@@ -119,7 +117,7 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &peakt
 
         dprintf("%s #%u +phash %s\n",tintstr(),id_,bhst.bin().str().c_str());
 
-        fprintf(stderr,"AddHash: speak %s %s\n", bhst.bin().str().c_str(), bhst.hash().hex().c_str() );
+        fprintf(stderr,"AddLiveSignedPeakHashess: speak %s %s\n", bhst.bin().str().c_str(), bhst.hash().hex().c_str() );
 
 	evbuffer_add_8(evb, SWIFT_SIGNED_INTEGRITY);
 	evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
@@ -156,11 +154,13 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
     // the hashes to the right of the new peak (3,0) as these are "hashes
     // needed to verify the integrity of the chunk" (PPSP spec).
     //
+#ifdef SJAAK
     if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
 	AddLiveRightHashes(peak,bv);
 
     // PPSP -04: Send in descending layer order
     std::sort(bv.begin(),bv.end(), bin_sort_on_layer_cmp);
+#endif
 
     binvector::reverse_iterator iter;
     for (iter=bv.rbegin(); iter != bv.rend(); iter++) {
@@ -1244,6 +1244,10 @@ void    Channel::OnHint (struct evbuffer *evb) {
 	hint_in_.push_back(hint);
 	hint_in_size_ += hint.base_length();
 	dprintf("%s #%u -hint %s [%llu]\n",tintstr(),id_,hint.str().c_str(),hint_in_size_);
+
+	// SIGNPEAK
+	//if (hs_in_ != NULL && hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+	//    RemoveSinceSignedPeakTuples(hint);
     }
 }
 
