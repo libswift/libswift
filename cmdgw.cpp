@@ -611,12 +611,14 @@ int icount=0;
 
 void CmdGwUpdateDLStatesCallback()
 {
-	// Called by swift main approximately every second
-	// Loop over all swarms
+    // Called by swift main approximately every second
+    // Loop over all swarms
+    evutil_socket_t cmdsock=-1;
     for(int i=0; i<cmd_gw_reqs_open; i++)
     {
     	cmd_gw_t* req = &cmd_requests[i];
     	CmdGwUpdateDLStateCallback(req);
+    	cmdsock=req->cmdsock;
     }
 
     // Arno, 2012-05-24: Autoclose if CMD *connection* not *re*established soon
@@ -638,6 +640,34 @@ void CmdGwUpdateDLStatesCallback()
     else
     	cmd_gw_last_open = NOW;
     */
+
+    if (cmdsock != -1 && FileTransfer::subscribe_channel_close)
+    {
+    	std::ostringstream oss;
+
+	swevent_list_t::iterator iter;
+	for (iter = FileTransfer::subscribe_event_q.begin(); iter != FileTransfer::subscribe_event_q.end(); iter++)
+	{
+	    CloseEvent ce = *iter;
+
+	    oss << "CLOSE_EVENT" << " " << ce.swarmid().hex() << " ";
+	    oss << ce.peeraddr().str() << " ";
+	    oss << ce.raw_bytes(DDIR_UPLOAD) << " ";
+	    oss << ce.raw_bytes(DDIR_DOWNLOAD) << " ";
+	    oss << ce.bytes(DDIR_UPLOAD) << " ";
+	    oss << ce.bytes(DDIR_DOWNLOAD);
+	    oss << "\r\n";
+	}
+
+	if (FileTransfer::subscribe_event_q.size() > 0)
+	{
+	    std::stringbuf *pbuf=oss.rdbuf();
+	    size_t slen = strlen(pbuf->str().c_str());
+	    send(cmdsock,pbuf->str().c_str(),slen,0);
+	}
+	FileTransfer::subscribe_event_q.clear();
+    }
+
 }
 
 
@@ -1035,7 +1065,44 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
     	Sha1Hash root_hash = Sha1Hash(true,hashstr);
     	CmdGwGotPEERADDR(root_hash,peer);
     }
+    else if (!strcmp(method,"SUBSCRIBE"))
+    {
+	// Format: SUBSCRIBE swarmid EVENT 1/0
+	//         SUBSCRIBE 089aa... CHANNEL_CLOSE 1
+	std::string pstr = paramstr;
+        std::string swarmidstr="",eventstr="", enablestr="";
+        int sidx = pstr.find(" ");
+        if (sidx == std::string::npos)
+        {
+            return ERROR_MISS_ARG;
+        }
+        else
+        {
+	    swarmidstr = pstr.substr(0,sidx);
+	    std::string qstr = pstr.substr(sidx+1);
+	    sidx = qstr.find(" ");
+	    if (sidx == std::string::npos)
+	    {
+		// On/off missing
+		return ERROR_MISS_ARG;
+	    }
+	    else
+	    {
+		eventstr = qstr.substr(0,sidx);
+		enablestr = qstr.substr(sidx+1);
+	    }
 
+        }
+
+        fprintf(stderr,"PARSED %s %s %s\n", swarmidstr.c_str(), eventstr.c_str(), enablestr.c_str() );
+
+        if (swarmidstr.compare("ALL") || eventstr.compare("CHANNEL_CLOSE"))
+            return ERROR_BAD_ARG;
+
+        FileTransfer::subscribe_channel_close = !enablestr.compare("1");
+        if (!FileTransfer::subscribe_channel_close)
+            FileTransfer::subscribe_event_q.clear();
+    }
     else
     {
     	return ERROR_UNKNOWN_CMD;

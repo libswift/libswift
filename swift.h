@@ -253,6 +253,10 @@ namespace swift {
         DDIR_DOWNLOAD
     } data_direction_t;
 
+// Need data_direction_t
+#include "subscribe.h"
+
+
     class PiecePicker;
     //class CongestionController; // Arno: Currently part of Channel. See ::NextSendTime
     class PeerSelector;
@@ -428,6 +432,9 @@ namespace swift {
         bool            OnPexAddIn (const Address& addr);
 
         static std::vector<FileTransfer*> files;
+        // SUBSCRIBE
+        static bool subscribe_channel_close;
+        static swevent_list_t	subscribe_event_q;
 
 
         friend class Channel;

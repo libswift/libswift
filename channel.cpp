@@ -107,6 +107,14 @@ Channel::~Channel () {
 		}
     	transfer_->mychannels_.erase(iter);
     }
+
+    // SUBSCRIBE
+    fprintf(stderr,"~Channel CLOSE_EVENT\n");
+    if (FileTransfer::subscribe_channel_close)
+    {
+	CloseEvent ce(transfer().root_hash(),peer_,raw_bytes_down_,raw_bytes_up_,bytes_down_,bytes_up_);
+	FileTransfer::subscribe_event_q.push_back(ce);
+    }
 }
 
 

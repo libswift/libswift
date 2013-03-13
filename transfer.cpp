@@ -19,6 +19,8 @@
 using namespace swift;
 
 std::vector<FileTransfer*> FileTransfer::files(20);
+bool FileTransfer::subscribe_channel_close = false;
+swevent_list_t FileTransfer::subscribe_event_q;
 
 #define BINHASHSIZE (sizeof(bin64_t)+sizeof(Sha1Hash))
 
