@@ -771,7 +771,9 @@ namespace swift {
         void        AddCancel (struct evbuffer *evb);
         void        AddUncleHashes (struct evbuffer *evb, bin_t pos);
         void        AddPeakHashes (struct evbuffer *evb);
-        void        AddSignedPeakHashes(struct evbuffer *evb, bhstvector &sbv); // SIGNPEAK
+        void        AddUnsignedPeakHashes (struct evbuffer *evb);
+        void        AddLiveSignedPeakHashes(struct evbuffer *evb); // SIGNPEAK
+        void        AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &sbv); // SIGNPEAK
         void        AddLiveRightHashes(bin_t pos, binvector &bv); // SIGNPEAK
         void        AddPex (struct evbuffer *evb);
         void        OnPexReq(void);
