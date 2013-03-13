@@ -84,7 +84,7 @@ evutil_socket_t   cmd_tunnel_sock=INVALID_SOCKET;
 Address cmd_gw_httpaddr;
 std::string cmd_gw_metadir;
 
-bool cmd_gw_debug=true;
+bool cmd_gw_debug=false;
 
 tint cmd_gw_last_open=0;
 
@@ -1093,9 +1093,6 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 	    }
 
         }
-
-        fprintf(stderr,"PARSED %s %s %s\n", swarmidstr.c_str(), eventstr.c_str(), enablestr.c_str() );
-
         if (swarmidstr.compare("ALL") || eventstr.compare("CHANNEL_CLOSE"))
             return ERROR_BAD_ARG;
 
