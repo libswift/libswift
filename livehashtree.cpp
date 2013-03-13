@@ -12,8 +12,65 @@
 using namespace swift;
 
 
-#define  tree_debug	false
+#define  tree_debug	true
 
+
+/*
+ * Signature
+ */
+
+
+Signature::Signature(uint8_t *sb, uint16_t len) : sigbits_(NULL), siglen_(0)
+{
+    if (len == 0)
+	return;
+    siglen_ = len;
+    sigbits_ = new uint8_t[siglen_];
+    memcpy(sigbits_,sb,siglen_);
+}
+
+Signature::Signature(const Signature &copy) : sigbits_(NULL), siglen_(0)
+{
+    if (copy.siglen_ == 0)
+	return;
+
+    siglen_ = copy.siglen_;
+    sigbits_ = new uint8_t[siglen_];
+    memcpy(sigbits_,copy.sigbits_,siglen_);
+}
+
+Signature::~Signature()
+{
+    if (sigbits_ != NULL)
+	delete sigbits_;
+    sigbits_ = NULL;
+}
+
+Signature & Signature::operator= (const Signature & source)
+{
+    if (this != &source)
+     {
+         if (source.siglen_ == 0)
+         {
+             siglen_ = 0;
+             if (sigbits_ != NULL)
+                 delete sigbits_;
+             sigbits_ = NULL;
+         }
+         else
+         {
+            siglen_ = source.siglen_;
+            sigbits_ = new uint8_t[source.siglen_];
+            memcpy(sigbits_,source.sigbits_,source.siglen_);
+         }
+     }
+     return *this;
+ }
+
+
+/*
+ * Node
+ */
 
 Node::Node() : parent_(NULL), leftc_(NULL), rightc_(NULL), b_(bin_t::NONE), h_(Sha1Hash::ZERO), verified_(false)
 {
@@ -82,16 +139,12 @@ LiveHashTree::LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_s
  HashTree(), state_(LHT_STATE_SIGN_EMPTY), root_(NULL), addcursor_(NULL), privkey_(privkey), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
  chunk_size_(chunk_size), storage_(storage), signed_peak_count_(0)
 {
-    for (int i=0; i<64; i++)
-	signed_peak_sigs_[i] = NULL;
 }
 
 LiveHashTree::LiveHashTree(Storage *storage, pubkey_t swarmid, uint32_t chunk_size) :
  HashTree(), state_(LHT_STATE_VER_AWAIT_PEAK), root_(NULL), addcursor_(NULL), pubkey_(swarmid), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
  chunk_size_(chunk_size), storage_(storage), signed_peak_count_(0)
 {
-    for (int i=0; i<64; i++)
-	signed_peak_sigs_[i] = NULL;
 }
 
 LiveHashTree::~LiveHashTree()
@@ -264,7 +317,7 @@ Node *LiveHashTree::CreateNext()
 }
 
 
-binvector LiveHashTree::UpdateSignedPeaks()
+bhstvector LiveHashTree::UpdateSignedPeaks()
 {
     // Calc peak diffs
     bool changed=false;
@@ -284,12 +337,12 @@ binvector LiveHashTree::UpdateSignedPeaks()
     else
 	changed = true;
 
-    binvector subsumedbins;
+    bhstvector newpeaktuples;
     if (!changed)
-	return subsumedbins;
+	return newpeaktuples;
 
     // Arno, 2013-03-06: Determine which peaks have been subsumed by new ones.
-    for (i=0; i<peak_count_; i++)
+    /* for (i=0; i<peak_count_; i++)
     {
 	bin_t peak = peak_bins_[i];
 	for (int j=0; j<signed_peak_count_; j++)
@@ -297,26 +350,26 @@ binvector LiveHashTree::UpdateSignedPeaks()
 	    bin_t signed_peak = signed_peak_bins_[j];
 	    if (peak != signed_peak && peak.contains(signed_peak))
 	    {
-		subsumedbins.push_back(signed_peak);
+		// Save info for old peak: bin,hash,sig
+                fprintf(stderr,"UpdateSignedPeaks: %s subsumed by %s\n", signed_peak.str().c_str(), peak.str().c_str() );
+		Signature copysig = signed_peak_sigs_[j];
+		BinHashSigTuple bhst(signed_peak,hash(signed_peak),copysig);
+		subsumed.push_back(bhst);
 	    }
 	}
-    }
+    } */
 
     int startidx=0;
     changed = false;
 
-    // Got new or extra peak hash
+    // Copy new peaks to signed peaks
     signed_peak_count_ = peak_count_;
     for (i=0; i<peak_count_; i++)
     {
 	if (peak_bins_[i] != signed_peak_bins_[i])
 	{
-	    // Sign new peak
-	    Sha1Hash h = hash(peak_bins_[i]);
-	    uint8_t* signedhash = new uint8_t[DUMMY_DEFAULT_SIG_LENGTH]; // placeholder
-	    if (signed_peak_sigs_[i] != NULL)
-		delete signed_peak_sigs_[i];
-	    signed_peak_sigs_[i] = signedhash;
+            fprintf(stderr,"UpdateSignedPeaks: new %s \n", peak_bins_[i].str().c_str() );
+
 	    signed_peak_bins_[i] = peak_bins_[i];
 
 	    if (!changed)
@@ -326,39 +379,70 @@ binvector LiveHashTree::UpdateSignedPeaks()
 	    }
 	}
     }
-    // Clear old hashes
+    // Clear old peaks
     for (i=peak_count_; i<signed_peak_count_; i++)
     {
-	if (signed_peak_sigs_[i] != NULL)
-	{
-	    delete signed_peak_sigs_[i];
-	    signed_peak_sigs_[i] = NULL;
-	}
+	signed_peak_sigs_[i] = Signature();
     }
 
-
-    check_signed_peak_coverage(subsumedbins);
+    check_signed_peak_coverage();
 
 
     // Now the trees below peaks are stable, so we can calculate the hash tree
     // for them.
     for (i=startidx; i<signed_peak_count_; i++)
     {
-	Node *spnode = FindNode(signed_peak_bins_[i]);
+	bin_t newpeak = signed_peak_bins_[i];
+	fprintf(stderr,"UpdateSignedPeaks: compute till %s\n", signed_peak_bins_[i].str().c_str() );
+	Node *spnode = FindNode(newpeak);
 	if (spnode == NULL)
 	{
 	    fprintf(stderr,"UpdateSignedPeaks: cannot find peak?!\n");
-	    return subsumedbins;
+	    return newpeaktuples;
 	}
 	ComputeTree(spnode);
+
+	// Hash of new peak known, now sign and store for transmission
+	Sha1Hash hash = spnode->GetHash();
+	uint8_t* signedhash = new uint8_t[DUMMY_DEFAULT_SIG_LENGTH]; // placeholder
+        for (int k=0; k<20; k++)
+            signedhash[k] = 'v';
+        signedhash[19] = '\0';
+        Signature sig(signedhash,DUMMY_DEFAULT_SIG_LENGTH);
+        delete signedhash;
+
+        signed_peak_sigs_[i] = sig;
+
+	BinHashSigTuple bhst(newpeak,hash,sig);
+	newpeaktuples.push_back(bhst);
     }
 
-    return subsumedbins;
+    check_new_peaks(newpeaktuples);
+
+    return newpeaktuples;
+}
+
+
+bhstvector LiveHashTree::GetSignedPeakTuples()
+{
+    bhstvector peaktuples;
+
+    for (int j=0; j<signed_peak_count_; j++)
+    {
+	// Save info for old peak: bin,hash,sig
+	bin_t signed_peak = signed_peak_bins_[j];
+	Signature copysig = signed_peak_sigs_[j];
+	BinHashSigTuple bhst(signed_peak,hash(signed_peak),copysig);
+
+	peaktuples.push_back(bhst);
+    }
+    return peaktuples;
 }
 
 
 void LiveHashTree::ComputeTree(Node *start)
 {
+    fprintf(stderr,"ComputeTree: start %s\n", start->GetBin().str().c_str() );
     if (!start->GetVerified())
     {
 	ComputeTree(start->GetLeft());
@@ -375,7 +459,7 @@ void LiveHashTree::ComputeTree(Node *start)
 
 
 
-int LiveHashTree::signed_peak_count()
+/* int LiveHashTree::signed_peak_count()
 {
     return signed_peak_count_;
 }
@@ -392,7 +476,7 @@ uint8_t *LiveHashTree::signed_peak_sig(int i)
 
 int LiveHashTree::signed_peak_sig_length(int i)
 {
-    return DUMMY_DEFAULT_SIG_LENGTH;
+    return signed_peak_sigs_len_[i];
 }
 
 
@@ -406,7 +490,7 @@ bin_t LiveHashTree::signed_peak_for(bin_t pos) const
 	    return signed_peak_bins_[i];
     }
     return bin_t::NONE;
-}
+}*/
 
 
 
@@ -550,7 +634,7 @@ void LiveHashTree::check_peak_coverage()
 }
 
 
-void LiveHashTree::check_signed_peak_coverage(binvector subsumedbins)
+void LiveHashTree::check_signed_peak_coverage()
 {
     // Sanity check
     bin_t::uint_t end = 0;
@@ -575,17 +659,23 @@ void LiveHashTree::check_signed_peak_coverage(binvector subsumedbins)
 	}
 	end = signed_peak_bins_[i].base_right().layer_offset();
     }
+}
 
+
+void LiveHashTree::check_new_peaks(bhstvector &newpeaktuples)
+{
     if (tree_debug)
     {
-        binvector::iterator iter;
-        for (iter=subsumedbins.begin(); iter!=subsumedbins.end(); iter++)
+        bhstvector::iterator iter;
+        for (iter=newpeaktuples.begin(); iter!=newpeaktuples.end(); iter++)
         {    
-	    bin_t pos = *iter;
-	    fprintf(stderr,"UpdateSignedPeaks: signed peak subsumed: %s\n", pos.str().c_str() );
+	    BinHashSigTuple bhst = *iter;
+	    fprintf(stderr,"UpdateSignedPeaks: new peak: %s %s\n", bhst.bin().str().c_str(), bhst.hash().hex().c_str() );
         }
     }
 }
+
+
 
 
 bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified)
@@ -765,7 +855,12 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     if (tree_debug)
 	fprintf(stderr,"OfferHash: verifying %s\n", pos.str().c_str() );
     // Walk to the nearest proven hash
-    while ( piter->GetBin()!=peak && ack_out_.is_empty(piter->GetBin()) && !piter->GetVerified() ) {
+    // Arno, 2013-03-11: Can't use is_empty as we may have verified some hashes
+    // under an old peak, but now that the tree has grown this doesn't indicate
+    // verified status anymore.
+    //
+    // while ( piter->GetBin()!=peak && ack_out_.is_empty(piter->GetBin()) && !piter->GetVerified() ) {
+    while ( piter->GetBin()!=peak && !piter->GetVerified() ) {
         piter->SetHash(uphash);
         piter = piter->GetParent();
 

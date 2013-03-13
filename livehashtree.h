@@ -18,6 +18,8 @@
  *  - SetVerified repeated for same bin?!
  *  - right hashes not till base, but till log(NCHUNKS_PER_SIGN) layer
  *  - Add unittest that expands tree and see if all hashes are there and verified bits set correctly
+ *  - Make sure AddHave peak messages not too big
+ *  - Remove old peaks from list when ack.
  *
  *  - Problem with hook in and missing hashtree?
  */
@@ -74,6 +76,41 @@ typedef int privkey_t;
 typedef Sha1Hash pubkey_t;
 #endif
 
+
+struct Signature
+{
+    uint8_t    *sigbits_;
+    uint16_t   siglen_;
+    Signature() : sigbits_(NULL), siglen_(0)  {}
+    Signature(uint8_t *sb, uint16_t len);
+    Signature(const Signature &copy);
+    Signature & operator = (const Signature &source);
+    ~Signature();
+    uint8_t  *bits()  { return sigbits_; }
+    uint16_t length() { return siglen_; }
+};
+
+
+struct BinHashSigTuple
+{
+    bin_t	b_;
+    Sha1Hash	h_;
+    Signature	s_;
+    BinHashSigTuple(const bin_t &b, const Sha1Hash &h, const Signature &s) : b_(b), h_(h), s_(s) {}
+    BinHashSigTuple(const BinHashSigTuple &copy)
+    {
+	b_ = copy.b_;
+	h_ = copy.h_;
+	s_ = copy.s_;
+    }
+    bin_t &bin() { return b_; }
+    Sha1Hash &hash() { return h_; }
+    Signature &sig() { return s_; }
+};
+
+typedef std::vector<BinHashSigTuple>	bhstvector;
+
+
 class LiveHashTree: public HashTree
 {
    public:
@@ -89,12 +126,11 @@ class LiveHashTree: public HashTree
      /** Called when a chunk is added */
      bin_t          AddData(const char* data, size_t length);
      /** Called after N chunks have been added, following -06. Returns subsumed peaks */
-     binvector	    UpdateSignedPeaks();
-     int            signed_peak_count();
+     bhstvector	    UpdateSignedPeaks();
+     /*int            signed_peak_count();
      bin_t          signed_peak(int i);
-     uint8_t *      signed_peak_sig(int i);
-     int            signed_peak_sig_length(int i);
-     bin_t          signed_peak_for (bin_t pos) const;
+     bin_t          signed_peak_for (bin_t pos) const; */
+     bhstvector	    GetSignedPeakTuples();
 
      bool OfferSignedPeakHash(bin_t pos,const uint8_t *signedhash);
      bool CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified);
@@ -161,7 +197,7 @@ class LiveHashTree: public HashTree
      bin_t           signed_peak_bins_[64];
      int             signed_peak_count_;
      /** Actual signatures */
-     uint8_t *       signed_peak_sigs_[64];
+     Signature       signed_peak_sigs_[64];
      // TODO: cache peak sigs
 
      /** Temp storage for candidate peak */
@@ -179,7 +215,8 @@ class LiveHashTree: public HashTree
      Sha1Hash        DeriveRoot();
 
      void check_peak_coverage();
-     void check_signed_peak_coverage(binvector subsumedbins);
+     void check_signed_peak_coverage();
+     void check_new_peaks(bhstvector &newpeaktuples);
 };
 
 }

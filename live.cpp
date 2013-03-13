@@ -203,7 +203,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         fprintf(stderr,"live: AddData: stored " PRISIZET " bytes\n", nbyte);
 
     uint64_t till = std::max((size_t)1,nbyte/chunk_size_);
-    binvector subsumedbins;
+    bhstvector subsumedpeaktuples;
     bool newepoch=false;
     for (uint64_t c=0; c<till; c++)
     {
@@ -228,22 +228,24 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
             chunks_since_sign_++;
             if (chunks_since_sign_ == nchunks_per_sign_)
             {
-        	int old = umt->signed_peak_count();
+        	int old = umt->GetSignedPeakTuples().size();
 
-        	binvector newsubsumedbins = umt->UpdateSignedPeaks();
-        	subsumedbins.insert(subsumedbins.end(), newsubsumedbins.begin(), newsubsumedbins.end() );
+        	bhstvector newsubsumedpeaktuples = umt->UpdateSignedPeaks();
+        	subsumedpeaktuples.insert(subsumedpeaktuples.end(), newsubsumedpeaktuples.begin(), newsubsumedpeaktuples.end() );
 
-        	fprintf(stderr,"live: AddData: UMT: signed peaks old %d new %d\n", old, umt->signed_peak_count() );
+        	fprintf(stderr,"live: AddData: UMT: signed peaks old %d new %d\n", old, umt->GetSignedPeakTuples().size() );
 
         	chunks_since_sign_ = 0;
         	newepoch = true;
 
 		// Arno, 2013-02-26: Cannot send HAVEs not covered by signed peak
-		LiveHashTree *umt = (LiveHashTree *)hashtree();
 		signed_ack_out_.clear();
-		for (int i=0; i<umt->signed_peak_count(); i++)
+		bhstvector cursignpeaktuples = umt->GetSignedPeakTuples();
+		bhstvector::iterator iter;
+		for (iter= cursignpeaktuples.begin(); iter != cursignpeaktuples.end(); iter++)
 		{
-		    signed_ack_out_.set(umt->signed_peak(i));
+		    BinHashSigTuple bhst = *iter;
+		    signed_ack_out_.set(bhst.bin());
 		}
             }
         }
@@ -272,7 +274,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         //DDOS
         if (c->is_established())
         {
-            c->SetSignedPeaksSubsumed(subsumedbins);
+            c->AddSignedPeakSubsumedTuples(subsumedpeaktuples);
             c->LiveSend();
         }
     }

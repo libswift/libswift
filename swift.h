@@ -771,8 +771,8 @@ namespace swift {
         void        AddCancel (struct evbuffer *evb);
         void        AddUncleHashes (struct evbuffer *evb, bin_t pos);
         void        AddPeakHashes (struct evbuffer *evb);
-        void        AddSignedPeakHashes(struct evbuffer *evb); // SIGNPEAK
-        void        AddLiveRightHashes (struct evbuffer *evb, bin_t pos); // SIGNPEAK
+        void        AddSignedPeakHashes(struct evbuffer *evb, bhstvector &sbv); // SIGNPEAK
+        void        AddLiveRightHashes(bin_t pos, binvector &bv); // SIGNPEAK
         void        AddPex (struct evbuffer *evb);
         void        OnPexReq(void);
         void        AddPexReq(struct evbuffer *evb);
@@ -848,9 +848,9 @@ namespace swift {
         // LIVE
         /** Arno: Called when source generates chunk. */
         void        LiveSend();
-        void	    SetSignedPeaksSubsumed(binvector &sbv);
-        binvector   GetSignedPeaksSubsumed();
-        void 	    ClearSignedPeaksSubsumed();
+        void	    AddSignedPeakSubsumedTuples(bhstvector &sbv);
+        bhstvector &GetSignedPeakSubsumedTuples();
+        void 	    ClearSignedPeakSubsumedTuples();
 
         void 	    CloseOnError();
 
@@ -952,7 +952,7 @@ namespace swift {
         //LIVE
         bool        peer_is_source_;
         /** SIGNPEAKTODO */
-        binvector subsumed_signed_peak_bins_;
+        bhstvector subsumed_signed_peak_tuples_;
 
         // PPSP
         /** Handshake I sent to peer. swarmid not set. */

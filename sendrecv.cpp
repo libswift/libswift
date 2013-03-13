@@ -62,26 +62,28 @@ void    Channel::AddPeakHashes (struct evbuffer *evb) {
 
 
 // SIGNPEAK
-void    Channel::AddSignedPeakHashes(struct evbuffer *evb)
+void    Channel::AddSignedPeakHashes(struct evbuffer *evb, bhstvector &sbv)
 {
-    LiveHashTree *umt = (LiveHashTree *)hashtree();
-    for(int i=0; i<umt->signed_peak_count(); i++) {
-        bin_t peak = umt->signed_peak(i);
+    bhstvector::iterator iter;
+    for (iter= sbv.begin(); iter != sbv.end(); iter++)
+    {
+	BinHashSigTuple bhst = *iter;
+
         evbuffer_add_8(evb, SWIFT_INTEGRITY);
-        evbuffer_add_chunkaddr(evb,peak,hs_out_->chunk_addr_);
-        evbuffer_add_hash(evb, umt->hash(peak));
+        evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
+        evbuffer_add_hash(evb, bhst.hash());
 
-        dprintf("%s #%u +phash %s\n",tintstr(),id_,peak.str().c_str());
+        dprintf("%s #%u +phash %s\n",tintstr(),id_,bhst.bin().str().c_str());
 
-        fprintf(stderr,"AddHash: speak %s %s\n", peak.str().c_str(), umt->hash(peak).hex().c_str() );
+        fprintf(stderr,"AddHash: speak %s %s\n", bhst.bin().str().c_str(), bhst.hash().hex().c_str() );
 
         if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
         {
             evbuffer_add_8(evb, SWIFT_SIGNED_INTEGRITY);
-            evbuffer_add_chunkaddr(evb,peak,hs_out_->chunk_addr_);
-            evbuffer_add(evb, umt->signed_peak_sig(i), umt->signed_peak_sig_length(i));
+            evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
+            evbuffer_add(evb, bhst.sig().bits(), bhst.sig().length() );
         }
-        dprintf("%s #%u +sigh %s\n",tintstr(),id_,peak.str().c_str());
+        dprintf("%s #%u +sigh %s %d\n",tintstr(),id_,bhst.bin().str().c_str(), bhst.sig().length() );
     }
 }
 
@@ -102,6 +104,10 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
         bv.push_back(uncle);
         pos = pos.parent();
     }
+
+    if (transfer()->ttype() == LIVE_TRANSFER)
+	AddLiveRightHashes(peak,bv);
+
     // PPSP -04: Send in descending layer order
     binvector::reverse_iterator iter;
     for (iter=bv.rbegin(); iter != bv.rend(); iter++) {
@@ -119,8 +125,8 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
 }
 
 
-void    Channel::AddLiveRightHashes (struct evbuffer *evb, bin_t pos) {
-
+void    Channel::AddLiveRightHashes(bin_t pos, binvector &bv)
+{
     dprintf("%s #%u +right hash for %s\n",tintstr(),id_,pos.str().c_str());
 
     // Only need to send down to smallest peak subtree
@@ -132,6 +138,29 @@ void    Channel::AddLiveRightHashes (struct evbuffer *evb, bin_t pos) {
     bin_t p = pos;
     //while (!p.is_base())
     while (p.layer() >= nchunks_per_sign_layer)
+    //while (p == pos)
+    {
+	bv.push_back(p);
+	fprintf(stderr,"AddLiveRight: %s\n", p.str().c_str() );
+	p = p.right();
+    }
+}
+
+
+/* void    Channel::AddLiveRightHashes (struct evbuffer *evb, bin_t pos) {
+
+    dprintf("%s #%u +right hash for %s\n",tintstr(),id_,pos.str().c_str());
+
+    // Only need to send down to smallest peak subtree
+    LiveTransfer *lt = (LiveTransfer *)transfer();
+    uint32_t nchunks_per_sign = lt->GetNChunksPerSign();
+    bin_t::uint_t nchunks_per_sign_layer = (bin_t::uint_t)log2((double)nchunks_per_sign);
+    //fprintf(stderr,"AddLiveRightHashes: layer %d\n", nchunks_per_sign_layer );
+
+    bin_t p = pos;
+    //while (!p.is_base())
+    //while (p.layer() >= nchunks_per_sign_layer)
+    while (p == pos)
     {
 	evbuffer_add_8(evb, SWIFT_INTEGRITY);
 	evbuffer_add_chunkaddr(evb,p,hs_out_->chunk_addr_);
@@ -141,7 +170,7 @@ void    Channel::AddLiveRightHashes (struct evbuffer *evb, bin_t pos) {
 	dprintf("%s #%u +hash %s\n",tintstr(),id_,p.str().c_str());
 	p = p.right();
     }
-}
+}*/
 
 
 
@@ -646,26 +675,26 @@ void    Channel::AddHave (struct evbuffer *evb) {
     {
 	LiveHashTree *umt = (LiveHashTree *)hashtree();
 	//fprintf(stderr,"AddHave: Adding signed peaks %d\n", umt->signed_peak_count());
-	AddSignedPeakHashes(evb);
 
 	// Deep sh*t
-	binvector::iterator iter;
-	binvector subsumedsignedpeakbins = GetSignedPeaksSubsumed();
+	bhstvector::iterator iter;
+	bhstvector subsumedsignedpeaks = GetSignedPeakSubsumedTuples();
 
 	// SIGNPEAKTODO: don't clear until somehow receipt acknowledged.
-	ClearSignedPeaksSubsumed();
+	ClearSignedPeakSubsumedTuples();
 
-	for (iter=subsumedsignedpeakbins.begin(); iter != subsumedsignedpeakbins.end(); iter++)
+	for (iter=subsumedsignedpeaks.begin(); iter != subsumedsignedpeaks.end(); iter++)
 	{
-	    bin_t pos = *iter;
-	    fprintf(stderr,"AddHave: Adding rights of signed peaks subsumed by new %s\n", pos.str().c_str() );
+	    BinHashSigTuple bhst = *iter;
+	    fprintf(stderr,"AddHave: Adding subsumed signed peak %s\n", bhst.bin().str().c_str() );
 	}
 
-	for (iter=subsumedsignedpeakbins.begin(); iter != subsumedsignedpeakbins.end(); iter++)
-	{
-	    bin_t pos = *iter;
-	    AddLiveRightHashes(evb,pos);
-	}
+	// Send old subsumed peaks
+	AddSignedPeakHashes(evb,subsumedsignedpeaks);
+
+	// Send current peaks
+	AddSignedPeakHashes(evb,umt->GetSignedPeakTuples());
+
     }
 
     if (!data_in_dbl_.is_none()) { // TODO: do redundancy better
