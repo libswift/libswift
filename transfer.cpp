@@ -58,6 +58,13 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, std:
     binmap_filename.assign(metaprefix);
     binmap_filename.append(".mbinmap");
 
+    // METADIR MULTIFILE
+    std::string meta_mfspec_filename;
+    meta_mfspec_filename.assign(metaprefix);
+    meta_mfspec_filename.append(".mfspec");
+
+    //fprintf(stderr,"FileTransfer: %s %s %s\n", filename.c_str(), destdir.c_str(), metaprefix.c_str() );
+
     // Arno, 2013-03-06: Try to open content read-only when seeding to avoid certain locking problems on
     // Win32 when opening the content with a different application in parallel
     uint64_t complete = 0;
@@ -70,7 +77,7 @@ FileTransfer::FileTransfer(std::string filename, const Sha1Hash& root_hash, std:
     }
 
 	// MULTIFILE
-    storage_ = new Storage(filename,destdir,fd(),complete);
+    storage_ = new Storage(filename,meta_mfspec_filename,destdir,fd(),complete);
 
     if (!zerostate_)
     {
@@ -479,7 +486,7 @@ std::vector<std::string> swift::filename2storagefns(std::string filename,const S
 		if (!metadir.compare(""))
 		    metaprefix = filename;
 		else
-		    metaprefix = metadir+FILE_SEP+filename;
+		    metaprefix = metadir+filename;
 	    }
 	    else
 	    {

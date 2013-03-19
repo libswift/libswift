@@ -22,26 +22,40 @@ using namespace swift;
 const std::string Storage::MULTIFILE_PATHNAME = "META-INF-multifilespec.txt";
 const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 
-Storage::Storage(std::string ospathname, std::string destdir, int transferfd, uint64_t complete) :
+Storage::Storage(std::string ospathname, std::string metamfspecospathname, std::string destdir, int transferfd, uint64_t complete) :
 		Operational(),
 		state_(STOR_STATE_INIT),
-		os_pathname_(ospathname), destdir_(destdir), ht_(NULL), spec_size_(0),
-		single_fd_(-1), reserved_size_(-1), total_size_from_spec_(-1), last_sf_(NULL),
+		os_pathname_(ospathname), destdir_(destdir), meta_mfspec_os_pathname_(metamfspecospathname),
+		ht_(NULL), spec_size_(0), single_fd_(-1), reserved_size_(-1),
+		total_size_from_spec_(-1), last_sf_(NULL),
 		transfer_fd_(transferfd), alloc_cb_(NULL), open_flags_(OPENFLAGS)
 {
 
 	//fprintf(stderr,"Storage: ospathname %s destdir %s\n", ospathname.c_str(), destdir.c_str() );
+	//METADIR
+	std::string filename = os_pathname_;
 
-	int64_t fsize = file_size_by_path_utf8(ospathname.c_str());
+	int64_t fsize = file_size_by_path_utf8(filename.c_str());
 	if (fsize < 0 && errno == ENOENT)
 	{
-		// File does not exist, assume we're a client and all will be revealed
-		// (single file, multi-spec) when chunks come in.
-		return;
+	    // File does not exist, assume we're a client and all will be revealed
+	    // (single file, multi-spec) when chunks come in.
+
+	    //METADIR
+	    // If this is a multi-file swarm and we use a separate dir for meta data
+	    filename = meta_mfspec_os_pathname_;
+
+	    fsize = file_size_by_path_utf8(filename.c_str());
+	    if (fsize < 0 && errno == ENOENT)
+	    {
+		    // File does not exist, assume we're a client and all will be revealed
+		    // (single file, multi-spec) when chunks come in.
+		    return;
+	    }
 	}
 
 	// File exists. Check first bytes to see if a multifile-spec
-	FILE *fp = fopen_utf8(ospathname.c_str(),"rb");
+	FILE *fp = fopen_utf8(filename.c_str(),"rb");
 	if (!fp)
 	{
 		dprintf("%s %s storage: File exists, but error opening %s\n", tintstr(), roothashhex().c_str(), ospathname.c_str() );
@@ -66,7 +80,10 @@ Storage::Storage(std::string ospathname, std::string destdir, int transferfd, ui
 
 		dprintf("%s %s storage: Found multifile-spec, will seed it.\n", tintstr(), roothashhex().c_str() );
 
-		StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,fsize,ospathname,open_flags_);
+		//METADIR
+		os_pathname_ = filename;
+
+		StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,fsize,os_pathname_,open_flags_);
 		sfs_.push_back(sf);
 		if (ParseSpec(sf) < 0)
 		{
@@ -245,6 +262,18 @@ int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64
 		{
 			errno = EINVAL;
 			return -1;
+		}
+
+		//METADIR
+		if (!os_pathname_.compare(meta_mfspec_os_pathname_))
+		{
+		    // Multi-spec considered metadata and not stored with content
+		    ret = sf->MoveStorageFile(meta_mfspec_os_pathname_);
+		    if (ret < 0)
+		    {
+			errno = EINVAL;
+			return -1;
+		    }
 		}
 
 		// We know exact size after chunk 0, inform hash tree (which doesn't
@@ -717,3 +746,58 @@ StorageFile::~StorageFile()
 }
 
 
+int StorageFile::MoveStorageFile(std::string metamfspecospathname)
+{
+     if (fd_ < 0)
+     {
+	 SetBroken();
+	 return -1;
+     }
+
+     int wfd = open_utf8(metamfspecospathname.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+     if (wfd < 0)
+     {
+	//print_error("storage: file: Could not open");
+	dprintf("%s %s storage: file: Could not open meta mfspec %s\n", tintstr(), "0000000000000000000000000000000000000000", os_pathname_.c_str() );
+	SetBroken();
+	return wfd;
+     }
+
+     ssize_t readbytes = file_seek(fd_,0);
+     if (readbytes < 0)
+     {
+	 close(wfd);
+	 return readbytes;
+     }
+
+     ssize_t writebytes = 0;
+     size_t wantbytes = 1024;
+     char buffer[1024];
+     while (true)
+     {
+	 readbytes = read(fd_,buffer,wantbytes);
+	 if (readbytes < 0)
+	 {
+	     close(wfd);
+	     return readbytes;
+	 }
+	 else
+	 {
+	     writebytes = write(wfd,buffer,readbytes);
+	     if (writebytes < 0)
+	     {
+		 close(wfd);
+		 return writebytes;
+	     }
+
+	     if (wantbytes != readbytes) // EOF
+		 break;
+	 }
+     }
+
+     close(fd_);
+     fd_ = wfd;
+     os_pathname_ = metamfspecospathname;
+
+     return 0;
+}

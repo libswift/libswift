@@ -1,1 +1,1 @@
-std::string SubversionRevisionString = "https://svn.tribler.org/libswift/branches/tribler-6.1.x@31892";
+std::string SubversionRevisionString = "https://svn.tribler.org/libswift/branches/tribler-6.1.x@31963";

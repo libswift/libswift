@@ -755,6 +755,8 @@ namespace swift {
     	 ssize_t  Write(const void *buf, size_t nbyte, int64_t offset) { return pwrite(fd_,buf,nbyte,offset); }
     	 ssize_t  Read(void *buf, size_t nbyte, int64_t offset) {  return pread(fd_,buf,nbyte,offset); }
     	 int ResizeReserved() { return file_resize(fd_,GetSize()); }
+    	 /** Move storage file with multi-file spec to metadir */
+    	 int MoveStorageFile(std::string metamfspecospathname); // METADIR
 
        protected:
     	 std::string spec_pathname_;
@@ -806,8 +808,9 @@ namespace swift {
 		static std::string spec2ospn(std::string specpn);
 		static std::string os2specpn(std::string ospn);
 
-		/** Create Storage from specified path and destination dir if content turns about to be a multi-file */
-		Storage(std::string ospathname, std::string destdir,int transferfd,uint64_t complete=0);
+		/** Create Storage from specified path and destination dir if content turns about to be a multi-file.
+		 * If metaspecospathname is non-empty and it is a multi-file, the multi-file spec file will be moved there when it is complete. */
+		Storage(std::string ospathname,std::string metamfspecospathname,std::string destdir,int transferfd,uint64_t complete=0);
 		~Storage();
 
 		/** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
@@ -853,7 +856,9 @@ namespace swift {
 			storage_state_t	state_;
 
 			std::string os_pathname_;
+			std::string meta_mfspec_os_pathname_;
 			std::string destdir_;
+
 
 			/** HashTree this Storage is linked to */
 			HashTree *ht_;

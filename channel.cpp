@@ -447,6 +447,9 @@ void    swift::Shutdown (int sock_des) {
 }
 
 int      swift::Open (std::string filename, const Sha1Hash& roothash, std::string metadir, Address tracker, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size) {
+
+    //fprintf(stderr,"Open: %s %s %s\n", filename.c_str(), roothash.hex().c_str(), metadir.c_str() );
+
     FileTransfer* ft = new FileTransfer(filename, roothash, metadir, force_check_diskvshash, check_netwvshash, chunk_size);
     if (ft->fd() && ft->IsOperational()) {
 
