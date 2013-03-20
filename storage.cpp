@@ -265,7 +265,7 @@ int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64
 		}
 
 		//METADIR
-		if (!os_pathname_.compare(meta_mfspec_os_pathname_))
+		if (os_pathname_.compare(meta_mfspec_os_pathname_))
 		{
 		    // Multi-spec considered metadata and not stored with content
 		    ret = sf->MoveStorageFile(meta_mfspec_os_pathname_);
@@ -274,6 +274,8 @@ int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64
 			errno = EINVAL;
 			return -1;
 		    }
+		    else
+			dprintf("%s %s storage: WriteSpecPart: mfspec moved to %s\n", tintstr(), roothashhex().c_str(), meta_mfspec_os_pathname_.c_str() );
 		}
 
 		// We know exact size after chunk 0, inform hash tree (which doesn't
@@ -758,7 +760,7 @@ int StorageFile::MoveStorageFile(std::string metamfspecospathname)
      if (wfd < 0)
      {
 	//print_error("storage: file: Could not open");
-	dprintf("%s %s storage: file: Could not open meta mfspec %s\n", tintstr(), "0000000000000000000000000000000000000000", os_pathname_.c_str() );
+	dprintf("%s %s storage: file: move: Could not open meta mfspec %s\n", tintstr(), "0000000000000000000000000000000000000000", metamfspecospathname.c_str() );
 	SetBroken();
 	return wfd;
      }
@@ -766,6 +768,7 @@ int StorageFile::MoveStorageFile(std::string metamfspecospathname)
      ssize_t readbytes = file_seek(fd_,0);
      if (readbytes < 0)
      {
+	 dprintf("%s %s storage: file: move: Error seeking in %s\n", tintstr(), "0000000000000000000000000000000000000000", os_pathname_.c_str() );
 	 close(wfd);
 	 return readbytes;
      }
@@ -778,6 +781,7 @@ int StorageFile::MoveStorageFile(std::string metamfspecospathname)
 	 readbytes = read(fd_,buffer,wantbytes);
 	 if (readbytes < 0)
 	 {
+	     dprintf("%s %s storage: file: move: Error reading in %s\n", tintstr(), "0000000000000000000000000000000000000000", os_pathname_.c_str() );
 	     close(wfd);
 	     return readbytes;
 	 }
@@ -786,6 +790,7 @@ int StorageFile::MoveStorageFile(std::string metamfspecospathname)
 	     writebytes = write(wfd,buffer,readbytes);
 	     if (writebytes < 0)
 	     {
+		 dprintf("%s %s storage: file: move: Error writing in %s\n", tintstr(), "0000000000000000000000000000000000000000", metamfspecospathname.c_str() );
 		 close(wfd);
 		 return writebytes;
 	     }
@@ -797,6 +802,9 @@ int StorageFile::MoveStorageFile(std::string metamfspecospathname)
 
      close(fd_);
      fd_ = wfd;
+
+     remove_utf8(os_pathname_);
+
      os_pathname_ = metamfspecospathname;
 
      return 0;
