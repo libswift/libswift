@@ -627,6 +627,7 @@ void LiveHashTree::check_peak_coverage()
 	    {
 		fprintf(stderr,"peak bork: %s covers %s to %s\n", peak_bins_[j].str().c_str(), peak_bins_[j].base_left().str().c_str(), peak_bins_[j].base_right().str().c_str());
 	    }
+            fflush(stderr);
             getchar();
 	    exit(-1);
 	}
@@ -657,6 +658,7 @@ void LiveHashTree::check_signed_peak_coverage()
 		fprintf(stderr,"UpdateSignedPeaks: signed peak bork: %s covers %s to %s\n", signed_peak_bins_[j].str().c_str(), signed_peak_bins_[j].base_left().str().c_str(), signed_peak_bins_[j].base_right().str().c_str());
 	    }
             fprintf(stderr,"Press...\n");
+            fflush(stderr);
             getchar();
 	    exit(-1);
 	}
@@ -692,6 +694,8 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     Node *parent = NULL;
     while (true)
     {
+	fprintf(stderr,"OfferHash: Find\n");
+
 	if (tree_debug)
 	{
 	    if (iter == NULL)
@@ -765,6 +769,9 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 	    root_ = newroot;
 	    iter->SetParent(newroot);
 	    iter = newroot;
+            parent = NULL;
+            // Arno, 2013-03-14: New root may not be high enough, retest from start
+            continue;
 	}
 
 	if (pos.toUInt() == iter->GetBin().toUInt())
@@ -910,6 +917,7 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     if (!success)
     {
 	fprintf(stderr,"OfferHash: !success data %s\n", pos.str().c_str() );
+        fflush(stderr);
         getchar();
 	exit(-1);
     }
@@ -937,12 +945,19 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
             if (piter == NULL)
             {
                 fprintf(stderr,"OfferHash: SetVerified %s has NULL node!!!\n", p.str().c_str() );
-                return false;
+                return true; // had success
             }
-            else
+            else 
             {
-	        fprintf(stderr,"OfferHash: SetVerified %s\n", piter->GetBin().str().c_str() );
-	        piter->SetVerified(true);
+                if (piter->GetHash() == Sha1Hash::ZERO)
+                {
+                    fprintf(stderr,"OfferHash: SetVerified %s has ZERO hash!!!\n", piter->GetBin().str().c_str() );
+                }
+                else
+                {
+	            fprintf(stderr,"OfferHash: SetVerified %s\n", piter->GetBin().str().c_str() );
+	            piter->SetVerified(true);
+                }
             }
 	}
 	// Also mark hashes on direct path to root as verified. Doesn't decrease
@@ -957,6 +972,7 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
             if (piter == NULL)
             {
                 fprintf(stderr,"OfferHash: SetVerified2 %s has NULL node!!!\n", p.str().c_str() );
+                return true; // had success
             }
 	    else if (piter->GetHash() == Sha1Hash::ZERO)
 	    {

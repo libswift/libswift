@@ -629,29 +629,14 @@ binvector swift::bin_fragment(bin_t &origbin, bin_t &cancelbin)
 
 void Channel::AddSinceSignedPeakTuples(bhstvector &sbv)
 {
+    fprintf(stderr,"AddSinceSignedPeakTuples: adding to %p\n", &since_signed_peak_tuples_ );
     since_signed_peak_tuples_.insert( since_signed_peak_tuples_.end(), sbv.begin(), sbv.end() );
 }
 
 bhstvector   &Channel::GetSinceSignedPeakTuples()
 {
+    fprintf(stderr,"GetSinceSignedPeakTuples: returning %p\n", &since_signed_peak_tuples_ );
     return since_signed_peak_tuples_;
-}
-
-void Channel::RemoveSinceSignedPeakTuples(bin_t hint)
-{
-    // TODO: perhaps hashtable index on bin_t to make this faster
-    bhstvector::iterator iter;
-
-    for (iter=since_signed_peak_tuples_.begin(); iter != since_signed_peak_tuples_.end(); iter++)
-    {
-	BinHashSigTuple bhst = *iter;
-	if (bhst.bin().contains(hint))
-	{
-	    fprintf(stderr,"RemoveSinceSignedPeakTuples: removing %s containing %s\n", bhst.bin().str().c_str(), hint.str().c_str() );
-	    since_signed_peak_tuples_.erase(iter);
-	    break;
-	}
-    }
 }
 
 void Channel::ClearSinceSignedPeakTuples()

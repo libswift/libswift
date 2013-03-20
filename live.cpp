@@ -231,6 +231,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         	int old = umt->GetCurrentSignedPeakTuples().size();
 
         	bhstvector newpeaktuples = umt->UpdateSignedPeaks();
+        	fprintf(stderr,"live: AddData: UMT: adding %d to %d\n", newpeaktuples.size(), totalnewpeaktuples.size() );
         	totalnewpeaktuples.insert(totalnewpeaktuples.end(), newpeaktuples.begin(), newpeaktuples.end() );
 
         	fprintf(stderr,"live: AddData: UMT: signed peaks old %d new %d\n", old, umt->GetCurrentSignedPeakTuples().size() );
@@ -274,6 +275,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         //DDOS
         if (c->is_established())
         {
+            fprintf(stderr,"live: AddData: announce to channel %d new signed %d\n", c->id(), totalnewpeaktuples.size() );
             c->AddSinceSignedPeakTuples(totalnewpeaktuples);
             c->LiveSend();
         }

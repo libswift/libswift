@@ -770,11 +770,13 @@ namespace swift {
         void        AddHint (struct evbuffer *evb);
         void        AddCancel (struct evbuffer *evb);
         void        AddUncleHashes (struct evbuffer *evb, bin_t pos);
+        void        AddFileUncleHashes (struct evbuffer *evb, bin_t pos);
+        void        AddLiveUncleHashes (struct evbuffer *evb, bin_t pos); // SIGNPEAK
         void        AddPeakHashes (struct evbuffer *evb);
         void        AddUnsignedPeakHashes (struct evbuffer *evb);
         void        AddLiveSignedPeakHashes(struct evbuffer *evb); // SIGNPEAK
         void        AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &sbv); // SIGNPEAK
-        void        AddLiveRightHashes(bin_t pos, binvector &bv); // SIGNPEAK
+        //void        AddLiveRightHashes(bin_t pos, binvector &bv); // SIGNPEAK
         void        AddPex (struct evbuffer *evb);
         void        OnPexReq(void);
         void        AddPexReq(struct evbuffer *evb);
@@ -854,8 +856,6 @@ namespace swift {
         void	    AddSinceSignedPeakTuples(bhstvector &sbv);
         /** Get list of new signed peaks to send */
         bhstvector &GetSinceSignedPeakTuples();
-        /** Remove peak from list that contains hint, means sig checked */
-        void 	    RemoveSinceSignedPeakTuples(bin_t hint);
         void 	    ClearSinceSignedPeakTuples();
 
         void 	    CloseOnError();

@@ -88,8 +88,10 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
     LiveHashTree *umt = (LiveHashTree *)hashtree();
 
     bhstvector::iterator iter;
-    //bhstvector sincesignedpeaktuples = GetSinceSignedPeakTuples();
-    bhstvector sincesignedpeaktuples = umt->GetCurrentSignedPeakTuples();
+    bhstvector sincesignedpeaktuples = GetSinceSignedPeakTuples();
+
+    fprintf(stderr,"AddLiveSignedPeakHashes: Peaks signed since %d\n", sincesignedpeaktuples.size() );
+
 
     for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
     {
@@ -100,7 +102,8 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
     // Put in datagram
     AddLiveSignedPeakHashes(evb,sincesignedpeaktuples);
 
-    //ClearSinceSignedPeakTuples();
+    // SIGNPEAKTODO add resend on retransmit
+    ClearSinceSignedPeakTuples();
 }
 
 
@@ -133,6 +136,17 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
 
     dprintf("%s #%u +uncle hash for %s\n",tintstr(),id_,pos.str().c_str());
 
+    if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE)
+    {
+	AddFileUncleHashes(evb,pos);
+    }
+    else if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+    {
+	AddLiveUncleHashes(evb,pos);
+    }
+}
+
+void    Channel::AddFileUncleHashes (struct evbuffer *evb, bin_t pos) {
     bin_t peak = hashtree()->peak_for(pos);
     // Ric: TODO check (remove data_out_cap??)
     //      For the moment lets keep the old behaviour
@@ -145,22 +159,81 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
         pos = pos.parent();
     }
 
-    // Arno, 2013-03-13: With Unified Merkle Trees say we have a tree of 4
-    // chunks with peak (2,0). When the tree is expanded from 4 to 8 chunks,
-    // the new peak becomes (3,0). The uncle hash algorithm assumes that (2,1)
-    // the hash of the 4 new chunks was sent to the peer when chunks from (2,0)
-    // where sent (after all, (2,1) is their uncle). However, that part of
-    // the tree did not yet exist, so it wasn't sent. To fix this we send
-    // the hashes to the right of the new peak (3,0) as these are "hashes
-    // needed to verify the integrity of the chunk" (PPSP spec).
-    //
-#ifdef SJAAK
-    if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
-	AddLiveRightHashes(peak,bv);
+    binvector::reverse_iterator iter;
+    for (iter=bv.rbegin(); iter != bv.rend(); iter++) {
+        bin_t uncle = *iter;
+        evbuffer_add_8(evb, SWIFT_INTEGRITY);
+        evbuffer_add_chunkaddr(evb,uncle,hs_out_->chunk_addr_);
+        evbuffer_add_hash(evb, hashtree()->hash(uncle) );
+        dprintf("%s #%u +hash %s\n",tintstr(),id_,uncle.str().c_str());
+        pos = pos.parent();
+    }
 
-    // PPSP -04: Send in descending layer order
-    std::sort(bv.begin(),bv.end(), bin_sort_on_layer_cmp);
-#endif
+}
+
+void    Channel::AddLiveUncleHashes (struct evbuffer *evb, bin_t pos) {
+
+    LiveTransfer *lt = (LiveTransfer *)transfer();
+    uint32_t nchunks_per_sign = lt->GetNChunksPerSign();
+    bin_t::uint_t nchunks_per_sign_layer = (bin_t::uint_t)log2((double)nchunks_per_sign);
+
+    binvector bv;
+    bin_t peak = hashtree()->peak_for(pos);
+    bin_t siglayerroot;
+    bin_t unclestillpos;
+    if (peak.layer() == nchunks_per_sign_layer)
+    {
+	// Simple case. Assume signed peak has been sent
+	siglayerroot = peak;
+	unclestillpos = peak;
+	fprintf(stderr,"AddLiveHash: peak %s is siglayer\n", peak.str().c_str() );
+    }
+    else
+    {
+	// Peak is higher than granularity
+	siglayerroot = pos;
+	for (int i=0; i<nchunks_per_sign_layer; i++)
+	    siglayerroot = siglayerroot.parent();
+	if (siglayerroot.layer() != nchunks_per_sign_layer)
+	    fprintf(stderr,"AddLiveHash: ERROR siglayerroot\n");
+
+	// Initial chunk
+	if (siglayerroot.is_right() && ack_in_.is_empty(siglayerroot.sibling()) )
+	{
+	    fprintf(stderr,"AddLiveHash: missing left side of tree, send uncles till peak\n" );
+	    unclestillpos = peak;
+	}
+	else if (siglayerroot.is_left() && ack_in_.is_empty(siglayerroot) )
+	{
+	    fprintf(stderr,"AddLiveHash: missing siglayerroot, send uncles till peak\n" );
+	    unclestillpos = peak;
+	}
+	else
+	    unclestillpos = siglayerroot;
+
+	fprintf(stderr,"AddLiveHash: peak %s > siglayer %s\n", peak.str().c_str(), siglayerroot.str().c_str() );
+    }
+
+    while (pos!=unclestillpos && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) )
+    {
+	bin_t uncle = pos.sibling();
+	if (ack_in_.is_filled(uncle))
+	    break;
+	bv.push_back(uncle);
+	fprintf(stderr,"AddLiveHash: uncle %s %s\n", uncle.str().c_str(), hashtree()->hash(uncle).hex().c_str() );
+
+	pos = pos.parent();
+    }
+
+    // Add right hashes up to signed peak
+    bin_t p = siglayerroot;
+    while (p != peak)
+    {
+	bv.push_back(p);
+	fprintf(stderr,"AddLiveHash: right %s %s\n", p.str().c_str(), hashtree()->hash(p).hex().c_str() );
+	p = p.parent();
+    }
+
 
     binvector::reverse_iterator iter;
     for (iter=bv.rbegin(); iter != bv.rend(); iter++) {
@@ -169,15 +242,12 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
         evbuffer_add_chunkaddr(evb,uncle,hs_out_->chunk_addr_);
         evbuffer_add_hash(evb, hashtree()->hash(uncle) );
 
-        fprintf(stderr,"AddHash: uncle %s %s\n", uncle.str().c_str(), hashtree()->hash(uncle).hex().c_str() );
-
         dprintf("%s #%u +hash %s\n",tintstr(),id_,uncle.str().c_str());
-        pos = pos.parent();
     }
-
 }
 
 
+/*
 void    Channel::AddLiveRightHashes(bin_t pos, binvector &bv)
 {
     dprintf("%s #%u +right hash for %s\n",tintstr(),id_,pos.str().c_str());
@@ -198,7 +268,7 @@ void    Channel::AddLiveRightHashes(bin_t pos, binvector &bv)
 }
 
 
-/* void    Channel::AddLiveRightHashes (struct evbuffer *evb, bin_t pos) {
+void    Channel::AddLiveRightHashes (struct evbuffer *evb, bin_t pos) {
 
     dprintf("%s #%u +right hash for %s\n",tintstr(),id_,pos.str().c_str());
 
