@@ -23,6 +23,7 @@
  *  - Split signed peaks into multiple datagrams when too big
  *  - Split uncle hashes into multiple datagrams when too big
  *  - Check for hashes sent above current signed peak
+ *  - For non-source providing chunks: it won't have left side of tree (but will have all hashes to check all chunks)
  *
  *  - Problem with hook in and missing hashtree?
  */

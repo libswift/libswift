@@ -189,7 +189,7 @@ public:
 
     void EndAddPeerPos(uint32_t channelid)
     {
-#ifndef SJAAK
+#ifdef SJAAK
         // TEMP FORCE
 	hookin_bin_ = bin_t(0,126);
 	current_bin_ = hookin_bin_;
