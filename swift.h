@@ -769,12 +769,13 @@ namespace swift {
         void        AddHave (struct evbuffer *evb);
         void        AddHint (struct evbuffer *evb);
         void        AddCancel (struct evbuffer *evb);
-        void        AddUncleHashes (struct evbuffer *evb, bin_t pos);
+        void        AddUncleHashes (struct evbuffer *evb, bin_t pos, bool isretransmit);
         void        AddFileUncleHashes (struct evbuffer *evb, bin_t pos);
-        void        AddLiveUncleHashes (struct evbuffer *evb, bin_t pos); // SIGNPEAK
+        void        AddLiveUncleHashes (struct evbuffer *evb, bin_t pos, bool isretransmit); // SIGNPEAK
         void        AddPeakHashes (struct evbuffer *evb);
         void        AddUnsignedPeakHashes (struct evbuffer *evb);
         void        AddLiveSignedPeakHashes(struct evbuffer *evb); // SIGNPEAK
+        void        AddLiveSignedPeakHash4Retransmit(struct evbuffer *evb, bin_t pos);
         void        AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &sbv); // SIGNPEAK
         //void        AddLiveRightHashes(bin_t pos, binvector &bv); // SIGNPEAK
         void        AddPex (struct evbuffer *evb);

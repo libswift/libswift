@@ -622,14 +622,14 @@ void LiveHashTree::check_peak_coverage()
 	bin_t::uint_t start = peak_bins_[i].base_left().layer_offset();
 	if (start != end+1)
 	{
-	    fprintf(stderr,"peak broken!\n");
+	    fprintf(stderr,"LiveHashTree: ERROR peak broken!\n");
 	    for (int j=0; j<peak_count_; j++)
 	    {
 		fprintf(stderr,"peak bork: %s covers %s to %s\n", peak_bins_[j].str().c_str(), peak_bins_[j].base_left().str().c_str(), peak_bins_[j].base_right().str().c_str());
 	    }
-            fflush(stderr);
+            /*fflush(stderr);
             getchar();
-	    exit(-1);
+	    exit(-1);*/
 	}
 	end = peak_bins_[i].base_right().layer_offset();
     }
@@ -652,15 +652,15 @@ void LiveHashTree::check_signed_peak_coverage()
 	bin_t::uint_t start = signed_peak_bins_[i].base_left().layer_offset();
 	if (start != end+1)
 	{
-	    fprintf(stderr,"UpdateSignedPeaks: signed peak broken!\n");
+	    fprintf(stderr,"UpdateSignedPeaks: ERROR signed peak broken!\n");
 	    for (int j=0; j<signed_peak_count_; j++)
 	    {
 		fprintf(stderr,"UpdateSignedPeaks: signed peak bork: %s covers %s to %s\n", signed_peak_bins_[j].str().c_str(), signed_peak_bins_[j].base_left().str().c_str(), signed_peak_bins_[j].base_right().str().c_str());
 	    }
-            fprintf(stderr,"Press...\n");
+            /* fprintf(stderr,"Press...\n");
             fflush(stderr);
             getchar();
-	    exit(-1);
+	    exit(-1); */
 	}
 	end = signed_peak_bins_[i].base_right().layer_offset();
     }
@@ -910,6 +910,9 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 	fprintf(stderr,"OfferHash: while %d %d %d\n", piter->GetBin()!=peak, ack_out_.is_empty(piter->GetBin()),  !piter->GetVerified() );
 	fprintf(stderr,"OfferHash: %s computed %s truth %s\n", piter->GetBin().str().c_str(), uphash.hex().c_str(), piter->GetHash().hex().c_str() );
     }
+
+    if (piter->GetHash() == Sha1Hash::ZERO)
+	return false; // missing hashes
 
     bool success = (uphash==piter->GetHash());
 

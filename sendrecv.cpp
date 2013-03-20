@@ -85,13 +85,10 @@ void Channel::AddUnsignedPeakHashes (struct evbuffer *evb)
 void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
 {
     // Send signed peaks generated since last send
-    LiveHashTree *umt = (LiveHashTree *)hashtree();
-
     bhstvector::iterator iter;
     bhstvector sincesignedpeaktuples = GetSinceSignedPeakTuples();
 
     fprintf(stderr,"AddLiveSignedPeakHashes: Peaks signed since %d\n", sincesignedpeaktuples.size() );
-
 
     for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
     {
@@ -100,10 +97,40 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
     }
 
     // Put in datagram
+#ifdef LOSS
+    // TEST LOSS
+    int count = sincesignedpeaktuples.size() / 2;
+    for (int i=0; i<count; i++)
+	sincesignedpeaktuples.erase(sincesignedpeaktuples.begin()+i+1);
+#endif
+
     AddLiveSignedPeakHashes(evb,sincesignedpeaktuples);
 
     // SIGNPEAKTODO add resend on retransmit
     ClearSinceSignedPeakTuples();
+}
+
+
+// SIGNPEAK
+void    Channel::AddLiveSignedPeakHash4Retransmit(struct evbuffer *evb, bin_t pos)
+{
+    LiveHashTree *umt = (LiveHashTree *)hashtree();
+    bhstvector::iterator iter;
+    bhstvector curpeaktuples = umt->GetCurrentSignedPeakTuples();
+    bhstvector containpeaktuples;
+    for (iter=curpeaktuples.begin(); iter != curpeaktuples.end(); iter++)
+    {
+	BinHashSigTuple bhst = *iter;
+	if (bhst.bin().contains(pos))
+	{
+	    fprintf(stderr,"AddLiveRepeat: speak %s for %s\n", bhst.bin().str().c_str(), pos.str().c_str() );
+	    containpeaktuples.push_back(bhst);
+	    break;
+	}
+    }
+
+    // Put in datagram
+    AddLiveSignedPeakHashes(evb,containpeaktuples);
 }
 
 
@@ -132,7 +159,7 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &peakt
 
 
 
-void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
+void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos, bool isretransmit) {
 
     dprintf("%s #%u +uncle hash for %s\n",tintstr(),id_,pos.str().c_str());
 
@@ -142,7 +169,7 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos) {
     }
     else if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
-	AddLiveUncleHashes(evb,pos);
+	AddLiveUncleHashes(evb,pos,isretransmit);
     }
 }
 
@@ -171,69 +198,33 @@ void    Channel::AddFileUncleHashes (struct evbuffer *evb, bin_t pos) {
 
 }
 
-void    Channel::AddLiveUncleHashes (struct evbuffer *evb, bin_t pos) {
 
-    LiveTransfer *lt = (LiveTransfer *)transfer();
-    uint32_t nchunks_per_sign = lt->GetNChunksPerSign();
-    bin_t::uint_t nchunks_per_sign_layer = (bin_t::uint_t)log2((double)nchunks_per_sign);
-
-    binvector bv;
+void    Channel::AddLiveUncleHashes (struct evbuffer *evb, bin_t pos, bool isretransmit)
+{
+    // SIGNPEAKTODO signed_peak_for?
     bin_t peak = hashtree()->peak_for(pos);
-    bin_t siglayerroot;
-    bin_t unclestillpos;
-    if (peak.layer() == nchunks_per_sign_layer)
+    binvector bv;
+    if (isretransmit)
     {
-	// Simple case. Assume signed peak has been sent
-	siglayerroot = peak;
-	unclestillpos = peak;
-	fprintf(stderr,"AddLiveHash: peak %s is siglayer\n", peak.str().c_str() );
+	// Send all
+	while (pos!=peak) {
+	    bin_t uncle = pos.sibling();
+	    bv.push_back(uncle);
+	    pos = pos.parent();
+	}
     }
     else
     {
-	// Peak is higher than granularity
-	siglayerroot = pos;
-	for (int i=0; i<nchunks_per_sign_layer; i++)
-	    siglayerroot = siglayerroot.parent();
-	if (siglayerroot.layer() != nchunks_per_sign_layer)
-	    fprintf(stderr,"AddLiveHash: ERROR siglayerroot\n");
-
-	// Initial chunk
-	if (siglayerroot.is_right() && ack_in_.is_empty(siglayerroot.sibling()) )
-	{
-	    fprintf(stderr,"AddLiveHash: missing left side of tree, send uncles till peak\n" );
-	    unclestillpos = peak;
+	// Ric: TODO check (remove data_out_cap??)
+	//      For the moment lets keep the old behaviour
+	while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
+		ack_in_.is_empty(pos.parent()) ) {
+	//while (pos!=peak && ack_in_.is_empty(pos.parent()) ) {
+	    bin_t uncle = pos.sibling();
+	    bv.push_back(uncle);
+	    pos = pos.parent();
 	}
-	else if (siglayerroot.is_left() && ack_in_.is_empty(siglayerroot) )
-	{
-	    fprintf(stderr,"AddLiveHash: missing siglayerroot, send uncles till peak\n" );
-	    unclestillpos = peak;
-	}
-	else
-	    unclestillpos = siglayerroot;
-
-	fprintf(stderr,"AddLiveHash: peak %s > siglayer %s\n", peak.str().c_str(), siglayerroot.str().c_str() );
     }
-
-    while (pos!=unclestillpos && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) )
-    {
-	bin_t uncle = pos.sibling();
-	if (ack_in_.is_filled(uncle))
-	    break;
-	bv.push_back(uncle);
-	fprintf(stderr,"AddLiveHash: uncle %s %s\n", uncle.str().c_str(), hashtree()->hash(uncle).hex().c_str() );
-
-	pos = pos.parent();
-    }
-
-    // Add right hashes up to signed peak
-    bin_t p = siglayerroot;
-    while (p != peak)
-    {
-	bv.push_back(p);
-	fprintf(stderr,"AddLiveHash: right %s %s\n", p.str().c_str(), hashtree()->hash(p).hex().c_str() );
-	p = p.parent();
-    }
-
 
     binvector::reverse_iterator iter;
     for (iter=bv.rbegin(); iter != bv.rend(); iter++) {
@@ -241,8 +232,8 @@ void    Channel::AddLiveUncleHashes (struct evbuffer *evb, bin_t pos) {
         evbuffer_add_8(evb, SWIFT_INTEGRITY);
         evbuffer_add_chunkaddr(evb,uncle,hs_out_->chunk_addr_);
         evbuffer_add_hash(evb, hashtree()->hash(uncle) );
-
         dprintf("%s #%u +hash %s\n",tintstr(),id_,uncle.str().c_str());
+        pos = pos.parent();
     }
 }
 
@@ -684,8 +675,14 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
 
     // Add required hashes first
     //SIGNPEAK
+    if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE && isretransmit)
+    {
+	// Resend highest signed peak
+	AddLiveSignedPeakHash4Retransmit(evb,tosend);
+    }
+
     if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
-	AddUncleHashes(evb,tosend);
+	AddUncleHashes(evb,tosend,isretransmit);
 
     if (!ack_in_.is_empty()) // TODO: cwnd_>1
         data_out_cap_ = tosend;

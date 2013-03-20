@@ -22,6 +22,7 @@
  *  - Remove old peaks from list when ack.
  *  - Split signed peaks into multiple datagrams when too big
  *  - Split uncle hashes into multiple datagrams when too big
+ *  - Check for hashes sent above current signed peak
  *
  *  - Problem with hook in and missing hashtree?
  */
