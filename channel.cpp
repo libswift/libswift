@@ -629,13 +629,11 @@ binvector swift::bin_fragment(bin_t &origbin, bin_t &cancelbin)
 
 void Channel::AddSinceSignedPeakTuples(bhstvector &sbv)
 {
-    fprintf(stderr,"AddSinceSignedPeakTuples: adding to %p\n", &since_signed_peak_tuples_ );
     since_signed_peak_tuples_.insert( since_signed_peak_tuples_.end(), sbv.begin(), sbv.end() );
 }
 
 bhstvector   &Channel::GetSinceSignedPeakTuples()
 {
-    fprintf(stderr,"GetSinceSignedPeakTuples: returning %p\n", &since_signed_peak_tuples_ );
     return since_signed_peak_tuples_;
 }
 

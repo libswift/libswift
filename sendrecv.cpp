@@ -90,24 +90,39 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
     bhstvector sincesignedpeaktuples = GetSinceSignedPeakTuples();
 
     fprintf(stderr,"AddLiveSignedPeakHashes: Peaks signed since %d\n", sincesignedpeaktuples.size() );
-
     for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
     {
 	BinHashSigTuple bhst = *iter;
 	fprintf(stderr,"AddLiveSignedPeakHashes: Adding since signed peak %s\n", bhst.bin().str().c_str() );
     }
 
-    // Put in datagram
+    // Arno, 2013-03-25: If not source, forward only unknown signed peaks
+    // to next
+    bhstvector unknownpeaktuples;
+    if (((LiveTransfer *)transfer())->am_source())
+	unknownpeaktuples = sincesignedpeaktuples;
+    else
+    {
+	for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
+	{
+	    BinHashSigTuple bhst = *iter;
+	    if (!ack_in_.is_filled(bhst.bin()))
+		unknownpeaktuples.push_back(bhst);
+	}
+    }
+
 #ifdef LOSS
     // TEST LOSS
-    int count = sincesignedpeaktuples.size() / 2;
+    int count = unknownpeaktuples.size() / 2;
     for (int i=0; i<count; i++)
-	sincesignedpeaktuples.erase(sincesignedpeaktuples.begin()+i+1);
+	unknownpeaktuples.erase(unknownpeaktuples.begin()+i+1);
 #endif
 
-    AddLiveSignedPeakHashes(evb,sincesignedpeaktuples);
+    // Put in datagram
+    AddLiveSignedPeakHashes(evb,unknownpeaktuples);
 
-    // SIGNPEAKTODO add resend on retransmit
+    // Forget, on loss the latest signed peak is sent with all uncles,
+    // see AddLiveUncleHashes(retransmit=true)
     ClearSinceSignedPeakTuples();
 }
 
@@ -840,8 +855,8 @@ void    Channel::Recv (struct evbuffer *evb) {
     while (evbuffer_get_length(evb) && send_control_!=CLOSE_CONTROL) {
         uint8_t type = evbuffer_remove_8(evb);
 
-        if (DEBUGTRAFFIC)
-            fprintf(stderr," %d", type);
+        //if (DEBUGTRAFFIC)
+            fprintf(stderr,"GOT %d\n", type);
 
         switch (type) {
 	    case SWIFT_HANDSHAKE: // explicit close
@@ -1011,10 +1026,10 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
     if (bv.size() == 0 || bv.size() > 1) {
-		// Chunk spec must denote single chunk
-		dprintf("%s #%u ?data bad chunk spec\n",tintstr(),id_);
-		Close(CLOSE_DO_NOT_SEND);
-		return bin_t::NONE;
+	// Chunk spec must denote single chunk
+	dprintf("%s #%u ?data bad chunk spec\n",tintstr(),id_);
+	Close(CLOSE_DO_NOT_SEND);
+	return bin_t::NONE;
     }
     bin_t pos = bv.front();
     tint peer_time = TINT_NEVER;
@@ -1634,10 +1649,15 @@ void Channel::OnSignedHash(struct evbuffer *evb)
     {
 	LiveHashTree *umt = (LiveHashTree *)hashtree();
 	uint8_t dummy[DUMMY_DEFAULT_SIG_LENGTH];
-	if (umt->OfferSignedPeakHash(pos, dummy))
-	    dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
-	else
+	BinHashSigTuple bhst = umt->OfferSignedPeakHash(pos,Signature(dummy, DUMMY_DEFAULT_SIG_LENGTH));
+	if (bhst.bin() == bin_t::NONE)
 	    dprintf("%s #%u !sigh %s\n",tintstr(),id_,pos.str().c_str());
+	else
+	{
+	    dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
+	    LiveTransfer *lt = (LiveTransfer *)transfer();
+	    lt->OnVerifiedPeakHash(bhst,this);
+	}
     }
 }
 

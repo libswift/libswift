@@ -602,6 +602,10 @@ namespace swift {
         /** Returns the number of live chunks generated before a new peak is signed */
         uint32_t        GetNChunksPerSign() { return nchunks_per_sign_; }
 
+        /** Channel c received a correctly signed peak hash. Schedule for
+         * distribution to other channels. */
+        void 		OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *srcc);
+
         // Arno: FileTransfers are managed by the SwarmManager which
         // activates/deactivates them as required. LiveTransfers are unmanaged.
         /** Find transfer by the transfer descriptor. */

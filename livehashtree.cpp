@@ -528,23 +528,26 @@ Sha1Hash  LiveHashTree::DeriveRoot()
  * Live client specific
  */
 
-bool LiveHashTree::OfferSignedPeakHash(bin_t pos, const uint8_t *signedhash)
+BinHashSigTuple LiveHashTree::OfferSignedPeakHash(bin_t pos, Signature &sig)
 {
     // TODO check sig
+    // return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,sig);
     // TODO store sig
 
     if (tree_debug)
 	fprintf(stderr,"OfferSignedPeakHash: peak %s\n", pos.str().c_str() );
+
+    BinHashSigTuple bhst(cand_peak_bin_,cand_peak_hash_,sig);
 
     if (pos != cand_peak_bin_)
     {
 	// Ignore duplicate (or message mixup)
         if (tree_debug)
 	    fprintf(stderr,"OfferSignedPeakHash: message mixup! %s %s\n", pos.str().c_str(), cand_peak_bin_.str().c_str() );
-	return true;
+	return bhst;
     }
 
-    // TODO: must remove old peaks if consumed by new
+    // Remove old peaks if consumed by new
     int i=0;
     bool stored=false;
     while (i<peak_count_)
@@ -604,7 +607,7 @@ bool LiveHashTree::OfferSignedPeakHash(bin_t pos, const uint8_t *signedhash)
     // in root_hash() conflicts with const def :-(
     //root_->SetHash(DeriveRoot());
 
-    return true;
+    return bhst;
 }
 
 
@@ -1071,11 +1074,10 @@ bool LiveHashTree::OfferData(bin_t pos, const char* data, size_t length)
 
     ack_out_.set(pos);
 
-#ifdef SIGNPEAKTODO
     // Arno,2011-10-03: appease g++
     if (storage_->Write(data,length,pos.base_offset()*chunk_size_) < 0)
         print_error("pwrite failed");
-#endif
+
     complete_ += length;
     completec_++;
 

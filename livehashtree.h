@@ -132,7 +132,8 @@ class LiveHashTree: public HashTree
      bin_t          signed_peak_for (bin_t pos) const; */
      bhstvector	    GetCurrentSignedPeakTuples();
 
-     bool OfferSignedPeakHash(bin_t pos,const uint8_t *signedhash);
+     /** If bhst.bin() != bin_t::NONE the signature was good. */
+     BinHashSigTuple LiveHashTree::OfferSignedPeakHash(bin_t pos, Signature &sig);
      bool CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified);
 
      // Sanity checks

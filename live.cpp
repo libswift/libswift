@@ -308,6 +308,28 @@ binmap_t *LiveTransfer::ack_out()
 }
 
 
+void LiveTransfer::OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *srcc)
+{
+    // Channel c received a correctly signed peak hash. Schedule for
+    // distribution to other channels.
+
+    bhstvector newpeaktuples;
+    newpeaktuples.push_back(bhst);
+
+    channels_t::iterator iter;
+    for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
+    {
+        Channel *c = *iter;
+        if (c != srcc && c->is_established())
+        {
+            fprintf(stderr,"live: OnVerified: announce to channel %d\n", c->id() );
+            c->AddSinceSignedPeakTuples(newpeaktuples);
+        }
+    }
+}
+
+
+
 /*
  * Channel extensions for live
  */
