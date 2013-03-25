@@ -8,24 +8,20 @@
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  *  TODO:
- *  - what is SIGNED_INTEGRITY gets lost on UDP?
+ *  - what if SIGNED_INTEGRITY gets lost on UDP?
+ *      DONE: Resend signed peak + all uncles on Tdata
  *  - When new client joins half-way epoch, mustn't send HAVEs for new, or don't reply to REQUESTs?
+ *      DONE: See ack_signed_out() for source.
  *  - purge subtree, source and client
- *  - Get rid of GetNextSendSignedPeakFromIdx() and check if peer ack-d chunks
- *    which required peak X to decide if X should be sent.
  *  - Storage layer that remembers just part.
- *  - What if signed peak or right hashes lost?
- *  - SetVerified repeated for same bin?!
- *  - right hashes not till base, but till log(NCHUNKS_PER_SIGN) layer
  *  - Add unittest that expands tree and see if all hashes are there and verified bits set correctly
- *  - Make sure AddHave peak messages not too big
- *  - Remove old peaks from list when ack.
+ *  - Make sure signed peak messages not too big
  *  - Split signed peaks into multiple datagrams when too big
+ *      TODO: also do partial send in AddSignedPeakHashes when required
  *  - Split uncle hashes into multiple datagrams when too big
- *  - Check for hashes sent above current signed peak
- *  - For non-source providing chunks: it won't have left side of tree (but will have all hashes to check all chunks)
- *
- *  - Problem with hook in and missing hashtree?
+ *  - For non-source providing chunks: it won't have left side of tree
+ *    (but will have all hashes to check all chunks)
+ *  - Problem with hook-in and missing hashtree? Arno: what missing hashtree?
  */
 #ifndef SWIFT_LIVE_HASH_TREE_H
 #define SWIFT_LIVE_HASH_TREE_H

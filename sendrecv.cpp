@@ -64,6 +64,7 @@ void    Channel::AddPeakHashes (struct evbuffer *evb)
     }
     else if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
+	// SIGNPEAK
 	AddLiveSignedPeakHashes(evb);
     }
 }
@@ -111,29 +112,6 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
 }
 
 
-// SIGNPEAK
-void    Channel::AddLiveSignedPeakHash4Retransmit(struct evbuffer *evb, bin_t pos)
-{
-    LiveHashTree *umt = (LiveHashTree *)hashtree();
-    bhstvector::iterator iter;
-    bhstvector curpeaktuples = umt->GetCurrentSignedPeakTuples();
-    bhstvector containpeaktuples;
-    for (iter=curpeaktuples.begin(); iter != curpeaktuples.end(); iter++)
-    {
-	BinHashSigTuple bhst = *iter;
-	if (bhst.bin().contains(pos))
-	{
-	    fprintf(stderr,"AddLiveRepeat: speak %s for %s\n", bhst.bin().str().c_str(), pos.str().c_str() );
-	    containpeaktuples.push_back(bhst);
-	    break;
-	}
-    }
-
-    // Put in datagram
-    AddLiveSignedPeakHashes(evb,containpeaktuples);
-}
-
-
 void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &peaktuples)
 {
     bhstvector::iterator iter;
@@ -158,6 +136,34 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &peakt
 }
 
 
+bin_t  Channel::AddLiveSignedPeakHash4Retransmit(struct evbuffer *evb, bin_t pos)
+{
+    LiveHashTree *umt = (LiveHashTree *)hashtree();
+    bhstvector::iterator iter;
+    bhstvector curpeaktuples = umt->GetCurrentSignedPeakTuples();
+    bhstvector containpeaktuples;
+    bin_t signedpeak(bin_t::NONE);
+
+    // Find signed peak covering pos
+    for (iter=curpeaktuples.begin(); iter != curpeaktuples.end(); iter++)
+    {
+	BinHashSigTuple bhst = *iter;
+	if (bhst.bin().contains(pos))
+	{
+	    fprintf(stderr,"AddLiveRepeat: speak %s for %s\n", bhst.bin().str().c_str(), pos.str().c_str() );
+	    containpeaktuples.push_back(bhst);
+	    signedpeak = bhst.bin();
+	    break;
+	}
+    }
+
+    // Put in datagram
+    AddLiveSignedPeakHashes(evb,containpeaktuples);
+
+    return signedpeak;
+}
+
+
 
 void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos, bool isretransmit) {
 
@@ -173,6 +179,7 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos, bool isretrans
     }
 }
 
+
 void    Channel::AddFileUncleHashes (struct evbuffer *evb, bin_t pos) {
     bin_t peak = hashtree()->peak_for(pos);
     // Ric: TODO check (remove data_out_cap??)
@@ -186,6 +193,7 @@ void    Channel::AddFileUncleHashes (struct evbuffer *evb, bin_t pos) {
         pos = pos.parent();
     }
 
+    // PPSP -04: Send in descending layer order
     binvector::reverse_iterator iter;
     for (iter=bv.rbegin(); iter != bv.rend(); iter++) {
         bin_t uncle = *iter;
@@ -198,15 +206,25 @@ void    Channel::AddFileUncleHashes (struct evbuffer *evb, bin_t pos) {
 
 }
 
-
+//SIGNPEAK
 void    Channel::AddLiveUncleHashes (struct evbuffer *evb, bin_t pos, bool isretransmit)
 {
-    // SIGNPEAKTODO signed_peak_for?
-    bin_t peak = hashtree()->peak_for(pos);
+    bin_t peak(bin_t::NONE);
+    if (isretransmit)
+    {
+	// When retransmitting a live chunk, resend highest signed peak and all
+	// uncle hashes leading up to this.
+	peak = AddLiveSignedPeakHash4Retransmit(evb,pos);
+	if (peak == bin_t::NONE)
+	    return; // Shouldn't happen
+    }
+    else
+	peak = hashtree()->peak_for(pos);
+
     binvector bv;
     if (isretransmit)
     {
-	// Send all
+	// Select all uncles
 	while (pos!=peak) {
 	    bin_t uncle = pos.sibling();
 	    bv.push_back(uncle);
@@ -215,6 +233,7 @@ void    Channel::AddLiveUncleHashes (struct evbuffer *evb, bin_t pos, bool isret
     }
     else
     {
+	// Select only unsent uncles
 	// Ric: TODO check (remove data_out_cap??)
 	//      For the moment lets keep the old behaviour
 	while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
@@ -226,6 +245,7 @@ void    Channel::AddLiveUncleHashes (struct evbuffer *evb, bin_t pos, bool isret
 	}
     }
 
+    // PPSP -04: Send in descending layer order
     binvector::reverse_iterator iter;
     for (iter=bv.rbegin(); iter != bv.rend(); iter++) {
         bin_t uncle = *iter;
@@ -236,54 +256,6 @@ void    Channel::AddLiveUncleHashes (struct evbuffer *evb, bin_t pos, bool isret
         pos = pos.parent();
     }
 }
-
-
-/*
-void    Channel::AddLiveRightHashes(bin_t pos, binvector &bv)
-{
-    dprintf("%s #%u +right hash for %s\n",tintstr(),id_,pos.str().c_str());
-
-    // Only need to send down to smallest peak subtree
-    LiveTransfer *lt = (LiveTransfer *)transfer();
-    uint32_t nchunks_per_sign = lt->GetNChunksPerSign();
-    bin_t::uint_t nchunks_per_sign_layer = (bin_t::uint_t)log2((double)nchunks_per_sign);
-    //fprintf(stderr,"AddLiveRightHashes: layer %d\n", nchunks_per_sign_layer );
-
-    bin_t p = pos.right();
-    while (p.layer() >= nchunks_per_sign_layer)
-    {
-	bv.push_back(p);
-	fprintf(stderr,"AddLiveRight: %s\n", p.str().c_str() );
-	p = p.right();
-    }
-}
-
-
-void    Channel::AddLiveRightHashes (struct evbuffer *evb, bin_t pos) {
-
-    dprintf("%s #%u +right hash for %s\n",tintstr(),id_,pos.str().c_str());
-
-    // Only need to send down to smallest peak subtree
-    LiveTransfer *lt = (LiveTransfer *)transfer();
-    uint32_t nchunks_per_sign = lt->GetNChunksPerSign();
-    bin_t::uint_t nchunks_per_sign_layer = (bin_t::uint_t)log2((double)nchunks_per_sign);
-    //fprintf(stderr,"AddLiveRightHashes: layer %d\n", nchunks_per_sign_layer );
-
-    bin_t p = pos;
-    //while (!p.is_base())
-    //while (p.layer() >= nchunks_per_sign_layer)
-    while (p == pos)
-    {
-	evbuffer_add_8(evb, SWIFT_INTEGRITY);
-	evbuffer_add_chunkaddr(evb,p,hs_out_->chunk_addr_);
-	evbuffer_add_hash(evb, hashtree()->hash(p) );
-
-	fprintf(stderr,"AddHash: right %s %s\n", p.str().c_str(), hashtree()->hash(p).hex().c_str() );
-	dprintf("%s #%u +hash %s\n",tintstr(),id_,p.str().c_str());
-	p = p.right();
-    }
-}*/
-
 
 
 bin_t    Channel::ImposeHint () {
@@ -674,13 +646,6 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         return bin_t::NONE; // once in a while, empty data is sent just to check rtt FIXED
 
     // Add required hashes first
-    //SIGNPEAK
-    if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE && isretransmit)
-    {
-	// Resend highest signed peak
-	AddLiveSignedPeakHash4Retransmit(evb,tosend);
-    }
-
     if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
 	AddUncleHashes(evb,tosend,isretransmit);
 
@@ -701,6 +666,8 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
             raw_bytes_up_ += ret;
         evbuffer_add_32be(evb, hs_in_->peer_channel_id_);
     }
+
+    // Add chunk
     evbuffer_add_8(evb, SWIFT_DATA);
     evbuffer_add_chunkaddr(evb,tosend,hs_out_->chunk_addr_);
     // PPSPTODO LEDBAT current system time 64-bit
@@ -711,7 +678,6 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
 	// there. Not sure if this matters.
         evbuffer_add_64be(evb, Time() );
     }
-
 
     struct evbuffer_iovec vec;
     if (evbuffer_reserve_space(evb, transfer()->chunk_size(), &vec, 1) < 0) {
@@ -805,11 +771,14 @@ void    Channel::AddHave (struct evbuffer *evb) {
 
     // SIGNPEAK
     binmap_t *transfer_ack_out_ptr = transfer()->ack_out();
-    if (hs_in_ != NULL && hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+    if (hs_in_ != NULL && hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE )
     {
-	// Arno, 2013-02-26: LIVE SIGNPEAK Cannot send HAVEs not covered by signed peak
+	// Arno, 2013-02-26: LIVE SIGNPEAK Cannot send HAVEs not covered by
+	// signed peak when source. Non-source peers will consequently only
+	// see and receive chunks covered by signed peaks.
 	LiveTransfer *lt = (LiveTransfer *)transfer();
-	transfer_ack_out_ptr = lt->ack_out_signed();
+	if (lt->am_source())
+	    transfer_ack_out_ptr = lt->ack_out_signed();
     }
     for(int count=0; count<4; count++) {
         bin_t ack = binmap_t::find_complement(have_out_, *(transfer_ack_out_ptr), 0); // FIXME: do rotating queue
