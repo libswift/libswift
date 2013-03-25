@@ -73,7 +73,11 @@ void LiveTransfer::Initialize(bool check_netwvshash)
     else
 	hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
 
+    // TEMP
+    hs.live_disc_wnd_ = 100;
+
     fprintf(stderr,"LiveTransfer::Initialize: cipm %d\n", hs.cont_int_prot_);
+    fprintf(stderr,"LiveTransfer::Initialize: ldw  %llu\n", hs.live_disc_wnd_);
 
     SetDefaultHandshake(hs);
 

@@ -691,6 +691,8 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         return bin_t::NONE;
     }
 
+    dprintf("%s #%u ?data reading swarm %lld\n",tintstr(),id_, tosend.base_offset()*transfer()->chunk_size() );
+
     ssize_t r = transfer()->GetStorage()->Read((char *)vec.iov_base,
              transfer()->chunk_size(),tosend.base_offset()*transfer()->chunk_size());
     // TODO: corrupted data, retries, caching
@@ -1270,6 +1272,40 @@ void Channel::OnHave (struct evbuffer *evb) {
 	    LiveTransfer *lt = (LiveTransfer *)transfer();
 	    if (!lt->am_source())
 	    {
+		if (hs_in_ != NULL && hs_in_->live_disc_wnd_ != POPT_LIVE_DISC_WND_ALL)
+		{
+		    // Filter ack_in_ using live discard window. Peer will only have
+		    // the chunks in that window, so we should not pick outside.
+
+		    // 1. Find last non-empty bin
+		    bin_t lastbasepos = ackd_pos.base_right();
+		    if (ack_in_.is_empty(lastbasepos.right()))
+		    {
+			lastbasepos = ack_in_.find_empty(ackd_pos).base_left();
+			lastbasepos.to_right();
+		    }
+		    // 2. Calc start of window from last non-empty bin
+		    if (lastbasepos.layer_offset() >= hs_in_->live_disc_wnd_)
+		    {
+			bin_t firstbasepos = bin_t(0,lastbasepos.layer_offset() - hs_in_->live_disc_wnd_+1);
+
+			// 3. Empty all bins before start of window
+			binvector cbv;
+			swift::chunk32_to_bin32(0, firstbasepos.layer_offset(), &cbv); // firsbasepos exclusive
+			binvector::iterator iter;
+			for (iter=cbv.begin(); iter != cbv.end(); iter++)
+			{
+			    bin_t cpos = *iter;
+			    ack_in_.reset(cpos);
+			}
+			dprintf("%s #%u have window %s %s\n",tintstr(),id_,firstbasepos.str().c_str(),lastbasepos.str().c_str());
+		    }
+		}
+
+		// SIGPEAKTODO: affected by live_disc_wnd_, old bins before
+		// should be invalidated, to avoid hook-in minus NCHUNKS picking
+		// outside window.
+
 		((LivePiecePicker *)lt->picker())->StartAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_);
 
 		// Arno: it can happen that we receive a HAVE and have no hints

@@ -121,6 +121,9 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
     else if (state_ == STOR_STATE_SINGLE_LIVE_WRAP) // SIGNPEAK
     {
 	int64_t newoff = offset % live_disc_wnd_bytes_;
+
+	dprintf("%s %d ?data writing disk %lld window %llu\n",tintstr(), 0, newoff, live_disc_wnd_bytes_ );
+
 	return pwrite(single_fd_, buf, nbyte, newoff);
     }
 
@@ -455,6 +458,14 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
     {
         return pread(single_fd_, buf, nbyte, offset);
     }
+    else if (state_ == STOR_STATE_SINGLE_LIVE_WRAP)
+    {
+	int64_t newoff = offset % live_disc_wnd_bytes_;
+	dprintf("%s %d ?data reading disk %lld window %llu\n",tintstr(), 0, newoff, live_disc_wnd_bytes_ );
+
+        return pread(single_fd_, buf, nbyte, newoff);
+    }
+
 
     // MULTIFILE
     if (state_ == STOR_STATE_INIT)
