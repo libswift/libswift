@@ -253,6 +253,29 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
 		    BinHashSigTuple bhst = *iter;
 		    signed_ack_out_.set(bhst.bin());
 		}
+
+		// Forget old part of tree
+		if (def_hs_out_.live_disc_wnd_ != POPT_LIVE_DISC_WND_ALL)
+		{
+		    int64_t oldcid = ((int64_t)last_chunkid_ - (int64_t)def_hs_out_.live_disc_wnd_);
+		    if (oldcid > 0)
+		    {
+			uint64_t extracid = oldcid % nchunks_per_sign_;
+			uint64_t startcid = oldcid - extracid;
+			int64_t leftcid = ((int64_t)startcid - (int64_t)nchunks_per_sign_);
+			if (leftcid >= 0)
+			{
+			    bin_t leftpos(0,leftcid);
+
+			    bin_t::uint_t nchunks_per_sign_layer = (bin_t::uint_t)log2((double)nchunks_per_sign_);
+			    for (int h=0; h<nchunks_per_sign_layer; h++)
+			    {
+				leftpos = leftpos.parent();
+			    }
+			    fprintf(stderr,"live: AddData: UMT: purge %s nchunks %d window %llu when %llu\n", leftpos.str().c_str(), nchunks_per_sign_, def_hs_out_.live_disc_wnd_, last_chunkid_ );
+			}
+		    }
+		}
             }
         }
         else

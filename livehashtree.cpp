@@ -174,6 +174,8 @@ void LiveHashTree::FreeTree(Node *n)
 
 void LiveHashTree::PurgeTree(bin_t pos)
 {
+    Node *n = FindNode(pos);
+    FreeTree(n);
 }
 
 
