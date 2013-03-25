@@ -55,14 +55,27 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, bool ch
 
     picker_ = new SimpleLivePiecePicker(this);
     picker_->Randomize(rand()&63);
-
-
 }
 
 
 void LiveTransfer::Initialize(bool check_netwvshash)
 {
     GlobalAdd();
+
+    Handshake hs;
+    if (check_netwvshash)
+    {
+	if (nchunks_per_sign_ == 1)
+	    hs.cont_int_prot_ = POPT_CONT_INT_PROT_SIGNALL;
+	else
+	    hs.cont_int_prot_ = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
+    }
+    else
+	hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
+
+    fprintf(stderr,"LiveTransfer::Initialize: cipm %d\n", hs.cont_int_prot_);
+
+    SetDefaultHandshake(hs);
 
     std::string destdir;
     int ret = file_exists_utf8(filename_);
@@ -80,22 +93,10 @@ void LiveTransfer::Initialize(bool check_netwvshash)
     (void)remove_utf8(filename_);
 
     // MULTIFILE
-    storage_ = new Storage(filename_,destdir,td_);
-
-    Handshake hs;
-    if (check_netwvshash)
-    {
-	if (nchunks_per_sign_ == 1)
-	    hs.cont_int_prot_ = POPT_CONT_INT_PROT_SIGNALL;
-	else
-	    hs.cont_int_prot_ = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
-    }
-    else
-	hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
-
-    fprintf(stderr,"LiveTransfer::Initialize: cipm %d\n", hs.cont_int_prot_);
-
-    SetDefaultHandshake(hs);
+    uint64_t ldwb = hs.live_disc_wnd_;
+    if (ldwb != POPT_LIVE_DISC_WND_ALL)
+	ldwb *= chunk_size_;
+    storage_ = new Storage(filename_,destdir,td_,ldwb);
 
     fprintf(stderr,"LiveTransfer::Initialize: def cipm %d\n", def_hs_out_.cont_int_prot_ );
 

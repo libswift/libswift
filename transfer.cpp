@@ -25,6 +25,13 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
 {
     td_ = td;
 
+    Handshake hs;
+    if (check_netwvshash)
+	hs.cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
+    else
+	hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
+    SetDefaultHandshake(hs);
+
     std::string destdir;
     int ret = file_exists_utf8(filename);
     if (ret == 2 && root_hash != Sha1Hash::ZERO) {
@@ -38,7 +45,7 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
     }
 
     // MULTIFILE
-    storage_ = new Storage(filename,destdir,td_);
+    storage_ = new Storage(filename,destdir,td_,0);
 
     std::string hash_filename;
     hash_filename.assign(filename);
@@ -47,13 +54,6 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
     std::string binmap_filename;
     binmap_filename.assign(filename);
     binmap_filename.append(".mbinmap");
-
-    Handshake hs;
-    if (check_netwvshash)
-	hs.cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
-    else
-	hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
-    SetDefaultHandshake(hs);
 
     // Arno, 2013-02-25: Create HashTree even when PROT_NONE to enable
     // automatic size determination via peak hashes.

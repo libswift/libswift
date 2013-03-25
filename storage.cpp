@@ -22,15 +22,21 @@ using namespace swift;
 const std::string Storage::MULTIFILE_PATHNAME = "META-INF-multifilespec.txt";
 const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 
-Storage::Storage(std::string ospathname, std::string destdir, int td) :
+Storage::Storage(std::string ospathname, std::string destdir, int td, uint64_t live_disc_wnd_bytes) :
 	Operational(),
 	state_(STOR_STATE_INIT),
         os_pathname_(ospathname), destdir_(destdir), ht_(NULL), spec_size_(0),
         single_fd_(-1), reserved_size_(-1), total_size_from_spec_(-1), last_sf_(NULL),
-        td_(td), alloc_cb_(NULL)
+        td_(td), alloc_cb_(NULL), live_disc_wnd_bytes_(live_disc_wnd_bytes)
 {
-
     //fprintf(stderr,"Storage: ospathname %s destdir %s\n", ospathname.c_str(), destdir.c_str() );
+    // SIGNPEAK
+    if (live_disc_wnd_bytes > 0 && live_disc_wnd_bytes != POPT_LIVE_DISC_WND_ALL)
+    {
+	state_ = STOR_STATE_SINGLE_LIVE_WRAP;
+        (void)OpenSingleFile();
+        return;
+    }
 
     int64_t fsize = file_size_by_path_utf8(ospathname.c_str());
     if (fsize < 0 && errno == ENOENT)
@@ -83,7 +89,8 @@ Storage::Storage(std::string ospathname, std::string destdir, int td) :
         // Normal swarm
         dprintf("%s %s storage: Found single file, will check it.\n", tintstr(), roothashhex().c_str() );
 
-        (void)OpenSingleFile(); // sets state to STOR_STATE_SINGLE_FILE
+        state_ = STOR_STATE_SINGLE_FILE;
+        (void)OpenSingleFile();
     }
 }
 
@@ -111,12 +118,18 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
     {
         return pwrite(single_fd_, buf, nbyte, offset);
     }
+    else if (state_ == STOR_STATE_SINGLE_LIVE_WRAP) // SIGNPEAK
+    {
+	int64_t newoff = offset % live_disc_wnd_bytes_;
+	return pwrite(single_fd_, buf, nbyte, newoff);
+    }
+
     // MULTIFILE
     if (state_ == STOR_STATE_INIT)
     {
         if (offset != 0)
         {
-                        dprintf("%s %s storage: Write: First write to offset >0, assume live\n", tintstr(), roothashhex().c_str() );
+	    dprintf("%s %s storage: Write: First write to offset >0, assume live\n", tintstr(), roothashhex().c_str() );
             //errno = EINVAL;
             //return -1;
         }
@@ -149,7 +162,9 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
         else
         {
             // Is a single file swarm.
-            int ret = OpenSingleFile(); // sets state to STOR_STATE_SINGLE_FILE
+            state_ = STOR_STATE_SINGLE_FILE;
+
+            int ret = OpenSingleFile();
             if (ret < 0)
                 return -1;
 
@@ -405,8 +420,6 @@ int Storage::ParseSpec(StorageFile *sf)
 
 int Storage::OpenSingleFile()
 {
-    state_ = STOR_STATE_SINGLE_FILE;
-
     //dprintf("%s %s storage: Opening single file %s\n", tintstr(), roothashhex().c_str(), os_pathname_.c_str() );
     single_fd_ = open_utf8(os_pathname_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (single_fd_<0) {

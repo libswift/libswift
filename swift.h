@@ -1048,7 +1048,8 @@ namespace swift {
             STOR_STATE_INIT,
             STOR_STATE_MFSPEC_SIZE_KNOWN,
             STOR_STATE_MFSPEC_COMPLETE,
-            STOR_STATE_SINGLE_FILE
+            STOR_STATE_SINGLE_FILE,
+            STOR_STATE_SINGLE_LIVE_WRAP
         } storage_state_t;
 
         /** StorageFile for every file in this transfer */
@@ -1058,8 +1059,9 @@ namespace swift {
         static std::string spec2ospn(std::string specpn);
         static std::string os2specpn(std::string ospn);
 
-        /** Create Storage from specified path and destination dir if content turns about to be a multi-file */
-        Storage(std::string ospathname, std::string destdir, int td);
+        /** Create Storage from specified path and destination dir if content turns about to be a multi-file.
+         * If live_disc_wnd_bytes !=0 then live single-file, wrapping if != POPT_LIVE_DISC_WND_ALL */
+        Storage(std::string ospathname, std::string destdir, int td, uint64_t live_disc_wnd_bytes);
         ~Storage();
 
         /** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
@@ -1124,6 +1126,7 @@ namespace swift {
 
         int         td_; // transfer ID of the *Transfer we're part of.
         ProgressCallback alloc_cb_;
+        uint64_t    live_disc_wnd_bytes_;
 
         int         WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
         std::pair<int64_t,int64_t> WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);

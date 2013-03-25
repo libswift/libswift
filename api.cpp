@@ -654,7 +654,7 @@ int swift::HashCheckOffline( std::string filename, Sha1Hash *calchashptr, uint32
 	destdir = ".";
 
     // MULTIFILE
-    Storage *storage_ = new Storage(filename,destdir,-1);
+    Storage *storage_ = new Storage(filename,destdir,-1,0);
 
     std::string hash_filename;
     hash_filename.assign(filename);
