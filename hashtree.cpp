@@ -79,7 +79,8 @@ std::string    Sha1Hash::hex() const {
 
 MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool force_check_diskvshash, bool check_netwvshash, std::string binmap_filename) :
  HashTree(), root_hash_(root_hash), hashes_(NULL),
- peak_count_(0), hash_fd_(-1), hash_filename_(hash_filename), size_(0), sizec_(0), complete_(0), completec_(0),
+ peak_count_(0), hash_fd_(-1), hash_filename_(hash_filename),
+ binmap_filename_(binmap_filename), size_(0), sizec_(0), complete_(0), completec_(0),
  chunk_size_(chunk_size), storage_(storage), check_netwvshash_(check_netwvshash)
 {
     // MULTIFILE
@@ -153,7 +154,7 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
     		Submit();
     	}
     	fclose(fp);
-    } else {
+    } else if (mhash_exists) {
     	// Arno: no data on disk, or mhash on disk, but no binmap. In latter
     	// case recreate binmap by reading content again. Historic optimization
     	// of Submit.
@@ -164,9 +165,9 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
 
 
 MmapHashTree::MmapHashTree(bool dummy, std::string binmap_filename) :
-HashTree(), root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), hash_fd_(0),
+HashTree(), root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), hash_fd_(-1),
 hash_filename_(""), filename_(""), size_(0), sizec_(0), complete_(0), completec_(0),
-chunk_size_(0), check_netwvshash_(false)
+chunk_size_(0), storage_(NULL), check_netwvshash_(false)
 {
 	FILE *fp = fopen_utf8(binmap_filename.c_str(),"rb");
 	if (!fp) {
@@ -367,8 +368,10 @@ int MmapHashTree::internal_deserialize(FILE *fp,bool contentavail) {
 		return -1;
 	root_hash_ = Sha1Hash(true, hexhashstr);
 	chunk_size_ = cs;
-
-	// Arno, 2012-01-03: Hack to just get root hash
+	complete_ = c;
+	completec_ = cc;
+        // Arno, 2012-01-03: Hack to just get root hash
+        // 2013-03-06: and complete 
 	if (!contentavail)
 		return 2;
 

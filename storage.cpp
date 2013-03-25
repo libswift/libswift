@@ -22,12 +22,12 @@ using namespace swift;
 const std::string Storage::MULTIFILE_PATHNAME = "META-INF-multifilespec.txt";
 const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 
-Storage::Storage(std::string ospathname, std::string destdir, int transferfd) :
+Storage::Storage(std::string ospathname, std::string destdir, int transferfd, uint64_t complete) :
 		Operational(),
 		state_(STOR_STATE_INIT),
 		os_pathname_(ospathname), destdir_(destdir), ht_(NULL), spec_size_(0),
 		single_fd_(-1), reserved_size_(-1), total_size_from_spec_(-1), last_sf_(NULL),
-		transfer_fd_(transferfd), alloc_cb_(NULL)
+		transfer_fd_(transferfd), alloc_cb_(NULL), open_flags_(OPENFLAGS)
 {
 
 	//fprintf(stderr,"Storage: ospathname %s destdir %s\n", ospathname.c_str(), destdir.c_str() );
@@ -44,7 +44,7 @@ Storage::Storage(std::string ospathname, std::string destdir, int transferfd) :
 	FILE *fp = fopen_utf8(ospathname.c_str(),"rb");
 	if (!fp)
 	{
-		dprintf("%s %s storage: File exists, but error opening\n", tintstr(), roothashhex().c_str() );
+		dprintf("%s %s storage: File exists, but error opening %s\n", tintstr(), roothashhex().c_str(), ospathname.c_str() );
 		print_error("Could not open existing storage file");
 		SetBroken();
 		return;
@@ -66,21 +66,38 @@ Storage::Storage(std::string ospathname, std::string destdir, int transferfd) :
 
 		dprintf("%s %s storage: Found multifile-spec, will seed it.\n", tintstr(), roothashhex().c_str() );
 
-		StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,fsize,ospathname);
+		StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,fsize,ospathname,open_flags_);
 		sfs_.push_back(sf);
 		if (ParseSpec(sf) < 0)
 		{
 			print_error("storage: error parsing multi-file spec");
 			SetBroken();
 		}
+                else
+                    DetermineReadOnly(GetSizeFromSpec(),complete);
 	}
 	else
 	{
 		// Normal swarm
-		dprintf("%s %s storage: Found single file, will check it.\n", tintstr(), roothashhex().c_str() );
+		dprintf("%s %s storage: Found single file.\n", tintstr(), roothashhex().c_str() );
+
+                DetermineReadOnly(fsize,complete);
 
 		(void)OpenSingleFile(); // sets state to STOR_STATE_SINGLE_FILE
 	}
+}
+
+void Storage::DetermineReadOnly(int64_t fsize, uint64_t complete)
+{
+    // Arno, 2013-03-06: binmap file says content complete on disk, and
+    // there indeed is a content file. So open content read-only to
+    // avoid certain locking problems when opening the content with
+    // another application on Win32.
+    if (fsize > 0 && fsize == complete)
+    {
+        dprintf("%s %s storage: Opening read-only\n", tintstr(), roothashhex().c_str() );
+        open_flags_ = ROOPENFLAGS;
+    }
 }
 
 
@@ -137,7 +154,7 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 			//dprintf("%s %s storage: Write: multifile: specsize %lld\n", tintstr(), roothashhex().c_str(), spec_size_ );
 
 			// Create StorageFile for multi-file spec.
-			StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,spec_size_,os_pathname_);
+			StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,spec_size_,os_pathname_,open_flags_);
 			sfs_.push_back(sf);
 
 			// Write all, or part of spec and set state_
@@ -373,7 +390,7 @@ int Storage::ParseSpec(StorageFile *sf)
 			std::string ospath = destdir_+FILE_SEP;
 			ospath += Storage::spec2ospn(specpath);
 
-			StorageFile *sf = new StorageFile(specpath,offset,fsize,ospath);
+			StorageFile *sf = new StorageFile(specpath,offset,fsize,ospath,open_flags_);
 			sfs_.push_back(sf);
 			offset += fsize;
 		}
@@ -404,7 +421,7 @@ int Storage::OpenSingleFile()
 {
 	state_ = STOR_STATE_SINGLE_FILE;
 
-	single_fd_ = open_utf8(os_pathname_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+	single_fd_ = open_utf8(os_pathname_.c_str(),open_flags_,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
 	if (single_fd_<0) {
 		single_fd_ = -1;
 		print_error("storage: cannot open single file");
@@ -622,7 +639,7 @@ std::string Storage::os2specpn(std::string ospn)
 
 
 
-StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std::string ospath) :
+StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std::string ospath, int openflags) :
 		Operational(),
 		fd_(-1)
 {
@@ -682,7 +699,7 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
 
 
 	// Open
-	fd_ = open_utf8(os_pathname_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+	fd_ = open_utf8(os_pathname_.c_str(),openflags,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
 	if (fd_<0) {
 		//print_error("storage: file: Could not open");
 		dprintf("%s %s storage: file: Could not open %s\n", tintstr(), "0000000000000000000000000000000000000000", os_pathname_.c_str() );
