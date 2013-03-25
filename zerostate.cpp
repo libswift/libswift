@@ -19,7 +19,7 @@ ZeroState * ZeroState::__singleton = NULL;
 
 #define CLEANUP_INTERVAL			30	// seconds
 
-ZeroState::ZeroState() : contentdir_("."), connect_timeout_(TINT_NEVER)
+ZeroState::ZeroState() : contentdir_("."), metadir_(""), connect_timeout_(TINT_NEVER)
 {
 	if (__singleton == NULL)
 	{
@@ -131,6 +131,11 @@ void ZeroState::SetContentDir(std::string contentdir)
 	contentdir_ = contentdir;
 }
 
+void ZeroState::SetMetaDir(std::string metadir)
+{
+	metadir_ = metadir;
+}
+
 void ZeroState::SetConnectTimeout(tint timeout)
 {
 	//fprintf(stderr,"ZeroState: SetConnectTimeout: %lld\n", timeout/TINT_SEC );
@@ -144,24 +149,29 @@ FileTransfer * ZeroState::Find(Sha1Hash &root_hash)
 
 	//std::string file_name = "content.avi";
 	std::string file_name = contentdir_+FILE_SEP+root_hash.hex();
+	std::string meta_prefix = "";
+	if (!metadir_.compare(""))
+	    meta_prefix = file_name;
+	else
+	    meta_prefix = metadir_+FILE_SEP+root_hash.hex();
 	uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE;
 
 	dprintf("%s #0 zero find %s from %s\n",tintstr(),file_name.c_str(), getcwd_utf8().c_str() );
 
 	std::string reqfilename = file_name;
-    int ret = file_exists_utf8(reqfilename);
+	int ret = file_exists_utf8(reqfilename);
 	if (ret < 0 || ret == 0 || ret == 2)
 		return NULL;
-	reqfilename = file_name+".mbinmap";
-    ret = file_exists_utf8(reqfilename);
+	reqfilename = meta_prefix+".mbinmap";
+	ret = file_exists_utf8(reqfilename);
 	if (ret < 0 || ret == 0 || ret == 2)
 		return NULL;
-	reqfilename = file_name+".mhash";
-    ret = file_exists_utf8(reqfilename);
+	reqfilename = meta_prefix+".mhash";
+	ret = file_exists_utf8(reqfilename);
 	if (ret < 0 || ret == 0 || ret == 2)
 		return NULL;
 
-	FileTransfer *ft = new FileTransfer(file_name,root_hash,false,true,chunk_size,true);
+	FileTransfer *ft = new FileTransfer(file_name,root_hash,metadir_,false,true,chunk_size,true);
 	if (ft->hashtree() == NULL || !ft->hashtree()->is_complete())
 	{
 		// Safety catch

@@ -82,6 +82,7 @@ evutil_socket_t   cmd_tunnel_sock=INVALID_SOCKET;
 
 // HTTP gateway address for PLAY cmd
 Address cmd_gw_httpaddr;
+std::string cmd_gw_metadir;
 
 bool cmd_gw_debug=false;
 
@@ -219,11 +220,11 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 
 	if (removestate)
 	{
-		std::string mhashfilename = contentfilename + ".mhash";
+		std::string mhashfilename = ft->hashtree()->get_hash_filename();
 		delset.insert(mhashfilename);
 
 		// Arno, 2012-01-10: .mbinmap gots to go too.
-		std::string mbinmapfilename = contentfilename + ".mbinmap";
+		std::string mbinmapfilename = ft->hashtree()->get_binmap_filename();;
 		delset.insert(mbinmapfilename);
 	}
 
@@ -312,7 +313,7 @@ void CmdGwSendINFOHashChecking(evutil_socket_t cmdsock, Sha1Hash root_hash)
 	// Send INFO DLSTATUS_HASHCHECKING message.
 
     char cmd[MAX_CMD_MESSAGE];
-	sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",root_hash.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,3.14,0,0);
+    sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u %llu %llu\r\n",root_hash.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,(double)0.0,(double)0.0,0,0,(uint64_t)0,(uint64_t)0);
 
     //fprintf(stderr,"cmd: SendINFO: %s", cmd);
     send(cmdsock,cmd,strlen(cmd),0);
@@ -345,7 +346,7 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 
     double dlspeed = ft->GetCurrentSpeed(DDIR_DOWNLOAD);
     double ulspeed = ft->GetCurrentSpeed(DDIR_UPLOAD);
-    sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",root_hash.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds);
+    sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u %llu %llu\r\n",root_hash.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds,ft->GetBytes(DDIR_DOWNLOAD),ft->GetBytes(DDIR_UPLOAD));
 
     send(req->cmdsock,cmd,strlen(cmd),0);
 
@@ -440,8 +441,8 @@ void CmdGwSwiftPrebufferProgressCallback (int transfer, bin_t bin)
 	//
 	// Subsequent bytes of content downloaded
 	//
-	if (cmd_gw_debug)
-		fprintf(stderr,"cmd: SwiftPrebuffProgress: %d\n", transfer );
+	//if (cmd_gw_debug)
+	//	fprintf(stderr,"cmd: SwiftPrebuffProgress: %d\n", transfer );
 
 	cmd_gw_t* req = CmdGwFindRequestByTransfer(transfer);
 	if (req == NULL)
@@ -453,8 +454,8 @@ void CmdGwSwiftPrebufferProgressCallback (int transfer, bin_t bin)
         int64_t wantsize = std::min(req->endoff+1-req->startoff,(uint64_t)CMDGW_MAX_PREBUF_BYTES);
 #endif
 
-	if (cmd_gw_debug)
-		fprintf(stderr,"cmd: SwiftPrebuffProgress: want %lld got %lld\n", swift::SeqComplete(req->transfer,req->startoff), wantsize );
+	//if (cmd_gw_debug)
+	//	fprintf(stderr,"cmd: SwiftPrebuffProgress: want %lld got %lld\n", swift::SeqComplete(req->transfer,req->startoff), wantsize );
 
 
 	if (swift::SeqComplete(req->transfer,req->startoff) >= wantsize)
@@ -610,12 +611,14 @@ int icount=0;
 
 void CmdGwUpdateDLStatesCallback()
 {
-	// Called by swift main approximately every second
-	// Loop over all swarms
+    // Called by swift main approximately every second
+    // Loop over all swarms
+    evutil_socket_t cmdsock=-1;
     for(int i=0; i<cmd_gw_reqs_open; i++)
     {
     	cmd_gw_t* req = &cmd_requests[i];
     	CmdGwUpdateDLStateCallback(req);
+    	cmdsock=req->cmdsock;
     }
 
     // Arno, 2012-05-24: Autoclose if CMD *connection* not *re*established soon
@@ -637,6 +640,34 @@ void CmdGwUpdateDLStatesCallback()
     else
     	cmd_gw_last_open = NOW;
     */
+
+    if (cmdsock != -1 && FileTransfer::subscribe_channel_close)
+    {
+    	std::ostringstream oss;
+
+	swevent_list_t::iterator iter;
+	for (iter = FileTransfer::subscribe_event_q.begin(); iter != FileTransfer::subscribe_event_q.end(); iter++)
+	{
+	    CloseEvent ce = *iter;
+
+	    oss << "CLOSE_EVENT" << " " << ce.swarmid().hex() << " ";
+	    oss << ce.peeraddr().str() << " ";
+	    oss << ce.raw_bytes(DDIR_UPLOAD) << " ";
+	    oss << ce.raw_bytes(DDIR_DOWNLOAD) << " ";
+	    oss << ce.bytes(DDIR_UPLOAD) << " ";
+	    oss << ce.bytes(DDIR_DOWNLOAD);
+	    oss << "\r\n";
+	}
+
+	if (FileTransfer::subscribe_event_q.size() > 0)
+	{
+	    std::stringbuf *pbuf=oss.rdbuf();
+	    size_t slen = strlen(pbuf->str().c_str());
+	    send(cmdsock,pbuf->str().c_str(),slen,0);
+	}
+	FileTransfer::subscribe_event_q.clear();
+    }
+
 }
 
 
@@ -778,20 +809,42 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
     	// New START request
         //fprintf(stderr,"cmd: START: new request %i\n",cmd_gw_reqs_count+1);
 
-        // Format: START url destdir\r\n
-        // Arno, 2012-04-13: See if URL followed by storagepath for seeding
-        std::string pstr = paramstr;
-        std::string url="",storagepath="";
+        // Format: START url [destdir [metadir]]\r\n
+        // Arno, 2012-04-13: See if URL followed by destpath for seeding
+	// Arno, 2013-03-12: See if destpath followed by metadir
+	std::string pstr = paramstr;
+        std::string url="",storagepath="", metadir="";
         int sidx = pstr.find(" ");
         if (sidx == std::string::npos)
         {
-        	url = pstr;
-        	storagepath = "";
+            // No storage path or metadir
+	    url = pstr;
         }
         else
         {
-        	url = pstr.substr(0,sidx);
-        	storagepath = pstr.substr(sidx+1);
+	    url = pstr.substr(0,sidx);
+	    std::string qstr = pstr.substr(sidx+1);
+	    sidx = qstr.find(" ");
+	    if (sidx == std::string::npos)
+	    {
+		// Only storage path
+		storagepath = qstr;
+	    }
+	    else
+	    {
+		// Storage path and metadir
+		storagepath = qstr.substr(0,sidx);
+		metadir = qstr.substr(sidx+1);
+	    }
+        }
+
+        // If no metadir in command, but one is set on swift command line use latter.
+        if (cmd_gw_metadir.compare("") && !metadir.compare(""))
+            metadir = cmd_gw_metadir;
+        if (metadir.length() > 0)
+        {
+            if (metadir.substr(metadir.length()-std::string(FILE_SEP).length()).compare(FILE_SEP))
+                metadir += FILE_SEP;
         }
 
         // Parse URL
@@ -816,18 +869,18 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         if (durationstr.length() > 0)
         	std::istringstream(durationstr) >> duration;
 
-        dprintf("cmd: START: %s with tracker %s chunksize %i duration %i\n",hashstr.c_str(),trackerstr.c_str(),chunksize,duration);
+        dprintf("cmd: START: %s with tracker %s chunksize %i duration %i storage %s metadir %s\n",hashstr.c_str(),trackerstr.c_str(),chunksize,duration,storagepath.c_str(),metadir.c_str() );
 
         // ARNOTODO: return duration in HTTPGW
 
         Address trackaddr;
-		trackaddr = Address(trackerstr.c_str());
-		if (trackaddr==Address())
-		{
-			dprintf("cmd: START: tracker address must be hostname:port, ip:port or just port\n");
-	        return ERROR_BAD_ARG;
-		}
-		// SetTracker(trackaddr); == set default tracker
+	trackaddr = Address(trackerstr.c_str());
+	if (trackaddr==Address())
+	{
+		dprintf("cmd: START: tracker address must be hostname:port, ip:port or just port\n");
+	return ERROR_BAD_ARG;
+	}
+	// SetTracker(trackaddr); == set default tracker
 
         // initiate transmission
         Sha1Hash root_hash = Sha1Hash(true,hashstr.c_str());
@@ -841,9 +894,9 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         }
 
         // Send INFO DLSTATUS_HASHCHECKING
-		CmdGwSendINFOHashChecking(cmdsock,root_hash);
+	CmdGwSendINFOHashChecking(cmdsock,root_hash);
 
-		// ARNOSMPTODO: disable/interleave hashchecking at startup
+	// ARNOSMPTODO: disable/interleave hashchecking at startup
         int transfer = swift::Find(root_hash);
         if (transfer==-1) {
         	std::string filename;
@@ -851,7 +904,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         		filename = storagepath;
         	else
         		filename = hashstr;
-            transfer = swift::Open(filename,root_hash,trackaddr,false,true,chunksize);
+            transfer = swift::Open(filename,root_hash,metadir,trackaddr,false,true,chunksize);
             if (transfer == -1)
             {
             	CmdGwSendERRORBySocket(cmdsock,"bad swarm",root_hash);
@@ -1012,7 +1065,41 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
     	Sha1Hash root_hash = Sha1Hash(true,hashstr);
     	CmdGwGotPEERADDR(root_hash,peer);
     }
+    else if (!strcmp(method,"SUBSCRIBE"))
+    {
+	// Format: SUBSCRIBE swarmid EVENT 1/0
+	//         SUBSCRIBE 089aa... CHANNEL_CLOSE 1
+	std::string pstr = paramstr;
+        std::string swarmidstr="",eventstr="", enablestr="";
+        int sidx = pstr.find(" ");
+        if (sidx == std::string::npos)
+        {
+            return ERROR_MISS_ARG;
+        }
+        else
+        {
+	    swarmidstr = pstr.substr(0,sidx);
+	    std::string qstr = pstr.substr(sidx+1);
+	    sidx = qstr.find(" ");
+	    if (sidx == std::string::npos)
+	    {
+		// On/off missing
+		return ERROR_MISS_ARG;
+	    }
+	    else
+	    {
+		eventstr = qstr.substr(0,sidx);
+		enablestr = qstr.substr(sidx+1);
+	    }
 
+        }
+        if (swarmidstr.compare("ALL") || eventstr.compare("CHANNEL_CLOSE"))
+            return ERROR_BAD_ARG;
+
+        FileTransfer::subscribe_channel_close = !enablestr.compare("1");
+        if (!FileTransfer::subscribe_channel_close)
+            FileTransfer::subscribe_event_q.clear();
+    }
     else
     {
     	return ERROR_UNKNOWN_CMD;
@@ -1082,7 +1169,7 @@ void CmdGwListenErrorCallback(struct evconnlistener *listener, void *ctx)
 }
 
 
-bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr)
+bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr, std::string metadir)
 {
 	// Allocate libevent listener for cmd connections
 	// From http://www.wangafu.net/~nickm/libevent-book/Ref8_listener.html
@@ -1101,6 +1188,7 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
     evconnlistener_set_error_cb(cmd_evlistener, CmdGwListenErrorCallback);
 
     cmd_gw_httpaddr = httpaddr;
+    cmd_gw_metadir = metadir;
 
     cmd_evbuffer = evbuffer_new();
 
