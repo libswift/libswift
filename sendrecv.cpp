@@ -67,6 +67,9 @@ void    Channel::AddPeakHashes (struct evbuffer *evb)
 	// SIGNPEAK
 	AddLiveSignedPeakHashes(evb);
     }
+
+    // Send hashes in separate datagram if first would get too big
+    SendIfTooBig(evb);
 }
 
 
@@ -97,7 +100,7 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
     }
 
     // Arno, 2013-03-25: If not source, forward only unknown signed peaks
-    // to next
+    // to connected peer
     bhstvector unknownpeaktuples;
     if (((LiveTransfer *)transfer())->am_source())
 	unknownpeaktuples = sincesignedpeaktuples;
@@ -667,20 +670,8 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     if (!ack_in_.is_empty()) // TODO: cwnd_>1
         data_out_cap_ = tosend;
 
-    // Arno, 2011-11-03: May happen when first data packet is sent to empty
-    // leech, then peak + uncle hashes may be so big that they don't fit in eth
-    // frame with DATA. Send 2 datagrams then, one with peaks so they have
-    // a better chance of arriving. Optimistic violation of atomic datagram
-    // principle.
-    if (transfer()->chunk_size() == SWIFT_DEFAULT_CHUNK_SIZE && evbuffer_get_length(evb) > SWIFT_MAX_NONDATA_DGRAM_SIZE) {
-        dprintf("%s #%u fsent %ib %s:%x\n",
-                tintstr(),id_,(int)evbuffer_get_length(evb),peer().str().c_str(),
-                hs_in_->peer_channel_id_);
-        int ret = Channel::SendTo(socket_,peer(),evb); // kind of fragmentation
-        if (ret > 0)
-            raw_bytes_up_ += ret;
-        evbuffer_add_32be(evb, hs_in_->peer_channel_id_);
-    }
+    // Send hashes in separate datagram if first would get too big
+    SendIfTooBig(evb);
 
     // Add chunk
     evbuffer_add_8(evb, SWIFT_DATA);
@@ -728,6 +719,25 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     transfer_->OnSendData(transfer()->chunk_size());
 
     return tosend;
+}
+
+
+void Channel::SendIfTooBig(struct evbuffer *evb)
+{
+    // Arno, 2011-11-03: May happen when first data packet is sent to empty
+    // leech, then peak + uncle hashes may be so big that they don't fit in eth
+    // frame with DATA. Send 2 datagrams then, one with peaks so they have
+    // a better chance of arriving. Optimistic violation of atomic datagram
+    // principle.
+    if (transfer()->chunk_size() == SWIFT_DEFAULT_CHUNK_SIZE && evbuffer_get_length(evb) > SWIFT_MAX_NONDATA_DGRAM_SIZE) {
+        dprintf("%s #%u fsent %ib %s:%x\n",
+                tintstr(),id_,(int)evbuffer_get_length(evb),peer().str().c_str(),
+                hs_in_->peer_channel_id_);
+        int ret = Channel::SendTo(socket_,peer(),evb); // kind of fragmentation
+        if (ret > 0)
+            raw_bytes_up_ += ret;
+        evbuffer_add_32be(evb, hs_in_->peer_channel_id_);
+    }
 }
 
 

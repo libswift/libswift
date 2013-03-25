@@ -769,6 +769,7 @@ namespace swift {
         void        OnSignedHash (struct evbuffer *evb);
         void        AddHandshake (struct evbuffer *evb);
         bin_t       AddData (struct evbuffer *evb);
+        void 	    SendIfTooBig(struct evbuffer *evb);
         void        AddAck (struct evbuffer *evb);
         void        AddHave (struct evbuffer *evb);
         void        AddHint (struct evbuffer *evb);

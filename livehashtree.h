@@ -15,10 +15,10 @@
  *  - purge subtree, source and client
  *  - Storage layer that remembers just part.
  *  - Add unittest that expands tree and see if all hashes are there and verified bits set correctly
- *  - Make sure signed peak messages not too big
  *  - Split signed peaks into multiple datagrams when too big
- *      TODO: also do partial send in AddSignedPeakHashes when required
+ *      DONE: also do partial send in AddSignedPeakHashes when required
  *  - Split uncle hashes into multiple datagrams when too big
+ *      DONE
  *  - For non-source providing chunks: it won't have left side of tree
  *    (but will have all hashes to check all chunks)
  *  - Problem with hook-in and missing hashtree? Arno: what missing hashtree?
