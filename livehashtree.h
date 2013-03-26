@@ -131,6 +131,7 @@ class LiveHashTree: public HashTree
      bin_t          signed_peak(int i);
      bin_t          signed_peak_for (bin_t pos) const; */
      bhstvector	    GetCurrentSignedPeakTuples();
+     uint32_t	    GetGuessedNChunksPerSig() { return guessed_nchunks_per_sig_; }
 
      /** If bhst.bin() != bin_t::NONE the signature was good. */
      BinHashSigTuple LiveHashTree::OfferSignedPeakHash(bin_t pos, Signature &sig);
@@ -204,6 +205,7 @@ class LiveHashTree: public HashTree
      /** Temp storage for candidate peak */
      bin_t	     cand_peak_bin_;
      Sha1Hash	     cand_peak_hash_;
+     uint32_t	     guessed_nchunks_per_sig_;
 
      /** Create a new leaf Node next to the current latest leaf (pointed to by
       * addcursor_). This may involve creating a new root and subtree to

@@ -1074,6 +1074,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     // SIGNPEAK
     if (hashtree() != NULL && (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE))
     {
+	// Check integrity
         if (!hashtree()->OfferData(pos, (char*)data, length)) {
             evbuffer_drain(evb, length);
             dprintf("%s #%u !data %s\n",tintstr(),id_,pos.str().c_str());
@@ -1099,7 +1100,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     if (DEBUGTRAFFIC)
         fprintf(stderr,"$ ");
 
-
+    // Do swift API callbacks
     bin_t cover = transfer()->ack_out()->cover(pos);
     transfer()->Progress(cover);
     if (cover.layer() >= 5) // Arno: update DL speed. Tested with 32K, presently = 2 ** 5 * chunk_size CHUNKSIZE
@@ -1115,6 +1116,24 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     CleanHintOut(pos);
     bytes_down_ += length;
     global_bytes_down += length;
+
+    // SIGNPEAK
+    // Purge hash tree, if desired
+    if (hs_out_->live_disc_wnd_ != POPT_LIVE_DISC_WND_ALL)
+    {
+	// Find last non-empty bin
+	bin_t lastbasepos = pos;
+	if (transfer()->ack_out()->is_empty(lastbasepos.right()))
+	{
+	    lastbasepos = transfer()->ack_out()->find_empty(pos).base_left();
+	    lastbasepos.to_right();
+	}
+
+	LiveTransfer *lt = (LiveTransfer *)transfer();
+	LiveHashTree *umt = (LiveHashTree *)hashtree();
+	lt->OnDataPurgeTree(*hs_out_,lastbasepos,umt->GetGuessedNChunksPerSig());
+    }
+
     return pos;
 }
 
@@ -1264,59 +1283,65 @@ void Channel::OnHave (struct evbuffer *evb) {
 	ack_in_.set(ackd_pos);
 	dprintf("%s #%u -have %s\n",tintstr(),id_,ackd_pos.str().c_str());
 
-	// Arno, 2012-01-09: Provide PP with info needed for hook-in.
-	// Arno, 2013-02-14: Could be optimized such that only right-most bin
-	// is communicated to LivePiecePicker.
 	if (transfer()->ttype() == LIVE_TRANSFER)
 	{
-	    LiveTransfer *lt = (LiveTransfer *)transfer();
-	    if (!lt->am_source())
+	    OnHaveLive(ackd_pos);
+	}
+    }
+}
+
+
+void Channel::OnHaveLive(bin_t ackd_pos)
+{
+    // Arno, 2012-01-09: Provide PiecePicker with info needed for hook-in.
+    // Arno, 2013-02-14: Could be optimized such that only right-most bin
+    // is communicated to LivePiecePicker.
+    LiveTransfer *lt = (LiveTransfer *)transfer();
+    if (!lt->am_source())
+    {
+	if (hs_in_ != NULL && hs_in_->live_disc_wnd_ != POPT_LIVE_DISC_WND_ALL)
+	{
+	    // Filter ack_in_ using live discard window. Peer will only have
+	    // the chunks in that window, so we should not pick outside.
+
+	    // 1. Find last non-empty bin
+	    bin_t lastbasepos = ackd_pos.base_right();
+	    if (ack_in_.is_empty(lastbasepos.right()))
 	    {
-		if (hs_in_ != NULL && hs_in_->live_disc_wnd_ != POPT_LIVE_DISC_WND_ALL)
-		{
-		    // Filter ack_in_ using live discard window. Peer will only have
-		    // the chunks in that window, so we should not pick outside.
-
-		    // 1. Find last non-empty bin
-		    bin_t lastbasepos = ackd_pos.base_right();
-		    if (ack_in_.is_empty(lastbasepos.right()))
-		    {
-			lastbasepos = ack_in_.find_empty(ackd_pos).base_left();
-			lastbasepos.to_right();
-		    }
-		    // 2. Calc start of window from last non-empty bin
-		    if (lastbasepos.layer_offset() >= hs_in_->live_disc_wnd_)
-		    {
-			bin_t firstbasepos = bin_t(0,lastbasepos.layer_offset() - hs_in_->live_disc_wnd_+1);
-
-			// 3. Empty all bins before start of window
-			binvector cbv;
-			swift::chunk32_to_bin32(0, firstbasepos.layer_offset(), &cbv); // firsbasepos exclusive
-			binvector::iterator iter;
-			for (iter=cbv.begin(); iter != cbv.end(); iter++)
-			{
-			    bin_t cpos = *iter;
-			    ack_in_.reset(cpos);
-			}
-			dprintf("%s #%u have window %s %s\n",tintstr(),id_,firstbasepos.str().c_str(),lastbasepos.str().c_str());
-		    }
-		}
-
-		// SIGPEAKTODO: affected by live_disc_wnd_, old bins before
-		// should be invalidated, to avoid hook-in minus NCHUNKS picking
-		// outside window.
-
-		((LivePiecePicker *)lt->picker())->StartAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_);
-
-		// Arno: it can happen that we receive a HAVE and have no hints
-		// outstanding. In that case we should not wait till next_send_time_
-		// but request directly. See send_control.cpp
-		if (hint_out_.size() == 0)
-		{
-		    live_have_no_hint_ = true;
-		    dprintf("%s #%u have but no hints\n",tintstr(),id_);
-		}
+		lastbasepos = ack_in_.find_empty(ackd_pos).base_left();
+		lastbasepos.to_right();
 	    }
+	    // 2. Calc start of window from last non-empty bin
+	    if (lastbasepos.layer_offset() >= hs_in_->live_disc_wnd_)
+	    {
+		bin_t firstbasepos = bin_t(0,lastbasepos.layer_offset() - hs_in_->live_disc_wnd_+1);
+
+		// 3. Empty all bins before start of window
+		binvector cbv;
+		swift::chunk32_to_bin32(0, firstbasepos.layer_offset(), &cbv); // firsbasepos exclusive
+		binvector::iterator iter;
+		for (iter=cbv.begin(); iter != cbv.end(); iter++)
+		{
+		    bin_t cpos = *iter;
+		    ack_in_.reset(cpos);
+		}
+		dprintf("%s #%u have window %s %s\n",tintstr(),id_,firstbasepos.str().c_str(),lastbasepos.str().c_str());
+	    }
+	}
+
+	// SIGPEAKTODO: affected by live_disc_wnd_, old bins before
+	// should be invalidated, to avoid hook-in minus NCHUNKS picking
+	// outside window.
+
+	((LivePiecePicker *)lt->picker())->StartAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_);
+
+	// Arno: it can happen that we receive a HAVE and have no hints
+	// outstanding. In that case we should not wait till next_send_time_
+	// but request directly. See send_control.cpp
+	if (hint_out_.size() == 0)
+	{
+	    live_have_no_hint_ = true;
+	    dprintf("%s #%u have but no hints\n",tintstr(),id_);
 	}
     }
 }

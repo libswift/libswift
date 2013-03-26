@@ -606,6 +606,10 @@ namespace swift {
          * distribution to other channels. */
         void 		OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *srcc);
 
+        /** If live discard window is used, purge unused parts of tree.
+         * pos is right-most received chunk. */
+        void OnDataPurgeTree(Handshake &hs_out, bin_t pos, uint32_t nchunks2forget);
+
         // Arno: FileTransfers are managed by the SwarmManager which
         // activates/deactivates them as required. LiveTransfers are unmanaged.
         /** Find transfer by the transfer descriptor. */
@@ -756,6 +760,7 @@ namespace swift {
 
         void        OnAck (struct evbuffer *evb);
         void        OnHave (struct evbuffer *evb);
+        void 	    OnHaveLive(bin_t ackd_pos);
         bin_t       OnData (struct evbuffer *evb);
         void        OnHint (struct evbuffer *evb);
         void        OnHash (struct evbuffer *evb);

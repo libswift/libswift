@@ -137,13 +137,13 @@ void Node::SetVerified(bool val)
 
 LiveHashTree::LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_size) :
  HashTree(), state_(LHT_STATE_SIGN_EMPTY), root_(NULL), addcursor_(NULL), privkey_(privkey), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
- chunk_size_(chunk_size), storage_(storage), signed_peak_count_(0)
+ chunk_size_(chunk_size), storage_(storage), signed_peak_count_(0), guessed_nchunks_per_sig_(SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN)
 {
 }
 
 LiveHashTree::LiveHashTree(Storage *storage, pubkey_t swarmid, uint32_t chunk_size) :
  HashTree(), state_(LHT_STATE_VER_AWAIT_PEAK), root_(NULL), addcursor_(NULL), pubkey_(swarmid), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
- chunk_size_(chunk_size), storage_(storage), signed_peak_count_(0)
+ chunk_size_(chunk_size), storage_(storage), signed_peak_count_(0), guessed_nchunks_per_sig_(SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN)
 {
 }
 
@@ -160,12 +160,15 @@ LiveHashTree::~LiveHashTree()
 
 void LiveHashTree::FreeTree(Node *n)
 {
+    fprintf(stderr,"FreeTree: %s\n", n->GetBin().str().c_str() );
     if (n->GetLeft() != NULL)
     {
+	fprintf(stderr,"FreeTree: left\n");
 	FreeTree(n->GetLeft());
     }
     if (n->GetRight() != NULL)
     {
+	fprintf(stderr,"FreeTree: right\n");
 	FreeTree(n->GetRight());
     }
     delete n;
@@ -175,7 +178,20 @@ void LiveHashTree::FreeTree(Node *n)
 void LiveHashTree::PurgeTree(bin_t pos)
 {
     Node *n = FindNode(pos);
-    FreeTree(n);
+    if (n != NULL)
+    {
+	// Disconnect from parent
+	Node *par = n->GetParent();
+	if (par != NULL)
+	{
+	     if (par->GetLeft() == n)
+		 par->SetChildren(NULL,par->GetRight());
+	     else
+		 par->SetChildren(par->GetLeft(),NULL);
+	}
+	// Deallocate subtree
+	FreeTree(n);
+    }
 }
 
 
@@ -608,6 +624,12 @@ BinHashSigTuple LiveHashTree::OfferSignedPeakHash(bin_t pos, Signature &sig)
     // Could recalc root hash here, but never really used. Doing it on-demand
     // in root_hash() conflicts with const def :-(
     //root_->SetHash(DeriveRoot());
+
+    // Guess how many chunks per sig are used, convenient for tree purging
+    if (pos.base_length() < guessed_nchunks_per_sig_)
+    {
+	guessed_nchunks_per_sig_ = pos.base_length();
+    }
 
     return bhst;
 }

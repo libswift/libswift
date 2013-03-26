@@ -257,24 +257,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
 		// Forget old part of tree
 		if (def_hs_out_.live_disc_wnd_ != POPT_LIVE_DISC_WND_ALL)
 		{
-		    int64_t oldcid = ((int64_t)last_chunkid_ - (int64_t)def_hs_out_.live_disc_wnd_);
-		    if (oldcid > 0)
-		    {
-			uint64_t extracid = oldcid % nchunks_per_sign_;
-			uint64_t startcid = oldcid - extracid;
-			int64_t leftcid = ((int64_t)startcid - (int64_t)nchunks_per_sign_);
-			if (leftcid >= 0)
-			{
-			    bin_t leftpos(0,leftcid);
-
-			    bin_t::uint_t nchunks_per_sign_layer = (bin_t::uint_t)log2((double)nchunks_per_sign_);
-			    for (int h=0; h<nchunks_per_sign_layer; h++)
-			    {
-				leftpos = leftpos.parent();
-			    }
-			    fprintf(stderr,"live: AddData: UMT: purge %s nchunks %d window %llu when %llu\n", leftpos.str().c_str(), nchunks_per_sign_, def_hs_out_.live_disc_wnd_, last_chunkid_ );
-			}
-		    }
+		    OnDataPurgeTree(def_hs_out_,bin_t(0,last_chunkid_),nchunks_per_sign_);
 		}
             }
         }
@@ -353,6 +336,44 @@ void LiveTransfer::OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *srcc)
             fprintf(stderr,"live: OnVerified: announce to channel %d\n", c->id() );
             c->AddSinceSignedPeakTuples(newpeaktuples);
         }
+    }
+}
+
+
+void LiveTransfer::OnDataPurgeTree(Handshake &hs_out, bin_t pos, uint32_t nchunks2forget)
+{
+    uint64_t lastchunkid = pos.layer_offset();
+
+    int64_t oldcid = ((int64_t)lastchunkid - (int64_t)hs_out.live_disc_wnd_);
+    if (oldcid > 0)
+    {
+	// Find subtree left of window with width nchunks2forget that can be purged
+	uint64_t extracid = oldcid % nchunks2forget;
+	uint64_t startcid = oldcid - extracid;
+	int64_t leftcid = ((int64_t)startcid - (int64_t)nchunks2forget);
+	if (leftcid >= 0)
+	{
+	    bin_t leftpos(0,leftcid);
+
+	    bin_t::uint_t nchunks_per_sign_layer = (bin_t::uint_t)log2((double)nchunks2forget);
+	    for (int h=0; h<nchunks_per_sign_layer; h++)
+	    {
+		leftpos = leftpos.parent();
+	    }
+	    fprintf(stderr,"live: OnDataPurgeTree: purge leaf %s\n", leftpos.str().c_str() );
+
+	    // Find biggest subtree to remove
+	    if (leftpos.is_right())
+	    {
+		while (leftpos.parent().is_right())
+		{
+		    leftpos = leftpos.parent();
+		}
+	    }
+	    fprintf(stderr,"live: OnDataPurgeTree: purge %s log %lf nchunks %d window %llu when %llu\n", leftpos.str().c_str(), log2((double)lastchunkid), nchunks2forget, hs_out.live_disc_wnd_, lastchunkid );
+	    LiveHashTree *umt = (LiveHashTree *)hashtree();
+	    umt->PurgeTree(leftpos);
+	}
     }
 }
 
