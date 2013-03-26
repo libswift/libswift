@@ -1131,7 +1131,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 
 	LiveTransfer *lt = (LiveTransfer *)transfer();
 	LiveHashTree *umt = (LiveHashTree *)hashtree();
-	lt->OnDataPurgeTree(*hs_out_,lastbasepos,umt->GetGuessedNChunksPerSig());
+	lt->OnDataPruneTree(*hs_out_,lastbasepos,umt->GetGuessedNChunksPerSig());
     }
 
     return pos;

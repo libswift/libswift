@@ -22,6 +22,16 @@
  *  - For non-source providing chunks: it won't have left side of tree
  *    (but will have all hashes to check all chunks)
  *  - Problem with hook-in and missing hashtree? Arno: what missing hashtree?
+ *
+ *  Something to note when working with the Unified Merkle Tree scheme:
+ *
+ *  With Unified Merkle Trees say we have a tree of 4 chunks with peak (2,0).
+ *  When the tree is expanded from 4 to 8 chunks, the new peak becomes (3,0).
+ *  The uncle hash algorithm assumes that (2,1) the hash of the 4 new chunks
+ *  was sent to the peer when chunks from (2,0) where sent (after all, (2,1)
+ *  is their uncle). However, that part of the tree did not yet exist, so it
+ *  wasn't sent. We call these unsent uncles "right hashes". Current code
+ *  doesn't suffer from this problem.
  */
 #ifndef SWIFT_LIVE_HASH_TREE_H
 #define SWIFT_LIVE_HASH_TREE_H
@@ -38,6 +48,7 @@ class Node;
 
 class Node
 {
+    /** Class representing a node in a hashtree */
   public:
     Node();
     void SetParent(Node *parent);
@@ -64,6 +75,7 @@ class Node
 };
 
 
+/** States for the live hashtree */
 typedef enum {
     LHT_STATE_SIGN_EMPTY,      // live source, no chunks yet
     LHT_STATE_SIGN_DATA,       // live source, some chunks, so peaks and transient root known
@@ -77,6 +89,7 @@ typedef Sha1Hash pubkey_t;
 #endif
 
 
+/** Structure for holding a signature */
 struct Signature
 {
     uint8_t    *sigbits_;
@@ -91,6 +104,7 @@ struct Signature
 };
 
 
+/** Structure for holding a (bin,hash,signature) tuple */
 struct BinHashSigTuple
 {
     bin_t	b_;
@@ -111,6 +125,7 @@ struct BinHashSigTuple
 typedef std::vector<BinHashSigTuple>	bhstvector;
 
 
+/** Dynamic hash tree */
 class LiveHashTree: public HashTree
 {
    public:
@@ -120,21 +135,20 @@ class LiveHashTree: public HashTree
      LiveHashTree(Storage *storage, pubkey_t swarmid, uint32_t chunk_size);
      ~LiveHashTree();
 
-
-     void           PurgeTree(bin_t pos);
-
      /** Called when a chunk is added */
      bin_t          AddData(const char* data, size_t length);
      /** Called after N chunks have been added, following -06. Returns new peaks */
      bhstvector	    UpdateSignedPeaks();
-     /*int            signed_peak_count();
-     bin_t          signed_peak(int i);
-     bin_t          signed_peak_for (bin_t pos) const; */
+     /** Retrieve list of current signed peaks */
      bhstvector	    GetCurrentSignedPeakTuples();
+     /** Live client: guess source's nchunks_per_sig_ for tree pruning */
      uint32_t	    GetGuessedNChunksPerSig() { return guessed_nchunks_per_sig_; }
+     /** Remove subtree rooted at pos */
+     void           PruneTree(bin_t pos);
 
      /** If bhst.bin() != bin_t::NONE the signature was good. */
      BinHashSigTuple LiveHashTree::OfferSignedPeakHash(bin_t pos, Signature &sig);
+     /** Add node to the hashtree */
      bool CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified);
 
      // Sanity checks
@@ -162,7 +176,6 @@ class LiveHashTree: public HashTree
 
      Storage *       get_storage();
      void            set_size(uint64_t);
-     int             TESTGetFD();
 
 
    protected:
@@ -200,23 +213,27 @@ class LiveHashTree: public HashTree
      int             signed_peak_count_;
      /** Actual signatures */
      Signature       signed_peak_sigs_[64];
-     // TODO: cache peak sigs
 
-     /** Temp storage for candidate peak */
+     /** Temp storage for candidate peak. */
      bin_t	     cand_peak_bin_;
      Sha1Hash	     cand_peak_hash_;
+
      uint32_t	     guessed_nchunks_per_sig_;
 
      /** Create a new leaf Node next to the current latest leaf (pointed to by
       * addcursor_). This may involve creating a new root and subtree to
       * accommodate it. */
      Node *	     CreateNext();
+     /** Find the Node in the tree for the given bin. */
      Node *	     FindNode(bin_t pos) const;
+     /** Calculate hashes in substree rooted at start. */
      void	     ComputeTree(Node *start);
-
+     /** Deallocate a node. */
      void 	     FreeTree(Node *n);
+     /** Calculate root hash of current tree (unused). */
      Sha1Hash        DeriveRoot();
 
+     /** Sanity checks */
      void check_peak_coverage();
      void check_signed_peak_coverage();
      void check_new_peaks(bhstvector &newpeaktuples);

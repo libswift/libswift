@@ -568,9 +568,6 @@ namespace swift {
         /**  Close everything. */
         ~LiveTransfer();
 
-        /** Joint constructor code between source and client */
-        void Initialize(bool check_netwvshash);
-
         // ContentTransfer overrides
 
         const Sha1Hash& swarm_id() const { return pubkey_; }
@@ -593,13 +590,14 @@ namespace swift {
         /** Source: add a chunk to the swarm */
         int             AddData(const void *buf, size_t nbyte);
 
-        /** Source: SIGNPEAK Return all chunks in ack_out_ covered by peaks */
-        binmap_t *      ack_out_signed();
-
         /** Returns the byte offset at which we hooked into the live stream */
         uint64_t        GetHookinOffset();
 
-        /** Returns the number of live chunks generated before a new peak is signed */
+        // SIGNPEAK
+        /** Source: Return all chunks in ack_out_ covered by peaks */
+        binmap_t *      ack_out_signed();
+
+        /** Source: Returns the number of live chunks generated before a new peak is signed */
         uint32_t        GetNChunksPerSign() { return nchunks_per_sign_; }
 
         /** Channel c received a correctly signed peak hash. Schedule for
@@ -608,7 +606,7 @@ namespace swift {
 
         /** If live discard window is used, purge unused parts of tree.
          * pos is right-most received chunk. */
-        void OnDataPurgeTree(Handshake &hs_out, bin_t pos, uint32_t nchunks2forget);
+        void            OnDataPruneTree(Handshake &hs_out, bin_t pos, uint32_t nchunks2forget);
 
         // Arno: FileTransfers are managed by the SwarmManager which
         // activates/deactivates them as required. LiveTransfers are unmanaged.
@@ -655,6 +653,9 @@ namespace swift {
 
         /** Arno: global list of LiveTransfers, which are not managed via SwarmManager */
         static std::vector<LiveTransfer*> liveswarms;
+
+        /** Joint constructor code between source and client */
+        void Initialize(bool check_netwvshash);
     };
 
 
@@ -862,10 +863,11 @@ namespace swift {
         // LIVE
         /** Arno: Called when source generates chunk. */
         void        LiveSend();
-        /** Add new signed peaks, to be sent to peer on next send */
+        /** SIGNPEAK: Add new signed peaks, to be sent to peer on next send */
         void	    AddSinceSignedPeakTuples(bhstvector &sbv);
         /** Get list of new signed peaks to send */
         bhstvector &GetSinceSignedPeakTuples();
+        /** Clear list of peaks to send. Retransmit via AddLiveUncles */
         void 	    ClearSinceSignedPeakTuples();
 
         void 	    CloseOnError();
@@ -967,8 +969,8 @@ namespace swift {
 
         //LIVE
         bool        peer_is_source_;
-        /** SIGNPEAKTODO */
-        bhstvector since_signed_peak_tuples_;
+        // SIGNPEAK
+        bhstvector   since_signed_peak_tuples_;
 
         // PPSP
         /** Handshake I sent to peer. swarmid not set. */
@@ -1054,7 +1056,7 @@ namespace swift {
             STOR_STATE_MFSPEC_SIZE_KNOWN,
             STOR_STATE_MFSPEC_COMPLETE,
             STOR_STATE_SINGLE_FILE,
-            STOR_STATE_SINGLE_LIVE_WRAP
+            STOR_STATE_SINGLE_LIVE_WRAP  // single file containing just live discard window
         } storage_state_t;
 
         /** StorageFile for every file in this transfer */

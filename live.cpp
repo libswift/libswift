@@ -257,7 +257,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
 		// Forget old part of tree
 		if (def_hs_out_.live_disc_wnd_ != POPT_LIVE_DISC_WND_ALL)
 		{
-		    OnDataPurgeTree(def_hs_out_,bin_t(0,last_chunkid_),nchunks_per_sign_);
+		    OnDataPruneTree(def_hs_out_,bin_t(0,last_chunkid_),nchunks_per_sign_);
 		}
             }
         }
@@ -340,14 +340,14 @@ void LiveTransfer::OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *srcc)
 }
 
 
-void LiveTransfer::OnDataPurgeTree(Handshake &hs_out, bin_t pos, uint32_t nchunks2forget)
+void LiveTransfer::OnDataPruneTree(Handshake &hs_out, bin_t pos, uint32_t nchunks2forget)
 {
     uint64_t lastchunkid = pos.layer_offset();
 
     int64_t oldcid = ((int64_t)lastchunkid - (int64_t)hs_out.live_disc_wnd_);
     if (oldcid > 0)
     {
-	// Find subtree left of window with width nchunks2forget that can be purged
+	// Find subtree left of window with width nchunks2forget that can be pruned
 	uint64_t extracid = oldcid % nchunks2forget;
 	uint64_t startcid = oldcid - extracid;
 	int64_t leftcid = ((int64_t)startcid - (int64_t)nchunks2forget);
@@ -360,7 +360,7 @@ void LiveTransfer::OnDataPurgeTree(Handshake &hs_out, bin_t pos, uint32_t nchunk
 	    {
 		leftpos = leftpos.parent();
 	    }
-	    fprintf(stderr,"live: OnDataPurgeTree: purge leaf %s\n", leftpos.str().c_str() );
+	    fprintf(stderr,"live: OnDataPruneTree: prune leaf %s\n", leftpos.str().c_str() );
 
 	    // Find biggest subtree to remove
 	    if (leftpos.is_right())
@@ -370,9 +370,9 @@ void LiveTransfer::OnDataPurgeTree(Handshake &hs_out, bin_t pos, uint32_t nchunk
 		    leftpos = leftpos.parent();
 		}
 	    }
-	    fprintf(stderr,"live: OnDataPurgeTree: purge %s log %lf nchunks %d window %llu when %llu\n", leftpos.str().c_str(), log2((double)lastchunkid), nchunks2forget, hs_out.live_disc_wnd_, lastchunkid );
+	    fprintf(stderr,"live: OnDataPruneTree: prune %s log %lf nchunks %d window %llu when %llu\n", leftpos.str().c_str(), log2((double)lastchunkid), nchunks2forget, hs_out.live_disc_wnd_, lastchunkid );
 	    LiveHashTree *umt = (LiveHashTree *)hashtree();
-	    umt->PurgeTree(leftpos);
+	    umt->PruneTree(leftpos);
 	}
     }
 }

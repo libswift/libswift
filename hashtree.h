@@ -106,8 +106,6 @@ class HashTree : public Operational {
     virtual Storage *       get_storage() = 0;
     virtual void            set_size(uint64_t size) = 0;
 
-    virtual int TESTGetFD() = 0;
-
     virtual ~HashTree() {};
 };
 
@@ -194,8 +192,6 @@ public:
     int serialize(FILE *fp);
     int deserialize(FILE *fp);
     int partial_deserialize(FILE *fp);
-
-    int TESTGetFD() { return hash_fd_; }
 };
 
 
@@ -263,8 +259,6 @@ public:
     // for transfertest.cpp
     Storage *       get_storage() { return storage_; }
     void            set_size(uint64_t size) { size_ = size; }
-
-    int TESTGetFD() { return hash_fd_; }
 };
 
 
