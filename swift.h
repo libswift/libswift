@@ -38,7 +38,7 @@
 
   ACK         02, bin_32, timestamp_64
   HAVE        03, bin_32
-  Confirms successfull delivery of data. Used for congestion control, as well.
+  Confirms successful delivery of data. Used for congestion control, as well.
 
   REQUEST     08, bin_32
   Practical value of requests aka "hints" is to avoid overlap, mostly.
@@ -86,6 +86,15 @@
 
 namespace swift {
 
+// Arno, 2012-12-12: Configure which PPSP version to use by default. Set to 0 for legacy swift.
+#define ENABLE_IETF_PPSP_VERSION      1
+
+// Arno, 2011-12-22: Enable Riccardo's VodPiecePicker
+#define ENABLE_VOD_PIECEPICKER        1
+
+
+#define SWIFT_URI_SCHEME              "tswift"
+
 #define SWIFT_MAX_UDP_OVER_ETH_PAYLOAD        (1500-20-8)
 // Arno: Maximum size of non-DATA messages in a UDP packet we send.
 #define SWIFT_MAX_NONDATA_DGRAM_SIZE         (SWIFT_MAX_UDP_OVER_ETH_PAYLOAD-SWIFT_DEFAULT_CHUNK_SIZE-1-4)
@@ -98,13 +107,6 @@ namespace swift {
 #define bytes2layer(bn,cs)  (int)log2(  ((double)bn)/((double)cs) )
 
 
-#define ENABLE_IETF_PPSP_VERSION      1
-
-// Arno, 2011-12-22: Enable Riccardo's VodPiecePicker
-#define ENABLE_VOD_PIECEPICKER        1
-
-#define SWIFT_URI_SCHEME              "tswift"
-
 // Value for protocol option: Live Discard Window
 #define POPT_LIVE_DISC_WND_ALL	      0xFFFFFFFF	// automatically truncated for 32-bit
 
@@ -114,7 +116,7 @@ namespace swift {
 #define PEX_RES_MAX_CERT_SIZE		     1024
 
 // Live streaming via Unified Merkle Tree: The number of chunks per signature (power of 2)
-#define SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN	4 // SIGPEAKTODO 32
+#define SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN	4 // SIGNPEAKTODO 32
 
 
 /** IPv4/6 address, just a nice wrapping around struct sockaddr_storage. */

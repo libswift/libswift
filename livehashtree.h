@@ -13,7 +13,9 @@
  *  - When new client joins half-way epoch, mustn't send HAVEs for new, or don't reply to REQUESTs?
  *      DONE: See ack_signed_out() for source.
  *  - purge subtree, source and client
+ *      DONE
  *  - Storage layer that remembers just part.
+ *      DONE
  *  - Add unittest that expands tree and see if all hashes are there and verified bits set correctly
  *  - Split signed peaks into multiple datagrams when too big
  *      DONE: also do partial send in AddSignedPeakHashes when required
@@ -21,7 +23,8 @@
  *      DONE
  *  - For non-source providing chunks: it won't have left side of tree
  *    (but will have all hashes to check all chunks)
- *  - Problem with hook-in and missing hashtree? Arno: what missing hashtree?
+ *      DONE
+ *  - Replace Sha1Hash swarmid with generic SwarmID that allows roothash+pubkey
  *
  *  Something to note when working with the Unified Merkle Tree scheme:
  *
