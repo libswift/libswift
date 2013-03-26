@@ -623,8 +623,9 @@ namespace swift {
 
       protected:
 
-        //SIGNPEAKTODO REMOVE
-        /** Swarm Identifier. E.g hash of public key */
+        // SIGNPEAKTODO replace swarm ID = root_hash with generic swarm ID
+        /** PPSP-03: Live Swarm Identifier consists of a public key encoded as
+         * in a DNSSEC DNSKEY resource record [RFC4034] without BASE-64 encoding. */
         Sha1Hash 	swarm_id_;
         /**    Binmap of own chunk availability, when not POPT_CONT_INT_PROT_UNIFIED_MERKLE (so _NONE or _SIGNALL) */
         binmap_t        ack_out_;

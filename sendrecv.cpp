@@ -1713,7 +1713,7 @@ void Channel::OnSignedHash(struct evbuffer *evb)
     // PPSPTODO
     //if (hs_in_->live_sig_alg_ == POPT_LIVE_SIG_ALG_PRIVATEDNS)
 
-    // SIGNPEAKTODO copy sig
+    // SIGNPEAKTODO support diff sig algo
     evbuffer_drain(evb, DUMMY_DEFAULT_SIG_LENGTH);
 
     if (hashtree() != NULL)
