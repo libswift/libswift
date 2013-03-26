@@ -128,6 +128,7 @@ std::string livesource_input = "";
 LiveTransfer *livesource_lt = NULL;
 FILE *livesource_filep=NULL;
 struct evbuffer *livesource_evb = NULL;
+uint64_t livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
 
 long long int cmdgw_report_counter=0;
 long long int cmdgw_report_interval=REPORT_INTERVAL; // seconds
@@ -166,6 +167,7 @@ int utf8main (int argc, char** argv)
         {"cmdgwint",required_argument, 0, 'C'}, // SWIFTPROC
         {"zerostimeout",required_argument, 0, 'T'},  // ZEROSTATE
         {"test",no_argument, 0, 'G'},  // Less command line testing for GTest usage
+        {"ldw",required_argument, 0, 'W'}, // PPSP
         {0, 0, 0, 0}
     };
 
@@ -184,7 +186,7 @@ int utf8main (int argc, char** argv)
     Channel::evbase = event_base_new();
 
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:ji:kC:1:2:3:T:G", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:ji:kC:1:2:3:T:GW:", long_options, 0)) ) {
         switch (c) {
             case 'h':
                 if (strlen(optarg)!=40)
@@ -327,6 +329,10 @@ int utf8main (int argc, char** argv)
                 break;
             case 'G': //
                 gtesting = true;
+                break;
+            case 'W': // PPSP
+                if (sscanf(optarg,"%llu",&livesource_disc_wnd)!=1)
+                    quit("report interval must be int\n");
                 break;
             case 'T': // ZEROSTATE
                 double t=0.0;
@@ -683,7 +689,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
         }
 
         // Create swarm
-        livesource_lt = swift::LiveCreate(filename,swarmid,481,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,chunk_size); // SIGNPEAKTODO
+        livesource_lt = swift::LiveCreate(filename,swarmid,481,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,livesource_disc_wnd,chunk_size); // SIGNPEAKTODO
 
         // Periodically create chunks by reading from source
         evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
@@ -715,7 +721,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
         fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str() );
 
         // Create swarm
-        livesource_lt = swift::LiveCreate(filename,swarmid,481,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,chunk_size); // SIGNPEAKTODO
+        livesource_lt = swift::LiveCreate(filename,swarmid,481,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,livesource_disc_wnd,chunk_size); // SIGNPEAKTODO
 
         // Create HTTP client
         struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, httpservname.c_str(), httpport);

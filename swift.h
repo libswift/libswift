@@ -560,7 +560,7 @@ namespace swift {
        public:
 
         /** A constructor for a live source. */
-	LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+	LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
 	/** A constructor for live client. */
 	LiveTransfer(std::string filename, const pubkey_t &pubkey, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
@@ -655,7 +655,7 @@ namespace swift {
         static std::vector<LiveTransfer*> liveswarms;
 
         /** Joint constructor code between source and client */
-        void Initialize(bool check_netwvshash);
+        void Initialize(bool check_netwvshash,uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL);
     };
 
 
@@ -1244,7 +1244,7 @@ namespace swift {
 
     // LIVE
     /** To create a live stream as source */
-    LiveTransfer *LiveCreate(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    LiveTransfer *LiveCreate(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** To add chunks to a live stream as source */
     int     LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte);
     /** To open a live stream as peer */

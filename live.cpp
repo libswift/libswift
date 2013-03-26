@@ -33,13 +33,13 @@ std::vector<LiveTransfer*> LiveTransfer::liveswarms;
 #define TRANSFER_DESCR_LIVE_OFFSET	4000000
 
 /** A constructor for a live source. */
-LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash, uint32_t nchunks_per_sign, uint32_t chunk_size) :
+LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash, uint32_t nchunks_per_sign, uint64_t disc_wnd, uint32_t chunk_size) :
 	ContentTransfer(LIVE_TRANSFER), chunk_size_(chunk_size), am_source_(true),
 	filename_(filename), last_chunkid_(0), offset_(0),
 	chunks_since_sign_(0),nchunks_per_sign_(nchunks_per_sign),
 	pubkey_(pubkey), privkey_(privkey)
 {
-    Initialize(check_netwvshash);
+    Initialize(check_netwvshash,disc_wnd);
 
     picker_ = NULL;
 }
@@ -58,7 +58,7 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, bool ch
 }
 
 
-void LiveTransfer::Initialize(bool check_netwvshash)
+void LiveTransfer::Initialize(bool check_netwvshash,uint64_t disc_wnd)
 {
     GlobalAdd();
 
@@ -72,9 +72,7 @@ void LiveTransfer::Initialize(bool check_netwvshash)
     }
     else
 	hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
-
-    // TEMP
-    hs.live_disc_wnd_ = 100;
+    hs.live_disc_wnd_ = disc_wnd;
 
     fprintf(stderr,"LiveTransfer::Initialize: cipm %d\n", hs.cont_int_prot_);
     fprintf(stderr,"LiveTransfer::Initialize: ldw  %llu\n", hs.live_disc_wnd_);

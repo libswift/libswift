@@ -688,14 +688,14 @@ int swift::HashCheckOffline( std::string filename, Sha1Hash *calchashptr, uint32
  */
 
 
-LiveTransfer *swift::LiveCreate(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash, uint32_t nchunks_per_sign, uint32_t chunk_size)
+LiveTransfer *swift::LiveCreate(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash, uint32_t nchunks_per_sign, uint64_t disc_wnd, uint32_t chunk_size)
 {
     if (api_debug)
 	fprintf(stderr,"swift::LiveCreate %s hash %d nsign %u cs %u\n", filename.c_str(), pubkey, nchunks_per_sign, chunk_size );
 
     // Arno: LIVE streams are not managed by SwarmManager
     fprintf(stderr,"swift::LiveCreate: swarmid: %d\n",pubkey );
-    LiveTransfer *lt = new LiveTransfer(filename,pubkey,privkey,check_netwvshash,nchunks_per_sign,chunk_size);
+    LiveTransfer *lt = new LiveTransfer(filename,pubkey,privkey,check_netwvshash,nchunks_per_sign,disc_wnd,chunk_size);
 
     if (lt->IsOperational())
 	return lt;
