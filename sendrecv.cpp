@@ -269,7 +269,16 @@ void    Channel::AddLiveUncleHashes (struct evbuffer *evb, bin_t pos, bool isret
         bin_t uncle = *iter;
         evbuffer_add_8(evb, SWIFT_INTEGRITY);
         evbuffer_add_chunkaddr(evb,uncle,hs_out_->chunk_addr_);
-        evbuffer_add_hash(evb, hashtree()->hash(uncle) );
+        Sha1Hash h = hashtree()->hash(uncle);
+        if (h == Sha1Hash::ZERO)
+        {
+            // TEMP SIGNPEAKTODO
+            fprintf(stderr,"SENDING ZERO HASH %s. PRESS\n", uncle.str().c_str() );
+            fflush(stderr);
+            //getchar();
+            exit(-1);
+        }
+        evbuffer_add_hash(evb,h);
         dprintf("%s #%u +hash %s\n",tintstr(),id_,uncle.str().c_str());
         pos = pos.parent();
     }

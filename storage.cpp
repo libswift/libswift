@@ -124,7 +124,19 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 
 	dprintf("%s %d ?data writing disk %lld window %llu\n",tintstr(), 0, newoff, live_disc_wnd_bytes_ );
 
-	return pwrite(single_fd_, buf, nbyte, newoff);
+	if (newoff+nbyte > live_disc_wnd_bytes_)
+	{
+	    // Writing more than window
+	    size_t firstbyte = live_disc_wnd_bytes_ - newoff;
+	    dprintf("%s %d ?data writing disk %lld firstbyte " PRISIZET "\n",tintstr(), 0, newoff, firstbyte );
+	    int ret = pwrite(single_fd_, buf, firstbyte, newoff);
+	    if (ret < 0)
+		return ret;
+	    else
+		return Write(((char *)buf)+firstbyte,nbyte-firstbyte,offset+firstbyte);
+	}
+	else
+	    return pwrite(single_fd_, buf, nbyte, newoff);
     }
 
     // MULTIFILE

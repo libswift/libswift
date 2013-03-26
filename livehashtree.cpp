@@ -671,8 +671,6 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     Node *parent = NULL;
     while (true)
     {
-	fprintf(stderr,"umt: OfferHash: Find\n");
-
 	if (tree_debug)
 	{
 	    if (iter == NULL)

@@ -26,6 +26,8 @@
  *      DONE
  *  - Replace Sha1Hash swarmid with generic SwarmID that allows roothash+pubkey
  *
+ *  - Can't prune tree if it contains uncles?
+ *
  *  Something to note when working with the Unified Merkle Tree scheme:
  *
  *  With Unified Merkle Trees say we have a tree of 4 chunks with peak (2,0).

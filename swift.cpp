@@ -29,9 +29,9 @@ using namespace swift;
 
 // Arno, 2012-09-18: LIVE: Somehow Win32 works better when reading at a slower pace
 #ifdef WIN32
-//#define LIVESOURCE_BUFSIZE    102400
+#define LIVESOURCE_BUFSIZE    102400
 //SIGNPEAKTODO revert to 100K
-#define LIVESOURCE_BUFSIZE    10240
+//#define LIVESOURCE_BUFSIZE    10240
 #define LIVESOURCE_INTERVAL    TINT_SEC/2
 #else
 #define LIVESOURCE_BUFSIZE    102400

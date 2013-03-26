@@ -358,7 +358,6 @@ void LiveTransfer::OnDataPruneTree(Handshake &hs_out, bin_t pos, uint32_t nchunk
 	    {
 		leftpos = leftpos.parent();
 	    }
-	    fprintf(stderr,"live: OnDataPruneTree: prune leaf %s\n", leftpos.str().c_str() );
 
 	    // Find biggest subtree to remove
 	    if (leftpos.is_right())

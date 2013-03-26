@@ -108,7 +108,7 @@ namespace swift {
 
 
 // Value for protocol option: Live Discard Window
-#define POPT_LIVE_DISC_WND_ALL	      0xFFFFFFFF	// automatically truncated for 32-bit
+#define POPT_LIVE_DISC_WND_ALL	      	     0xFFFFFFFF	// automatically truncated for 32-bit
 
 // Max size of the swarm ID protocol option in a HANDSHAKE message.
 #define POPT_MAX_SWARMID_SIZE		     1024
@@ -116,7 +116,7 @@ namespace swift {
 #define PEX_RES_MAX_CERT_SIZE		     1024
 
 // Live streaming via Unified Merkle Tree: The number of chunks per signature (power of 2)
-#define SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN	4 // SIGNPEAKTODO 32
+#define SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN   32 // SIGNPEAKTODO 32
 
 
 /** IPv4/6 address, just a nice wrapping around struct sockaddr_storage. */
