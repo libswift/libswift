@@ -586,7 +586,7 @@ BinHashSigTuple LiveHashTree::OfferSignedPeakHash(bin_t pos, Signature &sig)
 }
 
 
-void LiveHashTree::check_peak_coverage()
+void LiveHashTree::check_peak_coverage(bool fireassert)
 {
     // Sanity check
     bin_t::uint_t end = 0;
@@ -605,7 +605,9 @@ void LiveHashTree::check_peak_coverage()
 	    {
 		fprintf(stderr,"umt: peak bork: %s covers %s to %s\n", peak_bins_[j].str().c_str(), peak_bins_[j].base_left().str().c_str(), peak_bins_[j].base_right().str().c_str());
 	    }
-            /*fflush(stderr);
+	    if (fireassert)
+		assert(start == end+1);
+	    /*fflush(stderr);
             getchar();
 	    exit(-1);*/
 	}
@@ -614,7 +616,7 @@ void LiveHashTree::check_peak_coverage()
 }
 
 
-void LiveHashTree::check_signed_peak_coverage()
+void LiveHashTree::check_signed_peak_coverage(bool fireassert)
 {
     // Sanity check
     bin_t::uint_t end = 0;
@@ -634,7 +636,9 @@ void LiveHashTree::check_signed_peak_coverage()
 	    {
 		fprintf(stderr,"umt: UpdateSignedPeaks: signed peak bork: %s covers %s to %s\n", signed_peak_bins_[j].str().c_str(), signed_peak_bins_[j].base_left().str().c_str(), signed_peak_bins_[j].base_right().str().c_str());
 	    }
-            /* fprintf(stderr,"umt: Press...\n");
+	    if (fireassert)
+		assert(start == end+1);
+	    /* fprintf(stderr,"umt: Press...\n");
             fflush(stderr);
             getchar();
 	    exit(-1); */
@@ -968,7 +972,7 @@ bool LiveHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
         cand_peak_bin_ = pos;
         cand_peak_hash_ = hash;
         if (tree_debug)
-	    fprintf(stderr,"umt: OfferData: no peak\n");
+	    fprintf(stderr,"umt: OfferHash: no peak\n");
         return false;
     }
     else
@@ -1171,11 +1175,13 @@ void LiveHashTree::sane_node(Node *n, Node *parent)
     if (n->GetLeft() != NULL)
     {
 	assert(n->GetLeft()->GetParent() == n);
+	assert(n->GetLeft()->GetBin() == n->GetBin().left());
 	sane_node(n->GetLeft(),n);
     }
     if (n->GetRight() != NULL)
     {
 	assert(n->GetRight()->GetParent() == n);
+	assert(n->GetRight()->GetBin() == n->GetBin().right());
 	sane_node(n->GetRight(),n);
     }
 }

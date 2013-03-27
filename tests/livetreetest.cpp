@@ -1,6 +1,9 @@
 /*
  *  livetreetest.cpp
  *
+ *  TODO:
+ *  - right hashes end-to-end
+ *
  *  Created by Arno Bakker
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
@@ -48,7 +51,7 @@ void do_add_data(LiveHashTree *umt, int nchunks)
     }
 }
 
-TEST(LiveTreeTest,AddData10)
+/*TEST(LiveTreeTest,AddData10)
 {
     LiveHashTree *umt = new LiveHashTree(NULL, (privkey_t)482, SWIFT_DEFAULT_CHUNK_SIZE); // privkey
 
@@ -60,6 +63,44 @@ TEST(LiveTreeTest,AddData10)
     ASSERT_EQ(umt->peak(1), bin_t(1,4));
 
 }
+*/
+
+TEST(LiveTreeTest,AddData10Prune3)
+{
+    LiveHashTree *umt = new LiveHashTree(NULL, (privkey_t)482, SWIFT_DEFAULT_CHUNK_SIZE); // privkey
+
+    do_add_data(umt,10);
+
+    umt->PruneTree(bin_t(1,0));
+    umt->sane_tree();
+    umt->PruneTree(bin_t(0,2));
+    umt->sane_tree();
+
+    // asserts
+    ASSERT_EQ(umt->peak_count(), 2);
+    ASSERT_EQ(umt->peak(0), bin_t(3,0));
+    ASSERT_EQ(umt->peak(1), bin_t(1,4));
+
+}
+
+TEST(LiveTreeTest,AddData10Prune9)
+{
+    LiveHashTree *umt = new LiveHashTree(NULL, (privkey_t)482, SWIFT_DEFAULT_CHUNK_SIZE); // privkey
+
+    do_add_data(umt,10);
+
+    umt->PruneTree(bin_t(3,0));
+    umt->sane_tree();
+    umt->PruneTree(bin_t(0,8));
+    umt->sane_tree();
+
+    // asserts
+    ASSERT_EQ(umt->peak_count(), 2);
+    ASSERT_EQ(umt->peak(0), bin_t(3,0));
+    ASSERT_EQ(umt->peak(1), bin_t(1,4));
+
+}
+
 
 /*
  * Live client tests
@@ -89,6 +130,21 @@ void do_download(LiveHashTree *umt, int nchunks, hmap_t &truthhashmap, pickorder
 	umt->sane_tree();
     }
 
+    // Verify peaks in tree
+    bhstvector signedpeaktuples = umt->GetCurrentSignedPeakTuples();
+    bhstvector::iterator piter;
+    int j=0;
+    for (piter=signedpeaktuples.begin(); piter != signedpeaktuples.end(); piter++)
+    {
+	BinHashSigTuple bhst = *piter;
+	ASSERT_EQ(peak_bins_[j],bhst.bin());
+	Node *n = umt->FindNode(peak_bins_[j]);
+	ASSERT_EQ(n->GetHash(),bhst.hash());
+	ASSERT_TRUE(n->GetVerified());
+	j++;
+    }
+    umt->check_signed_peak_coverage(true);
+
     pickorder_t::iterator citer;
     for (citer=pickorder.begin(); citer != pickorder.end(); citer++)
     {
@@ -117,12 +173,26 @@ void do_download(LiveHashTree *umt, int nchunks, hmap_t &truthhashmap, pickorder
 	    umt->sane_tree();
 	}
 
-	// Sending actual
+	// Sending actual chunk
 	fprintf(stderr,"Add %u orig %s\n", r, orig.str().c_str() );
 	ASSERT_TRUE(umt->OfferHash(orig,truthhashmap[orig]));
 	umt->sane_tree();
+
+	// Verify uncles in tree
+	for (iter=bv.rbegin(); iter != bv.rend(); iter++)
+	{
+	    bin_t uncle = *iter;
+	    Node *n = umt->FindNode(uncle);
+	    ASSERT_EQ(n->GetHash(),truthhashmap[uncle]);
+	    ASSERT_TRUE(n->GetVerified());
+	}
+
+	Node *n = umt->FindNode(orig);
+	ASSERT_EQ(n->GetHash(),truthhashmap[orig]);
+	ASSERT_TRUE(n->GetVerified());
     }
 }
+
 
 /**
  * Create hashtree for nchunks, then emulate that a client is downloading
@@ -208,6 +278,7 @@ LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy,int s
 }
 
 
+/*
 TEST(LiveTreeTest,Download8)
 {
     LiveHashTree *umt = prepare_do_download(8,PICK_INORDER);
@@ -294,7 +365,7 @@ TEST(LiveTreeTest,Download600Start489)
 {
     LiveHashTree *umt = prepare_do_download(600,PICK_INORDER,489);
 }
-
+*/
 
 
 int main (int argc, char** argv) {

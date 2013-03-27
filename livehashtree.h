@@ -183,6 +183,13 @@ class LiveHashTree: public HashTree
      Storage *       get_storage();
      void            set_size(uint64_t);
 
+     /** Find node for bin. (unprotected for testing) */
+     Node *	     FindNode(bin_t pos) const;
+
+     /** Sanity checks */
+     void check_peak_coverage(bool fireassert=false);
+     void check_signed_peak_coverage(bool fireassert=false);
+     void check_new_peaks(bhstvector &newpeaktuples);
 
    protected:
      lht_state_t     state_;
@@ -231,18 +238,11 @@ class LiveHashTree: public HashTree
       * accommodate it. */
      Node *	     CreateNext();
      /** Find the Node in the tree for the given bin. */
-     Node *	     FindNode(bin_t pos) const;
-     /** Calculate hashes in substree rooted at start. */
      void	     ComputeTree(Node *start);
      /** Deallocate a node. */
      void 	     FreeTree(Node *n);
      /** Calculate root hash of current tree (unused). */
      Sha1Hash        DeriveRoot();
-
-     /** Sanity checks */
-     void check_peak_coverage();
-     void check_signed_peak_coverage();
-     void check_new_peaks(bhstvector &newpeaktuples);
 };
 
 }
