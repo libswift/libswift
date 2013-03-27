@@ -51,6 +51,8 @@ class TestServerFramework:
            self.binpath = os.path.join("..","swift")
 
         self.livesourceinput = None
+        self.livediscardwindow = None
+        self.chunksize = None
         
         self.debug = True
         
@@ -114,6 +116,13 @@ class TestServerFramework:
             args.append(cllocalhost+":"+str(self.statshttpport))
         if self.progress is not None:
             args.append("-p")
+        if self.livediscardwindow is not None:
+            args.append("-W") 
+            args.append(str(self.livediscardwindow))
+        if self.chunksize is not None:
+            args.append("-z") 
+            args.append(str(self.chunksize))
+            
           
         if self.debug:  
             args.append("-B") # DEBUG Hack        
