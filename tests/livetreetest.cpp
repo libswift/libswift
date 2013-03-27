@@ -48,7 +48,6 @@ void do_add_data(LiveHashTree *umt, int nchunks)
     }
 }
 
-/*
 TEST(LiveTreeTest,AddData10)
 {
     LiveHashTree *umt = new LiveHashTree(NULL, (privkey_t)482, SWIFT_DEFAULT_CHUNK_SIZE); // privkey
@@ -61,7 +60,6 @@ TEST(LiveTreeTest,AddData10)
     ASSERT_EQ(umt->peak(1), bin_t(1,4));
 
 }
-*/
 
 /*
  * Live client tests
@@ -85,7 +83,9 @@ void do_download(LiveHashTree *umt, int nchunks, hmap_t &truthhashmap, pickorder
 	Sha1Hash peakhash = truthhashmap[peak_bins_[i]];
 	umt->OfferHash(peak_bins_[i],peakhash);
 	uint8_t dummy[DUMMY_DEFAULT_SIG_LENGTH];
-	ASSERT_TRUE(umt->OfferSignedPeakHash(peak_bins_[i],dummy));
+	Signature dummysig(dummy,DUMMY_DEFAULT_SIG_LENGTH);
+	BinHashSigTuple bhst = umt->OfferSignedPeakHash(peak_bins_[i],dummysig);
+	ASSERT_FALSE(bhst.bin() == bin_t::NONE);
 	umt->sane_tree();
     }
 
@@ -208,7 +208,6 @@ LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy,int s
 }
 
 
-/*
 TEST(LiveTreeTest,Download8)
 {
     LiveHashTree *umt = prepare_do_download(8,PICK_INORDER);
@@ -289,7 +288,7 @@ TEST(LiveTreeTest,Download137Start85)
 {
     LiveHashTree *umt = prepare_do_download(137,PICK_INORDER,85);
 }
-*/
+
 
 TEST(LiveTreeTest,Download600Start489)
 {
