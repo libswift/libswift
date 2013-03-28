@@ -1,9 +1,6 @@
 # Written by Arno Bakker
 # see LICENSE.txt for license information
 #
-# TODO: 
-# - with live discard window
-
 import unittest
 
 import os
@@ -25,8 +22,6 @@ from SwiftDef import SwiftDef
 from swiftconn import *
 
 DEBUG=False
-
-CHUNKSIZE=1024
 
 def chunkspeccontain(big,small):
     if big == small:
