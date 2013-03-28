@@ -39,8 +39,8 @@ def chunkspeccontain(big,small):
 
 class TestLiveSourceUMT(TestAsServer):
     """
-    Framework for seeding tests using zero-state transfers. Copy of 
-    activatetest.py/TestDirSeedFramework
+    Test if live source's output is sane: peaks and HAVEs span a 
+    consecutive range (assuming no losses)
     """
 
     def setUpPreSession(self):
@@ -83,9 +83,6 @@ class TestLiveSourceUMT(TestAsServer):
         myaddr = ("127.0.0.1",15357)
         hisaddr = ("127.0.0.1",self.listenport)
         
-        #CMD = "START tswift://127.0.0.1:"+str(self.listenport)+"/"+self.liveswarmid+"@-1 "+self.destdir+"\r\n"
-        #self.cmdsock.send(CMD)
-
         # Let source start up
         time.sleep(.5)
         
@@ -113,6 +110,16 @@ class TestLiveSourceUMT(TestAsServer):
                     newhave = (msg.chunkspec.s,msg.chunkspec.e)
                     havelist = self.update_chunklist(newhave, havelist)
                     print >>sys.stderr,"test: havelist",havelist
+
+                    # Must not have HAVEs that are not covered by a signed peak                    
+                    for have in havelist:
+                        found = False
+                        for peak in peaklist:
+                            if chunkspeccontain(peak, have) or (peak == have):
+                                found = True
+                                break
+                        self.assertTrue(found)
+                    
                         
                 elif msg.get_id() == MSG_ID_SIGNED_INTEGRITY:
                     newpeak = (msg.chunkspec.s,msg.chunkspec.e)
