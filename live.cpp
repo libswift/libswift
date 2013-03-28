@@ -228,6 +228,8 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
             umt->AddData(bufptr,s);
 
             // Create new signed peaks after N chunks
+            // Note: this means that if we use a file as input, the last < N
+            // chunks never get announced.
             chunks_since_sign_++;
             if (chunks_since_sign_ == nchunks_per_sign_)
             {

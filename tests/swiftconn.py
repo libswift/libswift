@@ -24,6 +24,9 @@ IPV6BYTES_LEN = (128/8)+2
 CHUNK_SPEC_ID_BIN32 = '\x00'
 CHUNK_SPEC_ID_BYTE64 = '\x01'
 CHUNK_SPEC_ID_CHUNK32 = '\x02' 
+CHUNK_SPEC_ID_BIN64 = '\x03' 
+CHUNK_SPEC_ID_CHUNK64 = '\x04'
+
 
 class Encodable:
     def to_bytes(self):
@@ -223,7 +226,33 @@ POPT_LDW_TYPE = '\x07'
 POPT_MSGS_TYPE = '\x08'
 POPT_END_TYPE = '\xff'
 
+POPT_CIPM_NONE = '\x00'
+POPT_CIPM_MERKLE = '\x01'
+POPT_CIPM_SIGNALL = '\x02'
+POPT_CIPM_UNIFIED_MERKLE = '\x03'
 
+POPT_MHF_SHA1 = '\x00'
+POPT_MHF_SHA224 = '\x01'
+POPT_MHF_SHA256 = '\x02'
+POPT_MHF_SHA384 = '\x03'
+POPT_MHF_SHA512 = '\x04'
+
+# POPT_CHUNK_ADDR_BIN32, see CHUNK_SPEC_ID_BIN32
+
+POPT_LSA_DH = '\x02'
+POPT_LSA_DSA = '\x03'
+POPT_LSA_RSASHA1 = '\x05'
+POPT_LSA_DSA_NSEC3_SHA1 = '\x06'
+POPT_LSA_RSASHA1_NSEC3_SHA1 = '\x07'
+POPT_LSA_RSASHA256 = '\x08'
+POPT_LSA_RSASHA512 = '\x0a'
+POPT_LSA_ECC_GOST =   '\x0c'
+POPT_LSA_ECDSAP256SHA256 = '\x0d'
+POPT_LSA_ECDSAP384SHA384 = '\x0e'
+POPT_LSA_PRIVATEDNS = '\xfd'     
+
+# SIGNPEAKTODO
+DUMMY_DEFAULT_SIG_LENGTH  = 20
 
 #
 # Messages
@@ -237,13 +266,17 @@ MSG_ID_HAVE = '\x03'
 MSG_ID_INTEGRITY = '\x04'
 MSG_ID_PEX_RESv4 = '\x05'
 MSG_ID_PEX_REQ = '\x06'
-MSG_ID_SIGN_INTEGRITY = '\x07'
+MSG_ID_SIGNED_INTEGRITY = '\x07'
 MSG_ID_REQUEST = '\x08'
 MSG_ID_CANCEL = '\x09'
 MSG_ID_CHOKE = '\x0a'
 MSG_ID_UNCHOKE = '\x0b'
 MSG_ID_PEX_RESv6 = '\x0c'
 MSG_ID_PEX_REScert = '\x0d'
+
+
+
+
 
 class HandshakeMessage(Encodable):
     def __init__(self,chanid,ver,minver=None,swarmid=None,cipm=None,mhf=None,lsa=None,cam=None,ldw=None,msgdata=None):
@@ -286,10 +319,10 @@ class HandshakeMessage(Encodable):
                 chain.append(POPT_LSA_TYPE)
                 chain.append(self.lsa)
             if self.cam is not None:
-                chain.append(POPT_CIPM_TYPE)
+                chain.append(POPT_CAM_TYPE)
                 chain.append(self.cam)
             if self.ldw is not None:
-                chain.append(POPT_CIPM_TYPE)
+                chain.append(POPT_LDW_TYPE)
                 chain.append(self.ldw)
             if self.msgdata is not None:
                 chain.append(POPT_MSGDATA_TYPE)
@@ -345,8 +378,11 @@ class HandshakeMessage(Encodable):
                     cam = bytes[off]
                     off += 1
                 elif popt == POPT_LDW_TYPE:
-                    ldw = bytes[off]
-                    off += 1
+                    ldwsize = 8
+                    if cam == CHUNK_SPEC_ID_BIN32 or cam == CHUNK_SPEC_ID_CHUNK32:
+                        ldwsize = 4
+                    ldw = bytes[off:off+ldwsize] 
+                    off += ldwsize
                 elif popt == POPT_MSGS_TYPE:
                     sbytes = bytes[off:off+1]
                     off += len(sbytes)
@@ -534,9 +570,10 @@ class SignedIntegrityMessage(Encodable):
         cabytes = bytes[off:off+t.get_chunkspec().get_bytes_length()]
         off += len(cabytes)
         chunkspec = t.chunkspec.from_bytes(cabytes)
-        intbytes = bytes[off:off+t.TODO]
+        # if t.lsa: siglen =  SIGNPEAKTODO 
+        intbytes = bytes[off:off+DUMMY_DEFAULT_SIG_LENGTH]
         off += len(intbytes)
-        return [SignedIntegrityMessage(chunkspec,intbytes),off]
+        return [SignedIntegrityMessage(t,chunkspec,intbytes),off]
     from_bytes = staticmethod(from_bytes)
     def get_bytes_length():
         return None # variable
@@ -681,6 +718,24 @@ class PexResCertMessage(Encodable):
         return "PEX_REScert(cert)"
 
 
+class KeepAliveMessage(Encodable):
+    def __init__(self):
+        pass 
+    def to_bytes(self):
+        return ""
+    def from_bytes(t,bytes,off):
+        return [KeepAliveMessage(),off]
+    from_bytes = staticmethod(from_bytes)
+    def get_bytes_length():
+        return 0
+    get_bytes_length = staticmethod(get_bytes_length)
+    def get_id():
+        return -1
+    get_id = staticmethod(get_id)
+    def __str__(self):
+        return "KEEPALIVE"
+
+
 #
 # Transfer
 #
@@ -688,10 +743,12 @@ class PexResCertMessage(Encodable):
 
 class Transfer:
     
-    def __init__(self,swarmid,version,chunkspec,socket):
+    def __init__(self,swarmid,version,chunkspec,cipm,lsa,socket):
         self.swarmid = swarmid
         self.version = version
         self.chunkspec = chunkspec
+        self.cipm = cipm
+        self.lsa = lsa
         self.socket = socket
 
     def get_swarm_id(self):
@@ -784,7 +841,7 @@ class Datagram(Encodable):
             [msg,self.off] = PexResv4Message.from_bytes(self.t,self.data,self.off)
         elif msgid == MSG_ID_PEX_REQ:
             [msg,self.off] = PexReqMessage.from_bytes(self.t,self.data,self.off)
-        elif msgid == MSG_ID_SIGN_INTEGRITY:
+        elif msgid == MSG_ID_SIGNED_INTEGRITY:
             [msg,self.off] = SignedIntegrityMessage.from_bytes(self.t,self.data,self.off)
         elif msgid == MSG_ID_REQUEST:
             [msg,self.off] = RequestMessage.from_bytes(self.t,self.data,self.off)
@@ -855,7 +912,7 @@ class Socket:
 
     def recv(self):
         [data,addr] = self.sock.recvfrom(DGRAM_MAX_RECV)
-        print >>sys.stderr,"recv len",len(data)
+        print >>sys.stderr,"Socket: recv len",len(data)
 
         return [addr,Datagram(None,data)]
         
@@ -874,13 +931,14 @@ class Socket:
         
         
 class SwiftConnection:
-    def __init__(self,myaddr,hisaddr,swarmid,listensock=None,hs=True,ver=POPT_VER_PPSP,chunkspec=ChunkRange(0,0)):
+    def __init__(self,myaddr,hisaddr,swarmid,listensock=None,hs=True,ver=POPT_VER_PPSP,minver=POPT_VER_PPSP,cipm=POPT_CIPM_MERKLE,mhf=POPT_MHF_SHA1,lsa=None,cam=CHUNK_SPEC_ID_CHUNK32,ldw=None,msgdata=None,chunkspec=ChunkRange(0,0)):
+        
         if listensock is None:
             self.s = Socket(myaddr)
         else:
             self.s = listensock
         #t = Transfer(swarmid,POPT_VER_PPSP,BIN_ALL,self.s)
-        self.t = Transfer(swarmid,ver,chunkspec,self.s)
+        self.t = Transfer(swarmid,ver,chunkspec,cipm,lsa,self.s)
         self.c = Channel(self.t,hisaddr,listensock is None)
         
         if hs:
@@ -892,7 +950,7 @@ class SwiftConnection:
                 self.c.send(d)
             else:
                 d.add( self.c.get_his_chanid() )
-                d.add( HandshakeMessage(self.c.get_my_chanid(),POPT_VER_PPSP,POPT_VER_PPSP,self.t.get_swarm_id()) )
+                d.add( HandshakeMessage(self.c.get_my_chanid(),ver=ver,minver=minver,swarmid=self.t.get_swarm_id(),cipm=cipm,mhf=mhf,lsa=lsa,cam=cam,ldw=ldw,msgdata=msgdata) )
                 self.c.send(d)
 
     def makeDatagram(self,autochanid=True):
