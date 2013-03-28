@@ -37,10 +37,10 @@ def chunkspeccontain(big,small):
         return False
 
 
-class TestLiveSourceUMT(TestAsServer):
+class TestLiveSourceUMTFramework(TestAsServer):
     """
-    Test if live source's output is sane: peaks and HAVEs span a 
-    consecutive range (assuming no losses)
+    Framework for testing if live source's output is sane: peaks and HAVEs 
+    span a consecutive range (assuming no losses)
     """
 
     def setUpPreSession(self):
@@ -79,7 +79,14 @@ class TestLiveSourceUMT(TestAsServer):
             pass
 
     
-    def test_monitor_source(self):
+    
+class TestLiveSourceUMTTests: # subclassed below    
+    """
+    Actual test definitions 
+    """
+
+    
+    def tst_monitor_source(self):
         myaddr = ("127.0.0.1",15357)
         hisaddr = ("127.0.0.1",self.listenport)
         
@@ -179,14 +186,33 @@ class TestLiveSourceUMT(TestAsServer):
 
 
 
+class TestLiveSourceUMTLiveDiscardNone(TestLiveSourceUMTFramework,TestLiveSourceUMTTests):
+    """
+    Test live source with live discard window None (i.e., source remembers all)
+    """
+    def test_monitor_source(self):
+        self.tst_monitor_source()
 
 
+class TestLiveSourceUMTLiveDiscardWrap(TestLiveSourceUMTFramework,TestLiveSourceUMTTests):
+    """
+    Test live source with live discard window set. Should give same output
+    as with no discard window.
+    """
+    def setUpPreSession(self):
+        TestLiveSourceUMTFramework.setUpPreSession(self)
+        
+        self.livediscardwindow = 128
 
+    def test_monitor_source(self):
+        self.tst_monitor_source()
+
+        
         
 def test_suite():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(TestLiveSourceUMT))
-    
+    suite.addTest(unittest.makeSuite(TestLiveSourceUMTLiveDiscardNone))
+    suite.addTest(unittest.makeSuite(TestLiveSourceUMTLiveDiscardWrap))
     return suite
 
 
