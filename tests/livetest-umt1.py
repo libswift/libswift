@@ -27,7 +27,6 @@ from swiftconn import *
 DEBUG=False
 
 CHUNKSIZE=1024
-SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN = 32
 
 def chunkspeccontain(big,small):
     if big == small:
@@ -97,8 +96,11 @@ class TestLiveSourceUMT(TestAsServer):
         havelist = []
         recvflag=True        
         kacount = 0
-        while recvflag:
-            d = s.recv()
+        while True:
+            try:
+                d = s.recv()
+            except socket.timeout:
+                break
             while True:
                 msg = d.get_message()
                 if msg is None:
@@ -108,9 +110,6 @@ class TestLiveSourceUMT(TestAsServer):
                     s.c.set_his_chanid(msg.chanid)
                     self.send_keepalive(s)
                 elif msg.get_id() == MSG_ID_HAVE:
-                    if msg.chunkspec.e == ((self.nchunks/SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN)*SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN)-1: # don't work if nchunks not multiple of SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN
-                        recvflag=False
-                        
                     newhave = (msg.chunkspec.s,msg.chunkspec.e)
                     havelist = self.update_chunklist(newhave, havelist)
                     print >>sys.stderr,"test: havelist",havelist
@@ -123,6 +122,9 @@ class TestLiveSourceUMT(TestAsServer):
                 kacount += 1
                 if (kacount % 100) == 0:
                     self.send_keepalive(s)
+
+        self.assertTrue(len(peaklist) > 0)
+        self.assertTrue(len(havelist) > 0)
 
         # Send explicit close
         d = s.makeDatagram()
