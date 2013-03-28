@@ -89,6 +89,7 @@ class TestLiveSourceUMT(TestAsServer):
         print >>sys.stderr,"test: Connect as peer"
         s = SwiftConnection(myaddr,hisaddr,self.liveswarmid,cipm=POPT_CIPM_UNIFIED_MERKLE,lsa=POPT_LSA_PRIVATEDNS)
 
+        hashlist = []
         peaklist = []
         havelist = []
         recvflag=True        
@@ -106,6 +107,20 @@ class TestLiveSourceUMT(TestAsServer):
                 if msg.get_id() == MSG_ID_HANDSHAKE:
                     s.c.set_his_chanid(msg.chanid)
                     self.send_keepalive(s)
+                    
+                elif msg.get_id() == MSG_ID_INTEGRITY:
+                    newhash = (msg.chunkspec.s,msg.chunkspec.e)
+                    hashlist = self.update_chunklist(newhash, hashlist)
+                    print >>sys.stderr,"test: hashlist",hashlist
+                        
+                elif msg.get_id() == MSG_ID_SIGNED_INTEGRITY:
+                    newpeak = (msg.chunkspec.s,msg.chunkspec.e)
+                    peaklist = self.update_chunklist(newpeak, peaklist)
+                    print >>sys.stderr,"test: peaklist",peaklist
+                    
+                    # Each SIGNED_INTEGRITY must be preceded by its INTEGRITY message
+                    self.assertEquals(hashlist,peaklist)
+
                 elif msg.get_id() == MSG_ID_HAVE:
                     newhave = (msg.chunkspec.s,msg.chunkspec.e)
                     havelist = self.update_chunklist(newhave, havelist)
@@ -119,12 +134,7 @@ class TestLiveSourceUMT(TestAsServer):
                                 found = True
                                 break
                         self.assertTrue(found)
-                    
-                        
-                elif msg.get_id() == MSG_ID_SIGNED_INTEGRITY:
-                    newpeak = (msg.chunkspec.s,msg.chunkspec.e)
-                    peaklist = self.update_chunklist(newpeak, peaklist)
-                    print >>sys.stderr,"test: peaklist",peaklist
+
                         
                 kacount += 1
                 if (kacount % 100) == 0:
