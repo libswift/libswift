@@ -785,7 +785,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             if (duration != -1)
                 td = swift::Open(filename,swarm_id,trackaddr,false,true,false,activate,chunksize);
             else
-                td = swift::LiveOpen(filename,swarm_id,trackaddr,false,chunksize);
+                td = swift::LiveOpen(filename,swarm_id,trackaddr,true,chunksize);
             if (td == -1) {
             	CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarm_id);
             	return ERROR_BAD_SWARM;

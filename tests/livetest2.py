@@ -23,7 +23,7 @@ from swiftconn import *
 DEBUG=False
 
 
-class TestLive(TestAsNPeers):
+class TestLiveDownload(TestAsNPeers):
     """
     Test that starts 2 swift process which do a live streaming transfer
     """
@@ -39,13 +39,19 @@ class TestLive(TestAsNPeers):
             f.write(data)
         f.close()
 
+        self.peers[0].listenport = 6778
+
         self.peers[0].livesourceinput = "liveinput.dat"
         self.peers[0].filename = "storage.dat"
         
         # Start peer1 as live downloader
         self.peers[1].destdir = '.'
-        #self.peers[1].usegtest = False
-        #self.peers[1].binpath = os.path.join("..","Debug","SwiftPPSP.exe")
+        
+        self.peers[1].usegtest = False
+        #self.peers[1].binpath = os.path.join("..","Debug","SwiftUMT.exe")
+
+        self.peers[0].debug = True
+        self.peers[1].debug = True
 
         # For CMDGW communication for peer1        
         self.buffer = ''
@@ -55,6 +61,9 @@ class TestLive(TestAsNPeers):
         TestAsNPeers.setUpPostSession(self)
 
     def tearDown(self):
+        
+        time.sleep(100)
+        
         TestAsNPeers.tearDown(self)
         try:
             os.remove(self.peers[0].livesourceinput)
@@ -163,7 +172,7 @@ class TestLive(TestAsNPeers):
     
 def test_suite():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(TestLive))
+    suite.addTest(unittest.makeSuite(TestLiveDownload))
     
     return suite
 

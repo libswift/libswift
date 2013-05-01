@@ -281,13 +281,12 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
         Channel *c = *iter;
-        fprintf(stderr,"live: AddData: announce to channel %d\n", c->id() );
-        dprintf("%s %%0 live: AddData: announce to channel %d\n", tintstr(), c->id() );
+        dprintf("%s %%0 live: AddData: record %d peaks for channel %d\n", tintstr(), totalnewpeaktuples.size(), c->id() );
+        c->AddSinceSignedPeakTuples(totalnewpeaktuples);
         //DDOS
         if (c->is_established())
         {
-            fprintf(stderr,"live: AddData: announce to channel %d new signed %d\n", c->id(), totalnewpeaktuples.size() );
-            c->AddSinceSignedPeakTuples(totalnewpeaktuples);
+            dprintf("%s %%0 live: AddData: send on channel %d\n", tintstr(), c->id() );
             c->LiveSend();
         }
     }

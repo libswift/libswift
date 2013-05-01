@@ -939,7 +939,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
             td = swift::Open(filename,swarm_id,Address(),false,true,false,activate,chunksize);
         }
         else {
-            td = swift::LiveOpen(filename,swarm_id,Address(),false,chunksize);
+            td = swift::LiveOpen(filename,swarm_id,Address(),true,chunksize);
         }
 
         // Arno, 2011-12-20: Only on new transfers, otherwise assume that CMD GW

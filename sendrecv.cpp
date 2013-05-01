@@ -6,6 +6,7 @@
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
+
 #include "swift.h"
 #include "bin_utils.h"
 #include <algorithm>  // kill it
@@ -57,7 +58,7 @@ void    Channel::AddPeakHashes (struct evbuffer *evb)
     {
 	// Arno, 2013-02-25: Need to send peak bins always (also CIPM None)
 	// to cold clients to communicate tree size
-	if (ack_in_.is_empty() && hashtree()->peak_count() > 0)
+	if (ack_in_.is_empty() && hashtree() != NULL && hashtree()->peak_count() > 0)
 	{
 	    AddUnsignedPeakHashes(evb);
 	}

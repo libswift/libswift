@@ -88,7 +88,7 @@ class TestLiveSourceUMTTests: # subclassed below
         # Let source start up
         time.sleep(.5)
         
-        print >>sys.stderr,"test: Connect as peer"
+        print >>sys.stdout,"test: Connect as peer"
         s = SwiftConnection(myaddr,hisaddr,self.liveswarmid,cipm=POPT_CIPM_UNIFIED_MERKLE,lsa=POPT_LSA_PRIVATEDNS)
 
         hashlist = []
@@ -105,7 +105,7 @@ class TestLiveSourceUMTTests: # subclassed below
                 msg = d.get_message()
                 if msg is None:
                     break
-                print >>sys.stderr,"test: Got",`msg`
+                print >>sys.stdout,"test: Got",`msg`
                 if msg.get_id() == MSG_ID_HANDSHAKE:
                     s.c.set_his_chanid(msg.chanid)
                     self.send_keepalive(s)
@@ -113,12 +113,12 @@ class TestLiveSourceUMTTests: # subclassed below
                 elif msg.get_id() == MSG_ID_INTEGRITY:
                     newhash = (msg.chunkspec.s,msg.chunkspec.e)
                     hashlist = self.update_chunklist(newhash, hashlist)
-                    print >>sys.stderr,"test: hashlist",hashlist
+                    print >>sys.stdout,"test: hashlist",hashlist
                         
                 elif msg.get_id() == MSG_ID_SIGNED_INTEGRITY:
                     newpeak = (msg.chunkspec.s,msg.chunkspec.e)
                     peaklist = self.update_chunklist(newpeak, peaklist)
-                    print >>sys.stderr,"test: peaklist",peaklist
+                    print >>sys.stdout,"test: peaklist",peaklist
                     
                     # Each SIGNED_INTEGRITY must be preceded by its INTEGRITY message
                     self.assertEquals(hashlist,peaklist)
@@ -126,7 +126,7 @@ class TestLiveSourceUMTTests: # subclassed below
                 elif msg.get_id() == MSG_ID_HAVE:
                     newhave = (msg.chunkspec.s,msg.chunkspec.e)
                     havelist = self.update_chunklist(newhave, havelist)
-                    print >>sys.stderr,"test: havelist",havelist
+                    print >>sys.stdout,"test: havelist",havelist
 
                     # Must not have HAVEs that are not covered by a signed peak                    
                     for have in havelist:
@@ -135,6 +135,10 @@ class TestLiveSourceUMTTests: # subclassed below
                             if chunkspeccontain(peak, have) or (peak == have):
                                 found = True
                                 break
+                        if not found:
+                            x = `peaklist`
+                            print >>sys.stderr,"test: UNCOVERED HAVE"+str(have)+" in peaklist "+x
+                            print >>sys.stdout,"test: UNCOVERED HAVE",have,"in peaklist",peaklist
                         self.assertTrue(found)
 
                         
@@ -174,7 +178,7 @@ class TestLiveSourceUMTTests: # subclassed below
         
 
     def send_keepalive(self,s):
-        print >>sys.stderr,"test: Send keep alive"            
+        print >>sys.stdout,"test: Send keep alive"            
         d2 = s.makeDatagram()
         d2.add( KeepAliveMessage() )
         s.c.send(d2)
