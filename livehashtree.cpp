@@ -892,6 +892,22 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 	// Arno: The hash checks out. Mark all hashes on the uncle path as
 	// being verified, so we don't have to go higher than them on a next
 	// check.
+
+	// Arno, 2013-05-07: uncle path = sibling + uncles
+	// Find sibling
+	piter = iter;
+	if (piter->GetParent() != NULL)
+	{
+	    if (pos.is_left())
+		piter = piter->GetParent()->GetRight();
+	    else
+		piter = piter->GetParent()->GetLeft();
+
+	    if (SetVerifiedIfNot0(piter,pos,0))
+		return true;
+	}
+
+	// Find uncles
 	bin_t p = pos;
 	piter = iter;
 	piter->SetVerified(true);
@@ -905,57 +921,54 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 		piter = piter->GetParent()->GetParent()->GetRight();
 	    else
 		piter = piter->GetParent()->GetParent()->GetLeft();
-            if (piter == NULL)
-            {
-        	if (tree_debug)
-        	    fprintf(stderr,"umt: OfferHash: SetVerified %s has NULL node!!!\n", p.str().c_str() );
-                return true; // had success
-            }
-            else 
-            {
-                if (piter->GetHash() == Sha1Hash::ZERO)
-                {
-                    if (tree_debug)
-                	fprintf(stderr,"umt: OfferHash: SetVerified %s has ZERO hash!!!\n", piter->GetBin().str().c_str() );
-                }
-                else
-                {
-                    if (tree_debug)
-                	fprintf(stderr,"umt: OfferHash: SetVerified %s\n", piter->GetBin().str().c_str() );
-	            piter->SetVerified(true);
-                }
-            }
+
+	    if (SetVerifiedIfNot0(piter,p,1))
+		return true;
 	}
 	// Also mark hashes on direct path to root as verified. Doesn't decrease
 	// #checks, but does increase the number of verified hashes faster.
-        // Arno, 2013-03-08: Only holds if hashes are permanent (i.e., not parents of peaks
-        // while live streaming with Unified Merkle Trees.
+        // Arno, 2013-03-08: Only holds if hashes are permanent (i.e., not
+	// parents of peaks while live streaming with Unified Merkle Trees.
 	p = pos;
 	piter = iter;
 	while (p != peak) {
 	    p = p.parent();
 	    piter = piter->GetParent();
-            if (piter == NULL)
-            {
-        	if (tree_debug)
-        	    fprintf(stderr,"umt: OfferHash: SetVerified2 %s has NULL node!!!\n", p.str().c_str() );
-                return true; // had success
-            }
-	    else if (piter->GetHash() == Sha1Hash::ZERO)
-	    {
-                if (tree_debug)
-		    fprintf(stderr,"umt: OfferHash: SetVerified2 %s ZERO!!!\n", piter->GetBin().str().c_str() );
-	    }
-	    else
-	    {
-		piter->SetVerified(true);
-                if (tree_debug)
-		    fprintf(stderr,"umt: OfferHash: SetVerified2 %s\n", piter->GetBin().str().c_str() );
-	    }
+
+	    if (SetVerifiedIfNot0(piter,p,2))
+		return true;
 	}
     }
     return success;
 }
+
+
+
+bool LiveHashTree::SetVerifiedIfNot0(Node *piter, bin_t p, int verclass)
+{
+    if (piter == NULL)
+    {
+	if (tree_debug)
+	    fprintf(stderr,"umt: OfferHash: SetVerified%u %s has NULL node!!!\n", verclass, p.str().c_str() );
+        return true; // had success
+    }
+    else
+    {
+        if (piter->GetHash() == Sha1Hash::ZERO)
+        {
+            if (tree_debug)
+        	fprintf(stderr,"umt: OfferHash: SetVerified%u %s has ZERO hash!!!\n", verclass, piter->GetBin().str().c_str() );
+        }
+        else
+        {
+            if (tree_debug)
+        	fprintf(stderr,"umt: OfferHash: SetVerified%u %s\n", verclass, piter->GetBin().str().c_str() );
+            piter->SetVerified(true);
+        }
+    }
+    return false; // = continue
+}
+
 
 
 /*

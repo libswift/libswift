@@ -51,7 +51,7 @@ void do_add_data(LiveHashTree *umt, int nchunks)
     }
 }
 
-/*TEST(LiveTreeTest,AddData10)
+TEST(LiveTreeTest,AddData10)
 {
     LiveHashTree *umt = new LiveHashTree(NULL, (privkey_t)482, SWIFT_DEFAULT_CHUNK_SIZE); // privkey
 
@@ -63,7 +63,7 @@ void do_add_data(LiveHashTree *umt, int nchunks)
     ASSERT_EQ(umt->peak(1), bin_t(1,4));
 
 }
-*/
+
 
 TEST(LiveTreeTest,AddData10Prune3)
 {
@@ -145,6 +145,7 @@ void do_download(LiveHashTree *umt, int nchunks, hmap_t &truthhashmap, pickorder
     }
     umt->check_signed_peak_coverage(true);
 
+    // Simulate download of chunks in pickorder
     pickorder_t::iterator citer;
     for (citer=pickorder.begin(); citer != pickorder.end(); citer++)
     {
@@ -182,6 +183,7 @@ void do_download(LiveHashTree *umt, int nchunks, hmap_t &truthhashmap, pickorder
 	for (iter=bv.rbegin(); iter != bv.rend(); iter++)
 	{
 	    bin_t uncle = *iter;
+	    fprintf(stderr,"Add %u check verified %s\n", r, uncle.str().c_str() );
 	    Node *n = umt->FindNode(uncle);
 	    ASSERT_EQ(n->GetHash(),truthhashmap[uncle]);
 	    ASSERT_TRUE(n->GetVerified());
@@ -277,8 +279,6 @@ LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy,int s
     return umt;
 }
 
-
-/*
 TEST(LiveTreeTest,Download8)
 {
     LiveHashTree *umt = prepare_do_download(8,PICK_INORDER);
@@ -287,7 +287,6 @@ TEST(LiveTreeTest,Download8)
     ASSERT_EQ(umt->peak_count(), 1);
     ASSERT_EQ(umt->peak(0), bin_t(3,0));
 }
-
 
 TEST(LiveTreeTest,Download10)
 {
@@ -365,8 +364,6 @@ TEST(LiveTreeTest,Download600Start489)
 {
     LiveHashTree *umt = prepare_do_download(600,PICK_INORDER,489);
 }
-*/
-
 
 int main (int argc, char** argv) {
     testing::InitGoogleTest(&argc, argv);

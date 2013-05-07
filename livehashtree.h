@@ -156,6 +156,8 @@ class LiveHashTree: public HashTree
      BinHashSigTuple LiveHashTree::OfferSignedPeakHash(bin_t pos, Signature &sig);
      /** Add node to the hashtree */
      bool CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified);
+     /** Mark node as verified. verclass indicates where verification decision came from for debugging */
+     bool SetVerifiedIfNot0(Node *piter, bin_t p, int verclass);
 
      // Sanity checks
      void sane_tree();
