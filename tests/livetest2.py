@@ -56,13 +56,20 @@ class TestLiveDownloadFramework(TestAsNPeers):
         # For CMDGW communication for peer1        
         self.buffer = ''
         self.stop = False
+
+        self.liveswarmidhex = "e5a12c7ad2d8fab33c699d1e198d66f79fa610c3"
+        try:
+            os.remove(self.liveswarmidhex)
+        except:
+            pass
+
         
     def setUpPostSession(self):
         TestAsNPeers.setUpPostSession(self)
 
     def tearDown(self):
         
-        time.sleep(100)
+        #time.sleep(100)
         
         TestAsNPeers.tearDown(self)
         try:
@@ -80,8 +87,7 @@ class TestLiveDownloadTests: # subclassed below
 
     def tst_live_download(self):
         # Start peer1 as live downloader
-        liveswarmid = "e5a12c7ad2d8fab33c699d1e198d66f79fa610c3"
-        CMD = "START tswift://127.0.0.1:"+str(self.peers[0].listenport)+"/"+liveswarmid+"@-1 "+self.peers[1].destdir+"\r\n"
+        CMD = "START tswift://127.0.0.1:"+str(self.peers[0].listenport)+"/"+self.liveswarmidhex+"@-1 "+self.peers[1].destdir+"\r\n"
         self.peers[1].cmdsock.send(CMD)
 
         # Let peers interact
