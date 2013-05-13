@@ -92,6 +92,9 @@ namespace swift {
 // Arno, 2011-12-22: Enable Riccardo's VodPiecePicker
 #define ENABLE_VOD_PIECEPICKER        1
 
+// Arno, 2013-05-13: Enable live content integrity protection (for which method see
+// SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN).
+#define ENABLE_LIVE_AUTH		      1
 
 #define SWIFT_URI_SCHEME              "tswift"
 
@@ -115,8 +118,9 @@ namespace swift {
 // Max size of a X.509 certificate in a PEX_REScert message.
 #define PEX_RES_MAX_CERT_SIZE		     1024
 
-// Live streaming via Unified Merkle Tree: The number of chunks per signature (power of 2)
-#define SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN   32 // SIGNPEAKTODO 32
+// Live streaming via Unified Merkle Tree or Sign All: The number of chunks per signature
+// Set to 1 for Sign All, set to a power of 2 > 1 for UMT. This MUST be a power of 2.
+#define SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN   32
 
 
 /** IPv4/6 address, just a nice wrapping around struct sockaddr_storage. */
@@ -674,7 +678,7 @@ namespace swift {
          *  @param  max_width   maximum number of packets to ask for
          *  @param  expires     (not used currently) when to consider request expired
          *  @return             the bin number to request */
-        virtual bin_t   Pick (binmap_t& offered, uint64_t max_width, tint expires) = 0;
+        virtual bin_t   Pick (binmap_t& offered, uint64_t max_width, tint expires, uint32_t channelid) = 0;
         virtual void    LimitRange (bin_t range) = 0;
         /** updates the playback position for streaming piece picking.
          *  @param  offbin        bin number of new playback pos
@@ -791,6 +795,7 @@ namespace swift {
         void        AddLiveSignedPeakHashes(struct evbuffer *evb); // SIGNPEAK
         bin_t       AddLiveSignedPeakHash4Retransmit(struct evbuffer *evb, bin_t pos); // SIGNPEAK
         void        AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &sbv); // SIGNPEAK
+        void        AddLivePeakRightHashes(struct evbuffer *evb, bin_t pos); // SIGNPEAK
         void        AddPex (struct evbuffer *evb);
         void        OnPexReq(void);
         void        AddPexReq(struct evbuffer *evb);

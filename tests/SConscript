@@ -13,7 +13,7 @@ Import("linkflags")
 if sys.platform == "win32":
 	gtestpath = "\\build\\gtest-1.6.0"
 else:
-	gtestpath = "../build/gtest-1.6.0"
+	gtestpath = "/home/arno/build/gtest-1.6.0"
 
 if DEBUG and sys.platform == "win32":
 	libs = ['libswift','gtestd'] + libs  # order is important, crypto needs to be last
@@ -87,7 +87,6 @@ env.Program(
     LIBS=libs,
     LIBPATH=libpath )
 
-
 env.Program( 
     target='binfragtest',
     source=['binfragtest.cpp'],
@@ -143,11 +142,18 @@ env.Program(
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )
-"""
 
 env.Program( 
     target='livetreetest',
     source=['livetreetest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+"""
+
+env.Program( 
+    target='livehookintest',
+    source=['livehookintest.cpp'],
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )

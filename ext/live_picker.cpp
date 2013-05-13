@@ -40,18 +40,18 @@ class SimpleLivePiecePicker : public LivePiecePicker {
     LiveTransfer*   transfer_;		// Pointer to container
     uint64_t        twist_;		// Unused
 
-    bool	    hooking_in_;	// Finding hook-in point y/n?
+    bool	    search4hookin_;	// Finding hook-in point y/n?
     PeerPosMapType  peer_pos_map_;	// Highest HAVEs for each peer
     bool	    source_seen_;	// Whether connected to source
     uint32_t	    source_channel_id_;	// Channel ID of the source
-    bin_t	    hookin_bin_;	// Chosen hook-in point when hooking_in_ = false
+    bin_t	    hookin_bin_;	// Chosen hook-in point when search4hookin_ = false
     bin_t           current_bin_;	// Current pos, not yet received
 
 
 public:
 
     SimpleLivePiecePicker (LiveTransfer* trans_to_pick_from) :
-           ack_hint_out_(), transfer_(trans_to_pick_from), twist_(0), hooking_in_(true), source_seen_(false), source_channel_id_(0), hookin_bin_(bin_t::NONE), current_bin_(bin_t::NONE) {
+           ack_hint_out_(), transfer_(trans_to_pick_from), twist_(0), search4hookin_(true), source_seen_(false), source_channel_id_(0), hookin_bin_(bin_t::NONE), current_bin_(bin_t::NONE) {
         binmap_t::copy(ack_hint_out_, *(transfer_->ack_out()));
     }
     virtual ~SimpleLivePiecePicker() {}
@@ -67,8 +67,8 @@ public:
     virtual void LimitRange (bin_t range) {
     }
 
-    virtual bin_t Pick (binmap_t& offer, uint64_t max_width, tint expires) {
-    	if (hooking_in_)
+    virtual bin_t Pick (binmap_t& offer, uint64_t max_width, tint expires, uint32_t channelid) {
+    	if (search4hookin_)
     	    return bin_t::NONE;
 
         while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*3/2) { // FIXME sec
@@ -85,6 +85,19 @@ public:
         }
         //dprintf("live: pp: new cur end\n" );
 
+        // When picking from source, do small-swarms optimization
+        if (source_seen_ && source_channel_id_ == channelid)
+        {
+            double r = (double)rand()/(double)RAND_MAX;
+            double dlprob = 0.75;
+            if (transfer_->GetNumLeechers()+transfer_->GetNumSeeders() == 1)
+                dlprob = 1.0; // only source
+            if (r >= dlprob)  // Trust you will get it from peers, don't dl from source
+            {
+        	fprintf(stderr,"live: pp: ssopt r %lf dlprob %lf npeers %d\n", r, dlprob, transfer_->GetNumLeechers()+transfer_->GetNumSeeders() );
+        	return bin_t::NONE;
+            }
+        }
 
         // Request next from this peer, if not already requested
         bin_t hint = pickLargestBin(offer,current_bin_);
@@ -157,7 +170,7 @@ public:
     void StartAddPeerPos(uint32_t channelid, bin_t peerpos, bool peerissource)
     {
     	//fprintf(stderr,"live: pp: StartAddPeerPos: peerpos %s\n", peerpos.str().c_str());
-    	if (hooking_in_) {
+    	if (search4hookin_) {
 
     	    if (peerissource) {
     		source_seen_ = true;
@@ -189,24 +202,34 @@ public:
 
     void EndAddPeerPos(uint32_t channelid)
     {
+	if (!search4hookin_)
+	    return;
+
+	bin_t candbin = CalculateHookinPos();
+	if (candbin != bin_t::NONE)
+	{
+	    hookin_bin_ = candbin;
+	    current_bin_ = hookin_bin_;
+	    search4hookin_ = false;
+    	}
+    }
+
+
+    bin_t CalculateHookinPos() // Must not modify state
+    {
 #ifdef SJAAK
-	hookin_bin_ = bin_t(0,126);
-	current_bin_ = hookin_bin_;
-	hooking_in_ = false;
-	return;
+	return bin_t(0,1077);
 #endif
-    	if (!hooking_in_)
-    	    return;
-
-    	if (source_seen_) {
-
+        bin_t hookbin(bin_t::NONE);
+    	if (source_seen_)
+    	{
     	    bin_t cand = peer_pos_map_[source_channel_id_];
     	    Channel *c = Channel::channel(source_channel_id_);
     	    if (c == NULL)
     	    {
     		// Source left building, fallback to old prebuf method (just 10
     		// chunks from source). Perhaps there are still some peers around.
-    		hookin_bin_ = bin_t(0,std::max((bin_t::uint_t)0,cand.layer_offset()-FALLBACK_LIVE_PP_NUMBER_PREBUF_CHUNKS));
+    		hookbin = bin_t(0,std::max((bin_t::uint_t)0,cand.layer_offset()-FALLBACK_LIVE_PP_NUMBER_PREBUF_CHUNKS));
     	    }
     	    else
     	    {
@@ -219,30 +242,69 @@ public:
     		while(!c->ack_in().is_filled(iterbin) && iterbin < cand)
     		    iterbin.to_right();
 
-    		hookin_bin_ = iterbin;
+    		hookbin = iterbin;
     	    }
-	    current_bin_ = hookin_bin_;
-	    hooking_in_ = false;
 
-	    fprintf(stderr,"live: pp: EndAddPeerPos: hookin on source, pos %s diff %llu\n", hookin_bin_.str().c_str(), cand.base_offset() - hookin_bin_.base_offset() );
+	    fprintf(stderr,"live: pp: EndAddPeerPos: hookin on source, pos %s diff %llu\n", hookbin.str().c_str(), cand.base_offset() - hookbin.base_offset() );
     	}
-    	else if (peer_pos_map_.size() > 0)
-    	{
-    	    fprintf(stderr,"live: pp: EndAddPeerPos: not connected to source, wait (peer hook-in TODO)\n");
-    	    // See if there is a quorum for a certain position
-    	    // LIVETODO
-    	    /*PeerPosMapType::const_iterator iter;
-    	    for (iter=peer_pos_map_.begin(); iter!=peer_pos_map_.end(); iter++)
-    	    {
-    	    	hookin_pos_ = iter->second;
-    	    	current_pos_ = hookin_pos_;
-    	    	fprintf(stderr,"live: pp: EndAddPeerPos: cand pos %s\n", hookin_pos_.str().c_str());
-    	    }
-	    fprintf(stderr,"live: pp: EndAddPeerPos: hookin on peers, pos %s\n", hookin_pos_.str().c_str());
-	    hooking_in_ = false;*/
-    	}
+        else if (peer_pos_map_.size() > 0)
+        {
+            // See if there is a quorum among the peers for a certain position
+            // Minimum number of peers for a quorum
+            int threshold = 2;
+            if (peer_pos_map_.size() < threshold)
+            {
+                fprintf(stderr,"live: pp: EndAddPeerPos: not connected to source, not enough peers for hookin\n");
+                return bin_t::NONE;
+            }
+
+            // Put in list and sort
+            binvector bv;
+            PeerPosMapType::const_iterator iter;
+            for (iter=peer_pos_map_.begin(); iter!=peer_pos_map_.end(); iter++)
+            {
+                bin_t p = iter->second;
+                bv.push_back(p);
+            }
+            std::sort(bv.begin(), bv.end());
+
+            binvector::iterator iter2;
+            for (iter2=bv.begin(); iter2 != bv.end(); iter2++)
+            {
+                bin_t pos = *iter2;
+                fprintf(stderr,"live: pp: EndAddPeerPos: candidate %s\n", pos.str().c_str() );
+            }
+
+
+            // See if there is a set peers of size 'threshold' with current pos > candidate
+            // Otherwise, lower candidate and try again.
+            int index=bv.size()-threshold;
+
+            fprintf(stderr,"live: pp: EndAddPeerPos: index %d\n", index);
+
+            bool found=false;
+            while (index >= 0 && !found)
+            {
+                int i=0,count=0;
+                for (i=index; i<bv.size(); i++)
+                {
+                    fprintf(stderr,"live: pp: EndAddPeerPos: index %d count %d bvi %s bvindex %s\n", index, count, bv[i].str().c_str(), bv[index].str().c_str() );
+                    if (bv[i] >= bv[index])
+                        count++;
+                }
+
+                if (count >= threshold)
+                {
+                    found = true;
+                    hookbin = bv[index];
+                }
+                index--;
+            }
+
+            fprintf(stderr,"live: pp: EndAddPeerPos: hookin on peers, pos %s\n", hookbin.str().c_str());
+        }
+    	return hookbin;
     }
-
 
 
     bin_t GetHookinPos()
@@ -255,6 +317,11 @@ public:
     	// LIVETODO?
     	// GetCurrentPos doesn't mean we obtain the indicated piece!
     	return current_bin_;
+    }
+
+    bool GetSearch4Hookin()
+    {
+	return search4hookin_;
     }
 };
 

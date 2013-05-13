@@ -36,8 +36,7 @@
  *  The uncle hash algorithm assumes that (2,1) the hash of the 4 new chunks
  *  was sent to the peer when chunks from (2,0) where sent (after all, (2,1)
  *  is their uncle). However, that part of the tree did not yet exist, so it
- *  wasn't sent. We call these unsent uncles "right hashes". Current code
- *  doesn't suffer from this problem.
+ *  wasn't sent. We call these unsent uncles "right hashes".
  */
 #ifndef SWIFT_LIVE_HASH_TREE_H
 #define SWIFT_LIVE_HASH_TREE_H
@@ -65,7 +64,7 @@ class Node
     Sha1Hash &GetHash();
     void SetHash(const Sha1Hash &hash);
     bin_t &GetBin();
-    void SetBin(bin_t &b);
+    void SetBin(bin_t b);
     /** whether hash checked against signed peak (client) or calculated (source) */
     void SetVerified(bool val);
     bool GetVerified();
@@ -153,7 +152,7 @@ class LiveHashTree: public HashTree
      void           PruneTree(bin_t pos);
 
      /** If bhst.bin() != bin_t::NONE the signature was good. */
-     BinHashSigTuple LiveHashTree::OfferSignedPeakHash(bin_t pos, Signature &sig);
+     BinHashSigTuple OfferSignedPeakHash(bin_t pos, Signature &sig);
      /** Add node to the hashtree */
      bool CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified);
      /** Mark node as verified. verclass indicates where verification decision came from for debugging */

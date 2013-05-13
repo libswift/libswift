@@ -16,7 +16,8 @@ import re
 import sys
 
 DEBUG = True
-CODECOVERAGE = (DEBUG and True)
+#CODECOVERAGE = (DEBUG and True)
+CODECOVERAGE = False
 
 TestDir='tests'
 
@@ -86,7 +87,7 @@ if sys.platform == "win32":
 else:
     # Linux or Mac build
     
-    libevent2path = '/arno/pkgs/libevent-2.0.15-arno-http'
+    libevent2path = '/home/arno/pkgs/libevent-2.0.20-stable-debug'
 
     # Enable the user defining external includes
     if 'CPPPATH' in os.environ:

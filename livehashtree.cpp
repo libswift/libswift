@@ -119,7 +119,7 @@ bin_t &Node::GetBin()
     return b_;
 }
 
-void Node::SetBin(bin_t &b)
+void Node::SetBin(bin_t b)
 {
     b_ = b;
 }
@@ -911,7 +911,8 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 	bin_t p = pos;
 	piter = iter;
 	piter->SetVerified(true);
-	while (p.layer() != peak.layer()) {
+	// Arno, 2013-05-13: Not too high
+	while (p.layer() != (peak.layer()-1)) {
 	    p = p.parent().sibling();
 	    if (piter->GetParent() == NULL)
 		break;
@@ -977,6 +978,13 @@ bool LiveHashTree::SetVerifiedIfNot0(Node *piter, bin_t p, int verclass)
 
 bool LiveHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
 {
+    if (hash == Sha1Hash::ZERO)
+    {
+        if (tree_debug)
+	    fprintf(stderr,"umt: OfferHash: zero\n");
+        return false;
+    }
+
     bin_t peak = peak_for(pos);
     if (peak.is_none())
     {
@@ -1092,9 +1100,13 @@ const Sha1Hash& LiveHashTree::hash(bin_t pos) const
     // This API may not be fastest with dynamic tree.
     Node *n = FindNode(pos);
     if (n == NULL)
-	return Sha1Hash::ZERO;
+        return Sha1Hash::ZERO;
     else
-	return n->GetHash();
+    {
+    	if (!n->GetVerified())
+    		fprintf(stderr,"umt::hash %s not verified!\n", pos.str().c_str() );
+        return n->GetHash();
+    }
 }
 
 Node *LiveHashTree::FindNode(bin_t pos) const

@@ -639,6 +639,5 @@ bhstvector   &Channel::GetSinceSignedPeakTuples()
 
 void Channel::ClearSinceSignedPeakTuples()
 {
-    fprintf(stderr,"ClearSinceSignedPeakTuples\n");
     since_signed_peak_tuples_.clear();
 }

@@ -9,6 +9,9 @@
  *  This modulo is equivalent to the live discard window (see IETF PPSPP spec).
  *  This overwriting can be done both at the source and in a client.
  *
+ * TODO:
+ *  - temp check if not diverging too much from source via CalculateHookinPos() authoritative.
+ *
  *  Created by Arno Bakker.
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  */
@@ -65,13 +68,17 @@ void LiveTransfer::Initialize(bool check_netwvshash,uint64_t disc_wnd)
     Handshake hs;
     if (check_netwvshash)
     {
-	if (nchunks_per_sign_ == 1)
-	    hs.cont_int_prot_ = POPT_CONT_INT_PROT_SIGNALL;
-	else
-	    hs.cont_int_prot_ = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
+#if ENABLE_LIVE_AUTH == 1
+    	if (nchunks_per_sign_ == 1)
+            hs.cont_int_prot_ = POPT_CONT_INT_PROT_SIGNALL;
+        else
+            hs.cont_int_prot_ = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
+#else
+        hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
+#endif
     }
     else
-	hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
+	    hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
     hs.live_disc_wnd_ = disc_wnd;
 
     fprintf(stderr,"LiveTransfer::Initialize: cipm %d\n", hs.cont_int_prot_);
@@ -194,7 +201,7 @@ uint64_t      LiveTransfer::GetHookinOffset() {
 
 int LiveTransfer::AddData(const void *buf, size_t nbyte)
 {
-    //fprintf(stderr,"live: AddData: writing to storage %lu\n", nbyte);
+    fprintf(stderr,"%s live: AddData: writing to storage %lu\n", tintstr(), nbyte);
 
     // Save chunk on disk
     int ret = storage_->Write(buf,nbyte,offset_);
@@ -203,7 +210,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         return ret;
     }
     else
-        fprintf(stderr,"live: AddData: stored " PRISIZET " bytes\n", nbyte);
+        fprintf(stderr,"%s live: AddData: stored " PRISIZET " bytes\n", tintstr(), nbyte);
 
     uint64_t till = std::max((size_t)1,nbyte/chunk_size_);
     bhstvector totalnewpeaktuples;
@@ -271,7 +278,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
     // Arno, 2013-02-26: When UNIFIED_MERKLE chunks are published in batches
     // of nchunks_per_sign_
     if (!newepoch)
-	return 0;
+	    return 0;
 
 
     // Announce chunks to peers
@@ -330,11 +337,19 @@ void LiveTransfer::OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *srcc)
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
         Channel *c = *iter;
-        if (c != srcc && c->is_established())
+        // Arno, 2013-05-13: Also record for channels being established
+        if (c != srcc)
         {
             fprintf(stderr,"live: OnVerified: announce to channel %d\n", c->id() );
             c->AddSinceSignedPeakTuples(newpeaktuples);
         }
+    }
+
+    // Arno, 2013-05-13: clients need to know nchunks_per_sig for right hashes
+    // (see sendrecv.cpp::AddLivePeakRightHashes(). Do autodetect.
+    if (nchunks_per_sign_ == 0 || bhst.bin().base_length() < nchunks_per_sign_)
+    {
+	nchunks_per_sign_ = bhst.bin().base_length();
     }
 }
 

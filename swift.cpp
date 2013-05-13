@@ -123,6 +123,8 @@ Address tracker;
 std::string livesource_input = "";
 LiveTransfer *livesource_lt = NULL;
 FILE *livesource_filep=NULL;
+// Arno, 2013-05-13: fread blocks till requested number of items is read, want non-blocking
+int livesource_fd=-1;
 struct evbuffer *livesource_evb = NULL;
 uint64_t livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
 
@@ -662,7 +664,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
     {
         // Source is file or pipe
         if (livesource_input == "-")
-            livesource_filep = stdin; // aka read from shell pipe
+            livesource_fd = 0; // aka read from shell pipe
 
         else if (livesource_input.substr(0,pipescheme.length()) == pipescheme) {
             // Source is program output
@@ -670,7 +672,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
 #ifdef WIN32
             livesource_filep = _popen( program.c_str(), "rb" );
             if (livesource_filep == NULL)
-            quit("live: file: popen failed" );
+                quit("live: file: popen failed" );
 
             fprintf(stderr,"live: pipe: Reading from %s\n", program.c_str() );
 #else
@@ -679,8 +681,9 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
         }
         else {
             // Source is file
-            livesource_filep = fopen(livesource_input.c_str(),"rb");
-            if (livesource_filep == NULL)
+            // Arno, 2013-05-13: fread blocks till requested number of items is read, want non-blocking
+            livesource_fd = open(livesource_input.c_str(),ROOPENFLAGS);
+            if (livesource_fd == -1)
                 quit("live: Could not open source input");
         }
 
@@ -947,11 +950,15 @@ void LiveSourceFileTimerCallback(int fd, short event, void *arg) {
 
     char buf[LIVESOURCE_BUFSIZE];
 
-    fprintf(stderr,"live: file: timer\n");
+    Channel::Time();
+    fprintf(stderr,"%s live: file: timer\n", tintstr() );
 
-    int nread = fread(buf,sizeof(char),sizeof(buf),livesource_filep);
-    fprintf(stderr,"live: file: read returned %d\n", nread );
-
+    int nread = -1;
+    if (livesource_filep != NULL)
+        nread = fread(buf,sizeof(char),sizeof(buf),livesource_filep);
+    else
+        nread = read(livesource_fd,buf,sizeof(buf));
+    fprintf(stderr,"%s live: file: read returned %d\n", tintstr(), nread );
     if (nread < -1)
         print_error("error reading from live source");
     else if (nread > 0)

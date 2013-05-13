@@ -56,17 +56,17 @@ void    Channel::AddPeakHashes (struct evbuffer *evb)
     //
     if (hs_out_->cont_int_prot_ != POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
-	// Arno, 2013-02-25: Need to send peak bins always (also CIPM None)
-	// to cold clients to communicate tree size
-	if (ack_in_.is_empty() && hashtree() != NULL && hashtree()->peak_count() > 0)
-	{
-	    AddUnsignedPeakHashes(evb);
-	}
+        // Arno, 2013-02-25: Need to send peak bins always (also CIPM None)
+        // to cold clients to communicate tree size
+        if (ack_in_.is_empty() && hashtree() != NULL && hashtree()->peak_count() > 0)
+        {
+            AddUnsignedPeakHashes(evb);
+        }
     }
     else if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
-	// SIGNPEAK
-	AddLiveSignedPeakHashes(evb);
+        // SIGNPEAK
+        AddLiveSignedPeakHashes(evb);
     }
 
     // Send hashes in separate datagram if first would get too big
@@ -93,33 +93,34 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
     bhstvector::iterator iter;
     bhstvector sincesignedpeaktuples = GetSinceSignedPeakTuples();
 
-    fprintf(stderr,"AddLiveSignedPeakHashes: Peaks signed since %d\n", sincesignedpeaktuples.size() );
+    if (sincesignedpeaktuples.size() > 0)
+         fprintf(stderr,"AddLiveSignedPeakHashes: Peaks signed since %d\n", sincesignedpeaktuples.size() );
     for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
     {
-	BinHashSigTuple bhst = *iter;
-	fprintf(stderr,"AddLiveSignedPeakHashes: Adding since signed peak %s\n", bhst.bin().str().c_str() );
+        BinHashSigTuple bhst = *iter;
+        fprintf(stderr,"AddLiveSignedPeakHashes: Adding since signed peak %s\n", bhst.bin().str().c_str() );
     }
 
     // Arno, 2013-03-25: If not source, forward only unknown signed peaks
     // to connected peer
     bhstvector unknownpeaktuples;
     if (((LiveTransfer *)transfer())->am_source())
-	unknownpeaktuples = sincesignedpeaktuples;
+        unknownpeaktuples = sincesignedpeaktuples;
     else
     {
-	for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
-	{
-	    BinHashSigTuple bhst = *iter;
-	    if (!ack_in_.is_filled(bhst.bin()))
-		unknownpeaktuples.push_back(bhst);
-	}
+        for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
+        {
+            BinHashSigTuple bhst = *iter;
+            if (!ack_in_.is_filled(bhst.bin()))
+                unknownpeaktuples.push_back(bhst);
+        }
     }
 
 #ifdef LOSS
     // TEST LOSS
     int count = unknownpeaktuples.size() / 2;
     for (int i=0; i<count; i++)
-	unknownpeaktuples.erase(unknownpeaktuples.begin()+i+1);
+        unknownpeaktuples.erase(unknownpeaktuples.begin()+i+1);
 #endif
 
     // Put in datagram
@@ -127,6 +128,7 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
 
     // Forget, on loss the latest signed peak is sent with all uncles,
     // see AddLiveUncleHashes(retransmit=true)
+    //fprintf(stderr,"ClearSinceSignedPeakTuples\n");
     ClearSinceSignedPeakTuples();
 }
 
@@ -136,7 +138,7 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &peakt
     bhstvector::iterator iter;
     for (iter= peaktuples.begin(); iter != peaktuples.end(); iter++)
     {
-	BinHashSigTuple bhst = *iter;
+        BinHashSigTuple bhst = *iter;
 
         evbuffer_add_8(evb, SWIFT_INTEGRITY);
         evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
@@ -146,11 +148,22 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &peakt
 
         fprintf(stderr,"AddLiveSignedPeakHashess: speak %s %s\n", bhst.bin().str().c_str(), bhst.hash().hex().c_str() );
 
-	evbuffer_add_8(evb, SWIFT_SIGNED_INTEGRITY);
-	evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
-	evbuffer_add(evb, bhst.sig().bits(), bhst.sig().length() );
+        evbuffer_add_8(evb, SWIFT_SIGNED_INTEGRITY);
+        evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
+        evbuffer_add(evb, bhst.sig().bits(), bhst.sig().length() );
 
-	dprintf("%s #%u +sigh %s %d\n",tintstr(),id_,bhst.bin().str().c_str(), bhst.sig().length() );
+        dprintf("%s #%u +sigh %s %d\n",tintstr(),id_,bhst.bin().str().c_str(), bhst.sig().length() );
+
+        // Arno, 2013-05-13: With Unified Merkle Trees, say we have a tree of 4
+        // chunks with peak (2,0). When the tree is expanded from 4 to 8 chunks,
+        // the new peak becomes (3,0). The uncle hash algorithm assumes that (2,1)
+        // the hash of the 4 new chunks was sent to the peer when chunks from (2,0)
+        // where sent (after all, (2,1) is their uncle). However, that part of
+        // the tree did not yet exist, so it wasn't sent. To fix this we send
+        // the hashes to the right of the new peak (3,0) as these are "hashes
+        // needed to verify the integrity of the chunk" (PPSP spec).
+        //
+        AddLivePeakRightHashes(evb,bhst.bin());
     }
 }
 
@@ -166,20 +179,46 @@ bin_t  Channel::AddLiveSignedPeakHash4Retransmit(struct evbuffer *evb, bin_t pos
     // Find signed peak covering pos
     for (iter=curpeaktuples.begin(); iter != curpeaktuples.end(); iter++)
     {
-	BinHashSigTuple bhst = *iter;
-	if (bhst.bin().contains(pos))
-	{
-	    fprintf(stderr,"AddLiveRepeat: speak %s for %s\n", bhst.bin().str().c_str(), pos.str().c_str() );
-	    containpeaktuples.push_back(bhst);
-	    signedpeak = bhst.bin();
-	    break;
-	}
+        BinHashSigTuple bhst = *iter;
+        if (bhst.bin().contains(pos))
+        {
+            fprintf(stderr,"AddLiveRepeat: speak %s for %s\n", bhst.bin().str().c_str(), pos.str().c_str() );
+            containpeaktuples.push_back(bhst);
+            signedpeak = bhst.bin();
+            break;
+        }
     }
 
     // Put in datagram
     AddLiveSignedPeakHashes(evb,containpeaktuples);
 
     return signedpeak;
+}
+
+
+void    Channel::AddLivePeakRightHashes(struct evbuffer *evb, bin_t pos)
+{
+    dprintf("%s #%u +right hash for %s\n",tintstr(),id_,pos.str().c_str());
+
+    // Only need to send down to smallest peak subtree
+    LiveTransfer *lt = (LiveTransfer *)transfer();
+    uint32_t nchunks_per_sign = lt->GetNChunksPerSign();
+    int nchunks_per_sign_layer = (int)log2((double)nchunks_per_sign);
+
+    bin_t p = pos.right();
+
+    fprintf(stderr,"AddLiveRightHashes: till layer %d got layer %d\n", nchunks_per_sign_layer, p.layer() );
+
+    while (p.layer() >= nchunks_per_sign_layer)
+    {
+    	Sha1Hash h = hashtree()->hash(p);
+        evbuffer_add_8(evb, SWIFT_INTEGRITY);
+        evbuffer_add_chunkaddr(evb,p,hs_out_->chunk_addr_);
+        evbuffer_add_hash(evb,h);
+
+        dprintf("%s #%u +rhash %s\n",tintstr(),id_,p.str().c_str());
+        p = p.right();
+    }
 }
 
 
@@ -190,11 +229,11 @@ void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos, bool isretrans
 
     if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE)
     {
-	AddFileUncleHashes(evb,pos);
+        AddFileUncleHashes(evb,pos);
     }
     else if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
-	AddLiveUncleHashes(evb,pos,isretransmit);
+        AddLiveUncleHashes(evb,pos,isretransmit);
     }
 }
 
@@ -231,37 +270,37 @@ void    Channel::AddLiveUncleHashes (struct evbuffer *evb, bin_t pos, bool isret
     bin_t peak(bin_t::NONE);
     if (isretransmit)
     {
-	// When retransmitting a live chunk, resend highest signed peak and all
-	// uncle hashes leading up to this.
-	peak = AddLiveSignedPeakHash4Retransmit(evb,pos);
-	if (peak == bin_t::NONE)
-	    return; // Shouldn't happen
+        // When retransmitting a live chunk, resend highest signed peak and all
+        // uncle hashes leading up to this.
+        peak = AddLiveSignedPeakHash4Retransmit(evb,pos);
+        if (peak == bin_t::NONE)
+            return; // Shouldn't happen
     }
     else
-	peak = hashtree()->peak_for(pos);
+        peak = hashtree()->peak_for(pos);
 
     binvector bv;
     if (isretransmit)
     {
-	// Select all uncles
-	while (pos!=peak) {
-	    bin_t uncle = pos.sibling();
-	    bv.push_back(uncle);
-	    pos = pos.parent();
-	}
+        // Select all uncles
+        while (pos!=peak) {
+            bin_t uncle = pos.sibling();
+            bv.push_back(uncle);
+            pos = pos.parent();
+        }
     }
     else
     {
-	// Select only unsent uncles
-	// Ric: TODO check (remove data_out_cap??)
-	//      For the moment lets keep the old behaviour
-	while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
-		ack_in_.is_empty(pos.parent()) ) {
-	//while (pos!=peak && ack_in_.is_empty(pos.parent()) ) {
-	    bin_t uncle = pos.sibling();
-	    bv.push_back(uncle);
-	    pos = pos.parent();
-	}
+        // Select only unsent uncles
+        // Ric: TODO check (remove data_out_cap??)
+        //      For the moment lets keep the old behaviour
+        while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
+                ack_in_.is_empty(pos.parent()) ) {
+        //while (pos!=peak && ack_in_.is_empty(pos.parent()) ) {
+            bin_t uncle = pos.sibling();
+            bv.push_back(uncle);
+            pos = pos.parent();
+        }
     }
 
     // PPSP -04: Send in descending layer order
@@ -276,8 +315,6 @@ void    Channel::AddLiveUncleHashes (struct evbuffer *evb, bin_t pos, bool isret
             // TEMP SIGNPEAKTODO
             fprintf(stderr,"SENDING ZERO HASH %s. PRESS\n", uncle.str().c_str() );
             fflush(stderr);
-            //getchar();
-            exit(-1);
         }
         evbuffer_add_hash(evb,h);
         dprintf("%s #%u +hash %s\n",tintstr(),id_,uncle.str().c_str());
@@ -306,8 +343,8 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
     // Arno, 2012-01-23: Extra protection against channel loss, don't send DATA
     if (last_recv_time_ < NOW-(3*TINT_SEC))
     {
-    	dprintf("%s #%u dequeued bad time %lld\n",tintstr(),id_, last_recv_time_ );
-    	return bin_t::NONE;
+            dprintf("%s #%u dequeued bad time %lld\n",tintstr(),id_, last_recv_time_ );
+            return bin_t::NONE;
     }
 
     // Arno, 2012-07-27: Reenable Victor's retransmit, check for ACKs
@@ -316,21 +353,21 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
         tintbin tb = data_out_tmo_.front();
         data_out_tmo_.pop_front();
         if (ack_in_.is_filled(tb.bin)) {
-	    // chunk was acknowledged in meantime
-	    continue;
-	}
-	else {
-	    send = tb.bin;
-	    dprintf("%s #%u dequeuing timed-out %s\n",tintstr(),id_, send.str().c_str() );
-	    *retransmitptr = true;
-	    break;
-	}
+            // chunk was acknowledged in meantime
+            continue;
+        }
+        else {
+            send = tb.bin;
+            dprintf("%s #%u dequeuing timed-out %s\n",tintstr(),id_, send.str().c_str() );
+            *retransmitptr = true;
+            break;
+        }
     }
 
     if (ENABLE_SENDERSIZE_PUSH && send.is_none() && hint_in_.empty() && last_recv_time_>NOW-rtt_avg_-TINT_SEC) {
         bin_t my_pick = ImposeHint(); // FIXME move to the loop
         if (!my_pick.is_none()) {
-        	hint_in_size_ += my_pick.base_offset();
+                hint_in_size_ += my_pick.base_offset();
             hint_in_.push_back(my_pick);
             dprintf("%s #%u *hint %s\n",tintstr(),id_,my_pick.str().c_str());
         }
@@ -365,84 +402,84 @@ void    Channel::AddHandshake (struct evbuffer *evb)
 {
     // If peer not responding, try legacy swift protocol
     if (sent_since_recv_ >= 3 && last_recv_time_ == 0)
-	hs_out_->ResetToLegacy();
+        hs_out_->ResetToLegacy();
 
     int encoded = -1;
     if (hs_out_->version_ == VER_SWIFT_LEGACY)
     {
-	//dprintf("%s #%u +hs swift legacy\n",tintstr(),id_ );
-	if (hs_in_ == NULL) { // initiating
-	    evbuffer_add_8(evb, SWIFT_INTEGRITY);
-	    evbuffer_add_32be(evb, bin_toUInt32(bin_t::ALL));
-	    evbuffer_add_hash(evb, transfer()->swarm_id());
-	    dprintf("%s #%u +hash ALL %s\n",
-		    tintstr(),id_,transfer()->swarm_id().hex().c_str());
-	}
-	evbuffer_add_8(evb, SWIFT_HANDSHAKE);
+        //dprintf("%s #%u +hs swift legacy\n",tintstr(),id_ );
+        if (hs_in_ == NULL) { // initiating
+            evbuffer_add_8(evb, SWIFT_INTEGRITY);
+            evbuffer_add_32be(evb, bin_toUInt32(bin_t::ALL));
+            evbuffer_add_hash(evb, transfer()->swarm_id());
+            dprintf("%s #%u +hash ALL %s\n",
+                    tintstr(),id_,transfer()->swarm_id().hex().c_str());
+        }
+        evbuffer_add_8(evb, SWIFT_HANDSHAKE);
 
-	if (send_control_==CLOSE_CONTROL) {
-	    encoded = 0;
-	}
-	else
-	    encoded = EncodeID(id_);
-	evbuffer_add_32be(evb, encoded);
+        if (send_control_==CLOSE_CONTROL) {
+            encoded = 0;
+        }
+        else
+            encoded = EncodeID(id_);
+        evbuffer_add_32be(evb, encoded);
 
-	dprintf("%s #%u +hs %x swift\n",tintstr(),id_,encoded);
+        dprintf("%s #%u +hs %x swift\n",tintstr(),id_,encoded);
     }
     else // IETF PPSP compliant
     {
-	//dprintf("%s #%u +hs ppsp\n",tintstr(),id_ );
-	evbuffer_add_8(evb, SWIFT_HANDSHAKE);
-	if (send_control_==CLOSE_CONTROL) {
-	    encoded = 0;
-	}
-	else
-	    encoded = EncodeID(id_);
-	evbuffer_add_32be(evb, encoded);
+        //dprintf("%s #%u +hs ppsp\n",tintstr(),id_ );
+        evbuffer_add_8(evb, SWIFT_HANDSHAKE);
+        if (send_control_==CLOSE_CONTROL) {
+            encoded = 0;
+        }
+        else
+            encoded = EncodeID(id_);
+        evbuffer_add_32be(evb, encoded);
 
-	// Send protocol options
-	std::ostringstream cross;
-	if (send_control_ !=CLOSE_CONTROL) {
-	    evbuffer_add_8(evb, POPT_VERSION);
-	    evbuffer_add_8(evb, hs_out_->version_);
-	    cross << "v" << hs_out_->version_ << " ";
-	    evbuffer_add_8(evb, POPT_MIN_VERSION);
-	    evbuffer_add_8(evb, hs_out_->min_version_);
-	    cross << "nv" << hs_out_->version_ << " ";
+        // Send protocol options
+        std::ostringstream cross;
+        if (send_control_ !=CLOSE_CONTROL) {
+            evbuffer_add_8(evb, POPT_VERSION);
+            evbuffer_add_8(evb, hs_out_->version_);
+            cross << "v" << hs_out_->version_ << " ";
+            evbuffer_add_8(evb, POPT_MIN_VERSION);
+            evbuffer_add_8(evb, hs_out_->min_version_);
+            cross << "nv" << hs_out_->version_ << " ";
 
-	    if (hs_in_ == NULL) { // initiating, send swarm ID
-		evbuffer_add_8(evb, POPT_SWARMID);
-		evbuffer_add_16be(evb, Sha1Hash::SIZE); // PPSPTODO LIVE
-		evbuffer_add_hash(evb, transfer()->swarm_id() );
-		cross << "sid " << transfer()->swarm_id().hex() << " ";
-	    }
-	    evbuffer_add_8(evb, POPT_CONT_INT_PROT);
-	    evbuffer_add_8(evb, hs_out_->cont_int_prot_);
-	    cross << "cipm " << hs_out_->cont_int_prot_ << " ";
-	    if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE)
-	    {
-		evbuffer_add_8(evb, POPT_MERKLE_HASH_FUNC);
-		evbuffer_add_8(evb, hs_out_->merkle_func_);
-		cross << "mhf " << hs_out_->merkle_func_ << " ";
-	    }
-	    evbuffer_add_8(evb, POPT_CHUNK_ADDR);
-	    evbuffer_add_8(evb, hs_out_->chunk_addr_);
-	    cross << "cam " << hs_out_->chunk_addr_ << " ";
-	    if (transfer()->ttype() == LIVE_TRANSFER)
-	    {
-		evbuffer_add_8(evb, POPT_LIVE_DISC_WND);
-		// For POPT_CHUNK_ADDR_CHUNK32, saves all chunks
-		// PPSPTODO forget
-		if (hs_out_->chunk_addr_ == POPT_CHUNK_ADDR_BIN32 || hs_out_->chunk_addr_ == POPT_CHUNK_ADDR_CHUNK32)
-		    evbuffer_add_32be(evb, (uint32_t)hs_out_->live_disc_wnd_);
-		else
-		    evbuffer_add_64be(evb, hs_out_->live_disc_wnd_);
-		cross << "ldw " << std::hex << hs_out_->live_disc_wnd_ << std::dec << " ";
-	    }
-	}
-	dprintf("%s #%u +hs %x ppsp %s\n",tintstr(),id_,encoded, cross.str().c_str() );
+            if (hs_in_ == NULL) { // initiating, send swarm ID
+                evbuffer_add_8(evb, POPT_SWARMID);
+                evbuffer_add_16be(evb, Sha1Hash::SIZE); // PPSPTODO LIVE
+                evbuffer_add_hash(evb, transfer()->swarm_id() );
+                cross << "sid " << transfer()->swarm_id().hex() << " ";
+            }
+            evbuffer_add_8(evb, POPT_CONT_INT_PROT);
+            evbuffer_add_8(evb, hs_out_->cont_int_prot_);
+            cross << "cipm " << hs_out_->cont_int_prot_ << " ";
+            if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE)
+            {
+                evbuffer_add_8(evb, POPT_MERKLE_HASH_FUNC);
+                evbuffer_add_8(evb, hs_out_->merkle_func_);
+                cross << "mhf " << hs_out_->merkle_func_ << " ";
+            }
+            evbuffer_add_8(evb, POPT_CHUNK_ADDR);
+            evbuffer_add_8(evb, hs_out_->chunk_addr_);
+            cross << "cam " << hs_out_->chunk_addr_ << " ";
+            if (transfer()->ttype() == LIVE_TRANSFER)
+            {
+                evbuffer_add_8(evb, POPT_LIVE_DISC_WND);
+                // For POPT_CHUNK_ADDR_CHUNK32, saves all chunks
+                // PPSPTODO forget
+                if (hs_out_->chunk_addr_ == POPT_CHUNK_ADDR_BIN32 || hs_out_->chunk_addr_ == POPT_CHUNK_ADDR_CHUNK32)
+                    evbuffer_add_32be(evb, (uint32_t)hs_out_->live_disc_wnd_);
+                else
+                    evbuffer_add_64be(evb, hs_out_->live_disc_wnd_);
+                cross << "ldw " << std::hex << hs_out_->live_disc_wnd_ << std::dec << " ";
+            }
+        }
+        dprintf("%s #%u +hs %x ppsp %s\n",tintstr(),id_,encoded, cross.str().c_str() );
 
-	evbuffer_add_8(evb, POPT_END);
+        evbuffer_add_8(evb, POPT_END);
     }
 
     have_out_.clear();
@@ -456,7 +493,7 @@ void    Channel::Send () {
     struct evbuffer *evb = evbuffer_new();
     uint32_t pcid = 0;
     if (hs_in_ != NULL)
-	pcid =  hs_in_->peer_channel_id_;
+        pcid =  hs_in_->peer_channel_id_;
 
     evbuffer_add_32be(evb,pcid);
     bin_t data = bin_t::NONE;
@@ -465,9 +502,9 @@ void    Channel::Send () {
         AddHandshake(evb);
     else
     {
-	if (is_established()) {
+        if (is_established()) {
             // FIXME: seeder check
-	    AddPeakHashes(evb);
+            AddPeakHashes(evb);
             AddHave(evb);
             AddAck(evb);
             //LIVE
@@ -531,12 +568,12 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
     std::deque<bin_t> tbc;
     while ( !hint_out_.empty() && hint_out_.front().time < timed_out ) {
-    	bin_t hint = hint_out_.front().bin;
+            bin_t hint = hint_out_.front().bin;
         hint_out_size_ -= hint.base_length();
         hint_out_.pop_front();
         // Ric: keep track of what we want to remove
         tbc.push_back(hint);
-	dprintf("%s #%u remove hint %s\n",tintstr(),id_,hint.str().c_str());
+        dprintf("%s #%u remove hint %s\n",tintstr(),id_,hint.str().c_str());
 
     }
 
@@ -552,25 +589,25 @@ void    Channel::AddHint (struct evbuffer *evb) {
     uint64_t rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
     if (transfer()->GetMaxSpeed(DDIR_DOWNLOAD) < DBL_MAX)
     {
-	channels_t::iterator iter;
-	for (iter=transfer()->GetChannels()->begin(); iter!=transfer()->GetChannels()->end(); iter++)
-	{
+        channels_t::iterator iter;
+        for (iter=transfer()->GetChannels()->begin(); iter!=transfer()->GetChannels()->end(); iter++)
+        {
             Channel *c = *iter;
-	    if (c != NULL)
-		rough_global_hint_out_size += c->hint_out_size_;
-	}
+            if (c != NULL)
+                rough_global_hint_out_size += c->hint_out_size_;
+        }
 
-	// Policy: this channel is allowed to hint at the limit - global_hinted_at
-	// Handle MaxSpeed = unlimited
-	double rate_hints_limit_float = transfer()->GetMaxSpeed(DDIR_DOWNLOAD)/((double)transfer()->chunk_size());
+        // Policy: this channel is allowed to hint at the limit - global_hinted_at
+        // Handle MaxSpeed = unlimited
+        double rate_hints_limit_float = transfer()->GetMaxSpeed(DDIR_DOWNLOAD)/((double)transfer()->chunk_size());
 
-	int rate_hints_limit = (int)min((double)LONG_MAX,rate_hints_limit_float);
+        int rate_hints_limit = (int)min((double)LONG_MAX,rate_hints_limit_float);
 
-	// Actually allowed is max minus what we already asked for, globally (=all channels)
-	rate_allowed_hints = max(0,rate_hints_limit-(int)rough_global_hint_out_size);
+        // Actually allowed is max minus what we already asked for, globally (=all channels)
+        rate_allowed_hints = max(0,rate_hints_limit-(int)rough_global_hint_out_size);
     }
     if (DEBUGTRAFFIC)
-    	fprintf(stderr,"hint c%u: %lf want %d qallow %d rallow %d chanout %llu globout %llu\n", id(), transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, queue_allowed_hints, rate_allowed_hints, hint_out_size_, rough_global_hint_out_size );
+            fprintf(stderr,"hint c%u: %lf want %d qallow %d rallow %d chanout %llu globout %llu\n", id(), transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, queue_allowed_hints, rate_allowed_hints, hint_out_size_, rough_global_hint_out_size );
 
     // 3. Take the smallest allowance from rate and queue limit
     uint64_t plan_pck = (uint64_t)min(rate_allowed_hints,queue_allowed_hints);
@@ -579,7 +616,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
     // Arno, 2012-10-30: not HINT_GRANULARITY for LIVE
     if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY || transfer()->ttype() == LIVE_TRANSFER)
     {
-        bin_t hint = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2);
+        bin_t hint = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2,id_);
         if (!hint.is_none()) {
             if (DEBUGTRAFFIC)
             {
@@ -595,12 +632,12 @@ void    Channel::AddHint (struct evbuffer *evb) {
             //fprintf(stderr,"HL %i ", hint.base_length());
 
             // Ric: final cancel the hints that have been removed
-	    while (!tbc.empty()) {
-		bin_t b = tbc.front();
-		if (!b.contains(hint) && !hint.contains(b))
-		    cancel_out_.push_back(b);
-		tbc.pop_front();
-	    }
+            while (!tbc.empty()) {
+                bin_t b = tbc.front();
+                if (!b.contains(hint) && !hint.contains(b))
+                    cancel_out_.push_back(b);
+                tbc.pop_front();
+            }
         }
         else
             dprintf("%s #%u Xhint\n",tintstr(),id_);
@@ -633,12 +670,12 @@ void    Channel::AddCancel (struct evbuffer *evb) {
 
     // Arno, 2013-01-15: take into account chunk addressing scheme
     while (SWIFT_MAX_NONDATA_DGRAM_SIZE-evbuffer_get_length(evb) >= 1+ChunkAddrSize(hs_out_->chunk_addr_) && !cancel_out_.empty()) {
-	bin_t cancel = cancel_out_.front();
-	cancel_out_.pop_front();
-	evbuffer_add_8(evb, SWIFT_CANCEL);
-	evbuffer_add_chunkaddr(evb,cancel,hs_out_->chunk_addr_);
-	dprintf("%s #%u +cancel %s\n",
-		tintstr(),id_,cancel.str().c_str());
+        bin_t cancel = cancel_out_.front();
+        cancel_out_.pop_front();
+        evbuffer_add_8(evb, SWIFT_CANCEL);
+        evbuffer_add_chunkaddr(evb,cancel,hs_out_->chunk_addr_);
+        dprintf("%s #%u +cancel %s\n",
+                tintstr(),id_,cancel.str().c_str());
     }
 }
 
@@ -675,7 +712,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
 
     // Add required hashes first
     if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
-	AddUncleHashes(evb,tosend,isretransmit);
+        AddUncleHashes(evb,tosend,isretransmit);
 
     if (!ack_in_.is_empty()) // TODO: cwnd_>1
         data_out_cap_ = tosend;
@@ -689,9 +726,9 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     // PPSPTODO LEDBAT current system time 64-bit
     if (hs_in_ != NULL && hs_in_->version_ == VER_PPSPP_v1)
     {
-	// NOTE: Time updates NOW, so customary behavior where NOW is not
-	// updated during the handling of a message (just at start) is no longer
-	// there. Not sure if this matters.
+        // NOTE: Time updates NOW, so customary behavior where NOW is not
+        // updated during the handling of a message (just at start) is no longer
+        // there. Not sure if this matters.
         evbuffer_add_64be(evb, Time() );
     }
 
@@ -810,12 +847,12 @@ void    Channel::AddHave (struct evbuffer *evb) {
     binmap_t *transfer_ack_out_ptr = transfer()->ack_out();
     if (hs_in_ != NULL && hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE )
     {
-	// Arno, 2013-02-26: LIVE SIGNPEAK Cannot send HAVEs not covered by
-	// signed peak when source. Non-source peers will consequently only
-	// see and receive chunks covered by signed peaks.
-	LiveTransfer *lt = (LiveTransfer *)transfer();
-	if (lt->am_source())
-	    transfer_ack_out_ptr = lt->ack_out_signed();
+        // Arno, 2013-02-26: LIVE SIGNPEAK Cannot send HAVEs not covered by
+        // signed peak when source. Non-source peers will consequently only
+        // see and receive chunks covered by signed peaks.
+        LiveTransfer *lt = (LiveTransfer *)transfer();
+        if (lt->am_source())
+            transfer_ack_out_ptr = lt->ack_out_signed();
     }
     for(int count=0; count<4; count++) {
         bin_t ack = binmap_t::find_complement(have_out_, *(transfer_ack_out_ptr), 0); // FIXME: do rotating queue
@@ -841,9 +878,9 @@ void    Channel::Recv (struct evbuffer *evb) {
     dgrams_rcvd_++;
 
     if (!transfer()->IsOperational()) {
-    	dprintf("%s #%u recvd on broken transfer %d \n",tintstr(),id_, transfer()->td() );
-	CloseOnError();
-    	return;
+            dprintf("%s #%u recvd on broken transfer %d \n",tintstr(),id_, transfer()->td() );
+        CloseOnError();
+            return;
     }
 
     lastrecvwaskeepalive_ = (evbuffer_get_length(evb) == 0);
@@ -865,26 +902,26 @@ void    Channel::Recv (struct evbuffer *evb) {
 
     Handshake *hishs = NULL;
     if (hs_in_ == NULL) { // first reply from client
-	if (hs_out_->version_ == VER_SWIFT_LEGACY) // I sent PPSPP_v1 HS, did not respond, now trying legacy
-	    hishs = StaticOnHandshake(peer_,id(),true,VER_SWIFT_LEGACY,evb);
-	else
-	    hishs = StaticOnHandshake(peer_,id(),false,VER_PPSPP_v1,evb);
-	if (hishs == NULL)
-	    return;
-	else
-	    OnHandshake(hishs);
+        if (hs_out_->version_ == VER_SWIFT_LEGACY) // I sent PPSPP_v1 HS, did not respond, now trying legacy
+            hishs = StaticOnHandshake(peer_,id(),true,VER_SWIFT_LEGACY,evb);
+        else
+            hishs = StaticOnHandshake(peer_,id(),false,VER_PPSPP_v1,evb);
+        if (hishs == NULL)
+            return;
+        else
+            OnHandshake(hishs);
     }
     while (evbuffer_get_length(evb) && send_control_!=CLOSE_CONTROL) {
         uint8_t type = evbuffer_remove_8(evb);
 
-        //if (DEBUGTRAFFIC)
+        if (DEBUGTRAFFIC)
             fprintf(stderr,"GOT %d\n", type);
 
         switch (type) {
-	    case SWIFT_HANDSHAKE: // explicit close
-		hishs = StaticOnHandshake(peer_,id(),true,hs_in_->version_,evb);
-		OnHandshake(hishs);
-		break;
+            case SWIFT_HANDSHAKE: // explicit close
+                hishs = StaticOnHandshake(peer_,id(),true,hs_in_->version_,evb);
+                OnHandshake(hishs);
+                break;
             case SWIFT_DATA:
                 if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
                     OnDataZeroState(evb);
@@ -907,14 +944,14 @@ void    Channel::Recv (struct evbuffer *evb) {
                     OnHash(evb);
                 break;
             case SWIFT_SIGNED_INTEGRITY: // PPSP
-		OnSignedHash(evb);
+                OnSignedHash(evb);
                 break;
             case SWIFT_REQUEST:
                 OnHint(evb);
                 break;
             case SWIFT_CANCEL: // PPSP
-            	OnCancel(evb);
-            	break;
+                    OnCancel(evb);
+                    break;
             case SWIFT_PEX_RESv4:
                 if (transfer()->ttype() == FILE_TRANSFER && ((FileTransfer *)transfer())->IsZeroState())
                     OnPexAddZeroState(evb,AF_INET);
@@ -940,10 +977,10 @@ void    Channel::Recv (struct evbuffer *evb) {
                     OnPexReq();
                 break;
             case SWIFT_CHOKE: // PPSP
-		OnChoke(evb);
+                OnChoke(evb);
                 break;
             case SWIFT_UNCHOKE: // PPSP
-		OnUnchoke(evb);
+                OnUnchoke(evb);
                 break;
             default:
                 dprintf("%s #%u ?msg id unknown %i\n",tintstr(),id_,(int)type);
@@ -969,7 +1006,7 @@ void    Channel::Recv (struct evbuffer *evb) {
     // Arno: see if transfer still in working order
     transfer()->UpdateOperational();
     if (!transfer()->IsOperational()) {
-    	dprintf("%s #%u recvd broke transfer %d \n",tintstr(),id_, transfer()->td() );
+            dprintf("%s #%u recvd broke transfer %d \n",tintstr(),id_, transfer()->td() );
         CloseOnError();
         return;
     }
@@ -991,23 +1028,23 @@ void   Channel::CloseOnError()
 void    Channel::OnHash (struct evbuffer *evb) {
     if (hs_in_->cont_int_prot_ != POPT_CONT_INT_PROT_MERKLE && hs_in_->cont_int_prot_ != POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
-	dprintf("%s #%u ?hash but no integrity prot\n",tintstr(),id_);
-	return;
+        dprintf("%s #%u ?hash but no integrity prot\n",tintstr(),id_);
+        return;
     }
 
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
     if (bv.size() == 0 || bv.size() > 1)
     {
-	// chunk spec for hash must be power-of-2 range, so must fit in single bin
-	dprintf("%s #%u ?hash bad chunk spec\n",tintstr(),id_);
-	Close(CLOSE_DO_NOT_SEND);
-	return;
+        // chunk spec for hash must be power-of-2 range, so must fit in single bin
+        dprintf("%s #%u ?hash bad chunk spec\n",tintstr(),id_);
+        Close(CLOSE_DO_NOT_SEND);
+        return;
     }
     bin_t pos = bv.front();
     Sha1Hash hash = evbuffer_remove_hash(evb);
 
     if (hashtree() != NULL && (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE))
-	hashtree()->OfferHash(pos,hash);
+        hashtree()->OfferHash(pos,hash);
     dprintf("%s #%u -hash %s\n",tintstr(),id_,pos.str().c_str());
 
     //fprintf(stderr,"HASH %lli hex %s\n",pos.toUInt(), hash.hex().c_str() );
@@ -1021,7 +1058,7 @@ void    Channel::CleanHintOut (bin_t pos) {
     if (hi==hint_out_.size())
         return; // something not hinted or hinted in far past
     while (hi--) { // removing likely snubbed hints
-    	bin_t hint = hint_out_.front().bin;
+            bin_t hint = hint_out_.front().bin;
         hint_out_size_ -= hint.base_length();
         hint_out_.pop_front();
     }
@@ -1048,20 +1085,20 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
     if (bv.size() == 0 || bv.size() > 1) {
-	// Chunk spec must denote single chunk
-	dprintf("%s #%u ?data bad chunk spec\n",tintstr(),id_);
-	Close(CLOSE_DO_NOT_SEND);
-	return bin_t::NONE;
+        // Chunk spec must denote single chunk
+        dprintf("%s #%u ?data bad chunk spec\n",tintstr(),id_);
+        Close(CLOSE_DO_NOT_SEND);
+        return bin_t::NONE;
     }
     bin_t pos = bv.front();
     tint peer_time = TINT_NEVER;
     if (hs_out_->version_ == VER_PPSPP_v1)
-    	peer_time = evbuffer_remove_64be(evb);
+            peer_time = evbuffer_remove_64be(evb);
 
     // Arno: Assuming DATA last message in datagram
     if (evbuffer_get_length(evb) > transfer()->chunk_size()) {
-    	dprintf("%s #%u !data chunk size mismatch %s: exp %u got " PRISIZET "\n",tintstr(),id_,pos.str().c_str(), transfer()->chunk_size(), evbuffer_get_length(evb));
-    	fprintf(stderr,"WARNING: chunk size mismatch: exp %lu got " PRISIZET "\n",transfer()->chunk_size(), evbuffer_get_length(evb));
+            dprintf("%s #%u !data chunk size mismatch %s: exp %u got " PRISIZET "\n",tintstr(),id_,pos.str().c_str(), transfer()->chunk_size(), evbuffer_get_length(evb));
+            fprintf(stderr,"WARNING: chunk size mismatch: exp %lu got " PRISIZET "\n",transfer()->chunk_size(), evbuffer_get_length(evb));
     }
 
     int length = (evbuffer_get_length(evb) < transfer()->chunk_size()) ? evbuffer_get_length(evb) : transfer()->chunk_size();
@@ -1084,7 +1121,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     // SIGNPEAK
     if (hashtree() != NULL && (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE))
     {
-	// Check integrity
+        // Check integrity
         if (!hashtree()->OfferData(pos, (char*)data, length)) {
             evbuffer_drain(evb, length);
             dprintf("%s #%u !data %s\n",tintstr(),id_,pos.str().c_str());
@@ -1119,8 +1156,8 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     data_in_ = tintbin(NOW,bin_t::NONE);
     data_in_.bin = pos;
     // Ric: the time of the ack is the owd.
-	if (peer_time!=TINT_NEVER)
-		data_in_.time = NOW - peer_time;
+        if (peer_time!=TINT_NEVER)
+                data_in_.time = NOW - peer_time;
 
     UpdateDIP(pos);
     CleanHintOut(pos);
@@ -1131,17 +1168,17 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     // Purge hash tree, if desired
     if (hs_out_->live_disc_wnd_ != POPT_LIVE_DISC_WND_ALL)
     {
-	// Find last non-empty bin
-	bin_t lastbasepos = pos;
-	if (transfer()->ack_out()->is_empty(lastbasepos.right()))
-	{
-	    lastbasepos = transfer()->ack_out()->find_empty(pos).base_left();
-	    lastbasepos.to_right();
-	}
+        // Find last non-empty bin
+        bin_t lastbasepos = pos;
+        if (transfer()->ack_out()->is_empty(lastbasepos.right()))
+        {
+            lastbasepos = transfer()->ack_out()->find_empty(pos).base_left();
+            lastbasepos.to_right();
+        }
 
-	LiveTransfer *lt = (LiveTransfer *)transfer();
-	LiveHashTree *umt = (LiveHashTree *)hashtree();
-	lt->OnDataPruneTree(*hs_out_,lastbasepos,umt->GetGuessedNChunksPerSig());
+        LiveTransfer *lt = (LiveTransfer *)transfer();
+        LiveHashTree *umt = (LiveHashTree *)hashtree();
+        lt->OnDataPruneTree(*hs_out_,lastbasepos,umt->GetGuessedNChunksPerSig());
     }
 
     return pos;
@@ -1164,74 +1201,74 @@ void    Channel::OnAck (struct evbuffer *evb) {
 
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
     if (bv.size() == 0) {
-	// Could not parse chunk spec
-	dprintf("%s #%u ?ack bad chunk spec\n",tintstr(),id_);
-	Close(CLOSE_DO_NOT_SEND);
-	return;
+        // Could not parse chunk spec
+        dprintf("%s #%u ?ack bad chunk spec\n",tintstr(),id_);
+        Close(CLOSE_DO_NOT_SEND);
+        return;
     }
     tint peer_owd = evbuffer_remove_64be(evb);
 
     binvector::iterator iter;
     for (iter=bv.begin(); iter != bv.end(); iter++)
     {
-	bin_t ackd_pos = *iter;
+        bin_t ackd_pos = *iter;
 
-	// FIXME FIXME: wrap around here
-	if (ackd_pos.is_none()) // safety catch
-	    return; // likely, broken chunk/ insufficient hashes
-	if (hashtree() != NULL && hashtree()->size() && ackd_pos.base_offset()>=hashtree()->size_in_chunks()) {
-	    eprintf("invalid ack: %s\n",ackd_pos.str().c_str());
-	    return;
-	}
-	ack_in_.set(ackd_pos);
+        // FIXME FIXME: wrap around here
+        if (ackd_pos.is_none()) // safety catch
+            return; // likely, broken chunk/ insufficient hashes
+        if (transfer()->ttype() == FILE_TRANSFER && hashtree() != NULL && hashtree()->size() && ackd_pos.base_offset()>=hashtree()->size_in_chunks()) {
+            eprintf("invalid ack: %s\n",ackd_pos.str().c_str());
+            return;
+        }
+        ack_in_.set(ackd_pos);
 
-	//fprintf(stderr,"OnAck: got bin %s is_complete %d\n", ackd_pos.str(), (int)ack_in_.is_complete_arno( transfer()->ack_out()->get_height() ));
+        //fprintf(stderr,"OnAck: got bin %s is_complete %d\n", ackd_pos.str(), (int)ack_in_.is_complete_arno( transfer()->ack_out()->get_height() ));
 
-	int di = 0, ri = 0;
-	// find an entry for the send (data out) event
-	while (di<data_out_.size() && (data_out_[di]==tintbin() || !ackd_pos.contains(data_out_[di].bin))  )
-	    di++;
-	// FUTURE: delayed acks
-	// rule out retransmits
-	while (ri<data_out_tmo_.size() && !ackd_pos.contains(data_out_tmo_[ri].bin) )
-	    ri++;
-	dprintf("%s #%u %cack %s owd:%lld\n",tintstr(),id_,
-		di==data_out_.size()?'?':'-',ackd_pos.str().c_str(),peer_owd);
-	if (di!=data_out_.size() && ri==data_out_tmo_.size()) { // not a retransmit
-	    // round trip time calculations
-		// Ric: TODO delayed acks
-	    tint rtt = NOW-data_out_[di].time;
-	    rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
-	    dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
-	    assert(data_out_[di].time!=TINT_NEVER);
-	    // one-way delay calculations
-	    // Ric: we r always re-writing the first element
-	    owd_cur_bin_ = 0;//(owd_cur_bin_+1) & 3;
-	    owd_current_[owd_cur_bin_] = peer_owd;
-	    if ( owd_min_bin_start_+TINT_SEC*30 < NOW ) {
-			owd_min_bin_start_ = NOW;
-			owd_min_bin_ = (owd_min_bin_+1) & 3;
-			owd_min_bins_[owd_min_bin_] = TINT_NEVER;
-	    }
-	    if (owd_min_bins_[owd_min_bin_]>peer_owd)
-	    	owd_min_bins_[owd_min_bin_] = peer_owd;
-	    // Arno, 2012-12-20: Temp disable, getting SEGV on this
-	    // dprintf("%s #%u sendctrl rtt %ld dev %ld based on %s\n",
-	    //	    tintstr(),id_,rtt_avg_,dev_avg_,data_out_[di].bin.str().c_str());
-	    ack_rcvd_recent_++;
-	    // early loss detection by packet reordering
-	    for (int re=0; re<di-MAX_REORDERING; re++) {
-			if (data_out_[re]==tintbin())
-				continue;
-			ack_not_rcvd_recent_++;
-			data_out_tmo_.push_back(data_out_[re].bin);
-			dprintf("%s #%u Rdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
-			data_out_cap_ = bin_t::ALL;
-			data_out_[re] = tintbin();
-	    }
-	}
-	if (di!=data_out_.size())
-	    data_out_[di]=tintbin();
+        int di = 0, ri = 0;
+        // find an entry for the send (data out) event
+        while (di<data_out_.size() && (data_out_[di]==tintbin() || !ackd_pos.contains(data_out_[di].bin))  )
+            di++;
+        // FUTURE: delayed acks
+        // rule out retransmits
+        while (ri<data_out_tmo_.size() && !ackd_pos.contains(data_out_tmo_[ri].bin) )
+            ri++;
+        dprintf("%s #%u %cack %s owd:%lld\n",tintstr(),id_,
+                di==data_out_.size()?'?':'-',ackd_pos.str().c_str(),peer_owd);
+        if (di!=data_out_.size() && ri==data_out_tmo_.size()) { // not a retransmit
+            // round trip time calculations
+                // Ric: TODO delayed acks
+            tint rtt = NOW-data_out_[di].time;
+            rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
+            dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
+            assert(data_out_[di].time!=TINT_NEVER);
+            // one-way delay calculations
+            // Ric: we r always re-writing the first element
+            owd_cur_bin_ = 0;//(owd_cur_bin_+1) & 3;
+            owd_current_[owd_cur_bin_] = peer_owd;
+            if ( owd_min_bin_start_+TINT_SEC*30 < NOW ) {
+                        owd_min_bin_start_ = NOW;
+                        owd_min_bin_ = (owd_min_bin_+1) & 3;
+                        owd_min_bins_[owd_min_bin_] = TINT_NEVER;
+            }
+            if (owd_min_bins_[owd_min_bin_]>peer_owd)
+                    owd_min_bins_[owd_min_bin_] = peer_owd;
+            // Arno, 2012-12-20: Temp disable, getting SEGV on this
+            // dprintf("%s #%u sendctrl rtt %ld dev %ld based on %s\n",
+            //            tintstr(),id_,rtt_avg_,dev_avg_,data_out_[di].bin.str().c_str());
+            ack_rcvd_recent_++;
+            // early loss detection by packet reordering
+            for (int re=0; re<di-MAX_REORDERING; re++) {
+                        if (data_out_[re]==tintbin())
+                                continue;
+                        ack_not_rcvd_recent_++;
+                        data_out_tmo_.push_back(data_out_[re].bin);
+                        dprintf("%s #%u Rdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
+                        data_out_cap_ = bin_t::ALL;
+                        data_out_[re] = tintbin();
+            }
+        }
+        if (di!=data_out_.size())
+            data_out_[di]=tintbin();
     }
 
     // clear zeroed items
@@ -1265,38 +1302,38 @@ void Channel::OnHave (struct evbuffer *evb) {
 
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
     if (bv.size() == 0) {
-	// Could not parse chunk spec
-	dprintf("%s #%u ?have bad chunk spec\n",tintstr(),id_);
-	Close(CLOSE_DO_NOT_SEND);
-	return;
+        // Could not parse chunk spec
+        dprintf("%s #%u ?have bad chunk spec\n",tintstr(),id_);
+        Close(CLOSE_DO_NOT_SEND);
+        return;
     }
     binvector::iterator iter;
     for (iter=bv.begin(); iter != bv.end(); iter++)
     {
-	bin_t ackd_pos = *iter;
+        bin_t ackd_pos = *iter;
 
-	if (ackd_pos.is_none()) // safety catch
-	    return; // wow, peer has hashes
+        if (ackd_pos.is_none()) // safety catch
+            return; // wow, peer has hashes
 
-	// PPPLUG
-	if (ENABLE_VOD_PIECEPICKER && transfer()->ttype() == FILE_TRANSFER) {
-	    FileTransfer *ft = (FileTransfer *)transfer();
-	    // Ric: check if we should set the size in the file transfer
-	    if (ft->availability()->size() <= 0 && ft->hashtree()->size() > 0)
-	    {
-		ft->availability()->setSize(hashtree()->size_in_chunks());
-	    }
-	    // Ric: update the availability if needed
-	    ft->availability()->set(id_, ack_in_, ackd_pos);
-	}
+        // PPPLUG
+        if (ENABLE_VOD_PIECEPICKER && transfer()->ttype() == FILE_TRANSFER) {
+            FileTransfer *ft = (FileTransfer *)transfer();
+            // Ric: check if we should set the size in the file transfer
+            if (ft->availability()->size() <= 0 && ft->hashtree()->size() > 0)
+            {
+                ft->availability()->setSize(hashtree()->size_in_chunks());
+            }
+            // Ric: update the availability if needed
+            ft->availability()->set(id_, ack_in_, ackd_pos);
+        }
 
-	ack_in_.set(ackd_pos);
-	dprintf("%s #%u -have %s\n",tintstr(),id_,ackd_pos.str().c_str());
+        ack_in_.set(ackd_pos);
+        dprintf("%s #%u -have %s\n",tintstr(),id_,ackd_pos.str().c_str());
 
-	if (transfer()->ttype() == LIVE_TRANSFER)
-	{
-	    OnHaveLive(ackd_pos);
-	}
+        if (transfer()->ttype() == LIVE_TRANSFER)
+        {
+            OnHaveLive(ackd_pos);
+        }
     }
 }
 
@@ -1309,50 +1346,50 @@ void Channel::OnHaveLive(bin_t ackd_pos)
     LiveTransfer *lt = (LiveTransfer *)transfer();
     if (!lt->am_source())
     {
-	if (hs_in_ != NULL && hs_in_->live_disc_wnd_ != POPT_LIVE_DISC_WND_ALL)
-	{
-	    // Filter ack_in_ using live discard window. Peer will only have
-	    // the chunks in that window, so we should not pick outside.
+        if (hs_in_ != NULL && hs_in_->live_disc_wnd_ != POPT_LIVE_DISC_WND_ALL)
+        {
+            // Filter ack_in_ using live discard window. Peer will only have
+            // the chunks in that window, so we should not pick outside.
 
-	    // 1. Find last non-empty bin
-	    bin_t lastbasepos = ackd_pos.base_right();
-	    if (ack_in_.is_empty(lastbasepos.right()))
-	    {
-		lastbasepos = ack_in_.find_empty(ackd_pos).base_left();
-		lastbasepos.to_right();
-	    }
-	    // 2. Calc start of window from last non-empty bin
-	    if (lastbasepos.layer_offset() >= hs_in_->live_disc_wnd_)
-	    {
-		bin_t firstbasepos = bin_t(0,lastbasepos.layer_offset() - hs_in_->live_disc_wnd_+1);
+            // 1. Find last non-empty bin
+            bin_t lastbasepos = ackd_pos.base_right();
+            if (ack_in_.is_empty(lastbasepos.right()))
+            {
+                lastbasepos = ack_in_.find_empty(ackd_pos).base_left();
+                lastbasepos.to_right();
+            }
+            // 2. Calc start of window from last non-empty bin
+            if (lastbasepos.layer_offset() >= hs_in_->live_disc_wnd_)
+            {
+                bin_t firstbasepos = bin_t(0,lastbasepos.layer_offset() - hs_in_->live_disc_wnd_+1);
 
-		// 3. Empty all bins before start of window
-		binvector cbv;
-		swift::chunk32_to_bin32(0, firstbasepos.layer_offset(), &cbv); // firsbasepos exclusive
-		binvector::iterator iter;
-		for (iter=cbv.begin(); iter != cbv.end(); iter++)
-		{
-		    bin_t cpos = *iter;
-		    ack_in_.reset(cpos);
-		}
-		dprintf("%s #%u have window %s %s\n",tintstr(),id_,firstbasepos.str().c_str(),lastbasepos.str().c_str());
-	    }
-	}
+                // 3. Empty all bins before start of window
+                binvector cbv;
+                swift::chunk32_to_bin32(0, firstbasepos.layer_offset(), &cbv); // firsbasepos exclusive
+                binvector::iterator iter;
+                for (iter=cbv.begin(); iter != cbv.end(); iter++)
+                {
+                    bin_t cpos = *iter;
+                    ack_in_.reset(cpos);
+                }
+                dprintf("%s #%u have window %s %s\n",tintstr(),id_,firstbasepos.str().c_str(),lastbasepos.str().c_str());
+            }
+        }
 
-	// SIGPEAKTODO: affected by live_disc_wnd_, old bins before
-	// should be invalidated, to avoid hook-in minus NCHUNKS picking
-	// outside window.
+        // SIGPEAKTODO: affected by live_disc_wnd_, old bins before
+        // should be invalidated, to avoid hook-in minus NCHUNKS picking
+        // outside window.
 
-	((LivePiecePicker *)lt->picker())->StartAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_);
+        ((LivePiecePicker *)lt->picker())->StartAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_);
 
-	// Arno: it can happen that we receive a HAVE and have no hints
-	// outstanding. In that case we should not wait till next_send_time_
-	// but request directly. See send_control.cpp
-	if (hint_out_.size() == 0)
-	{
-	    live_have_no_hint_ = true;
-	    dprintf("%s #%u have but no hints\n",tintstr(),id_);
-	}
+        // Arno: it can happen that we receive a HAVE and have no hints
+        // outstanding. In that case we should not wait till next_send_time_
+        // but request directly. See send_control.cpp
+        if (hint_out_.size() == 0)
+        {
+            live_have_no_hint_ = true;
+            dprintf("%s #%u have but no hints\n",tintstr(),id_);
+        }
     }
 }
 
@@ -1361,25 +1398,25 @@ void    Channel::OnHint (struct evbuffer *evb) {
 
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
     if (bv.size() == 0) {
-	// Could not parse chunk spec
-	dprintf("%s #%u ?hint bad chunk spec\n",tintstr(),id_);
-	Close(CLOSE_DO_NOT_SEND);
-	return;
+        // Could not parse chunk spec
+        dprintf("%s #%u ?hint bad chunk spec\n",tintstr(),id_);
+        Close(CLOSE_DO_NOT_SEND);
+        return;
     }
 
     binvector::iterator iter;
     for (iter=bv.begin(); iter != bv.end(); iter++)
     {
-	bin_t hint = *iter;
+        bin_t hint = *iter;
 
-	// FIXME: wake up here
-	hint_in_.push_back(hint);
-	hint_in_size_ += hint.base_length();
-	dprintf("%s #%u -hint %s [%llu]\n",tintstr(),id_,hint.str().c_str(),hint_in_size_);
+        // FIXME: wake up here
+        hint_in_.push_back(hint);
+        hint_in_size_ += hint.base_length();
+        dprintf("%s #%u -hint %s [%llu]\n",tintstr(),id_,hint.str().c_str(),hint_in_size_);
 
-	// SIGNPEAK
-	//if (hs_in_ != NULL && hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
-	//    RemoveSinceSignedPeakTuples(hint);
+        // SIGNPEAK
+        //if (hs_in_ != NULL && hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+        //    RemoveSinceSignedPeakTuples(hint);
     }
 }
 
@@ -1394,135 +1431,135 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
 
     if (!ver_known)
     {
-	uint8_t msgid = evbuffer_remove_8(evb);
-	if (msgid == SWIFT_INTEGRITY)
-	    ver = VER_SWIFT_LEGACY;
-	else if (msgid == SWIFT_HANDSHAKE)
-	    ver = VER_PPSPP_v1;
-	else
-	{
-	    dprintf("%s #%u ?hs unknown protocol %d %s\n", tintstr(),cid,msgid,addr.str().c_str());
-	    delete hs;
-	    return NULL;
-	}
+        uint8_t msgid = evbuffer_remove_8(evb);
+        if (msgid == SWIFT_INTEGRITY)
+            ver = VER_SWIFT_LEGACY;
+        else if (msgid == SWIFT_HANDSHAKE)
+            ver = VER_PPSPP_v1;
+        else
+        {
+            dprintf("%s #%u ?hs unknown protocol %d %s\n", tintstr(),cid,msgid,addr.str().c_str());
+            delete hs;
+            return NULL;
+        }
     }
 
     if (ver == VER_SWIFT_LEGACY)
     {
-	//dprintf("%s #%u -hs swift legacy\n", tintstr(), cid );
-	hs->version_ = VER_SWIFT_LEGACY;
-	if (cid == 0)
-	{
-	    // He is initiating. Initiating handshake has SWIFT_HASH + root hash, reply doesn't
-	    if (evbuffer_get_length(evb)<4+1+4+Sha1Hash::SIZE)
-	    {
-	        dprintf("%s #0 incorrect size %i initial handshake packet %s\n", tintstr(),(int)evbuffer_get_length(evb),addr.str().c_str());
-	        delete hs;
-	        return NULL;
-	    }
-	    bin_t pos = bin_fromUInt32(evbuffer_remove_32be(evb));
-	    if (!pos.is_all()) {
-		dprintf("%s #%u ?hs that is not the root hash %s\n",tintstr(), cid, addr.str().c_str());
-	       delete hs;
-	       return NULL;
-	    }
-	    Sha1Hash swarmid = evbuffer_remove_hash(evb);
-	    hs->SetSwarmID(swarmid);
-	    dprintf("%s #%u -hash ALL %s\n",tintstr(),cid,swarmid.hex().c_str());
-	}
+        //dprintf("%s #%u -hs swift legacy\n", tintstr(), cid );
+        hs->version_ = VER_SWIFT_LEGACY;
+        if (cid == 0)
+        {
+            // He is initiating. Initiating handshake has SWIFT_HASH + root hash, reply doesn't
+            if (evbuffer_get_length(evb)<4+1+4+Sha1Hash::SIZE)
+            {
+                dprintf("%s #0 incorrect size %i initial handshake packet %s\n", tintstr(),(int)evbuffer_get_length(evb),addr.str().c_str());
+                delete hs;
+                return NULL;
+            }
+            bin_t pos = bin_fromUInt32(evbuffer_remove_32be(evb));
+            if (!pos.is_all()) {
+                dprintf("%s #%u ?hs that is not the root hash %s\n",tintstr(), cid, addr.str().c_str());
+               delete hs;
+               return NULL;
+            }
+            Sha1Hash swarmid = evbuffer_remove_hash(evb);
+            hs->SetSwarmID(swarmid);
+            dprintf("%s #%u -hash ALL %s\n",tintstr(),cid,swarmid.hex().c_str());
+        }
 
-	// Read SWIFT_HANDSHAKE
-	uint8_t msgid = evbuffer_remove_8(evb);
-	hs->peer_channel_id_ = evbuffer_remove_32be(evb);
-	hs->ResetToLegacy();
+        // Read SWIFT_HANDSHAKE
+        uint8_t msgid = evbuffer_remove_8(evb);
+        hs->peer_channel_id_ = evbuffer_remove_32be(evb);
+        hs->ResetToLegacy();
 
-	dprintf("%s #%u -hs swift %x\n",tintstr(),cid,hs->peer_channel_id_);
+        dprintf("%s #%u -hs swift %x\n",tintstr(),cid,hs->peer_channel_id_);
     }
     else if (ver == VER_PPSPP_v1)
     {
-	// IETF PPSP compliant
-	//dprintf("%s #%u -hs ietf ppsp\n", tintstr(),cid );
-	hs->peer_channel_id_ = evbuffer_remove_32be(evb);
-	bool end=false;
-	uint8_t size8 = 0, i8=0;
-	uint16_t size = 0;
-	uint8_t *swarmidbytes = NULL;
-	uint8_t *msgbitmapbytes = NULL;
-	Sha1Hash swarmid;
-	std::ostringstream cross;
-	while (!end && evbuffer_get_length(evb) > 0)
-	{
-	    popt_t poid = (popt_t)evbuffer_remove_8(evb);
-	    //dprintf("%s #%u -hs popt %d\n", tintstr(),cid, (int)poid );
-	    switch (poid) {
-		case POPT_VERSION:
-		    hs->version_ = (popt_version_t)evbuffer_remove_8(evb);
-		    cross << "v" << hs->version_ << " ";
-		    break;
-		case POPT_MIN_VERSION:
-		    hs->min_version_ = (popt_version_t)evbuffer_remove_8(evb);
-		    cross << "nv" << hs->min_version_ << " ";
-		    break;
-		case POPT_SWARMID:
-		    size = evbuffer_remove_16be(evb);
-		    if (size > POPT_MAX_SWARMID_SIZE || evbuffer_get_length(evb) < size) {
-			dprintf("%s #%u ?hs popt swarmid too big\n",tintstr(),cid);
-			delete hs;
-			return NULL;
-		    }
-		    swarmidbytes = evbuffer_pullup(evb,size);
-		    swarmid = Sha1Hash(false,(const char *)swarmidbytes);
-		    hs->SetSwarmID(swarmid);
-		    cross << "sid " << swarmid.hex() << " ";
-		    evbuffer_drain(evb, size);
-		    break;
-		case POPT_CONT_INT_PROT:
-		    hs->cont_int_prot_ = (popt_cont_int_prot_t)evbuffer_remove_8(evb);
-		    cross << "cipm " << hs->cont_int_prot_ << " ";
-		    break;
-		case POPT_MERKLE_HASH_FUNC:
-		    hs->merkle_func_ = (popt_merkle_func_t)evbuffer_remove_8(evb);
-		    cross << "mhf " << hs->merkle_func_ << " ";
-		    break;
-		case POPT_LIVE_SIG_ALG:
-		    hs->live_sig_alg_ = (popt_live_sig_alg_t)evbuffer_remove_8(evb);
-		    cross << "lsa " << hs->live_sig_alg_ << " ";
-		    break;
-		case POPT_CHUNK_ADDR:
-		    hs->chunk_addr_ = (popt_chunk_addr_t)evbuffer_remove_8(evb);
-		    cross << "cam " << hs->chunk_addr_ << " ";
-		    break;
-		case POPT_LIVE_DISC_WND:
-		    if (hs->chunk_addr_ == POPT_CHUNK_ADDR_BIN32 || hs->chunk_addr_ == POPT_CHUNK_ADDR_CHUNK32)
-			hs->live_disc_wnd_ = evbuffer_remove_32be(evb);
-		    else
-			hs->live_disc_wnd_ = evbuffer_remove_64be(evb);
-		    cross << "ldw " << std::hex << hs->live_disc_wnd_ << std::dec << " ";
-		    break;
-		case POPT_SUPP_MSGS:
-		    size8 = evbuffer_remove_8(evb);
-		    if (size8 > 8 || evbuffer_get_length(evb) < size8) {
-			dprintf("%s #%u ?hs popt supp msgs too big\n",tintstr(),cid);
-			delete hs;
-			return NULL;
-		    }
-		    msgbitmapbytes = evbuffer_pullup(evb,size8);
-		    evbuffer_drain(evb, size);
-		    cross << "msgs " << std::hex;
-		    for (i8=0; i8<size8; i8++)
-			cross << (int)msgbitmapbytes[i8];
-		    cross << std::dec;
-		    break;
-		case POPT_END:
-		    end = true;
-		    dprintf("%s #%u -hs %x ppsp %s\n", tintstr(), cid, hs->peer_channel_id_, cross.str().c_str() );
-		    break;
-		default:
-		    dprintf("%s #%u ?hs popt id unknown %i\n",tintstr(),cid,(int)poid);
-		    delete hs;
-		    return NULL;
-	    }
-	}
+        // IETF PPSP compliant
+        //dprintf("%s #%u -hs ietf ppsp\n", tintstr(),cid );
+        hs->peer_channel_id_ = evbuffer_remove_32be(evb);
+        bool end=false;
+        uint8_t size8 = 0, i8=0;
+        uint16_t size = 0;
+        uint8_t *swarmidbytes = NULL;
+        uint8_t *msgbitmapbytes = NULL;
+        Sha1Hash swarmid;
+        std::ostringstream cross;
+        while (!end && evbuffer_get_length(evb) > 0)
+        {
+            popt_t poid = (popt_t)evbuffer_remove_8(evb);
+            //dprintf("%s #%u -hs popt %d\n", tintstr(),cid, (int)poid );
+            switch (poid) {
+                case POPT_VERSION:
+                    hs->version_ = (popt_version_t)evbuffer_remove_8(evb);
+                    cross << "v" << hs->version_ << " ";
+                    break;
+                case POPT_MIN_VERSION:
+                    hs->min_version_ = (popt_version_t)evbuffer_remove_8(evb);
+                    cross << "nv" << hs->min_version_ << " ";
+                    break;
+                case POPT_SWARMID:
+                    size = evbuffer_remove_16be(evb);
+                    if (size > POPT_MAX_SWARMID_SIZE || evbuffer_get_length(evb) < size) {
+                        dprintf("%s #%u ?hs popt swarmid too big\n",tintstr(),cid);
+                        delete hs;
+                        return NULL;
+                    }
+                    swarmidbytes = evbuffer_pullup(evb,size);
+                    swarmid = Sha1Hash(false,(const char *)swarmidbytes);
+                    hs->SetSwarmID(swarmid);
+                    cross << "sid " << swarmid.hex() << " ";
+                    evbuffer_drain(evb, size);
+                    break;
+                case POPT_CONT_INT_PROT:
+                    hs->cont_int_prot_ = (popt_cont_int_prot_t)evbuffer_remove_8(evb);
+                    cross << "cipm " << hs->cont_int_prot_ << " ";
+                    break;
+                case POPT_MERKLE_HASH_FUNC:
+                    hs->merkle_func_ = (popt_merkle_func_t)evbuffer_remove_8(evb);
+                    cross << "mhf " << hs->merkle_func_ << " ";
+                    break;
+                case POPT_LIVE_SIG_ALG:
+                    hs->live_sig_alg_ = (popt_live_sig_alg_t)evbuffer_remove_8(evb);
+                    cross << "lsa " << hs->live_sig_alg_ << " ";
+                    break;
+                case POPT_CHUNK_ADDR:
+                    hs->chunk_addr_ = (popt_chunk_addr_t)evbuffer_remove_8(evb);
+                    cross << "cam " << hs->chunk_addr_ << " ";
+                    break;
+                case POPT_LIVE_DISC_WND:
+                    if (hs->chunk_addr_ == POPT_CHUNK_ADDR_BIN32 || hs->chunk_addr_ == POPT_CHUNK_ADDR_CHUNK32)
+                        hs->live_disc_wnd_ = evbuffer_remove_32be(evb);
+                    else
+                        hs->live_disc_wnd_ = evbuffer_remove_64be(evb);
+                    cross << "ldw " << std::hex << hs->live_disc_wnd_ << std::dec << " ";
+                    break;
+                case POPT_SUPP_MSGS:
+                    size8 = evbuffer_remove_8(evb);
+                    if (size8 > 8 || evbuffer_get_length(evb) < size8) {
+                        dprintf("%s #%u ?hs popt supp msgs too big\n",tintstr(),cid);
+                        delete hs;
+                        return NULL;
+                    }
+                    msgbitmapbytes = evbuffer_pullup(evb,size8);
+                    evbuffer_drain(evb, size);
+                    cross << "msgs " << std::hex;
+                    for (i8=0; i8<size8; i8++)
+                        cross << (int)msgbitmapbytes[i8];
+                    cross << std::dec;
+                    break;
+                case POPT_END:
+                    end = true;
+                    dprintf("%s #%u -hs %x ppsp %s\n", tintstr(), cid, hs->peer_channel_id_, cross.str().c_str() );
+                    break;
+                default:
+                    dprintf("%s #%u ?hs popt id unknown %i\n",tintstr(),cid,(int)poid);
+                    delete hs;
+                    return NULL;
+            }
+        }
     }
 
     return hs;
@@ -1534,20 +1571,20 @@ void Channel::OnHandshake(Handshake *hishs) {
 
     if (hishs->peer_channel_id_ == 0) {
         // Arno: Got explicit close from peer, close channel and don't send reply
-	dprintf("%s #%u -hs close\n",tintstr(),id_);
+        dprintf("%s #%u -hs close\n",tintstr(),id_);
         Close(CLOSE_DO_NOT_SEND);
         delete hishs;
         return;
     }
     else
-	dprintf("%s #%u -hs %x %s opened as channel %u\n",tintstr(),id_,hishs->peer_channel_id_,(hishs->version_ == VER_SWIFT_LEGACY) ? "swift" : "ppsp", id_);
+        dprintf("%s #%u -hs %x %s opened as channel %u\n",tintstr(),id_,hishs->peer_channel_id_,(hishs->version_ == VER_SWIFT_LEGACY) ? "swift" : "ppsp", id_);
 
     if (!hishs->IsSupported())
     {
-	dprintf("%s #%u -hs unsupported\n",tintstr(),id_);
-	Close(CLOSE_SEND);
-	delete hishs;
-	return;
+        dprintf("%s #%u -hs unsupported\n",tintstr(),id_);
+        Close(CLOSE_SEND);
+        delete hishs;
+        return;
     }
 
     hs_in_ = hishs;
@@ -1568,7 +1605,7 @@ void Channel::OnHandshake(Handshake *hishs) {
     }
 
     if (hs_in_->version_ == VER_SWIFT_LEGACY)
-	hs_out_->ResetToLegacy(); // he speaks legacy, so will I
+        hs_out_->ResetToLegacy(); // he speaks legacy, so will I
 
     // FUTURE: channel forking
     if (is_established()) // when this was reply to our HS
@@ -1577,9 +1614,10 @@ void Channel::OnHandshake(Handshake *hishs) {
     // SIGNPEAK
     if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
-	LiveHashTree *umt = (LiveHashTree *)hashtree();
-	// Initialize with current signed peaks
-    	AddSinceSignedPeakTuples(umt->GetCurrentSignedPeakTuples());
+        LiveHashTree *umt = (LiveHashTree *)hashtree();
+        // Initialize with current signed peaks
+        bhstvector cursigpeaks = umt->GetCurrentSignedPeakTuples();
+        AddSinceSignedPeakTuples(cursigpeaks);
     }
 }
 
@@ -1588,10 +1626,10 @@ void    Channel::OnCancel (struct evbuffer *evb) {
 
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
     if (bv.size() == 0) {
-	// Could not parse chunk spec
-	dprintf("%s #%u ?cancel bad chunk spec\n",tintstr(),id_);
-	Close(CLOSE_DO_NOT_SEND);
-	return;
+        // Could not parse chunk spec
+        dprintf("%s #%u ?cancel bad chunk spec\n",tintstr(),id_);
+        Close(CLOSE_DO_NOT_SEND);
+        return;
     }
 
     // Arno, 2012-11-23: chunkaddr translated to list of bins, iterate and
@@ -1608,62 +1646,62 @@ void    Channel::OnCancel (struct evbuffer *evb) {
     binvector::iterator iter;
     for (iter=bv.begin(); iter != bv.end(); iter++)
     {
-	bin_t cancelbin = *iter;
-	dprintf("%s #%u -cancel %s\n",tintstr(),id_,cancelbin.str().c_str());
+        bin_t cancelbin = *iter;
+        dprintf("%s #%u -cancel %s\n",tintstr(),id_,cancelbin.str().c_str());
 
-	// 1. Remove hint from hint_in_ if contained in cancelbin. Use Riccardo's solution:
-	int hi = 0;
-	while (hi<hint_in_.size() && !cancelbin.contains(hint_in_[hi].bin) && cancelbin != hint_in_[hi].bin)
-	    hi++;
+        // 1. Remove hint from hint_in_ if contained in cancelbin. Use Riccardo's solution:
+        int hi = 0;
+        while (hi<hint_in_.size() && !cancelbin.contains(hint_in_[hi].bin) && cancelbin != hint_in_[hi].bin)
+            hi++;
 
-	// something to cancel?
-	if (hi != hint_in_.size())
-	{
-	    // Assumption: all fragments of a bin being cancelled consecutive in hint_in_
-	    do {
-		//dprintf("%s #%u -cancel frag %s\n",tintstr(),id_,hint_in_[hi].bin.str().c_str());
-	    	hint_in_size_ -= hint_in_[hi].bin.base_length();
-			hint_in_.erase(hint_in_.begin()+hi);
-			if (hint_in_.size() == 0 || hi >= hint_in_.size())
-				break;
-	    } while (cancelbin.contains(hint_in_[hi].bin));
-	}
+        // something to cancel?
+        if (hi != hint_in_.size())
+        {
+            // Assumption: all fragments of a bin being cancelled consecutive in hint_in_
+            do {
+                //dprintf("%s #%u -cancel frag %s\n",tintstr(),id_,hint_in_[hi].bin.str().c_str());
+                    hint_in_size_ -= hint_in_[hi].bin.base_length();
+                        hint_in_.erase(hint_in_.begin()+hi);
+                        if (hint_in_.size() == 0 || hi >= hint_in_.size())
+                                break;
+            } while (cancelbin.contains(hint_in_[hi].bin));
+        }
 
-	//dprintf("%s #%u -cancel ORIG %s len %d\n",tintstr(),id_,cancelbin.str().c_str(), hint_in_.size() );
+        //dprintf("%s #%u -cancel ORIG %s len %d\n",tintstr(),id_,cancelbin.str().c_str(), hint_in_.size() );
 
-	// 2. Fragment hint from hint_in_ if it covers cancelbin. Use Riccardo's solution:
-	hi = 0;
-	while (hi<hint_in_.size() && !hint_in_[hi].bin.contains(cancelbin))
-	    hi++;
+        // 2. Fragment hint from hint_in_ if it covers cancelbin. Use Riccardo's solution:
+        hi = 0;
+        while (hi<hint_in_.size() && !hint_in_[hi].bin.contains(cancelbin))
+            hi++;
 
-	// nothing to cancel
-	if (hi==hint_in_.size())
-	    continue;
+        // nothing to cancel
+        if (hi==hint_in_.size())
+            continue;
 
-	// Split up hint
-	tint origt = hint_in_[hi].time;
-	bin_t origbin = hint_in_[hi].bin;
-	binvector fragbins = swift::bin_fragment(origbin,cancelbin);
-	// Erase original
-	hint_in_size_ -= hint_in_[hi].bin.base_length();
-	hint_in_.erase(hint_in_.begin()+hi);
-	// Replace with fragments left
-	binvector::iterator iter2;
-	int idx=0;
-	for (iter2=fragbins.begin(); iter2 != fragbins.end(); iter2++)
-	{
-	    bin_t fragbin = *iter2;
-	    //dprintf("%s #%u -cancel keep %s\n",tintstr(),id_,fragbin.str().c_str());
-	    tintbin newtb(origt,fragbin);
-	    hint_in_size_ += fragbin.base_length();
-	    hint_in_.insert(hint_in_.begin()+hi+idx,newtb);
-	    idx++;
-	}
+        // Split up hint
+        tint origt = hint_in_[hi].time;
+        bin_t origbin = hint_in_[hi].bin;
+        binvector fragbins = swift::bin_fragment(origbin,cancelbin);
+        // Erase original
+        hint_in_size_ -= hint_in_[hi].bin.base_length();
+        hint_in_.erase(hint_in_.begin()+hi);
+        // Replace with fragments left
+        binvector::iterator iter2;
+        int idx=0;
+        for (iter2=fragbins.begin(); iter2 != fragbins.end(); iter2++)
+        {
+            bin_t fragbin = *iter2;
+            //dprintf("%s #%u -cancel keep %s\n",tintstr(),id_,fragbin.str().c_str());
+            tintbin newtb(origt,fragbin);
+            hint_in_size_ += fragbin.base_length();
+            hint_in_.insert(hint_in_.begin()+hi+idx,newtb);
+            idx++;
+        }
     }
 
     for (int i=0; i<hint_in_.size(); i++)
     {
-	dprintf("%s #%u -cancel NETS %s\n",tintstr(),id_,hint_in_[i].bin.str().c_str());
+        dprintf("%s #%u -cancel NETS %s\n",tintstr(),id_,hint_in_[i].bin.str().c_str());
     }
 }
 
@@ -1693,8 +1731,8 @@ void Channel::OnPexAddCert(struct evbuffer *evb)
 void Channel::OnChoke(struct evbuffer *evb)
 {
     if (hs_in_->version_ == VER_SWIFT_LEGACY) { // FRAGRAND support
-	evbuffer_remove_32be(evb); // read 4 random bytes
-	return;
+        evbuffer_remove_32be(evb); // read 4 random bytes
+        return;
     }
 
     //PPSPTODO
@@ -1713,10 +1751,10 @@ void Channel::OnSignedHash(struct evbuffer *evb)
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
     if (bv.size() == 0 || bv.size() > 1)
     {
-    	// chunk spec for hash must be power-of-2 range, so must fit in single bin
-    	dprintf("%s #%u ?sigh bad chunk spec\n",tintstr(),id_);
-    	Close(CLOSE_DO_NOT_SEND);
-    	return;
+            // chunk spec for hash must be power-of-2 range, so must fit in single bin
+            dprintf("%s #%u ?sigh bad chunk spec\n",tintstr(),id_);
+            Close(CLOSE_DO_NOT_SEND);
+            return;
     }
     bin_t pos = bv.front();
 
@@ -1728,17 +1766,18 @@ void Channel::OnSignedHash(struct evbuffer *evb)
 
     if (hashtree() != NULL)
     {
-	LiveHashTree *umt = (LiveHashTree *)hashtree();
-	uint8_t dummy[DUMMY_DEFAULT_SIG_LENGTH];
-	BinHashSigTuple bhst = umt->OfferSignedPeakHash(pos,Signature(dummy, DUMMY_DEFAULT_SIG_LENGTH));
-	if (bhst.bin() == bin_t::NONE)
-	    dprintf("%s #%u !sigh %s\n",tintstr(),id_,pos.str().c_str());
-	else
-	{
-	    dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
-	    LiveTransfer *lt = (LiveTransfer *)transfer();
-	    lt->OnVerifiedPeakHash(bhst,this);
-	}
+        LiveHashTree *umt = (LiveHashTree *)hashtree();
+        uint8_t dummy[DUMMY_DEFAULT_SIG_LENGTH];
+        Signature sig(dummy, DUMMY_DEFAULT_SIG_LENGTH);
+        BinHashSigTuple bhst = umt->OfferSignedPeakHash(pos,sig);
+        if (bhst.bin() == bin_t::NONE)
+            dprintf("%s #%u !sigh %s\n",tintstr(),id_,pos.str().c_str());
+        else
+        {
+            dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
+            LiveTransfer *lt = (LiveTransfer *)transfer();
+            lt->OnVerifiedPeakHash(bhst,this);
+        }
     }
 }
 
@@ -1760,8 +1799,8 @@ void    Channel::AddPex (struct evbuffer *evb) {
             // Arno, 2012-02-28: Don't send private addresses to non-private peers.
             if (!a.is_private() || (a.is_private() && peer().is_private()))
             {
-        	evbuffer_add_pexaddr(evb, a);
-        	dprintf("%s #%u +pex (reverse) %s\n",tintstr(),id_,a.str().c_str());
+                evbuffer_add_pexaddr(evb, a);
+                dprintf("%s #%u +pex (reverse) %s\n",tintstr(),id_,a.str().c_str());
             }
         } while (!reverse_pex_out_.empty() && (SWIFT_MAX_NONDATA_DGRAM_SIZE-evbuffer_get_length(evb)) >= 7);
 
@@ -1887,9 +1926,9 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
     Channel* channel = NULL;
     if (mych==0) { // peer initiates handshake
 
-	hishs = StaticOnHandshake(addr,0,false,VER_PPSPP_v1,evb);
-	if (hishs == NULL) // dprintf already called
-	    return_log ("%s #0 ?hs bad\n",tintstr());
+        hishs = StaticOnHandshake(addr,0,false,VER_PPSPP_v1,evb);
+        if (hishs == NULL) // dprintf already called
+            return_log ("%s #0 ?hs bad\n",tintstr());
 
         int td = swift::Find(hishs->GetSwarmID(),true); // Activate
         if (td < 0)
@@ -1903,7 +1942,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         ContentTransfer *ct = swift::GetActivatedTransfer(td);
         if (ct == NULL)
         {
-	    return_log( "%s #0 hash %s known, couldn't be activated; requested by %s\n", tintstr(), hishs->GetSwarmID().hex().c_str(), addr.str().c_str() );
+            return_log( "%s #0 hash %s known, couldn't be activated; requested by %s\n", tintstr(), hishs->GetSwarmID().hex().c_str(), addr.str().c_str() );
         }
         else if (!ct->IsOperational())
         {
@@ -1964,7 +2003,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
 
     // Process messages
     if (channel->send_control_!=CLOSE_CONTROL)
-	channel->Recv(evb);
+        channel->Recv(evb);
 
     evbuffer_free(evb);
 
@@ -2009,7 +2048,7 @@ void Channel::Close(close_send_t closesend) {
         this->Send(); // Arno: send explicit close
 
     if (hs_in_ != NULL) // is_established() -> false
-	hs_in_->peer_channel_id_ = 0;
+        hs_in_->peer_channel_id_ = 0;
 
     //LIVE
     if (ENABLE_VOD_PIECEPICKER && transfer()->ttype() == FILE_TRANSFER) {

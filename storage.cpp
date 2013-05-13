@@ -29,7 +29,6 @@ Storage::Storage(std::string ospathname, std::string destdir, int td, uint64_t l
         single_fd_(-1), reserved_size_(-1), total_size_from_spec_(-1), last_sf_(NULL),
         td_(td), alloc_cb_(NULL), live_disc_wnd_bytes_(live_disc_wnd_bytes)
 {
-    //fprintf(stderr,"Storage: ospathname %s destdir %s\n", ospathname.c_str(), destdir.c_str() );
     // SIGNPEAK
     if (live_disc_wnd_bytes > 0 && live_disc_wnd_bytes != POPT_LIVE_DISC_WND_ALL)
     {
@@ -112,8 +111,8 @@ Storage::~Storage()
 
 ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 {
-    //dprintf("%s %s storage: Write: fd %d nbyte %d off %lld state %d\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
-    fprintf(stderr,"%s %s storage: Write: fd %d nbyte %d off %lld state %d\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
+    dprintf("%s %s storage: Write: fd %d nbyte %d off %lld state %d\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
+    //fprintf(stderr,"%s %s storage: Write: fd %d nbyte %d off %lld state %d\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
 
     if (state_ == STOR_STATE_SINGLE_FILE)
     {
