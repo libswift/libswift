@@ -89,51 +89,98 @@ void Channel::AddUnsignedPeakHashes (struct evbuffer *evb)
 // SIGNPEAK
 void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
 {
-    // Send signed peaks generated since last send
+    // Send signed peaks generated since last send, or initial peaks when handshaking
     bhstvector::iterator iter;
     bhstvector sincesignedpeaktuples = GetSinceSignedPeakTuples();
 
-    //if (sincesignedpeaktuples.size() > 0)
-    //     fprintf(stderr,"AddLiveSignedPeakHashes: Peaks signed since %d\n", sincesignedpeaktuples.size() );
-    for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
+    if (!is_established() && ack_in_.is_empty())
     {
-        BinHashSigTuple bhst = *iter;
-        //fprintf(stderr,"AddLiveSignedPeakHashes: Adding since signed peak %s\n", bhst.bin().str().c_str() );
-    }
+        bhstvector initialsigpeaktuples;
+        if (initial_peak_count_ == -1)
+        {
+            // Send current signed peaks as initial peaks
+            LiveHashTree *umt = (LiveHashTree *)hashtree();
+            initialsigpeaktuples = umt->GetCurrentSignedPeakTuples();
 
-    // Arno, 2013-03-25: If not source, forward only unknown signed peaks
-    // to connected peer
-    bhstvector unknownpeaktuples;
-    if (((LiveTransfer *)transfer())->am_source())
-        unknownpeaktuples = sincesignedpeaktuples;
+            fprintf(stderr,"AddLiveSignedPeakHashes: BEFORE Initial peak count %d vector %d \n", initial_peak_count_, initialsigpeaktuples.size() );
+
+            // Add to since signed
+            AddSinceSignedPeakTuples(initialsigpeaktuples);
+
+            // Remember which are initial for retransmit
+            initial_peak_count_ = initialsigpeaktuples.size();
+        }
+        else
+        {
+            // Retransmit of initial HS. Transmit same initial peaks
+            // Copy
+            initialsigpeaktuples = sincesignedpeaktuples;
+            // Remove since signed peaks
+            initialsigpeaktuples.erase(initialsigpeaktuples.begin()+initial_peak_count_,initialsigpeaktuples.end());
+        }
+
+        fprintf(stderr,"AddLiveSignedPeakHashes: Initial peak count %d vector %d \n", initial_peak_count_, initialsigpeaktuples.size() );
+        for (iter=initialsigpeaktuples.begin(); iter != initialsigpeaktuples.end(); iter++)
+        {
+            BinHashSigTuple bhst = *iter;
+            fprintf(stderr,"AddLiveSignedPeakHashes: Initial peak %s\n", bhst.bin().str().c_str() );
+        }
+
+        // Put in datagram
+        AddLiveSignedPeakHashes(evb,initialsigpeaktuples,false);
+    }
     else
     {
+        // Send signed peaks generated since last send
+        if (initial_peak_count_ != -1)
+        {
+            // Initial peaks arrived, don't resend
+            sincesignedpeaktuples.erase(sincesignedpeaktuples.begin(),sincesignedpeaktuples.begin()+initial_peak_count_);
+            initial_peak_count_ = -1;
+        }
+
+        // DEBUG
+        fprintf(stderr,"AddLiveSignedPeakHashes: Peaks signed since %d\n", sincesignedpeaktuples.size() );
         for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
         {
             BinHashSigTuple bhst = *iter;
-            if (!ack_in_.is_filled(bhst.bin()))
-                unknownpeaktuples.push_back(bhst);
+            fprintf(stderr,"AddLiveSignedPeakHashes: Adding since signed peak %s\n", bhst.bin().str().c_str() );
         }
+
+        // Arno, 2013-03-25: If not source, forward only unknown signed peaks
+        // to connected peer
+        bhstvector unknownpeaktuples;
+        if (((LiveTransfer *)transfer())->am_source())
+            unknownpeaktuples = sincesignedpeaktuples;
+        else
+        {
+            for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
+            {
+                BinHashSigTuple bhst = *iter;
+                if (!ack_in_.is_filled(bhst.bin()))
+                    unknownpeaktuples.push_back(bhst);
+            }
+        }
+
+ #ifdef LOSS
+        // TEST LOSS
+        int count = unknownpeaktuples.size() / 2;
+        for (int i=0; i<count; i++)
+            unknownpeaktuples.erase(unknownpeaktuples.begin()+i+1);
+ #endif
+
+        // Put in datagram, including right hashes
+        AddLiveSignedPeakHashes(evb,unknownpeaktuples,true);
+
+        // Forget, on loss the latest signed peak is sent with all uncles,
+        // see AddLiveUncleHashes(retransmit=true)
+        fprintf(stderr,"ClearSinceSignedPeakTuples\n");
+        ClearSinceSignedPeakTuples();
     }
-
-#ifdef LOSS
-    // TEST LOSS
-    int count = unknownpeaktuples.size() / 2;
-    for (int i=0; i<count; i++)
-        unknownpeaktuples.erase(unknownpeaktuples.begin()+i+1);
-#endif
-
-    // Put in datagram
-    AddLiveSignedPeakHashes(evb,unknownpeaktuples);
-
-    // Forget, on loss the latest signed peak is sent with all uncles,
-    // see AddLiveUncleHashes(retransmit=true)
-    //fprintf(stderr,"ClearSinceSignedPeakTuples\n");
-    ClearSinceSignedPeakTuples();
 }
 
 
-void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &peaktuples)
+void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &peaktuples, bool includeright)
 {
     bhstvector::iterator iter;
     for (iter= peaktuples.begin(); iter != peaktuples.end(); iter++)
@@ -146,7 +193,7 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &peakt
 
         dprintf("%s #%u +phash %s\n",tintstr(),id_,bhst.bin().str().c_str());
 
-        fprintf(stderr,"AddLiveSignedPeakHashess: speak %s %s\n", bhst.bin().str().c_str(), bhst.hash().hex().c_str() );
+        //fprintf(stderr,"AddLiveSignedPeakHashess: speak %s %s\n", bhst.bin().str().c_str(), bhst.hash().hex().c_str() );
 
         evbuffer_add_8(evb, SWIFT_SIGNED_INTEGRITY);
         evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
@@ -154,16 +201,19 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &peakt
 
         dprintf("%s #%u +sigh %s %d\n",tintstr(),id_,bhst.bin().str().c_str(), bhst.sig().length() );
 
-        // Arno, 2013-05-13: With Unified Merkle Trees, say we have a tree of 4
-        // chunks with peak (2,0). When the tree is expanded from 4 to 8 chunks,
-        // the new peak becomes (3,0). The uncle hash algorithm assumes that (2,1)
-        // the hash of the 4 new chunks was sent to the peer when chunks from (2,0)
-        // where sent (after all, (2,1) is their uncle). However, that part of
-        // the tree did not yet exist, so it wasn't sent. To fix this we send
-        // the hashes to the right of the new peak (3,0) as these are "hashes
-        // needed to verify the integrity of the chunk" (PPSP spec).
-        //
-        AddLivePeakRightHashes(evb,bhst.bin());
+        if (includeright)
+        {
+            // Arno, 2013-05-13: With Unified Merkle Trees, say we have a tree of 4
+            // chunks with peak (2,0). When the tree is expanded from 4 to 8 chunks,
+            // the new peak becomes (3,0). The uncle hash algorithm assumes that (2,1)
+            // the hash of the 4 new chunks was sent to the peer when chunks from (2,0)
+            // where sent (after all, (2,1) is their uncle). However, that part of
+            // the tree did not yet exist, so it wasn't sent. To fix this we send
+            // the hashes to the right of the new peak (3,0) as these are "hashes
+            // needed to verify the integrity of the chunk" (PPSP spec).
+            //
+            AddLivePeakRightHashes(evb,bhst.bin());
+        }
     }
 }
 
@@ -189,8 +239,8 @@ bin_t  Channel::AddLiveSignedPeakHash4Retransmit(struct evbuffer *evb, bin_t pos
         }
     }
 
-    // Put in datagram
-    AddLiveSignedPeakHashes(evb,containpeaktuples);
+    // Put in datagram, including right hashes
+    AddLiveSignedPeakHashes(evb,containpeaktuples,true);
 
     return signedpeak;
 }
@@ -206,7 +256,8 @@ void    Channel::AddLivePeakRightHashes(struct evbuffer *evb, bin_t pos)
     int nchunks_per_sign_layer = (int)log2((double)nchunks_per_sign);
 
     bin_t p = pos.right();
-    //fprintf(stderr,"AddLiveRightHashes: till layer %d got layer %d\n", nchunks_per_sign_layer, p.layer() );
+    fprintf(stderr,"AddLiveRightHashes: till layer %d got layer %d\n", nchunks_per_sign_layer, p.layer() );
+
     while (p.layer() >= nchunks_per_sign_layer)
     {
     	Sha1Hash h = hashtree()->hash(p);
@@ -215,6 +266,8 @@ void    Channel::AddLivePeakRightHashes(struct evbuffer *evb, bin_t pos)
         evbuffer_add_hash(evb,h);
 
         dprintf("%s #%u +rhash %s\n",tintstr(),id_,p.str().c_str());
+        if (p.layer() == 0) // safety catch
+            break;
         p = p.right();
     }
 }
@@ -502,6 +555,7 @@ void    Channel::Send () {
     {
         if (is_established()) {
             // FIXME: seeder check
+            fprintf(stderr,"AddPeakHashes: BEFORE1\n");
             AddPeakHashes(evb);
             AddHave(evb);
             AddAck(evb);
@@ -519,6 +573,7 @@ void    Channel::Send () {
             data = AddData(evb);
         } else  {
             AddHandshake(evb);
+            fprintf(stderr,"AddPeakHashes: BEFORE2\n");
             AddPeakHashes(evb);
             AddHave(evb); // Arno, 2011-10-28: from AddHandShake. Why double?
             AddHave(evb);
@@ -776,8 +831,12 @@ void Channel::SendIfTooBig(struct evbuffer *evb)
     // frame with DATA. Send 2 datagrams then, one with peaks so they have
     // a better chance of arriving. Optimistic violation of atomic datagram
     // principle.
-    if (transfer()->chunk_size() == SWIFT_DEFAULT_CHUNK_SIZE && evbuffer_get_length(evb) > SWIFT_MAX_NONDATA_DGRAM_SIZE) {
-        dprintf("%s #%u fsent %ib %s:%x\n",
+    // Arno, 2013-05-14: Don't work if this is first msg, as peer_channel_id
+    // will be unknown. Then just continue adding to the first datagram and
+    // hope for the best.
+    if (is_established() && transfer()->chunk_size() == SWIFT_DEFAULT_CHUNK_SIZE && evbuffer_get_length(evb) > SWIFT_MAX_NONDATA_DGRAM_SIZE) {
+
+	    dprintf("%s #%u fsent %ib %s:%x\n",
                 tintstr(),id_,(int)evbuffer_get_length(evb),peer().str().c_str(),
                 hs_in_->peer_channel_id_);
         int ret = Channel::SendTo(socket_,peer(),evb); // kind of fragmentation
@@ -1041,9 +1100,10 @@ void    Channel::OnHash (struct evbuffer *evb) {
     bin_t pos = bv.front();
     Sha1Hash hash = evbuffer_remove_hash(evb);
 
+    dprintf("%s #%u -hash %s\n",tintstr(),id_,pos.str().c_str());
     if (hashtree() != NULL && (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE))
         hashtree()->OfferHash(pos,hash);
-    dprintf("%s #%u -hash %s\n",tintstr(),id_,pos.str().c_str());
+
 
     //fprintf(stderr,"HASH %lli hex %s\n",pos.toUInt(), hash.hex().c_str() );
 }
@@ -1608,15 +1668,6 @@ void Channel::OnHandshake(Handshake *hishs) {
     // FUTURE: channel forking
     if (is_established()) // when this was reply to our HS
         dprintf("%s #%u established %s\n", tintstr(), id_, peer().str().c_str());
-
-    // SIGNPEAK
-    if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
-    {
-        LiveHashTree *umt = (LiveHashTree *)hashtree();
-        // Initialize with current signed peaks
-        bhstvector cursigpeaks = umt->GetCurrentSignedPeakTuples();
-        AddSinceSignedPeakTuples(cursigpeaks);
-    }
 }
 
 
@@ -1749,10 +1800,10 @@ void Channel::OnSignedHash(struct evbuffer *evb)
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
     if (bv.size() == 0 || bv.size() > 1)
     {
-            // chunk spec for hash must be power-of-2 range, so must fit in single bin
-            dprintf("%s #%u ?sigh bad chunk spec\n",tintstr(),id_);
-            Close(CLOSE_DO_NOT_SEND);
-            return;
+        // chunk spec for hash must be power-of-2 range, so must fit in single bin
+        dprintf("%s #%u ?sigh bad chunk spec\n",tintstr(),id_);
+        Close(CLOSE_DO_NOT_SEND);
+        return;
     }
     bin_t pos = bv.front();
 
@@ -1764,6 +1815,7 @@ void Channel::OnSignedHash(struct evbuffer *evb)
 
     if (hashtree() != NULL)
     {
+        dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
         LiveHashTree *umt = (LiveHashTree *)hashtree();
         uint8_t dummy[DUMMY_DEFAULT_SIG_LENGTH];
         Signature sig(dummy, DUMMY_DEFAULT_SIG_LENGTH);
@@ -1772,7 +1824,6 @@ void Channel::OnSignedHash(struct evbuffer *evb)
             dprintf("%s #%u !sigh %s\n",tintstr(),id_,pos.str().c_str());
         else
         {
-            dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
             LiveTransfer *lt = (LiveTransfer *)transfer();
             lt->OnVerifiedPeakHash(bhst,this);
         }

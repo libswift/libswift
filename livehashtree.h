@@ -29,6 +29,10 @@
  *  - Can't prune tree if it contains uncles?
  *      No: was caused by hint buildup, see dont-prune-uncles.log
  *
+ *  - Check right hashes (i.e., if sibling verified and parent, then check)
+ *
+ *
+ *
  *  Something to note when working with the Unified Merkle Tree scheme:
  *
  *  With Unified Merkle Trees say we have a tree of 4 chunks with peak (2,0).
@@ -223,13 +227,14 @@ class LiveHashTree: public HashTree
 
      // SIGNPEAK
      /** List of currently signed peak hashes. Updated every N chunks */
+     // ARNOTODO: replace with BHST
      bin_t           signed_peak_bins_[64];
      int             signed_peak_count_;
      /** Actual signatures */
      Signature       signed_peak_sigs_[64];
 
      /** Temp storage for candidate peak. */
-     bin_t	     cand_peak_bin_;
+     bin_t           cand_peak_bin_;
      Sha1Hash	     cand_peak_hash_;
 
      uint32_t	     guessed_nchunks_per_sig_;

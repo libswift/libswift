@@ -68,6 +68,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     scheduled4del_(false),
     direct_sending_(false),
     peer_is_source_(peerissource),
+    initial_peak_count_(-1),
     hs_out_(NULL), hs_in_(NULL)
 {
     if (peer_==Address())

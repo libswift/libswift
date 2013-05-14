@@ -794,7 +794,7 @@ namespace swift {
         void        AddUnsignedPeakHashes (struct evbuffer *evb);
         void        AddLiveSignedPeakHashes(struct evbuffer *evb); // SIGNPEAK
         bin_t       AddLiveSignedPeakHash4Retransmit(struct evbuffer *evb, bin_t pos); // SIGNPEAK
-        void        AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &sbv); // SIGNPEAK
+        void        AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &sbv, bool includeright); // SIGNPEAK
         void        AddLivePeakRightHashes(struct evbuffer *evb, bin_t pos); // SIGNPEAK
         void        AddPex (struct evbuffer *evb);
         void        OnPexReq(void);
@@ -877,6 +877,7 @@ namespace swift {
         bhstvector &GetSinceSignedPeakTuples();
         /** Clear list of peaks to send. Retransmit via AddLiveUncles */
         void 	    ClearSinceSignedPeakTuples();
+        bool        IsSource() { return peer_is_source_; }
 
         void 	    CloseOnError();
 
@@ -979,6 +980,8 @@ namespace swift {
         bool        peer_is_source_;
         // SIGNPEAK
         bhstvector   since_signed_peak_tuples_;
+        /** Index of last initial peak in since_signed_peak_tuples_ for handshaking or -1*/
+        int	     initial_peak_count_;
 
         // PPSP
         /** Handshake I sent to peer. swarmid not set. */
