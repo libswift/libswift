@@ -4,8 +4,8 @@
  *
  *  Arno: Currently uses ever increasing chunk IDs. The binmap datastructure
  *  can store this quite efficiently, as long as there are few holes.
- *  The Storage object will save all chunks. The latter can be modified to wrap
- *  around, that is, a certain modulo is applied that overwrites earlier chunks.
+ *  The Storage object can save all chunks or wrap around, that is, a certain
+ *  modulo is applied that overwrites earlier chunks.
  *  This modulo is equivalent to the live discard window (see IETF PPSPP spec).
  *  This overwriting can be done both at the source and in a client.
  *
@@ -14,6 +14,15 @@
  *
  *  Created by Arno Bakker.
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
+ *
+ *  TODO:
+ *  - picker that handles total chunk loss
+ *  - picker that can hook-in from just peers
+ *  - picker than optimizes sharing (cf. small swarms sharing)
+ *  - aux live seeders?
+ *  - restartable live source (idea for UMT: just start new subtree, remembering transient root hash of previous to be used when tree grows in level above current size.)
+ *
+ *
  */
 //LIVE
 #include "swift.h"
@@ -33,6 +42,7 @@ std::vector<LiveTransfer*> LiveTransfer::liveswarms;
 /*
  * Local Constants
  */
+// live transfers get a transfer description (TD) above this offset
 #define TRANSFER_DESCR_LIVE_OFFSET	4000000
 
 /** A constructor for a live source. */
