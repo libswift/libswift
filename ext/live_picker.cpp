@@ -381,9 +381,9 @@ public:
 		download, you should such that you can forward
 		to your other peers.
 	     */
-	    uint32_t nlow = LIVE_PEERS_BIAS_LOW_NPEERS;
-	    uint32_t npeers = transfer_->GetNumLeechers()+transfer_->GetNumSeeders();
-	    uint32_t x = std::max((uint32_t)1,std::min(npeers,nlow) - std::max((uint32_t)0,npeers-nlow));
+	    int32_t nlow = LIVE_PEERS_BIAS_LOW_NPEERS;
+	    int32_t npeers = transfer_->GetNumLeechers()+transfer_->GetNumSeeders();
+	    uint32_t x = std::max((int32_t)1,std::min(npeers,nlow) - std::max((int32_t)0,npeers-nlow));
 	    double dlprob = 1.0/((double)x);
 
 	    // Extra: Increase download prob when you are
@@ -395,7 +395,7 @@ public:
 	    double r = (double)rand()/(double)RAND_MAX;
 	    if (r >= dlprob)  // Trust you will get it from peers, don't dl from source
 	    {
-		fprintf(stderr,"live: pp: ssopt r %.02lf dlprob %.02lf npeers %d\n", r, dlprob, npeers );
+		fprintf(stderr,"live: pp: ssopt r %.02lf dlprob %.02lf npeers %u x %u\n", r, dlprob, npeers, x );
 		return bin_t::NONE;
 	    }
 	}
