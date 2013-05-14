@@ -35,6 +35,7 @@ typedef std::map<uint32_t, bin_t> PeerPosMapType;
 /** Picks pieces nearly sequentially after hook-in point */
 class SimpleLivePiecePicker : public LivePiecePicker {
 
+  protected:
     binmap_t        ack_hint_out_;	// Legacy, not sure why copy used.
     tbqueue         hint_out_;		// Chunks picked
     LiveTransfer*   transfer_;		// Pointer to container
@@ -48,7 +49,7 @@ class SimpleLivePiecePicker : public LivePiecePicker {
     bin_t           current_bin_;	// Current pos, not yet received
 
 
-public:
+  public:
 
     SimpleLivePiecePicker (LiveTransfer* trans_to_pick_from) :
            ack_hint_out_(), transfer_(trans_to_pick_from), twist_(0), search4hookin_(true), source_seen_(false), source_channel_id_(0), hookin_bin_(bin_t::NONE), current_bin_(bin_t::NONE) {
@@ -84,20 +85,6 @@ public:
             //fprintf(stderr,"live: pp: new cur is %s\n", current_bin_.str().c_str() );
         }
         //dprintf("live: pp: new cur end\n" );
-
-        // When picking from source, do small-swarms optimization
-        if (source_seen_ && source_channel_id_ == channelid)
-        {
-            double r = (double)rand()/(double)RAND_MAX;
-            double dlprob = 0.75;
-            if (transfer_->GetNumLeechers()+transfer_->GetNumSeeders() == 1)
-                dlprob = 1.0; // only source
-            if (r >= dlprob)  // Trust you will get it from peers, don't dl from source
-            {
-        	fprintf(stderr,"live: pp: ssopt r %lf dlprob %lf npeers %d\n", r, dlprob, transfer_->GetNumLeechers()+transfer_->GetNumSeeders() );
-        	return bin_t::NONE;
-            }
-        }
 
         // Request next from this peer, if not already requested
         bin_t hint = pickLargestBin(offer,current_bin_);
@@ -324,5 +311,124 @@ public:
 	return search4hookin_;
     }
 };
+
+
+
+
+
+/** Optimized for (small swarms) sharing  */
+class SharingLivePiecePicker : public SimpleLivePiecePicker {
+
+    /* the number of peers at which the chance of downloading from the source
+     * is lowest. See PiecePickerStreaming. */
+    static const uint32_t LIVE_PEERS_BIAS_LOW_NPEERS = 10;
+
+    /* if a peer has not uploaded a chunk in this amount of seconds it is no longer
+     * considered an uploader in the peers bias algorithm. */
+    static const float LIVE_PEERS_BIAS_UPLOAD_IDLE_SECS = 5.0;
+
+    /* The increase in probability of downloading from the source that peers get
+     * that have uploaded data in the last LIVE_PEERS_BIAS_UPLOAD_IDLE_SECS */
+    static const float LIVE_PEERS_BIAS_FORWARDER_DLPROB_BONUS = 0.5;  // 0..1
+
+
+public:
+
+    SharingLivePiecePicker (LiveTransfer* trans_to_pick_from) : SimpleLivePiecePicker(trans_to_pick_from)
+    {
+    }
+
+    virtual ~SharingLivePiecePicker() {}
+
+
+    virtual bin_t Pick (binmap_t& offer, uint64_t max_width, tint expires, uint32_t channelid) {
+	if (search4hookin_)
+	    return bin_t::NONE;
+
+	while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*3/2) { // FIXME sec
+	    binmap_t::copy(ack_hint_out_, *(transfer_->ack_out()), hint_out_.front().bin);
+	    hint_out_.pop_front();
+	}
+
+	// Advance ptr
+	//dprintf("live: pp: new cur start\n" );
+	while (transfer_->ack_out()->is_filled(current_bin_))
+	{
+	    current_bin_ = bin_t(0,current_bin_.layer_offset()+1);
+	    //fprintf(stderr,"live: pp: new cur is %s\n", current_bin_.str().c_str() );
+	}
+	//dprintf("live: pp: new cur end\n" );
+
+	// When picking from source, do small-swarms optimization
+	if (source_seen_ && source_channel_id_ == channelid)
+	{
+	     /* Up to trustdl seconds before playout deadline
+		we put our faith into peers to deliver us the
+		piece instead of the source.
+
+		So instead of downloading from the source
+		when possible, just one in x peers will DL
+		from source.
+
+		This download probability will decrease till
+		swarm has LIVE_PEERS_BIAS_LOW_NPEERS peers,
+		after that it increases again, to ensure the
+		behaviour is the old behaviour for larger
+		swarms. Old behaviour is to download immediately.
+		In larger swarms this is needed because the
+		source only has a limited number of upload
+		slots, so if you are granted the chance to
+		download, you should such that you can forward
+		to your other peers.
+	     */
+	    uint32_t nlow = LIVE_PEERS_BIAS_LOW_NPEERS;
+	    uint32_t npeers = transfer_->GetNumLeechers()+transfer_->GetNumSeeders();
+	    uint32_t x = std::max((uint32_t)1,std::min(npeers,nlow) - std::max((uint32_t)0,npeers-nlow));
+	    double dlprob = 1.0/((double)x);
+
+	    // Extra: Increase download prob when you are
+	    // forwarding
+	    //since_last_upload = time.time() - connection.upload.last_upload_time.get()
+    	    //if since_last_upload < self.transporter.LIVE_PEERS_BIAS_UPLOAD_IDLE_SECS:
+            //    dlprob += LIVE_PEERS_BIAS_FORWARDER_DLPROB_BONUS;
+
+	    double r = (double)rand()/(double)RAND_MAX;
+	    if (r >= dlprob)  // Trust you will get it from peers, don't dl from source
+	    {
+		fprintf(stderr,"live: pp: ssopt r %.02lf dlprob %.02lf npeers %d\n", r, dlprob, npeers );
+		return bin_t::NONE;
+	    }
+	}
+
+	// Request next from this peer, if not already requested
+	bin_t hint = pickLargestBin(offer,current_bin_);
+	if (hint == bin_t::NONE)
+	{
+	    //dprintf("live: pp: Look beyond %s\n", current_bin_.str().c_str() );
+	    // See if there is stuff to download beyond current bin
+	    hint = ack_hint_out_.find_empty(current_bin_);
+	    //dprintf("live: pp: Empty is %s boe %llu boc %llu\n", hint.str().c_str(), hint.toUInt(), current_bin_.toUInt() );
+
+	    // Safety catch, find_empty(offset) apparently buggy.
+	    if (hint.base_offset() <= current_bin_.base_offset())
+		hint = bin_t::NONE;
+
+	    if (hint != bin_t::NONE)
+		hint = pickLargestBin(offer,hint);
+	}
+
+	if (hint == bin_t::NONE)
+	    return hint;
+
+	//dprintf("live: pp: Picked %s\n", hint.str().c_str() );
+
+	assert(ack_hint_out_.is_empty(hint));
+	ack_hint_out_.set(hint);
+	hint_out_.push_back(tintbin(NOW,hint));
+	return hint;
+    }
+};
+
+
 
 #endif

@@ -12,7 +12,7 @@
 using namespace swift;
 
 
-#define  tree_debug	true
+#define  tree_debug	false
 
 
 /*

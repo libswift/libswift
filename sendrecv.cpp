@@ -93,12 +93,12 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
     bhstvector::iterator iter;
     bhstvector sincesignedpeaktuples = GetSinceSignedPeakTuples();
 
-    if (sincesignedpeaktuples.size() > 0)
-         fprintf(stderr,"AddLiveSignedPeakHashes: Peaks signed since %d\n", sincesignedpeaktuples.size() );
+    //if (sincesignedpeaktuples.size() > 0)
+    //     fprintf(stderr,"AddLiveSignedPeakHashes: Peaks signed since %d\n", sincesignedpeaktuples.size() );
     for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
     {
         BinHashSigTuple bhst = *iter;
-        fprintf(stderr,"AddLiveSignedPeakHashes: Adding since signed peak %s\n", bhst.bin().str().c_str() );
+        //fprintf(stderr,"AddLiveSignedPeakHashes: Adding since signed peak %s\n", bhst.bin().str().c_str() );
     }
 
     // Arno, 2013-03-25: If not source, forward only unknown signed peaks
@@ -206,9 +206,7 @@ void    Channel::AddLivePeakRightHashes(struct evbuffer *evb, bin_t pos)
     int nchunks_per_sign_layer = (int)log2((double)nchunks_per_sign);
 
     bin_t p = pos.right();
-
-    fprintf(stderr,"AddLiveRightHashes: till layer %d got layer %d\n", nchunks_per_sign_layer, p.layer() );
-
+    //fprintf(stderr,"AddLiveRightHashes: till layer %d got layer %d\n", nchunks_per_sign_layer, p.layer() );
     while (p.layer() >= nchunks_per_sign_layer)
     {
     	Sha1Hash h = hashtree()->hash(p);

@@ -19,9 +19,12 @@
  *  - picker that handles total chunk loss
  *  - picker that can hook-in from just peers
  *  - picker than optimizes sharing (cf. small swarms sharing)
+ *      * don't have piece_due
+ *      * need rarest or latest bla-bla (UTorino guy)
  *  - aux live seeders?
  *  - restartable live source (idea for UMT: just start new subtree, remembering transient root hash of previous to be used when tree grows in level above current size.)
  *
+ *  - avg upload buggy? Check problem found by Riccardo.
  *
  */
 //LIVE
@@ -66,7 +69,7 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, bool ch
 {
     Initialize(check_netwvshash);
 
-    picker_ = new SimpleLivePiecePicker(this);
+    picker_ = new SharingLivePiecePicker(this);
     picker_->Randomize(rand()&63);
 }
 
