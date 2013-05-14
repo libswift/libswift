@@ -501,7 +501,6 @@ BinHashSigTuple LiveHashTree::OfferSignedPeakHash(bin_t pos, Signature &sig)
 {
     // TODO check sig
     // return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,sig);
-    // TODO store sig
 
     if (tree_debug)
         fprintf(stderr,"umt: OfferSignedPeakHash: peak %s\n", pos.str().c_str() );
@@ -521,10 +520,13 @@ BinHashSigTuple LiveHashTree::OfferSignedPeakHash(bin_t pos, Signature &sig)
     bool stored=false;
     while (i<signed_peak_count_)
     {
+        fprintf(stderr,"umt: OfferSignedPeakHash: my %s place %s\n", signed_peak_bins_[i].str().c_str(), pos.str().c_str() );
+
         if (pos == signed_peak_bins_[i])
         {
-            stored = true;
-            break;
+            //stored = true;
+            //break;
+            return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,sig);
         }
         else if (pos.contains(signed_peak_bins_[i]))
         {
@@ -556,6 +558,18 @@ BinHashSigTuple LiveHashTree::OfferSignedPeakHash(bin_t pos, Signature &sig)
                 // Retest current i as it has been replaced
                 continue;
             }
+        }
+        else if (signed_peak_bins_[i].contains(pos))
+        {
+            // Resend of signed peak by peer other than source, ignore
+            if (tree_debug)
+                fprintf(stderr,"umt: OfferSignedPeakHash: outdated\n" );
+
+            return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,sig);
+        }
+        else
+        {
+            fprintf(stderr,"umt: OfferSignedPeakHash: fish nor flesh\n" );
         }
         i++;
     }
