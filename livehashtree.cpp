@@ -1179,7 +1179,11 @@ const Sha1Hash& LiveHashTree::hash(bin_t pos) const
     else
     {
         if (!n->GetVerified())
-            fprintf(stderr,"umt::hash %s not verified SENDING!\n", pos.str().c_str() );
+        {
+            if (tree_debug)
+        	fprintf(stderr,"umt::hash %s not verified SENDING!\n", pos.str().c_str() );
+            dprintf("%s umt::hash %s SENDING unverified!\n", tintstr(), pos.str().c_str() );
+        }
         return n->GetHash();
     }
 }

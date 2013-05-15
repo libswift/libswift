@@ -87,20 +87,12 @@ class SimpleLivePiecePicker : public LivePiecePicker {
         //dprintf("live: pp: new cur end\n" );
 
         // Request next from this peer, if not already requested
-        bin_t hint = pickLargestBin(offer,current_bin_);
+        bin_t hint = PickLargestBin(offer,current_bin_);
         if (hint == bin_t::NONE)
         {
-            //dprintf("live: pp: Look beyond %s\n", current_bin_.str().c_str() );
             // See if there is stuff to download beyond current bin
-            hint = ack_hint_out_.find_empty(current_bin_);
-            //dprintf("live: pp: Empty is %s boe %llu boc %llu\n", hint.str().c_str(), hint.toUInt(), current_bin_.toUInt() );
-
-            // Safety catch, find_empty(offset) apparently buggy.
-            if (hint.base_offset() <= current_bin_.base_offset())
-        	hint = bin_t::NONE;
-
-            if (hint != bin_t::NONE)
-        	hint = pickLargestBin(offer,hint);
+            //dprintf("live: pp: Look beyond %s\n", current_bin_.str().c_str() );
+            hint = PickBeyondCurrentPos(offer);
         }
 
         if (hint == bin_t::NONE)
@@ -115,7 +107,7 @@ class SimpleLivePiecePicker : public LivePiecePicker {
     }
 
 
-    bin_t pickLargestBin(binmap_t& offer, bin_t starthint)
+    bin_t PickLargestBin(const binmap_t& offer, bin_t starthint)
     {
 	bin_t hint;
         if (offer.is_filled(starthint) && ack_hint_out_.is_empty(starthint))
@@ -310,14 +302,31 @@ class SimpleLivePiecePicker : public LivePiecePicker {
     {
 	return search4hookin_;
     }
+
+    /** See if chunks are on offer beyond current pos */
+    bin_t PickBeyondCurrentPos(const binmap_t &offer)
+    {
+	//dprintf("live: pp: Look beyond %s\n", current_bin_.str().c_str() );
+	bin_t hint = ack_hint_out_.find_empty(current_bin_);
+	//dprintf("live: pp: Empty is %s boe %llu boc %llu\n", hint.str().c_str(), hint.toUInt(), current_bin_.toUInt() );
+
+	// Safety catch, find_empty(offset) apparently buggy.
+	if (hint.base_offset() <= current_bin_.base_offset())
+	    hint = bin_t::NONE;
+
+	if (hint != bin_t::NONE)
+	    hint = PickLargestBin(offer,hint);
+
+	return hint;
+    }
+
 };
 
 
-
-
-
-/** Optimized for (small swarms) sharing  */
 class SharingLivePiecePicker : public SimpleLivePiecePicker {
+    /**
+     * Optimized for (small swarms) sharing
+     */
 
     /* the number of peers at which the chance of downloading from the source
      * is lowest. See PiecePickerStreaming. */
@@ -331,10 +340,12 @@ class SharingLivePiecePicker : public SimpleLivePiecePicker {
      * that have uploaded data in the last LIVE_PEERS_BIAS_UPLOAD_IDLE_SECS */
     static const float LIVE_PEERS_BIAS_FORWARDER_DLPROB_BONUS = 0.5;  // 0..1
 
+    static const uint32_t LIVE_MAX_ATTEMPTS_BEFORE_CHUNK_DROP= 100;
+    uint32_t same_curbin_count_;
 
 public:
 
-    SharingLivePiecePicker (LiveTransfer* trans_to_pick_from) : SimpleLivePiecePicker(trans_to_pick_from)
+    SharingLivePiecePicker (LiveTransfer* trans_to_pick_from) : SimpleLivePiecePicker(trans_to_pick_from), same_curbin_count_(0)
     {
     }
 
@@ -355,31 +366,55 @@ public:
 	while (transfer_->ack_out()->is_filled(current_bin_))
 	{
 	    current_bin_ = bin_t(0,current_bin_.layer_offset()+1);
+	    same_curbin_count_ = 0;
 	    //fprintf(stderr,"live: pp: new cur is %s\n", current_bin_.str().c_str() );
 	}
+	same_curbin_count_++;
 	//dprintf("live: pp: new cur end\n" );
 
 	char priority='H';
 	// Request next from this peer, if not already requested
-	bin_t hint = pickLargestBin(offer,current_bin_);
+	bin_t hint = PickLargestBin(offer,current_bin_);
 	if (hint == bin_t::NONE)
 	{
-	    priority = 'M';
-	    //dprintf("live: pp: Look beyond %s\n", current_bin_.str().c_str() );
-	    // See if there is stuff to download beyond current bin
-	    hint = ack_hint_out_.find_empty(current_bin_);
-	    //dprintf("live: pp: Empty is %s boe %llu boc %llu\n", hint.str().c_str(), hint.toUInt(), current_bin_.toUInt() );
+	    if (same_curbin_count_  >  LIVE_MAX_ATTEMPTS_BEFORE_CHUNK_DROP)
+	    {
+	        // current_bin_ not picked for many times. Check if we should skip
+		same_curbin_count_ = 0;
+		bool skip = CheckSkipPolicy();
+		if (skip)
+		{
+		    // Skip over chunk
+		    current_bin_ = bin_t(0,current_bin_.layer_offset()+1);
+		    dprintf("%s live: pp: SKIP to chunk %s\n", tintstr(), current_bin_.str().c_str() );
 
-	    // Safety catch, find_empty(offset) apparently buggy.
-	    if (hint.base_offset() <= current_bin_.base_offset())
-		hint = bin_t::NONE;
-
-	    if (hint != bin_t::NONE)
-		hint = pickLargestBin(offer,hint);
+                    hint = PickLargestBin(offer,current_bin_);
+		    if (hint == bin_t::NONE)
+		    {
+		         // Again not found, see if there is stuff to download beyond current bin
+			 priority = 'M';
+			 hint = PickBeyondCurrentPos(offer);
+		    }
+		}
+		else
+		{
+		    // wait to get from other peer
+		    fprintf(stderr,"live: pp: chunk not offered in long time, but avail or newest %s\n", current_bin_.str().c_str() );
+		}
+	    }
+	    else
+	    {
+		// See if there is stuff to download beyond current bin
+		priority = 'M';
+                hint = PickBeyondCurrentPos(offer);
+	    }
 	}
 
 	if (hint == bin_t::NONE)
+	{
+	    // current_bin_ not on offer, nor any subsequent chunks
 	    return hint;
+	}
 
 	// When picking from source, do small-swarms optimization, unless urgent
 	if (priority != 'H' && source_seen_ && source_channel_id_ == channelid)
@@ -430,8 +465,38 @@ public:
 	hint_out_.push_back(tintbin(NOW,hint));
 	return hint;
     }
-};
 
+
+    bool CheckSkipPolicy()
+    {
+	/** Policy: See if chunk is available from any of the connected peers.
+	 * If so, don't skip. If not check if there are chunks beyond.
+	 */
+        channels_t *chansptr = transfer_->GetChannels();
+        channels_t::iterator iter;
+        bool found=false;
+        bool beyond=false;
+	for (iter=chansptr->begin(); iter!=chansptr->end(); iter++)
+	{
+	    Channel *c = *iter;
+	    if (c != NULL && c->is_established())
+	    {
+	        found = c->ack_in() .is_filled(current_bin_);
+	        if (found)
+	            return false; // don't skip
+	        else
+	        {
+	            // Check if there are chunks already past current_bin_ that we can skip to
+	            // If not, don't skip. May be waiting for source to generate next chunk.
+	            bin_t hint = PickBeyondCurrentPos(c->ack_in());
+	            if (hint != bin_t::NONE)
+	        	beyond = true;
+	        }
+	    }
+	}
+	return beyond;
+    }
+};
 
 
 #endif

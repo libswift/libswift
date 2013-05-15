@@ -17,7 +17,6 @@
  *
  *  TODO:
  *  - picker that handles total chunk loss
- *  - picker that can hook-in from just peers
  *  - picker than optimizes sharing (cf. small swarms sharing)
  *      * don't have piece_due
  *      * need rarest or latest bla-bla (UTorino guy)
