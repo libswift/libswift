@@ -857,11 +857,57 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     if (tree_debug)
         fprintf(stderr,"umt: OfferHash: setting hash %s %s\n",pos.str().c_str(),hash.hex().c_str() );
 
-    if (!pos.is_base())
-        return false; // who cares?
-
     Node *piter = iter;
     Sha1Hash uphash = hash;
+
+    if (!pos.is_base())
+    {
+	// Arno, 2013-05-14: Optimization for ridge hashes
+        piter = iter;
+	parent = piter->GetParent();
+	if (parent == NULL || !parent->GetVerified())
+	{
+	    if (tree_debug)
+	        fprintf(stderr,"umt: OfferHash: non-base hash %s could not be verified, parent bad\n",pos.str().c_str() );
+	    return false;
+	}
+
+	if (pos.is_left())
+	{
+	    piter = parent->GetRight();
+	    if (piter == NULL || !piter->GetVerified())
+	    {
+		 if (tree_debug)
+		     fprintf(stderr,"umt: OfferHash: non-base hash %s could not be verified, right sibling bad\n",pos.str().c_str() );
+
+		return false;
+	    }
+	    uphash = Sha1Hash(iter->GetHash(),piter->GetHash());
+	}
+	else
+	{
+	    piter = parent->GetLeft();
+	    if (piter == NULL || !piter->GetVerified())
+	    {
+		 if (tree_debug)
+		     fprintf(stderr,"umt: OfferHash: non-base hash %s could not be verified, left sibling bad\n",pos.str().c_str() );
+
+		return false;
+	    }
+	    uphash = Sha1Hash(piter->GetHash(),iter->GetHash());
+	}
+	if (uphash == parent->GetHash())
+	{
+	     iter->SetVerified(true);
+             if (tree_debug)
+	         fprintf(stderr,"umt: OfferHash: non-base hash %s verified OK\n",pos.str().c_str() );
+
+	    return true;
+	}
+	return false;
+    }
+
+
 
     if (tree_debug)
         fprintf(stderr,"umt: OfferHash: verifying %s\n", pos.str().c_str() );
@@ -1133,7 +1179,7 @@ const Sha1Hash& LiveHashTree::hash(bin_t pos) const
     else
     {
         if (!n->GetVerified())
-            fprintf(stderr,"umt::hash %s not verified!\n", pos.str().c_str() );
+            fprintf(stderr,"umt::hash %s not verified SENDING!\n", pos.str().c_str() );
         return n->GetHash();
     }
 }
