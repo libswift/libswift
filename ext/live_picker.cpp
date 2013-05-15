@@ -359,8 +359,30 @@ public:
 	}
 	//dprintf("live: pp: new cur end\n" );
 
-	// When picking from source, do small-swarms optimization
-	if (source_seen_ && source_channel_id_ == channelid)
+	char priority='H';
+	// Request next from this peer, if not already requested
+	bin_t hint = pickLargestBin(offer,current_bin_);
+	if (hint == bin_t::NONE)
+	{
+	    priority = 'M';
+	    //dprintf("live: pp: Look beyond %s\n", current_bin_.str().c_str() );
+	    // See if there is stuff to download beyond current bin
+	    hint = ack_hint_out_.find_empty(current_bin_);
+	    //dprintf("live: pp: Empty is %s boe %llu boc %llu\n", hint.str().c_str(), hint.toUInt(), current_bin_.toUInt() );
+
+	    // Safety catch, find_empty(offset) apparently buggy.
+	    if (hint.base_offset() <= current_bin_.base_offset())
+		hint = bin_t::NONE;
+
+	    if (hint != bin_t::NONE)
+		hint = pickLargestBin(offer,hint);
+	}
+
+	if (hint == bin_t::NONE)
+	    return hint;
+
+	// When picking from source, do small-swarms optimization, unless urgent
+	if (priority != 'H' && source_seen_ && source_channel_id_ == channelid)
 	{
 	     /* Up to trustdl seconds before playout deadline
 		we put our faith into peers to deliver us the
@@ -400,25 +422,6 @@ public:
 	    }
 	}
 
-	// Request next from this peer, if not already requested
-	bin_t hint = pickLargestBin(offer,current_bin_);
-	if (hint == bin_t::NONE)
-	{
-	    //dprintf("live: pp: Look beyond %s\n", current_bin_.str().c_str() );
-	    // See if there is stuff to download beyond current bin
-	    hint = ack_hint_out_.find_empty(current_bin_);
-	    //dprintf("live: pp: Empty is %s boe %llu boc %llu\n", hint.str().c_str(), hint.toUInt(), current_bin_.toUInt() );
-
-	    // Safety catch, find_empty(offset) apparently buggy.
-	    if (hint.base_offset() <= current_bin_.base_offset())
-		hint = bin_t::NONE;
-
-	    if (hint != bin_t::NONE)
-		hint = pickLargestBin(offer,hint);
-	}
-
-	if (hint == bin_t::NONE)
-	    return hint;
 
 	//dprintf("live: pp: Picked %s\n", hint.str().c_str() );
 
