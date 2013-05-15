@@ -40,7 +40,7 @@
  *  The uncle hash algorithm assumes that (2,1) the hash of the 4 new chunks
  *  was sent to the peer when chunks from (2,0) where sent (after all, (2,1)
  *  is their uncle). However, that part of the tree did not yet exist, so it
- *  wasn't sent. We call these unsent uncles "right hashes".
+ *  wasn't sent. We call these unsent uncles "ridge hashes".
  */
 #ifndef SWIFT_LIVE_HASH_TREE_H
 #define SWIFT_LIVE_HASH_TREE_H

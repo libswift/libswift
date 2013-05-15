@@ -169,7 +169,7 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
             unknownpeaktuples.erase(unknownpeaktuples.begin()+i+1);
  #endif
 
-        // Put in datagram, including right hashes
+        // Put in datagram, including ridge hashes
         AddLiveSignedPeakHashes(evb,unknownpeaktuples,true);
 
         // Forget, on loss the latest signed peak is sent with all uncles,
@@ -180,7 +180,7 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
 }
 
 
-void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &peaktuples, bool includeright)
+void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &peaktuples, bool includeridge)
 {
     bhstvector::iterator iter;
     for (iter= peaktuples.begin(); iter != peaktuples.end(); iter++)
@@ -201,7 +201,7 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &peakt
 
         dprintf("%s #%u +sigh %s %d\n",tintstr(),id_,bhst.bin().str().c_str(), bhst.sig().length() );
 
-        if (includeright)
+        if (includeridge)
         {
             // Arno, 2013-05-13: With Unified Merkle Trees, say we have a tree of 4
             // chunks with peak (2,0). When the tree is expanded from 4 to 8 chunks,
@@ -210,9 +210,10 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &peakt
             // where sent (after all, (2,1) is their uncle). However, that part of
             // the tree did not yet exist, so it wasn't sent. To fix this we send
             // the hashes to the right of the new peak (3,0) as these are "hashes
-            // needed to verify the integrity of the chunk" (PPSP spec).
+            // needed to verify the integrity of the chunk" (PPSP spec). We call
+            // these hashes "ridge hashes".
             //
-            AddLivePeakRightHashes(evb,bhst.bin());
+            AddLivePeakRidgeHashes(evb,bhst.bin());
         }
     }
 }
@@ -239,16 +240,16 @@ bin_t  Channel::AddLiveSignedPeakHash4Retransmit(struct evbuffer *evb, bin_t pos
         }
     }
 
-    // Put in datagram, including right hashes
+    // Put in datagram, including ridge hashes
     AddLiveSignedPeakHashes(evb,containpeaktuples,true);
 
     return signedpeak;
 }
 
 
-void    Channel::AddLivePeakRightHashes(struct evbuffer *evb, bin_t pos)
+void    Channel::AddLivePeakRidgeHashes(struct evbuffer *evb, bin_t pos)
 {
-    dprintf("%s #%u +right hash for %s\n",tintstr(),id_,pos.str().c_str());
+    dprintf("%s #%u +ridge hash for %s\n",tintstr(),id_,pos.str().c_str());
 
     // Only need to send down to smallest peak subtree
     LiveTransfer *lt = (LiveTransfer *)transfer();
@@ -256,7 +257,7 @@ void    Channel::AddLivePeakRightHashes(struct evbuffer *evb, bin_t pos)
     int nchunks_per_sign_layer = (int)log2((double)nchunks_per_sign);
 
     bin_t p = pos.right();
-    fprintf(stderr,"AddLiveRightHashes: till layer %d got layer %d\n", nchunks_per_sign_layer, p.layer() );
+    fprintf(stderr,"AddLiveridgeHashes: till layer %d got layer %d\n", nchunks_per_sign_layer, p.layer() );
 
     while (p.layer() >= nchunks_per_sign_layer)
     {
