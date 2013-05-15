@@ -102,8 +102,6 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
             LiveHashTree *umt = (LiveHashTree *)hashtree();
             initialsigpeaktuples = umt->GetCurrentSignedPeakTuples();
 
-            fprintf(stderr,"AddLiveSignedPeakHashes: BEFORE Initial peak count %d vector %d \n", initial_peak_count_, initialsigpeaktuples.size() );
-
             // Add to since signed
             AddSinceSignedPeakTuples(initialsigpeaktuples);
 
@@ -119,12 +117,13 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
             initialsigpeaktuples.erase(initialsigpeaktuples.begin()+initial_peak_count_,initialsigpeaktuples.end());
         }
 
-        fprintf(stderr,"AddLiveSignedPeakHashes: Initial peak count %d vector %d \n", initial_peak_count_, initialsigpeaktuples.size() );
+        // DEBUG
+        /*fprintf(stderr,"AddLiveSignedPeakHashes: Initial peak count %d vector %d \n", initial_peak_count_, initialsigpeaktuples.size() );
         for (iter=initialsigpeaktuples.begin(); iter != initialsigpeaktuples.end(); iter++)
         {
             BinHashSigTuple bhst = *iter;
             fprintf(stderr,"AddLiveSignedPeakHashes: Initial peak %s\n", bhst.bin().str().c_str() );
-        }
+        }*/
 
         // Put in datagram
         AddLiveSignedPeakHashes(evb,initialsigpeaktuples,false);
@@ -140,12 +139,12 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
         }
 
         // DEBUG
-        fprintf(stderr,"AddLiveSignedPeakHashes: Peaks signed since %d\n", sincesignedpeaktuples.size() );
+        /*fprintf(stderr,"AddLiveSignedPeakHashes: Peaks signed since %d\n", sincesignedpeaktuples.size() );
         for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
         {
             BinHashSigTuple bhst = *iter;
             fprintf(stderr,"AddLiveSignedPeakHashes: Adding since signed peak %s\n", bhst.bin().str().c_str() );
-        }
+        }*/
 
         // Arno, 2013-03-25: If not source, forward only unknown signed peaks
         // to connected peer
@@ -174,7 +173,7 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
 
         // Forget, on loss the latest signed peak is sent with all uncles,
         // see AddLiveUncleHashes(retransmit=true)
-        fprintf(stderr,"ClearSinceSignedPeakTuples\n");
+        //fprintf(stderr,"ClearSinceSignedPeakTuples\n");
         ClearSinceSignedPeakTuples();
     }
 }
@@ -556,7 +555,6 @@ void    Channel::Send () {
     {
         if (is_established()) {
             // FIXME: seeder check
-            fprintf(stderr,"AddPeakHashes: BEFORE1\n");
             AddPeakHashes(evb);
             AddHave(evb);
             AddAck(evb);
@@ -574,7 +572,6 @@ void    Channel::Send () {
             data = AddData(evb);
         } else  {
             AddHandshake(evb);
-            fprintf(stderr,"AddPeakHashes: BEFORE2\n");
             AddPeakHashes(evb);
             AddHave(evb); // Arno, 2011-10-28: from AddHandShake. Why double?
             AddHave(evb);

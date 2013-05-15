@@ -12,7 +12,7 @@
 using namespace swift;
 
 
-#define  tree_debug	true
+#define  tree_debug	false
 
 
 /*
@@ -520,8 +520,6 @@ BinHashSigTuple LiveHashTree::OfferSignedPeakHash(bin_t pos, Signature &sig)
     bool stored=false;
     while (i<signed_peak_count_)
     {
-        fprintf(stderr,"umt: OfferSignedPeakHash: my %s place %s\n", signed_peak_bins_[i].str().c_str(), pos.str().c_str() );
-
         if (pos == signed_peak_bins_[i])
         {
             //stored = true;
@@ -566,10 +564,6 @@ BinHashSigTuple LiveHashTree::OfferSignedPeakHash(bin_t pos, Signature &sig)
                 fprintf(stderr,"umt: OfferSignedPeakHash: outdated\n" );
 
             return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,sig);
-        }
-        else
-        {
-            fprintf(stderr,"umt: OfferSignedPeakHash: fish nor flesh\n" );
         }
         i++;
     }
