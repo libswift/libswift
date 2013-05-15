@@ -29,9 +29,6 @@
  *  - Can't prune tree if it contains uncles?
  *      No: was caused by hint buildup, see dont-prune-uncles.log
  *
- *  - Check right hashes (i.e., if sibling verified and parent, then check)
- *
- *
  *
  *  Something to note when working with the Unified Merkle Tree scheme:
  *
