@@ -322,25 +322,27 @@ class SimpleLivePiecePicker : public LivePiecePicker {
 
 };
 
+/* the number of peers at which the chance of downloading from the source
+ * is lowest. See PiecePickerStreaming. */
+#define SHAR_LIVE_PP_BIAS_LOW_NPEERS 		10
 
+/* if a peer has not uploaded a chunk in this amount of seconds it is no longer
+ * considered an uploader in the peers bias algorithm. */
+#define SHAR_LIVE_PP_BIAS_UPLOAD_IDLE_SECS 	5.0
+
+/* The increase in probability of downloading from the source that peers get
+ * that have uploaded data in the last SHAR_LIVE_PP_BIAS_UPLOAD_IDLE_SECS */
+#define SHAR_LIVE_PP_BIAS_FORWARDER_DLPROB_BONUS  0.5  // 0..1
+
+/** How often to test if a chunk should be skipped when curren pos not progressing */
+#define SHAR_LIVE_PP_MAX_ATTEMPTS_BEFORE_CHUNK_DROP	100
+
+
+/**
+ * Optimized for (small swarms) sharing
+ */
 class SharingLivePiecePicker : public SimpleLivePiecePicker {
-    /**
-     * Optimized for (small swarms) sharing
-     */
 
-    /* the number of peers at which the chance of downloading from the source
-     * is lowest. See PiecePickerStreaming. */
-    static const uint32_t LIVE_PEERS_BIAS_LOW_NPEERS;
-
-    /* if a peer has not uploaded a chunk in this amount of seconds it is no longer
-     * considered an uploader in the peers bias algorithm. */
-    static const float LIVE_PEERS_BIAS_UPLOAD_IDLE_SECS;
-
-    /* The increase in probability of downloading from the source that peers get
-     * that have uploaded data in the last LIVE_PEERS_BIAS_UPLOAD_IDLE_SECS */
-    static const float LIVE_PEERS_BIAS_FORWARDER_DLPROB_BONUS;
-
-    static const uint32_t LIVE_MAX_ATTEMPTS_BEFORE_CHUNK_DROP;
     uint32_t same_curbin_count_;
 
 public:
@@ -377,7 +379,7 @@ public:
 	bin_t hint = PickLargestBin(offer,current_bin_);
 	if (hint == bin_t::NONE)
 	{
-	    if (same_curbin_count_  >  LIVE_MAX_ATTEMPTS_BEFORE_CHUNK_DROP)
+	    if (same_curbin_count_ > SHAR_LIVE_PP_MAX_ATTEMPTS_BEFORE_CHUNK_DROP)
 	    {
 	        // current_bin_ not picked for many times. Check if we should skip
 		same_curbin_count_ = 0;
@@ -428,7 +430,7 @@ public:
 		from source.
 
 		This download probability will decrease till
-		swarm has LIVE_PEERS_BIAS_LOW_NPEERS peers,
+		swarm has SHAR_LIVE_PP_BIAS_LOW_NPEERS peers,
 		after that it increases again, to ensure the
 		behaviour is the old behaviour for larger
 		swarms. Old behaviour is to download immediately.
@@ -438,7 +440,7 @@ public:
 		download, you should such that you can forward
 		to your other peers.
 	     */
-	    int32_t nlow = LIVE_PEERS_BIAS_LOW_NPEERS;
+	    int32_t nlow = SHAR_LIVE_PP_BIAS_LOW_NPEERS;
 	    int32_t npeers = transfer_->GetNumLeechers()+transfer_->GetNumSeeders();
 	    uint32_t x = std::max((int32_t)1,std::min(npeers,nlow) - std::max((int32_t)0,npeers-nlow));
 	    double dlprob = 1.0/((double)x);
@@ -446,8 +448,8 @@ public:
 	    // Extra: Increase download prob when you are
 	    // forwarding
 	    //since_last_upload = time.time() - connection.upload.last_upload_time.get()
-    	    //if since_last_upload < self.transporter.LIVE_PEERS_BIAS_UPLOAD_IDLE_SECS:
-            //    dlprob += LIVE_PEERS_BIAS_FORWARDER_DLPROB_BONUS;
+    	    //if since_last_upload < self.transporter.SHAR_LIVE_PP_BIAS_UPLOAD_IDLE_SECS:
+            //    dlprob += SHAR_LIVE_PP_BIAS_FORWARDER_DLPROB_BONUS;
 
 	    double r = (double)rand()/(double)RAND_MAX;
 	    if (r >= dlprob)  // Trust you will get it from peers, don't dl from source
@@ -497,13 +499,6 @@ public:
 	return beyond;
     }
 };
-
-
-const uint32_t SharingLivePiecePicker::LIVE_PEERS_BIAS_LOW_NPEERS = 10;
-const float SharingLivePiecePicker::LIVE_PEERS_BIAS_UPLOAD_IDLE_SECS = 5.0;
-const float SharingLivePiecePicker::LIVE_PEERS_BIAS_FORWARDER_DLPROB_BONUS = 0.5;  // 0..1
-const uint32_t SharingLivePiecePicker::LIVE_MAX_ATTEMPTS_BEFORE_CHUNK_DROP= 100;
-
 
 
 #endif
