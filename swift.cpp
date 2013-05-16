@@ -71,6 +71,7 @@ void usage(void)
     fprintf(stderr,"  -3 zerosdir-in-hex, a win32 workaround for non UTF-16 popen\n");
     fprintf(stderr,"  -T time-out in seconds for slow zero state connections\n");
     fprintf(stderr,"  -G GTest mode\n");
+    fprintf(stderr,"  -W live discard window in chunks\n");
     fprintf(stderr, "%s\n", SubversionRevisionString.c_str() );
 
 }
@@ -93,8 +94,8 @@ void LiveSourceHTTPResponseCallback(struct evhttp_request *req, void *arg);
 void LiveSourceHTTPDownloadChunkCallback(struct evhttp_request *req, void *arg);
 
 // Gateway stuff
-bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf );
-bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr);
+bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint64_t disc_wnd, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf );
+bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr,uint64_t disc_wnd);
 bool HTTPIsSending();
 #ifndef SWIFTGTEST
 bool InstallStatsGateway(struct event_base *evbase,Address addr);
@@ -385,9 +386,9 @@ int utf8main (int argc, char** argv)
     }
 
     if (httpgw_enabled)
-        InstallHTTPGateway(Channel::evbase,httpaddr,chunk_size,maxspeed,"",-1,-1);
+        InstallHTTPGateway(Channel::evbase,httpaddr,livesource_disc_wnd,chunk_size,maxspeed,"",-1,-1);
     if (cmdgw_enabled)
-        InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr);
+        InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr,livesource_disc_wnd);
 
 // Arno, 2013-01-10: Cannot use while GTesting because statsgw is not part of
 // libswift, but considered part of an app on top.
@@ -582,7 +583,7 @@ int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address &tracker, 
     if (!livestream)
 	td = swift::Open(filename,hash,tracker,force_check_diskvshash,true,false,activate,chunk_size);
     else
-	td = swift::LiveOpen(filename,hash,tracker,true,chunk_size);
+	td = swift::LiveOpen(filename,hash,tracker,true,livesource_disc_wnd,chunk_size);
     return td;
 }
 

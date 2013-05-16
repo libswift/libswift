@@ -26,6 +26,12 @@
  *
  *  - avg upload buggy? Check problem found by Riccardo.
  *
+ *  - Windows needs live discard window < max as it doesn't have sparse files,
+ *    so tuning in at chunk 197992 without a smaller window causes a
+ *    file-allocation stall in client.sh
+ *
+ *  - (related) Pass live discard window via CMDGW interface.
+ *
  */
 //LIVE
 #include "swift.h"
@@ -62,12 +68,12 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const p
 
 
 /** A constructor for live client. */
-LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, bool check_netwvshash, uint32_t chunk_size) :
+LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, bool check_netwvshash, uint64_t disc_wnd, uint32_t chunk_size) :
         ContentTransfer(LIVE_TRANSFER), pubkey_(pubkey), chunk_size_(chunk_size), am_source_(false),
         filename_(filename), last_chunkid_(0), offset_(0),
         chunks_since_sign_(0),nchunks_per_sign_(0)
 {
-    Initialize(check_netwvshash);
+    Initialize(check_netwvshash,disc_wnd);
 
     picker_ = new SharingLivePiecePicker(this);
     picker_->Randomize(rand()&63);
@@ -396,7 +402,7 @@ void LiveTransfer::OnDataPruneTree(Handshake &hs_out, bin_t pos, uint32_t nchunk
 		    leftpos = leftpos.parent();
 		}
 	    }
-	    fprintf(stderr,"live: OnDataPruneTree: prune %s log %lf nchunks %d window %llu when %llu\n", leftpos.str().c_str(), log2((double)lastchunkid), nchunks2forget, hs_out.live_disc_wnd_, lastchunkid );
+	    //fprintf(stderr,"live: OnDataPruneTree: prune %s log %lf nchunks %d window %llu when %llu\n", leftpos.str().c_str(), log2((double)lastchunkid), nchunks2forget, hs_out.live_disc_wnd_, lastchunkid );
 	    LiveHashTree *umt = (LiveHashTree *)hashtree();
 	    umt->PruneTree(leftpos);
 	}

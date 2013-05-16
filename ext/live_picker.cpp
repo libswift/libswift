@@ -330,17 +330,17 @@ class SharingLivePiecePicker : public SimpleLivePiecePicker {
 
     /* the number of peers at which the chance of downloading from the source
      * is lowest. See PiecePickerStreaming. */
-    static const uint32_t LIVE_PEERS_BIAS_LOW_NPEERS = 10;
+    static const uint32_t LIVE_PEERS_BIAS_LOW_NPEERS;
 
     /* if a peer has not uploaded a chunk in this amount of seconds it is no longer
      * considered an uploader in the peers bias algorithm. */
-    static const float LIVE_PEERS_BIAS_UPLOAD_IDLE_SECS = 5.0;
+    static const float LIVE_PEERS_BIAS_UPLOAD_IDLE_SECS;
 
     /* The increase in probability of downloading from the source that peers get
      * that have uploaded data in the last LIVE_PEERS_BIAS_UPLOAD_IDLE_SECS */
-    static const float LIVE_PEERS_BIAS_FORWARDER_DLPROB_BONUS = 0.5;  // 0..1
+    static const float LIVE_PEERS_BIAS_FORWARDER_DLPROB_BONUS;
 
-    static const uint32_t LIVE_MAX_ATTEMPTS_BEFORE_CHUNK_DROP= 100;
+    static const uint32_t LIVE_MAX_ATTEMPTS_BEFORE_CHUNK_DROP;
     uint32_t same_curbin_count_;
 
 public:
@@ -497,6 +497,13 @@ public:
 	return beyond;
     }
 };
+
+
+const uint32_t SharingLivePiecePicker::LIVE_PEERS_BIAS_LOW_NPEERS = 10;
+const float SharingLivePiecePicker::LIVE_PEERS_BIAS_UPLOAD_IDLE_SECS = 5.0;
+const float SharingLivePiecePicker::LIVE_PEERS_BIAS_FORWARDER_DLPROB_BONUS = 0.5;  // 0..1
+const uint32_t SharingLivePiecePicker::LIVE_MAX_ATTEMPTS_BEFORE_CHUNK_DROP= 100;
+
 
 
 #endif

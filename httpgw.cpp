@@ -72,6 +72,7 @@ int http_gw_reqs_open = 0;
 int http_gw_reqs_count = 0;
 struct evhttp *http_gw_event;
 struct evhttp_bound_socket *http_gw_handle;
+uint64_t httpgw_livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
 uint32_t httpgw_chunk_size = SWIFT_DEFAULT_CHUNK_SIZE; // Copy of cmdline param
 double *httpgw_maxspeed = NULL;                         // Copy of cmdline param
 std::string httpgw_storage_dir="";
@@ -998,7 +999,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 }
 
 
-bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf ) {
+bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint64_t disc_wnd, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf ) {
     // Arno, 2011-10-04: From libevent's http-server.c example
 
     // Arno, 2012-10-16: Made configurable for ANDROID
@@ -1025,6 +1026,7 @@ bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint32_t ch
         return false;
     }
 
+    httpgw_livesource_disc_wnd=disc_wnd;
     httpgw_chunk_size = chunk_size;
     // Arno, 2012-11-1: Make copy.
     httpgw_maxspeed = new double[2];

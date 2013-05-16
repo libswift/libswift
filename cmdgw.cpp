@@ -89,6 +89,7 @@ evutil_socket_t cmd_tunnel_sock=INVALID_SOCKET;
 
 // HTTP gateway address for PLAY cmd
 Address cmd_gw_httpaddr;
+uint64_t cmd_gw_livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
 
 #define cmd_gw_debug	false
 
@@ -1035,7 +1036,7 @@ void CmdGwListenErrorCallback(struct evconnlistener *listener, void *ctx)
 }
 
 
-bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr)
+bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr,uint64_t disc_wnd)
 {
     // Allocate libevent listener for cmd connections
     // From http://www.wangafu.net/~nickm/libevent-book/Ref8_listener.html
@@ -1054,6 +1055,7 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
     evconnlistener_set_error_cb(cmd_evlistener, CmdGwListenErrorCallback);
 
     cmd_gw_httpaddr = httpaddr;
+    cmd_gw_livesource_disc_wnd = disc_wnd;
 
     cmd_evbuffer = evbuffer_new();
 
