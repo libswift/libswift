@@ -452,7 +452,7 @@ public:
 	    double r = (double)rand()/(double)RAND_MAX;
 	    if (r >= dlprob)  // Trust you will get it from peers, don't dl from source
 	    {
-		fprintf(stderr,"live: pp: ssopt r %.02lf dlprob %.02lf npeers %u x %u\n", r, dlprob, npeers, x );
+		//fprintf(stderr,"live: pp: ssopt r %.02lf dlprob %.02lf npeers %u\n", r, dlprob, npeers);
 		return bin_t::NONE;
 	    }
 	}

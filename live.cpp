@@ -353,7 +353,7 @@ void LiveTransfer::OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *srcc)
         // Arno, 2013-05-13: Also record for channels being established
         if (c != srcc && !c->IsSource())
         {
-            fprintf(stderr,"live: OnVerified: announce to channel %d\n", c->id() );
+            //fprintf(stderr,"live: OnVerified: schedule for channel %d\n", c->id() );
             c->AddSinceSignedPeakTuples(newpeaktuples);
         }
     }

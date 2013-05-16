@@ -256,7 +256,7 @@ void    Channel::AddLivePeakRidgeHashes(struct evbuffer *evb, bin_t pos)
     int nchunks_per_sign_layer = (int)log2((double)nchunks_per_sign);
 
     bin_t p = pos.right();
-    fprintf(stderr,"AddLiveridgeHashes: till layer %d got layer %d\n", nchunks_per_sign_layer, p.layer() );
+    //fprintf(stderr,"AddLiveridgeHashes: till layer %d got layer %d\n", nchunks_per_sign_layer, p.layer() );
 
     while (p.layer() >= nchunks_per_sign_layer)
     {
