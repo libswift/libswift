@@ -12,7 +12,7 @@
 using namespace swift;
 
 
-#define  tree_debug	false
+#define  tree_debug	true
 
 
 /*
@@ -38,6 +38,36 @@ Signature::Signature(const Signature &copy) : sigbits_(NULL), siglen_(0)
     sigbits_ = new uint8_t[siglen_];
     memcpy(sigbits_,copy.sigbits_,siglen_);
 }
+
+Signature::Signature(bool hex, const uint8_t *sb, uint16_t len)
+{
+    if (len == 0)
+        return;
+    if (hex)
+    {
+	siglen_ = len/2;
+	sigbits_ = new uint8_t[siglen_];
+
+        int val;
+        for(int i=0; i<siglen_; i++)
+        {
+            if (sscanf((const char *)(sb+i*2), "%2x", &val)!=1)
+            {
+                memset(sigbits_,0,siglen_);
+                return;
+            }
+            sigbits_[i] = val;
+        }
+        assert(this->hex()==std::string((const char *)sb));
+    }
+    else
+    {
+	siglen_ = len;
+	sigbits_ = new uint8_t[siglen_];
+	memcpy(sigbits_,sb,siglen_);
+    }
+}
+
 
 Signature::~Signature()
 {
@@ -65,6 +95,16 @@ Signature & Signature::operator= (const Signature & source)
         }
     }
     return *this;
+}
+
+
+std::string    Signature::hex() const {
+    char *hex = new char[siglen_*2+1];
+    for(int i=0; i<siglen_; i++)
+        sprintf(hex+i*2, "%02x", (int)(unsigned char)sigbits_[i]);
+    std::string s(hex,HASHSZ*2);
+    delete hex;
+    return s;
 }
 
 
@@ -230,6 +270,9 @@ bin_t LiveHashTree::AddData(const char* data, size_t length)
 
     state_ = LHT_STATE_SIGN_DATA;
 
+
+
+
     return next->GetBin();
 }
 
@@ -339,6 +382,13 @@ Node *LiveHashTree::CreateNext()
 
 bhstvector LiveHashTree::UpdateSignedPeaks()
 {
+    if (tree_debug)
+    {
+	fprintf(stderr,"umt: UpdateSignedPeaks\n");
+        check_signed_peak_coverage();
+        check_peak_coverage();
+    }
+
     // Calc peak diffs
     bool changed=false;
 
@@ -492,6 +542,49 @@ Sha1Hash  LiveHashTree::DeriveRoot()
 }
 
 
+BinHashSigTuple LiveHashTree::GetRootTuple()
+{
+    if (root_ == NULL)
+	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
+
+    Sha1Hash roothash = DeriveRoot();
+
+    uint8_t* signedhash = new uint8_t[DUMMY_DEFAULT_SIG_LENGTH]; // placeholder
+    for (int k=0; k<20; k++)
+        signedhash[k] = 'v';
+    signedhash[19] = '\0';
+    Signature sig(signedhash,DUMMY_DEFAULT_SIG_LENGTH);
+    delete signedhash;
+
+    return BinHashSigTuple(root_->GetBin(),roothash,sig);
+}
+
+
+BinHashSigTuple LiveHashTree::InitFromCheckpoint(BinHashSigTuple roottup)
+{
+    OfferHash(roottup.bin(),roottup.hash());
+    BinHashSigTuple gottup = OfferSignedPeakHash(roottup.bin(),roottup.sig());
+
+    if (tree_debug)
+    {
+        check_signed_peak_coverage();
+        check_peak_coverage();
+    }
+
+    fprintf(stderr,"umt: InitFromCheckpoint: %s %s %s\n", gottup.bin().str().c_str(), gottup.hash().hex().c_str(), gottup.sig().hex().c_str() );
+
+    // Create fake right ridge to set addcursor_
+    bin_t baseright = gottup.bin().base_right();
+    CreateAndVerifyNode(baseright,Sha1Hash::ZERO,true);
+    addcursor_ = FindNode(baseright);
+
+    // Set fake sizes
+    sizec_ = gottup.bin().base_length();
+    size_ = sizec_ * chunk_size_;
+
+    return gottup;
+}
+
 
 /*
  * Live client specific
@@ -615,6 +708,8 @@ void LiveHashTree::check_peak_coverage(bool fireassert)
     bin_t::uint_t end = 0;
     for (int i=0; i<peak_count_; i++)
     {
+	fprintf(stderr,"umt: peak view: %s covers %s to %s\n", peak_bins_[i].str().c_str(), peak_bins_[i].base_left().str().c_str(), peak_bins_[i].base_right().str().c_str());
+
         if (i == 0)
         {
             end = peak_bins_[i].base_right().layer_offset();
@@ -645,7 +740,7 @@ void LiveHashTree::check_signed_peak_coverage(bool fireassert)
     bin_t::uint_t end = 0;
     for (int i=0; i<signed_peak_count_; i++)
     {
-        //fprintf(stderr,"umt: UpdateSignedPeaks: signed peak is: %s\n", signed_peak_bins_[i].str().c_str() );
+        fprintf(stderr,"umt: signed peak view: %s\n", signed_peak_bins_[i].str().c_str() );
         if (i == 0)
         {
             end = signed_peak_bins_[i].base_right().layer_offset();

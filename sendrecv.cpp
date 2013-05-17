@@ -794,8 +794,10 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     ssize_t r = transfer()->GetStorage()->Read((char *)vec.iov_base,
              transfer()->chunk_size(),tosend.base_offset()*transfer()->chunk_size());
     // TODO: corrupted data, retries, caching
-    if (r<0) {
+    if (r <= 0) {
         print_error("error on reading");
+
+        dprintf("%s #%u !data %s\n",tintstr(),id_,tosend.str().c_str());
         vec.iov_len = 0;
         evbuffer_commit_space(evb, &vec, 1);
         return bin_t::NONE;

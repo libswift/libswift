@@ -54,6 +54,7 @@ void usage(void)
     fprintf(stderr,"  -g, --httpgw\t[ip:|host:]port to bind HTTP content gateway to (no default)\n");
     fprintf(stderr,"  -s, --statsgw\t[ip:|host:]port to bind HTTP stats listen socket to (no default)\n");
     fprintf(stderr,"  -c, --cmdgw\t[ip:|host:]port to bind CMD listen socket to (no default)\n");
+    fprintf(stderr,"  -C, --cmdgwint\tcmdgw report interval in seconds\n");
     fprintf(stderr,"  -o, --destdir\tdirectory for saving data (default: none)\n");
     fprintf(stderr,"  -u, --uprate\tupload rate limit in KiB/s (default: unlimited)\n");
     fprintf(stderr,"  -y, --downrate\tdownload rate limit in KiB/s (default: unlimited)\n");
@@ -65,13 +66,15 @@ void usage(void)
     fprintf(stderr,"  -e, --zerosdir\tdirectory with checkpointed content to serve from with zero state\n");
     fprintf(stderr,"  -i, --source\tlive source input (URL or filename or - for stdin)\n");
     fprintf(stderr,"  -k, --live\tperform live download, use with -t and -h\n");
-    fprintf(stderr,"  -r filename to save URL to\n");
-    fprintf(stderr,"  -1 filename-in-hex, a win32 workaround for non UTF-16 popen\n");
-    fprintf(stderr,"  -2 urlfilename-in-hex, a win32 workaround for non UTF-16 popen\n");
-    fprintf(stderr,"  -3 zerosdir-in-hex, a win32 workaround for non UTF-16 popen\n");
-    fprintf(stderr,"  -T time-out in seconds for slow zero state connections\n");
+    fprintf(stderr,"  -r filename\t to save URL to\n");
+    fprintf(stderr,"  -1 filename-in-hex\ta win32 workaround for non UTF-16 popen\n");
+    fprintf(stderr,"  -2 urlfilename-in-hex\ta win32 workaround for non UTF-16 popen\n");
+    fprintf(stderr,"  -3 zerosdir-in-hex\ta win32 workaround for non UTF-16 popen\n");
+    fprintf(stderr,"  -T time-out\tin seconds for slow zero state connections\n");
     fprintf(stderr,"  -G GTest mode\n");
     fprintf(stderr,"  -W live discard window in chunks\n");
+    fprintf(stderr,"  -P live checkpoint filename\n");
+
     fprintf(stderr, "%s\n", SubversionRevisionString.c_str() );
 
 }
@@ -128,6 +131,7 @@ FILE *livesource_filep=NULL;
 int livesource_fd=-1;
 struct evbuffer *livesource_evb = NULL;
 uint64_t livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
+std::string livesource_checkpoint_filename = "";
 
 long long int cmdgw_report_counter=0;
 long long int cmdgw_report_interval=REPORT_INTERVAL; // seconds
@@ -167,6 +171,7 @@ int utf8main (int argc, char** argv)
         {"zerostimeout",required_argument, 0, 'T'},  // ZEROSTATE
         {"test",no_argument, 0, 'G'},  // Less command line testing for GTest usage
         {"ldw",required_argument, 0, 'W'}, // PPSP
+        {"lcf",required_argument, 0, 'P'}, // LIVECHECKPOINT
         {0, 0, 0, 0}
     };
 
@@ -185,7 +190,7 @@ int utf8main (int argc, char** argv)
     Channel::evbase = event_base_new();
 
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:ji:kC:1:2:3:T:GW:", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:ji:kC:1:2:3:T:GW:P:", long_options, 0)) ) {
         switch (c) {
             case 'h':
                 if (strlen(optarg)!=40)
@@ -332,6 +337,9 @@ int utf8main (int argc, char** argv)
             case 'W': // PPSP
                 if (sscanf(optarg,"%llu",&livesource_disc_wnd)!=1)
                     quit("report interval must be int\n");
+                break;
+            case 'P':
+                livesource_checkpoint_filename = strdup(optarg);
                 break;
             case 'T': // ZEROSTATE
                 double t=0.0;
@@ -683,13 +691,14 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
         else {
             // Source is file
             // Arno, 2013-05-13: fread blocks till requested number of items is read, want non-blocking
-            livesource_fd = open(livesource_input.c_str(),ROOPENFLAGS);
+            livesource_fd = open_utf8(livesource_input.c_str(),ROOPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+
             if (livesource_fd == -1)
                 quit("live: Could not open source input");
         }
 
         // Create swarm
-        livesource_lt = swift::LiveCreate(filename,swarmid,481,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,livesource_disc_wnd,chunk_size); // SIGNPEAKTODO
+        livesource_lt = swift::LiveCreate(filename,swarmid,481,livesource_checkpoint_filename,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,livesource_disc_wnd,chunk_size); // SIGNPEAKTODO
 
         // Periodically create chunks by reading from source
         evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
@@ -721,7 +730,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
         fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str() );
 
         // Create swarm
-        livesource_lt = swift::LiveCreate(filename,swarmid,481,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,livesource_disc_wnd,chunk_size); // SIGNPEAKTODO
+        livesource_lt = swift::LiveCreate(filename,swarmid,481,livesource_checkpoint_filename,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,livesource_disc_wnd,chunk_size); // SIGNPEAKTODO
 
         // Create HTTP client
         struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, httpservname.c_str(), httpport);

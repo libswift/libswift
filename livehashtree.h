@@ -29,6 +29,7 @@
  *  - Can't prune tree if it contains uncles?
  *      No: was caused by hint buildup, see dont-prune-uncles.log
  *
+ *  - Verify sizec_ correct
  *
  *  Something to note when working with the Unified Merkle Tree scheme:
  *
@@ -102,11 +103,13 @@ struct Signature
     uint16_t   siglen_;
     Signature() : sigbits_(NULL), siglen_(0)  {}
     Signature(uint8_t *sb, uint16_t len);
+    Signature(bool hex, const uint8_t *sb, uint16_t len);
     Signature(const Signature &copy);
     Signature & operator = (const Signature &source);
     ~Signature();
     uint8_t  *bits()  { return sigbits_; }
     uint16_t length() { return siglen_; }
+    std::string hex() const;
 };
 
 
@@ -151,6 +154,8 @@ class LiveHashTree: public HashTree
      uint32_t	    GetGuessedNChunksPerSig() { return guessed_nchunks_per_sig_; }
      /** Remove subtree rooted at pos */
      void           PruneTree(bin_t pos);
+     /** Return bin,hash,sig for current root */
+     BinHashSigTuple GetRootTuple();  // LIVECHECKPOINT
 
      /** If bhst.bin() != bin_t::NONE the signature was good. */
      BinHashSigTuple OfferSignedPeakHash(bin_t pos, Signature &sig);
@@ -158,6 +163,9 @@ class LiveHashTree: public HashTree
      bool CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified);
      /** Mark node as verified. verclass indicates where verification decision came from for debugging */
      bool SetVerifiedIfNot0(Node *piter, bin_t p, int verclass);
+
+     // LIVECHECKPOINT
+     BinHashSigTuple InitFromCheckpoint(BinHashSigTuple roottup);
 
      // Sanity checks
      void sane_tree();

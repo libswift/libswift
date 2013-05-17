@@ -32,6 +32,9 @@
  *
  *  - (related) Pass live discard window via CMDGW interface.
  *
+ *  - Test if CIPM None still works.
+ *
+ *  - sendrecv.cpp Don't add DATA+bin+etc if read of data fails.
  */
 //LIVE
 #include "swift.h"
@@ -55,15 +58,59 @@ std::vector<LiveTransfer*> LiveTransfer::liveswarms;
 #define TRANSFER_DESCR_LIVE_OFFSET	4000000
 
 /** A constructor for a live source. */
-LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash, uint32_t nchunks_per_sign, uint64_t disc_wnd, uint32_t chunk_size) :
+LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, std::string checkpoint_filename, bool check_netwvshash, uint32_t nchunks_per_sign, uint64_t disc_wnd, uint32_t chunk_size) :
 	ContentTransfer(LIVE_TRANSFER), chunk_size_(chunk_size), am_source_(true),
 	filename_(filename), last_chunkid_(0), offset_(0),
 	chunks_since_sign_(0),nchunks_per_sign_(nchunks_per_sign),
-	pubkey_(pubkey), privkey_(privkey)
+	pubkey_(pubkey), privkey_(privkey),
+	checkpoint_filename_(checkpoint_filename), checkpoint_bin_(bin_t::NONE)
 {
     Initialize(check_netwvshash,disc_wnd);
 
     picker_ = NULL;
+
+    BinHashSigTuple roottup = ReadCheckpoint();
+    if (GetDefaultHandshake().cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
+    {
+	// Start generating chunks from rootbin.base_right()+1
+    }
+    else if (GetDefaultHandshake().cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+    {
+	/*
+	 * Read live source state from checkpoint. This is the info about
+	 * the virtual root node of the last tree from the previous instance.
+	 * We turn this root node into a first peak in our new tree, but
+	 * do not advertise its chunks. Clients should skip over the unused
+	 * parts of the old tree and start downloading the chunks in the new
+	 * part of our tree.
+	 *
+	 *           new virtual root
+	 *             /          \
+	 *            /            \
+	 *     checkpoint        first new chunk
+	 *         root
+	 */
+	LiveHashTree *umt = (LiveHashTree *)hashtree_;
+	if (roottup.bin() != bin_t::NONE)
+	{
+	    BinHashSigTuple gottup = umt->InitFromCheckpoint(roottup);
+	    checkpoint_bin_ = gottup.bin();
+	    last_chunkid_ = checkpoint_bin_.base_right().base_offset()+1;
+	    offset_ = last_chunkid_ * chunk_size_;
+	}
+
+	bhstvector cursignpeaktuples = umt->GetCurrentSignedPeakTuples();
+	bhstvector::iterator iter;
+	for (iter= cursignpeaktuples.begin(); iter != cursignpeaktuples.end(); iter++)
+	{
+	    BinHashSigTuple bhst = *iter;
+	    fprintf(stderr,"live: source: restored sigpeak: %s %s %s lastchunkid %llu\n", bhst.bin().str().c_str(), bhst.hash().hex().c_str(), bhst.sig().hex().c_str(), last_chunkid_ );
+	}
+    }
+    else // SIGNALL
+    {
+	// Start generating chunks from rootbin.base_right()+1
+    }
 }
 
 
@@ -71,7 +118,8 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const p
 LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, bool check_netwvshash, uint64_t disc_wnd, uint32_t chunk_size) :
         ContentTransfer(LIVE_TRANSFER), pubkey_(pubkey), chunk_size_(chunk_size), am_source_(false),
         filename_(filename), last_chunkid_(0), offset_(0),
-        chunks_since_sign_(0),nchunks_per_sign_(0)
+        chunks_since_sign_(0),nchunks_per_sign_(0),
+        checkpoint_filename_(""), checkpoint_bin_(bin_t::NONE)
 {
     Initialize(check_netwvshash,disc_wnd);
 
@@ -263,9 +311,13 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
 
         	bhstvector newpeaktuples = umt->UpdateSignedPeaks();
         	fprintf(stderr,"live: AddData: UMT: adding %d to %d\n", newpeaktuples.size(), totalnewpeaktuples.size() );
-        	totalnewpeaktuples.insert(totalnewpeaktuples.end(), newpeaktuples.begin(), newpeaktuples.end() );
 
+        	totalnewpeaktuples.insert(totalnewpeaktuples.end(), newpeaktuples.begin(), newpeaktuples.end() );
         	fprintf(stderr,"live: AddData: UMT: signed peaks old %d new %d\n", old, umt->GetCurrentSignedPeakTuples().size() );
+
+        	// LIVECHECKPOINT
+        	BinHashSigTuple roottup = umt->GetRootTuple();
+        	WriteCheckpoint(roottup);
 
         	chunks_since_sign_ = 0;
         	newepoch = true;
@@ -279,6 +331,8 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
 		    BinHashSigTuple bhst = *iter;
 		    signed_ack_out_.set(bhst.bin());
 		}
+		// LIVECHECKPOINT, see constructor
+		signed_ack_out_.reset(checkpoint_bin_);
 
 		// Forget old part of tree
 		if (def_hs_out_.live_disc_wnd_ != POPT_LIVE_DISC_WND_ALL)
@@ -409,6 +463,117 @@ void LiveTransfer::OnDataPruneTree(Handshake &hs_out, bin_t pos, uint32_t nchunk
     }
 }
 
+
+int LiveTransfer::WriteCheckpoint(BinHashSigTuple &roottup)
+{
+    // FORMAT: (layer,layeroff) roothash-in-hex rootsig-in-hex\n
+    std::string s = roottup.bin().str()+" "+roottup.hash().hex()+" "+roottup.sig().hex()+"\n";
+    char *cstr = new char[strlen(s.c_str())+1];
+
+    strcpy(cstr,s.c_str());
+
+    // TODO: atomic?
+    int fd = open_utf8(checkpoint_filename_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+    if (fd < 0)
+    {
+	print_error("could not write checkpoint file");
+	delete cstr;
+	return fd;
+    }
+    int ret = write(fd,cstr,strlen(cstr));
+    if (ret < 0)
+    {
+	print_error("could not write live checkpoint data");
+	delete cstr;
+	return ret;
+    }
+    delete cstr;
+    ret = close(fd);
+
+    return ret;
+}
+
+
+BinHashSigTuple LiveTransfer::ReadCheckpoint()
+{
+    // TODO: atomic?
+    int fd = open_utf8(checkpoint_filename_.c_str(),ROOPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+    if (fd < 0)
+    {
+	print_error("could not read live checkpoint file");
+	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
+    }
+    char buffer[1024];
+    int ret = read(fd,buffer,1024);
+    if (ret < 0)
+    {
+	print_error("could not read live checkpoint data");
+	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
+    }
+    close(fd);
+
+    // Overwrite \n with end-of-string
+    buffer[ret-1] = '\0';
+    std::string pstr(buffer);
+
+    std::string binstr;
+    std::string hashstr;
+    std::string sigstr;
+    int sidx = pstr.find(" ");
+    if (sidx == std::string::npos)
+    {
+	print_error("could not parsing live checkpoint: no bin");
+	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
+    }
+    else
+    {
+	binstr = pstr.substr(0,sidx);
+	int midx = pstr.find(" ",sidx+1);
+	if (midx == std::string::npos)
+	{
+	    print_error("could not parsing live checkpoint: no hash");
+	    return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
+	}
+	else
+	{
+	    hashstr = pstr.substr(sidx+1,midx-sidx-1);
+	    sigstr = pstr.substr(midx+1);
+	}
+    }
+
+    sidx = binstr.find(",");
+    if (sidx == std::string::npos)
+    {
+	print_error("could not parsing live checkpoint: bin bad");
+	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
+    }
+
+    std::string layerstr=binstr.substr(1,sidx-1);
+    std::string layeroffstr=binstr.substr(sidx+1,binstr.length()-sidx-2);
+
+    int layer;
+    ret = sscanf(layerstr.c_str(),"%d",&layer);
+    if (ret != 1)
+    {
+	print_error("could not parsing live checkpoint: bin layer bad");
+	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
+    }
+    bin_t::uint_t layeroff;
+    ret = sscanf(layeroffstr.c_str(),"%llu",&layeroff);
+    if (ret != 1)
+    {
+	print_error("could not parsing live checkpoint: bin layer off bad");
+	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
+    }
+
+    bin_t rootbin(layer,layeroff);
+    Sha1Hash roothash = Sha1Hash(true,hashstr.c_str());
+    Signature rootsig = Signature(true,(const uint8_t *)sigstr.c_str(),(uint16_t)sigstr.length());
+
+    //fprintf(stderr,"CHECKPOINT parsed <%s> %d %llu <%s> <%s>\n", rootbin.str().c_str(), layer, layeroff, roothash.hex().c_str(), rootsig.hex().c_str() );
+
+    return BinHashSigTuple(rootbin,roothash,rootsig);
+}
 
 
 /*

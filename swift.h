@@ -563,10 +563,10 @@ namespace swift {
 
     /** A class representing a live transfer. */
     class    LiveTransfer : public ContentTransfer {
-       public:
+      public:
 
         /** A constructor for a live source. */
-	LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+	LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, std::string checkpoint_filename, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
 	/** A constructor for live client. */
 	LiveTransfer(std::string filename, const pubkey_t &pubkey, bool check_netwvshash=true, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
@@ -627,6 +627,10 @@ namespace swift {
         /** Remove this LiveTransfer for the global list */
         void GlobalDel();
 
+        // LIVECHECKPOINT
+        int WriteCheckpoint(BinHashSigTuple &roottup);
+        BinHashSigTuple ReadCheckpoint();
+
       protected:
 
         // SIGNPEAKTODO replace swarm ID = root_hash with generic swarm ID
@@ -657,6 +661,14 @@ namespace swift {
 
         privkey_t	privkey_;
         pubkey_t	pubkey_;
+
+        // LIVECHECKPOINT
+	/** Filename to store source checkpoint */
+        std::string checkpoint_filename_;
+        /** bin of old tree, which becomes new peak but must announced as
+         * being in possession to others */
+        bin_t	    checkpoint_bin_;
+
 
         /** Arno: global list of LiveTransfers, which are not managed via SwarmManager */
         static std::vector<LiveTransfer*> liveswarms;
@@ -1255,7 +1267,7 @@ namespace swift {
 
     // LIVE
     /** To create a live stream as source */
-    LiveTransfer *LiveCreate(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    LiveTransfer *LiveCreate(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, std::string checkpoint_filename, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** To add chunks to a live stream as source */
     int     LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte);
     /** To open a live stream as peer */
