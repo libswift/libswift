@@ -375,21 +375,36 @@ void    Channel::AddHint (struct evbuffer *evb) {
             evbuffer_add_chunkaddr(evb,hint,hs_out_->chunk_addr_);
             dprintf("%s #%u +hint %s [%lld]\n",tintstr(),id_,hint.str().c_str(),hint_out_size_);
             dprintf("%s #%u +hint base %s width %d\n",tintstr(),id_,hint.base_left().str().c_str(), (int)hint.base_length() );
-            hint_out_.push_back(hint);
-            hint_out_size_ += hint.base_length();
             //fprintf(stderr,"send c%d: HINTLEN %i\n", id(), hint.base_length());
             //fprintf(stderr,"HL %i ", hint.base_length());
 
             // Ric: final cancel the hints that have been removed
-			while (!tbc.empty()) {
-				bin_t b = tbc.front();
-				if (!b.contains(hint) && !hint.contains(b))
-					cancel_out_.push_back(b);
-				tbc.pop_front();
-			}
+            while (!tbc.empty()) {
+                bin_t c = tbc.front();
+                if (!c.contains(hint) && !hint.contains(c))
+	                cancel_out_.push_back(c);
+                else if (c.contains(hint))
+	                while (c.contains(hint) && c!=hint) {
+		                if (c>hint)
+			                c.to_left();
+		                else
+			                c.to_right();
+		                cancel_out_.push_back(c.sibling());
+	                }
+                else if (c == hint)
+	                break;
+                tbc.pop_front();
+            }
+            hint_out_.push_back(hint);
+            hint_out_size_ += hint.base_length();
         }
         else
             dprintf("%s #%u Xhint\n",tintstr(),id_);
+    }
+    // add the temporary cancel bin to the actual cancel queue
+	while (!tbc.empty()) {
+		cancel_out_.push_back(tbc.front());
+		tbc.pop_front();
     }
 }
 
