@@ -37,6 +37,8 @@
  *  - sendrecv.cpp Don't add DATA+bin+etc if read of data fails.
  *
  *  - Idea: client skips when signed peaks arrives that is way past hook-in point.
+ *
+ *  - Don't send SIGNED INTEGRITY to source.
  */
 //LIVE
 #include "swift.h"
@@ -423,7 +425,7 @@ void LiveTransfer::OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *srcc)
     {
         Channel *c = *iter;
         // Arno, 2013-05-13: Also record for channels being established
-        if (c != srcc && !c->IsSource())
+        if (c != srcc && !c->PeerIsSource())
         {
             //fprintf(stderr,"live: OnVerified: schedule for channel %d\n", c->id() );
             c->AddSinceSignedPeakTuples(newpeaktuples);

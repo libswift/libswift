@@ -889,7 +889,7 @@ namespace swift {
         bhstvector &GetSinceSignedPeakTuples();
         /** Clear list of peaks to send. Retransmit via AddLiveUncles */
         void 	    ClearSinceSignedPeakTuples();
-        bool        IsSource() { return peer_is_source_; }
+        bool        PeerIsSource() { return peer_is_source_; }
 
         void 	    CloseOnError();
 

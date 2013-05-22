@@ -66,7 +66,8 @@ void    Channel::AddPeakHashes (struct evbuffer *evb)
     else if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
         // SIGNPEAK
-        AddLiveSignedPeakHashes(evb);
+	if (!PeerIsSource())
+	    AddLiveSignedPeakHashes(evb);
     }
 
     // Send hashes in separate datagram if first would get too big
