@@ -1473,8 +1473,7 @@ void binmap_t::set(const bin_t& bin)
 /**
  * Resets bins
  *
- * @param bin
- *             the bin
+ * @param bin  the bin
  */
 void binmap_t::reset(const bin_t& bin)
 {

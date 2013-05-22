@@ -94,7 +94,7 @@ void ContentTransfer::GarbageCollectChannels()
 // Global method
 void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg)
 {
-    //fprintf(stderr,"ContentTransfer::GlobalCleanCallback\n");
+    fprintf(stderr,"ContentTransfer::GlobalCleanCallback %llu\n", ContentTransfer::cleancounter );
 
     // Arno, 2012-02-24: Why-oh-why, update NOW
     Channel::Time();
@@ -136,6 +136,8 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
 
 void ContentTransfer::ReConnectToTrackerIfAllowed(bool hasestablishedpeers)
 {
+    fprintf(stderr,"%s F%d content reconnect to tracker: peers %s\n",tintstr(),td_,(hasestablishedpeers ? "true" : "false") );
+
     // If I'm not connected to any
     // peers, try to contact the tracker again.
     if (!hasestablishedpeers)

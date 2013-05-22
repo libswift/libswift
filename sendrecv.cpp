@@ -1102,8 +1102,16 @@ void    Channel::OnHash (struct evbuffer *evb) {
 
     dprintf("%s #%u -hash %s\n",tintstr(),id_,pos.str().c_str());
     if (hashtree() != NULL && (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE))
+    {
+	if (transfer()->ttype() == LIVE_TRANSFER)
+	{
+	    // Don't accept hashes from others as source
+	    LiveTransfer *lt = (LiveTransfer *)transfer();
+	    if (lt->am_source())
+		return;
+	}
         hashtree()->OfferHash(pos,hash);
-
+    }
 
     //fprintf(stderr,"HASH %lli hex %s\n",pos.toUInt(), hash.hex().c_str() );
 }
@@ -1812,6 +1820,14 @@ void Channel::OnSignedHash(struct evbuffer *evb)
 
     // SIGNPEAKTODO support diff sig algo
     evbuffer_drain(evb, DUMMY_DEFAULT_SIG_LENGTH);
+
+    if (transfer()->ttype() != LIVE_TRANSFER)
+	return;
+
+    // Don't accept signed hashes from others as source
+    LiveTransfer *lt = (LiveTransfer *)transfer();
+    if (lt->am_source())
+	return;
 
     if (hashtree() != NULL)
     {

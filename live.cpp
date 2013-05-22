@@ -35,6 +35,8 @@
  *  - Test if CIPM None still works.
  *
  *  - sendrecv.cpp Don't add DATA+bin+etc if read of data fails.
+ *
+ *  - Idea: client skips when signed peaks arrives that is way past hook-in point.
  */
 //LIVE
 #include "swift.h"
@@ -316,8 +318,11 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         	fprintf(stderr,"live: AddData: UMT: signed peaks old %d new %d\n", old, umt->GetCurrentSignedPeakTuples().size() );
 
         	// LIVECHECKPOINT
-        	BinHashSigTuple roottup = umt->GetRootTuple();
-        	WriteCheckpoint(roottup);
+        	if (checkpoint_filename_.length() > 0)
+        	{
+        	    BinHashSigTuple roottup = umt->GetRootTuple();
+        	    WriteCheckpoint(roottup);
+        	}
 
         	chunks_since_sign_ = 0;
         	newepoch = true;
@@ -333,6 +338,15 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
 		}
 		// LIVECHECKPOINT, see constructor
 		signed_ack_out_.reset(checkpoint_bin_);
+
+		// TEST
+		/* fprintf(stderr,"live: AddData: UMT: checkp %s\n", checkpoint_bin_.str().c_str() );
+		bin_t bf = signed_ack_out_.find_filled();
+		bin_t be = signed_ack_out_.find_empty();
+		bin_t sbe = signed_ack_out_.find_empty(checkpoint_bin_);
+
+		fprintf(stderr,"live: AddData: UMT: bf %s be %s sbe %s\n", bf.str().c_str(), be.str().c_str(), sbe.str().c_str() );
+		*/
 
 		// Forget old part of tree
 		if (def_hs_out_.live_disc_wnd_ != POPT_LIVE_DISC_WND_ALL)
@@ -351,12 +365,10 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
     // Arno, 2013-02-26: When UNIFIED_MERKLE chunks are published in batches
     // of nchunks_per_sign_
     if (!newepoch)
-	    return 0;
-
+	return 0;
 
     // Announce chunks to peers
     //fprintf(stderr,"live: AddData: announcing to %d channel\n", mychannels_.size() );
-
     channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {

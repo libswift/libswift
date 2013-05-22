@@ -389,6 +389,7 @@ public:
 		    // Skip over chunk
 		    current_bin_ = bin_t(0,current_bin_.layer_offset()+1);
 		    dprintf("%s live: pp: SKIP to chunk %s\n", tintstr(), current_bin_.str().c_str() );
+		    fprintf(stderr,"%s live: pp: SKIP to chunk %s\n", tintstr(), current_bin_.str().c_str() );
 
                     hint = PickLargestBin(offer,current_bin_);
 		    if (hint == bin_t::NONE)
