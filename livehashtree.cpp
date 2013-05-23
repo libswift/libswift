@@ -641,8 +641,8 @@ BinHashSigTuple LiveHashTree::OfferSignedPeakHash(bin_t pos, Signature &sig)
                 signed_peak_count_--;
                 for (int j=i; j<signed_peak_count_; j++)
                 {
-                    if (tree_debug)
-                        fprintf(stderr,"umt: OfferSignedPeakHash: copy %d to %d\n", j, j+1 );
+                    //if (tree_debug)
+                    //    fprintf(stderr,"umt: OfferSignedPeakHash: copy %d to %d\n", j, j+1 );
                     signed_peak_bins_[j] = signed_peak_bins_[j+1];
                     signed_peak_sigs_[j] = signed_peak_sigs_[j+1];
                 }

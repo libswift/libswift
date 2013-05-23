@@ -209,7 +209,7 @@ public:
 
 
     /**
-     * Sets this object to the right child
+     * Sets this object to the right child. WARNING: does NOT calculate next-in-layer when at base!
      */
     bin_t& to_right(void);
 
@@ -257,7 +257,7 @@ public:
 
 
     /**
-     * Gets the right child
+     * Gets the right child. WARNING: does NOT calculate next-in-layer when at base!
      */
     bin_t right(void) const;
 

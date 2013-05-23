@@ -39,6 +39,10 @@
  *  - Idea: client skips when signed peaks arrives that is way past hook-in point.
  *
  *  - Don't send SIGNED INTEGRITY to source.
+ *
+ *  - avoid infinitely growing vector of channels.
+ *
+ *  - Policy for how far peer and source may be apart before rehook-in
  */
 //LIVE
 #include "swift.h"
@@ -63,7 +67,8 @@ std::vector<LiveTransfer*> LiveTransfer::liveswarms;
 
 /** A constructor for a live source. */
 LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, std::string checkpoint_filename, bool check_netwvshash, uint32_t nchunks_per_sign, uint64_t disc_wnd, uint32_t chunk_size) :
-	ContentTransfer(LIVE_TRANSFER), chunk_size_(chunk_size), am_source_(true),
+	ContentTransfer(LIVE_TRANSFER), ack_out_right_basebin_(bin_t::NONE),
+	chunk_size_(chunk_size), am_source_(true),
 	filename_(filename), last_chunkid_(0), offset_(0),
 	chunks_since_sign_(0),nchunks_per_sign_(nchunks_per_sign),
 	pubkey_(pubkey), privkey_(privkey),
@@ -412,9 +417,9 @@ binmap_t *LiveTransfer::ack_out()
 }
 
 
-void LiveTransfer::OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *srcc)
+void LiveTransfer::OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *sendc)
 {
-    // Channel c received a correctly signed peak hash. Schedule for
+    // Channel sendc received a correctly signed peak hash. Schedule for
     // distribution to other channels.
 
     bhstvector newpeaktuples;
@@ -425,7 +430,7 @@ void LiveTransfer::OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *srcc)
     {
         Channel *c = *iter;
         // Arno, 2013-05-13: Also record for channels being established
-        if (c != srcc && !c->PeerIsSource())
+        if (c != sendc && !c->PeerIsSource())
         {
             //fprintf(stderr,"live: OnVerified: schedule for channel %d\n", c->id() );
             c->AddSinceSignedPeakTuples(newpeaktuples);
@@ -438,12 +443,21 @@ void LiveTransfer::OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *srcc)
     {
 	nchunks_per_sign_ = bhst.bin().base_length();
     }
+
+    // Arno, 2013-05-22: Hook-in using signed peaks in UMT.
+    LivePiecePicker *lpp = (LivePiecePicker *)picker_;
+    lpp->StartAddPeerPos(sendc->id(), bhst.bin(), sendc->PeerIsSource(), true);
 }
 
 
 void LiveTransfer::OnDataPruneTree(Handshake &hs_out, bin_t pos, uint32_t nchunks2forget)
 {
-    uint64_t lastchunkid = pos.layer_offset();
+    if (ack_out_right_basebin_ == bin_t::NONE || pos > ack_out_right_basebin_)
+	ack_out_right_basebin_ = pos;
+    else
+	return; // Don't prune if no change
+
+    uint64_t lastchunkid = ack_out_right_basebin_.layer_offset();
 
     int64_t oldcid = ((int64_t)lastchunkid - (int64_t)hs_out.live_disc_wnd_);
     if (oldcid > 0)

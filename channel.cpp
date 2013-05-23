@@ -46,6 +46,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     // Arno, 2011-10-03: Reordered to avoid g++ Wall warning
     peer_(peer_addr), socket_(socket==INVALID_SOCKET?default_socket():socket), // FIXME
     transfer_(transfer), own_id_mentioned_(false),
+    ack_in_right_basebin_(bin_t::NONE),
     data_in_(TINT_NEVER,bin_t::NONE), data_in_dbl_(bin_t::NONE),
     data_out_cap_(bin_t::ALL),hint_in_size_(0), hint_out_size_(0),
     // Gertjan fix 996e21e8abfc7d88db3f3f8158f2a2c4fc8a8d3f
@@ -74,6 +75,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     if (peer_==Address())
         peer_ = tracker;
   
+    // ARNOTODO: avoid infinitely growing vector
     this->id_ = channels.size();
     channels.push_back(this);
 
@@ -114,6 +116,13 @@ Channel::~Channel () {
                break;
         }
         channels->erase(iter);
+
+        // Arno, 2013-05-22: Forget hook-in info
+        if (transfer_->ttype() == LIVE_TRANSFER)
+        {
+            LivePiecePicker *lpp = (LivePiecePicker *)transfer_->picker();
+            lpp->ClearPeerPos(id());
+        }
     }
 
     if (hs_in_ != NULL)

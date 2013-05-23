@@ -767,7 +767,7 @@ bin_t binmap_t::find_filled() const
  *
  * BUG: Current binmap_t constructor creates a tree with a minimum height of
  * 6. If the user assumes binmap_t dynamically determines the height of the
- * three and it is smaller than 6, this method may return values out of the
+ * tree and it is smaller than 6, this method may return values out of the
  * user's expected range. At this point I don't want to touch the minimum height
  * to avoid breaking something.
  */

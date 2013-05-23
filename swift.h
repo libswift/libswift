@@ -606,12 +606,12 @@ namespace swift {
         /** Source: Returns the number of live chunks generated before a new peak is signed */
         uint32_t        GetNChunksPerSign() { return nchunks_per_sign_; }
 
-        /** Channel c received a correctly signed peak hash. Schedule for
+        /** Channel sendc received a correctly signed peak hash. Schedule for
          * distribution to other channels. */
-        void 		OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *srcc);
+        void 		OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *sendc);
 
         /** If live discard window is used, purge unused parts of tree.
-         * pos is right-most received chunk. */
+         * pos is last received chunk. */
         void            OnDataPruneTree(Handshake &hs_out, bin_t pos, uint32_t nchunks2forget);
 
         // Arno: FileTransfers are managed by the SwarmManager which
@@ -641,6 +641,8 @@ namespace swift {
         binmap_t        ack_out_;
         /**    Binmap of own chunk availability restricted to current signed peaks SIGNPEAK */
         binmap_t	signed_ack_out_;
+        /**    Bin of right-most received chunk LIVE */
+        bin_t		ack_out_right_basebin_; // FUTURE: make part of binmap_t?
         // CHUNKSIZE
         /** Arno: configurable fixed chunk size in bytes */
        uint32_t         chunk_size_;
@@ -702,10 +704,11 @@ namespace swift {
     class LivePiecePicker : public PiecePicker {
       public:
 	/** Arno: Register which bins a peer has, to be able to choose a hook-in
-	 * point. Because multiple HAVE messages may be encoded in single
-	 * datagram make this a transaction like (Start/End) */
-        virtual void    StartAddPeerPos(uint32_t channelid, bin_t peerpos, bool peerissource) = 0;
+	 * point. Because multiple SIGNED_INTEGRITY/HAVE messages may be encoded
+	 * in single datagram make this a transaction like (Start/End) */
+        virtual void    StartAddPeerPos(uint32_t channelid, bin_t peerpos, bool peerissource, bool signedpeak) = 0;
         virtual void    EndAddPeerPos(uint32_t channelid) = 0;
+        virtual void    ClearPeerPos(uint32_t channelid) = 0;
 
         /** Returns the bin at which we hooked into the live stream. */
         virtual bin_t   GetHookinPos() = 0;
@@ -909,6 +912,9 @@ namespace swift {
         bool        own_id_mentioned_;
         /**    Peer's progress, based on acknowledgements. */
         binmap_t    ack_in_;
+        /**    Bin of right-most acked chunk LIVE */
+        bin_t	    ack_in_right_basebin_; // FUTURE: make part of binmap_t?
+
         /**    Last data received; needs to be acked immediately. */
         tintbin     data_in_;
         bin_t       data_in_dbl_;

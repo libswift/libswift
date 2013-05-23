@@ -18,7 +18,7 @@
 using namespace swift;
 
 
-#define FALLBACK_LIVE_PP_NUMBER_PREBUF_CHUNKS	10 // chunks
+//#define FALLBACK_LIVE_PP_NUMBER_PREBUF_CHUNKS	10 // chunks
 
 // Set this to a few seconds worth of data to get a decent prebuffer. Should
 // work when content is MPEG-TS. With LIVESOURCE=ANDROID and H.264 prebuffering
@@ -26,6 +26,14 @@ using namespace swift;
 // with source. Probably due to lack of timing codes in raw H.264?!
 //
 #define LIVE_PP_NUMBER_PREBUF_CHUNKS		10 // chunks
+
+// How often to test if we are not hook-in at a point too far from the
+// source (due to communication problems or source restart)
+//
+#define LIVE_DIVERGENCE_TEST_INTERVAL		(10*TINT_SEC)
+
+// TODO: policy
+#define LIVE_PP_MAX_NUMBER_DIVERGENCE_CHUNKS	100 // chunks
 
 
 // Map to store the highest chunk each peer has, used for hooking in.
@@ -41,18 +49,23 @@ class SimpleLivePiecePicker : public LivePiecePicker {
     LiveTransfer*   transfer_;		// Pointer to container
     uint64_t        twist_;		// Unused
 
-    bool	    search4hookin_;	// Finding hook-in point y/n?
+    bool	    search4hookin_;	// Search for hook-in point y/n?
     PeerPosMapType  peer_pos_map_;	// Highest HAVEs for each peer
     bool	    source_seen_;	// Whether connected to source
     uint32_t	    source_channel_id_;	// Channel ID of the source
     bin_t	    hookin_bin_;	// Chosen hook-in point when search4hookin_ = false
     bin_t           current_bin_;	// Current pos, not yet received
-
+    tint	    last_div_test_time_;// Time we last checked divergence from source/signed peaks
 
   public:
 
     SimpleLivePiecePicker (LiveTransfer* trans_to_pick_from) :
-           ack_hint_out_(), transfer_(trans_to_pick_from), twist_(0), search4hookin_(true), source_seen_(false), source_channel_id_(0), hookin_bin_(bin_t::NONE), current_bin_(bin_t::NONE) {
+           ack_hint_out_(), transfer_(trans_to_pick_from),
+           twist_(0), search4hookin_(true),
+           source_seen_(false), source_channel_id_(0),
+           hookin_bin_(bin_t::NONE), current_bin_(bin_t::NONE),
+           last_div_test_time_(0)
+    {
         binmap_t::copy(ack_hint_out_, *(transfer_->ack_out()));
     }
     virtual ~SimpleLivePiecePicker() {}
@@ -144,53 +157,92 @@ class SimpleLivePiecePicker : public LivePiecePicker {
      *
      * LIVETODO: if latest source pos is not in first datagram, you may hook-in too late.
      *
-     * LIVETODO: what if peer departs?
      */
-    void StartAddPeerPos(uint32_t channelid, bin_t peerpos, bool peerissource)
+    void StartAddPeerPos(uint32_t channelid, bin_t peerpos, bool peerissource, bool signedpeak)
     {
     	//fprintf(stderr,"live: pp: StartAddPeerPos: peerpos %s\n", peerpos.str().c_str());
-    	if (search4hookin_) {
+	if (peerissource) {
+	    source_seen_ = true;
+	    source_channel_id_ = channelid;
+	}
 
-    	    if (peerissource) {
-    		source_seen_ = true;
-    		source_channel_id_ = channelid;
-    	    }
+	bin_t peerbasepos(peerpos.base_right());
 
-    	    bin_t peerbasepos(peerpos.base_right());
+	fprintf(stderr,"live: pp: StartAddPeerPos: peerbasepos %s\n", peerbasepos.str().c_str());
+	bin_t cand;
+	cand = bin_t(0,peerbasepos.layer_offset());
 
-    	    fprintf(stderr,"live: pp: StartAddPeerPos: peerbasepos %s\n", peerbasepos.str().c_str());
-    	    bin_t cand;
-    	    cand = bin_t(0,peerbasepos.layer_offset());
-
-    	    PeerPosMapType::iterator iter = peer_pos_map_.find(channelid);
-    	    if (iter ==  peer_pos_map_.end())
-    	    {
-    	        // Unknown channel, just store
-    	    	peer_pos_map_.insert(PeerPosMapType::value_type(channelid, cand));
-    	    }
-    	    else
-    	    {
-    	    	// Update channelid's position, if newer
-		bin_t oldcand = peer_pos_map_[channelid];
-		if (cand.layer_offset() > oldcand.layer_offset())
-		    peer_pos_map_[channelid] = cand;
-    	    }
-    	}
+	PeerPosMapType::iterator iter = peer_pos_map_.find(channelid);
+	if (iter == peer_pos_map_.end())
+	{
+	    // Unknown channel, just store
+	    peer_pos_map_.insert(PeerPosMapType::value_type(channelid, cand));
+	}
+	else
+	{
+	    // Update channelid's position, if newer
+	    bin_t oldcand = peer_pos_map_[channelid];
+	    if (cand.layer_offset() > oldcand.layer_offset())
+		peer_pos_map_[channelid] = cand;
+	}
     }
 
 
     void EndAddPeerPos(uint32_t channelid)
     {
+	// See if first hook-in or we are checking divergence from source
 	if (!search4hookin_)
-	    return;
+	{
+	    if ((last_div_test_time_+LIVE_DIVERGENCE_TEST_INTERVAL) > NOW)
+		return;
+	}
 
+	last_div_test_time_ = NOW;
 	bin_t candbin = CalculateHookinPos();
 	if (candbin != bin_t::NONE)
 	{
-	    hookin_bin_ = candbin;
-	    current_bin_ = hookin_bin_;
-	    search4hookin_ = false;
+	    // Found a candidate to hook-in on.
+	    bool setnewhookin = search4hookin_;
+	    if (!setnewhookin)
+	    {
+		// Already tuned in, see if not too much divergence
+		if (candbin > current_bin_)
+		{
+		    // How much peer can be apart from source. Currently live discard window.
+	            uint64_t maxdiff = transfer_->GetDefaultHandshake().live_disc_wnd_;
+	            if (maxdiff == POPT_LIVE_DISC_WND_ALL)
+	        	maxdiff = LIVE_PP_MAX_NUMBER_DIVERGENCE_CHUNKS;
+		    bool closeenough = candbin.toUInt() < (current_bin_.toUInt()+maxdiff);
+		    if (!closeenough)
+		    {
+			setnewhookin = true;
+			fprintf(stderr,"live: pp: EndAddPeerPos: Re-hook-in on %s from %s\n", candbin.str().c_str(), current_bin_.str().c_str() );
+		    }
+		}
+	    }
+
+	    fprintf(stderr,"live: pp: EndAddPeerPos: exec %s\n", (setnewhookin ? "true":"false") );
+
+	    // First time, or re-hook-in
+	    if (setnewhookin)
+	    {
+		hookin_bin_ = candbin;
+		current_bin_ = hookin_bin_;
+		search4hookin_ = false;
+		fprintf(stderr,"live: pp: EndAddPeerPos: Execute hook-in on %s\n", hookin_bin_.str().c_str() );
+	    }
     	}
+    }
+
+
+    void ClearPeerPos(uint32_t channelid)
+    {
+	peer_pos_map_.erase(channelid);
+	if (source_seen_ && channelid == source_channel_id_)
+	{
+	    source_seen_ = false;
+	    source_channel_id_ = 0;
+	}
     }
 
 
@@ -204,11 +256,11 @@ class SimpleLivePiecePicker : public LivePiecePicker {
     	{
     	    bin_t cand = peer_pos_map_[source_channel_id_];
     	    Channel *c = Channel::channel(source_channel_id_);
-    	    if (c == NULL)
+    	    if (c == NULL || !c->PeerIsSource()) // Arno, 2013-05-23: Safety catch
     	    {
     		// Source left building, fallback to old prebuf method (just 10
     		// chunks from source). Perhaps there are still some peers around.
-    		hookbin = bin_t(0,std::max((bin_t::uint_t)0,cand.layer_offset()-FALLBACK_LIVE_PP_NUMBER_PREBUF_CHUNKS));
+    		// hookbin = bin_t(0,std::max((bin_t::uint_t)0,cand.layer_offset()-FALLBACK_LIVE_PP_NUMBER_PREBUF_CHUNKS));
     	    }
     	    else
     	    {
@@ -219,21 +271,26 @@ class SimpleLivePiecePicker : public LivePiecePicker {
 
     		// Check what is actually first available chunk
     		while(!c->ack_in().is_filled(iterbin) && iterbin < cand)
-    		    iterbin.to_right();
+    		    iterbin = bin_t(0,iterbin.layer_offset()+1);
 
     		hookbin = iterbin;
-    	    }
 
-	    fprintf(stderr,"live: pp: EndAddPeerPos: hookin on source, pos %s diff %llu\n", hookbin.str().c_str(), cand.base_offset() - hookbin.base_offset() );
+    		fprintf(stderr,"live: pp: CalculateHookinPos: hook-in on source, pos %s diff %llu\n", hookbin.str().c_str(), cand.base_offset() - hookbin.base_offset() );
+    	    }
     	}
-        else if (peer_pos_map_.size() > 0)
+
+    	// If not connected to source, hook-in on peers
+    	if (hookbin == bin_t::NONE && peer_pos_map_.size() > 0)
         {
             // See if there is a quorum among the peers for a certain position
             // Minimum number of peers for a quorum
             int threshold = 2;
+            // How much peers in a quorum can be apart. Currently live discard window.
+            uint64_t maxdiff = transfer_->GetDefaultHandshake().live_disc_wnd_;
+
             if (peer_pos_map_.size() < threshold)
             {
-                fprintf(stderr,"live: pp: EndAddPeerPos: not connected to source, not enough peers for hookin\n");
+                fprintf(stderr,"live: pp: CalculateHookinPos: not connected to source, not enough peers for hookin\n");
                 return bin_t::NONE;
             }
 
@@ -251,7 +308,7 @@ class SimpleLivePiecePicker : public LivePiecePicker {
             for (iter2=bv.begin(); iter2 != bv.end(); iter2++)
             {
                 bin_t pos = *iter2;
-                fprintf(stderr,"live: pp: EndAddPeerPos: candidate %s\n", pos.str().c_str() );
+                fprintf(stderr,"live: pp: CalculateHookinPos: candidate %s\n", pos.str().c_str() );
             }
 
 
@@ -259,7 +316,7 @@ class SimpleLivePiecePicker : public LivePiecePicker {
             // Otherwise, lower candidate and try again.
             int index=bv.size()-threshold;
 
-            fprintf(stderr,"live: pp: EndAddPeerPos: index %d\n", index);
+            fprintf(stderr,"live: pp: CalculateHookinPos: index %d\n", index);
 
             bool found=false;
             while (index >= 0 && !found)
@@ -267,8 +324,9 @@ class SimpleLivePiecePicker : public LivePiecePicker {
                 int i=0,count=0;
                 for (i=index; i<bv.size(); i++)
                 {
-                    fprintf(stderr,"live: pp: EndAddPeerPos: index %d count %d bvi %s bvindex %s\n", index, count, bv[i].str().c_str(), bv[index].str().c_str() );
-                    if (bv[i] >= bv[index])
+                    //fprintf(stderr,"live: pp: CalculateHookinPos: index %d count %d bvi %s bvindex %s\n", index, count, bv[i].str().c_str(), bv[index].str().c_str() );
+                    bool closeenough = bv[i].toUInt() < (bv[index].toUInt()+maxdiff);
+                    if (bv[i] >= bv[index] && closeenough)
                         count++;
                 }
 
@@ -280,7 +338,7 @@ class SimpleLivePiecePicker : public LivePiecePicker {
                 index--;
             }
 
-            fprintf(stderr,"live: pp: EndAddPeerPos: hookin on peers, pos %s\n", hookbin.str().c_str());
+            fprintf(stderr,"live: pp: CalculateHookinPos: hook-in on peers, pos %s\n", hookbin.str().c_str());
         }
     	return hookbin;
     }
