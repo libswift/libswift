@@ -468,9 +468,9 @@ namespace swift {
         void            SetTracker(Address tracker) { tracker_ = tracker; }
         /** Arno: (Re)Connect to tracker for this transfer, or global Channel::tracker if not set */
         void            ConnectToTracker();
-        /** Arno: Reconnect to the tracker if no established peers and
-         * exp backoff allows it. */
-        void            ReConnectToTrackerIfAllowed(bool hasestablishedpeers);
+        /** Arno: Reconnect to the tracker if no established peers or is connected
+         * to a live source that went silent and exp backoff allows it. */
+        void            ReConnectToTrackerIfAllowed(uint32_t numestablishedpeers, bool livesourceinactive);
 
         /** Progress callback management **/
         void 		AddProgressCallback(ProgressCallback cb, uint8_t agg);
@@ -893,6 +893,7 @@ namespace swift {
         /** Clear list of peaks to send. Retransmit via AddLiveUncles */
         void 	    ClearSinceSignedPeakTuples();
         bool        PeerIsSource() { return peer_is_source_; }
+        tint	    GetLastRecvTime() { return last_recv_time_; }
 
         void 	    CloseOnError();
 

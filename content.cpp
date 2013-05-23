@@ -30,6 +30,7 @@ uint64_t ContentTransfer::cleancounter = 0;
 #define TRACKER_RETRY_INTERVAL_EXP	1.1	// exponent used to increase INTERVAL_START
 #define TRACKER_RETRY_INTERVAL_MAX	(1800*TINT_SEC) // 30 minutes
 
+#define LIVE_SOURCE_INACTIVE_BEFORE_RECONNECT_INTERVAL	(10*TINT_SEC)
 
 
 ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), mychannels_(), callbacks_(), picker_(NULL),
@@ -72,23 +73,33 @@ void ContentTransfer::GarbageCollectChannels()
     // STL and MS and conditional delete from set not a happy place :-(
     channels_t   delset;
     channels_t::iterator iter;
-    bool hasestablishedpeers=false;
+    uint32_t numestablishedpeers=0;
+    bool livesourceinactive=false;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
         Channel *c = *iter;
-        if (c != NULL) {
+        if (c != NULL)
+        {
             if (c->IsScheduled4Delete())
                 delset.push_back(c);
 
             if (c->is_established ())
-                hasestablishedpeers = true;
+                numestablishedpeers++;
+
+            // If was connected to source and not responding, reconnect to tracker
+            if (c->PeerIsSource() && (NOW > c->GetLastRecvTime()+LIVE_SOURCE_INACTIVE_BEFORE_RECONNECT_INTERVAL))
+            {
+        	livesourceinactive = true;
+        	//c->Schedule4Delete();
+        	//delset.push_back(c);
+            }
         }
     }
     //dprintf("%s F%d content gc chans\n",tintstr(),td_);
     CloseChannels(delset);
 
     // Arno, 2012-02-24: Check for liveliness.
-    ReConnectToTrackerIfAllowed(hasestablishedpeers);
+    ReConnectToTrackerIfAllowed(numestablishedpeers,livesourceinactive);
 }
 
 // Global method
@@ -134,13 +145,13 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
 
 
 
-void ContentTransfer::ReConnectToTrackerIfAllowed(bool hasestablishedpeers)
+void ContentTransfer::ReConnectToTrackerIfAllowed(uint32_t numestablishedpeers, bool livesourceinactive)
 {
-    fprintf(stderr,"%s F%d content reconnect to tracker: peers %s\n",tintstr(),td_,(hasestablishedpeers ? "true" : "false") );
+    fprintf(stderr,"%s F%d content reconnect to tracker: npeers %u deadsource %s\n",tintstr(),td_,numestablishedpeers,(livesourceinactive ? "true":"false") );
 
     // If I'm not connected to any
     // peers, try to contact the tracker again.
-    if (!hasestablishedpeers)
+    if (numestablishedpeers == 0 || livesourceinactive)
     {
         if (NOW > tracker_retry_time_)
         {

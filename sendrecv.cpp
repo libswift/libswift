@@ -94,7 +94,7 @@ void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
     bhstvector::iterator iter;
     bhstvector sincesignedpeaktuples = GetSinceSignedPeakTuples();
 
-    if (!is_established() && ack_in_.is_empty())
+    if (!is_established()) // Always send initial peaks for easy restart of source
     {
         bhstvector initialsigpeaktuples;
         if (initial_peak_count_ == -1)

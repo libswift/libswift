@@ -213,6 +213,9 @@ class SimpleLivePiecePicker : public LivePiecePicker {
 	            if (maxdiff == POPT_LIVE_DISC_WND_ALL)
 	        	maxdiff = LIVE_PP_MAX_NUMBER_DIVERGENCE_CHUNKS;
 		    bool closeenough = candbin.toUInt() < (current_bin_.toUInt()+maxdiff);
+
+		    fprintf(stderr,"live: pp: EndAddPeerPos: New %s from %s closeenough %s\n", candbin.str().c_str(), current_bin_.str().c_str(), (closeenough ? "true" : "false") );
+
 		    if (!closeenough)
 		    {
 			setnewhookin = true;
