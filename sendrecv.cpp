@@ -1442,7 +1442,7 @@ void Channel::OnHaveLive(bin_t ackd_pos)
 	    // outside window.
 
 	    LivePiecePicker *lpp = (LivePiecePicker *)lt->picker();
-	    lpp->StartAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_, false);
+	    lpp->StartAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_);
         }
 
         // Arno: it can happen that we receive a HAVE and have no hints

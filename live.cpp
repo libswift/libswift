@@ -446,7 +446,7 @@ void LiveTransfer::OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *sendc)
 
     // Arno, 2013-05-22: Hook-in using signed peaks in UMT.
     LivePiecePicker *lpp = (LivePiecePicker *)picker_;
-    lpp->StartAddPeerPos(sendc->id(), bhst.bin(), sendc->PeerIsSource(), true);
+    lpp->StartAddPeerPos(sendc->id(), bhst.bin(), sendc->PeerIsSource());
 }
 
 

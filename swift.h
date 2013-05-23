@@ -706,7 +706,7 @@ namespace swift {
 	/** Arno: Register which bins a peer has, to be able to choose a hook-in
 	 * point. Because multiple SIGNED_INTEGRITY/HAVE messages may be encoded
 	 * in single datagram make this a transaction like (Start/End) */
-        virtual void    StartAddPeerPos(uint32_t channelid, bin_t peerpos, bool peerissource, bool signedpeak) = 0;
+        virtual void    StartAddPeerPos(uint32_t channelid, bin_t peerpos, bool peerissource) = 0;
         virtual void    EndAddPeerPos(uint32_t channelid) = 0;
         virtual void    ClearPeerPos(uint32_t channelid) = 0;
 

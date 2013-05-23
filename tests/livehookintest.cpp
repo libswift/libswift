@@ -20,7 +20,7 @@ using namespace swift;
 
 /* Set */
 
-void TemplHookinNoSource2Peers(uint64_t disc_wnd, bool frompeaks)
+void TemplHookinNoSource2Peers(uint64_t disc_wnd)
 {
 	std::string filename="bla.dat";
 	pubkey_t pubkey;
@@ -30,7 +30,7 @@ void TemplHookinNoSource2Peers(uint64_t disc_wnd, bool frompeaks)
 
 	for (int i=0; i<4; i++)
 	{
-	     lpp->StartAddPeerPos(1, bin_t(0,100+i), false, frompeaks);
+	     lpp->StartAddPeerPos(1, bin_t(0,100+i), false);
 	}
 
 	lpp->EndAddPeerPos(1);
@@ -38,7 +38,7 @@ void TemplHookinNoSource2Peers(uint64_t disc_wnd, bool frompeaks)
 
 	for (int i=0; i<4; i++)
 	{
-	     lpp->StartAddPeerPos(2, bin_t(0,101+i), false, frompeaks);
+	     lpp->StartAddPeerPos(2, bin_t(0,101+i), false);
 	}
 
 	lpp->EndAddPeerPos(2);
@@ -49,29 +49,19 @@ void TemplHookinNoSource2Peers(uint64_t disc_wnd, bool frompeaks)
 
 TEST(LiveHookinTest,HookinNoSource2PeersST)
 {
-    TemplHookinNoSource2Peers(SMALL_DISC_WINDOW,true);
+    TemplHookinNoSource2Peers(SMALL_DISC_WINDOW);
 }
-
-TEST(LiveHookinTest,HookinNoSource2PeersSF)
-{
-    TemplHookinNoSource2Peers(SMALL_DISC_WINDOW,false);
-}
-
 
 TEST(LiveHookinTest,HookinNoSource2PeersFT)
 {
-    TemplHookinNoSource2Peers(POPT_LIVE_DISC_WND_ALL,true);
+    TemplHookinNoSource2Peers(POPT_LIVE_DISC_WND_ALL);
 }
 
-TEST(LiveHookinTest,HookinNoSource2PeersFF)
-{
-    TemplHookinNoSource2Peers(POPT_LIVE_DISC_WND_ALL,false);
-}
 
 
 /* Set */
 
-void TemplHookinNoSource2PeersSame(uint64_t disc_wnd, bool frompeaks)
+void TemplHookinNoSource2PeersSame(uint64_t disc_wnd)
 {
     std::string filename="bla.dat";
     pubkey_t pubkey;
@@ -81,8 +71,8 @@ void TemplHookinNoSource2PeersSame(uint64_t disc_wnd, bool frompeaks)
 
     for (int i=0; i<4; i++)
     {
-	 lpp->StartAddPeerPos(1, bin_t(0,100+i), false, frompeaks);
-	 lpp->StartAddPeerPos(2, bin_t(0,100+i), false, frompeaks);
+	 lpp->StartAddPeerPos(1, bin_t(0,100+i), false);
+	 lpp->StartAddPeerPos(2, bin_t(0,100+i), false);
     }
 
     lpp->EndAddPeerPos(2);
@@ -92,29 +82,20 @@ void TemplHookinNoSource2PeersSame(uint64_t disc_wnd, bool frompeaks)
 
 TEST(LiveHookinTest,HookinNoSource2PeersSameST)
 {
-    TemplHookinNoSource2PeersSame(SMALL_DISC_WINDOW,true);
+    TemplHookinNoSource2PeersSame(SMALL_DISC_WINDOW);
 }
 
-TEST(LiveHookinTest,HookinNoSource2PeersSameSF)
-{
-    TemplHookinNoSource2PeersSame(SMALL_DISC_WINDOW,false);
-}
 
 TEST(LiveHookinTest,HookinNoSource2PeersSameFT)
 {
-    TemplHookinNoSource2PeersSame(POPT_LIVE_DISC_WND_ALL,true);
-}
-
-TEST(LiveHookinTest,HookinNoSource2PeersSameFF)
-{
-    TemplHookinNoSource2PeersSame(POPT_LIVE_DISC_WND_ALL,false);
+    TemplHookinNoSource2PeersSame(POPT_LIVE_DISC_WND_ALL);
 }
 
 
 /* Set */
 
 
-void TemplHookinNoSource8Peers(uint64_t disc_wnd, bool frompeaks)
+void TemplHookinNoSource8Peers(uint64_t disc_wnd)
 {
     std::string filename="bla.dat";
     pubkey_t pubkey;
@@ -126,7 +107,7 @@ void TemplHookinNoSource8Peers(uint64_t disc_wnd, bool frompeaks)
     {
 	for (int i=0; i<4; i++)
 	{
-	    lpp->StartAddPeerPos(c, bin_t(0,100+c+i), false, frompeaks);
+	    lpp->StartAddPeerPos(c, bin_t(0,100+c+i), false);
 	}
     }
     lpp->EndAddPeerPos(1);
@@ -138,28 +119,19 @@ void TemplHookinNoSource8Peers(uint64_t disc_wnd, bool frompeaks)
 
 TEST(LiveHookinTest,HookinNoSource8PeersST)
 {
-    TemplHookinNoSource8Peers(SMALL_DISC_WINDOW,true);
-}
-
-TEST(LiveHookinTest,HookinNoSource8PeersSF)
-{
-    TemplHookinNoSource8Peers(SMALL_DISC_WINDOW,false);
+    TemplHookinNoSource8Peers(SMALL_DISC_WINDOW);
 }
 
 TEST(LiveHookinTest,HookinNoSource8PeersFT)
 {
-    TemplHookinNoSource8Peers(POPT_LIVE_DISC_WND_ALL,true);
+    TemplHookinNoSource8Peers(POPT_LIVE_DISC_WND_ALL);
 }
 
-TEST(LiveHookinTest,HookinNoSource8PeersFF)
-{
-    TemplHookinNoSource8Peers(POPT_LIVE_DISC_WND_ALL,false);
-}
 
 
 /* Set */
 
-void TemplHookinNoSource8Good1Bad(uint64_t disc_wnd, bool frompeaks)
+void TemplHookinNoSource8Good1Bad(uint64_t disc_wnd)
 {
     std::string filename="bla.dat";
     pubkey_t pubkey;
@@ -172,13 +144,13 @@ void TemplHookinNoSource8Good1Bad(uint64_t disc_wnd, bool frompeaks)
     {
 	for (int i=0; i<4; i++)
 	{
-	    lpp->StartAddPeerPos(c, bin_t(0,100+c+i), false, frompeaks);
+	    lpp->StartAddPeerPos(c, bin_t(0,100+c+i), false);
 	}
     }
     // Add 1 ahead
     for (int i=0; i<4; i++)
     {
-	lpp->StartAddPeerPos(c+1, bin_t(0,200+c+i), false, frompeaks);
+	lpp->StartAddPeerPos(c+1, bin_t(0,200+c+i), false);
     }
 
     lpp->EndAddPeerPos(1);
@@ -192,28 +164,18 @@ void TemplHookinNoSource8Good1Bad(uint64_t disc_wnd, bool frompeaks)
 
 TEST(LiveHookinTest,HookinNoSource8Good1BadST)
 {
-    TemplHookinNoSource8Good1Bad(SMALL_DISC_WINDOW,true);
-}
-
-TEST(LiveHookinTest,HookinNoSource8Good1BadSF)
-{
-    TemplHookinNoSource8Good1Bad(SMALL_DISC_WINDOW,false);
+    TemplHookinNoSource8Good1Bad(SMALL_DISC_WINDOW);
 }
 
 TEST(LiveHookinTest,HookinNoSource8Good1BadFT)
 {
-    TemplHookinNoSource8Good1Bad(POPT_LIVE_DISC_WND_ALL,true);
-}
-
-TEST(LiveHookinTest,HookinNoSource8Good1BadFF)
-{
-    TemplHookinNoSource8Good1Bad(POPT_LIVE_DISC_WND_ALL,false);
+    TemplHookinNoSource8Good1Bad(POPT_LIVE_DISC_WND_ALL);
 }
 
 
 /* Set */
 
-void TemplHookinNoSource8Old2Good(uint64_t disc_wnd, bool frompeaks)
+void TemplHookinNoSource8Old2Good(uint64_t disc_wnd)
 {
     std::string filename="bla.dat";
     pubkey_t pubkey;
@@ -227,18 +189,18 @@ void TemplHookinNoSource8Old2Good(uint64_t disc_wnd, bool frompeaks)
     {
 	for (int i=0; i<4; i++)
 	{
-	    lpp->StartAddPeerPos(c, bin_t(0,100+c+i), false, frompeaks);
+	    lpp->StartAddPeerPos(c, bin_t(0,100+c+i), false);
 	}
     }
     // 1 new
     for (int i=0; i<4; i++)
     {
-	lpp->StartAddPeerPos(c+1, bin_t(0,200+c+i), false, frompeaks);
+	lpp->StartAddPeerPos(c+1, bin_t(0,200+c+i), false);
     }
     // 2 new
     for (int i=0; i<4; i++)
     {
-	lpp->StartAddPeerPos(c+2, bin_t(0,201+c+i), false, frompeaks);
+	lpp->StartAddPeerPos(c+2, bin_t(0,201+c+i), false);
     }
 
 
@@ -251,22 +213,12 @@ void TemplHookinNoSource8Old2Good(uint64_t disc_wnd, bool frompeaks)
 
 TEST(LiveHookinTest,HookinNoSource8Old2GoodST)
 {
-    TemplHookinNoSource8Old2Good(SMALL_DISC_WINDOW,true);
-}
-
-TEST(LiveHookinTest,HookinNoSource8Old2GoodSF)
-{
-    TemplHookinNoSource8Old2Good(SMALL_DISC_WINDOW,false);
+    TemplHookinNoSource8Old2Good(SMALL_DISC_WINDOW);
 }
 
 TEST(LiveHookinTest,HookinNoSource8Old2GoodFT)
 {
-    TemplHookinNoSource8Old2Good(POPT_LIVE_DISC_WND_ALL,true);
-}
-
-TEST(LiveHookinTest,HookinNoSource8Old2GoodFF)
-{
-    TemplHookinNoSource8Old2Good(POPT_LIVE_DISC_WND_ALL,false);
+    TemplHookinNoSource8Old2Good(POPT_LIVE_DISC_WND_ALL);
 }
 
 

@@ -158,7 +158,7 @@ class SimpleLivePiecePicker : public LivePiecePicker {
      * LIVETODO: if latest source pos is not in first datagram, you may hook-in too late.
      *
      */
-    void StartAddPeerPos(uint32_t channelid, bin_t peerpos, bool peerissource, bool signedpeak)
+    void StartAddPeerPos(uint32_t channelid, bin_t peerpos, bool peerissource)
     {
     	//fprintf(stderr,"live: pp: StartAddPeerPos: peerpos %s\n", peerpos.str().c_str());
 	if (peerissource) {
@@ -285,6 +285,10 @@ class SimpleLivePiecePicker : public LivePiecePicker {
             // See if there is a quorum among the peers for a certain position
             // Minimum number of peers for a quorum
             int threshold = 2;
+    	    if (transfer_->GetDefaultHandshake().cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+    		threshold = 1; // based on signed peaks, so 1 enough
+    	    // TODO: SIGN_ALL: how to deal with many malicious peers sending future HAVEs
+
             // How much peers in a quorum can be apart. Currently live discard window.
             uint64_t maxdiff = transfer_->GetDefaultHandshake().live_disc_wnd_;
 
