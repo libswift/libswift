@@ -1132,7 +1132,7 @@ namespace swift {
         std::string GetDestDir() { return destdir_; }
 
         /** Whether Storage is ready to be used */
-        bool        IsReady() { return state_ == STOR_STATE_SINGLE_FILE || state_ == STOR_STATE_MFSPEC_COMPLETE; }
+        bool        IsReady() { return state_ == STOR_STATE_SINGLE_FILE || STOR_STATE_SINGLE_LIVE_WRAP || state_ == STOR_STATE_MFSPEC_COMPLETE; }
 
         /** Return the list of StorageFiles for this Storage, empty if not multi-file */
         storage_files_t    GetStorageFiles() { return sfs_; }

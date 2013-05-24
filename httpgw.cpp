@@ -25,12 +25,12 @@ static uint32_t HTTPGW_VOD_PROGRESS_STEP_BYTES = (256*1024); // configurable
 #define HTTPGW_LIVE_MAX_WRITE_BYTES	(32*1024)
 
 
-// Report swift download progress every 2^layer * chunksize bytes (so 0 = report every chunk)
-// Note: for LIVE this cannot be reliably used to force a prebuffer size,
-// as this gets called with a subtree of size X has been downloaded. If the
-// hook-in point is in the middle of such a subtree, the call won't happen
-// until the next full subtree has been downloaded, i.e. after ~1.5 times the
-// prebuf has been downloaded. See HTTPGW_MIN_PREBUF_BYTES
+// Let swift report download progress every 2^layer * chunksize bytes (so 0 = report
+// every chunk). Note: for LIVE this cannot be reliably used to force a
+// prebuffer size, as this gets called when a subtree of size X has been
+// downloaded. If the hook-in point is in the middle of such a subtree, the
+// call won't happen until the next full subtree has been downloaded, i.e.
+// after ~1.5 times the prebuf has been downloaded. See HTTPGW_MIN_PREBUF_BYTES
 //
 #define HTTPGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER     0    // must be 0
 
@@ -39,7 +39,7 @@ static uint32_t HTTPGW_VOD_PROGRESS_STEP_BYTES = (256*1024); // configurable
 // amount at app level.
 #define HTTPGW_MAX_OUTBUF_BYTES		(2*1024*1024)
 
-// Arno: Minium amout of content to have download before replying to HTTP
+// Arno: Minimum amout of content to download before replying to HTTP
 static uint32_t HTTPGW_MIN_PREBUF_BYTES  = (256*1024); // configurable
 
 
@@ -229,7 +229,7 @@ void HttpGwWrite(int td) {
         char *buf = (char *)malloc(max_write_bytes);
 
         uint64_t tosend = std::min(max_write_bytes,avail);
-        size_t rd = swift::Read(req->td,buf,tosend,swift::GetHookinOffset(req->td)+req->offset);
+        size_t rd = swift::Read(req->td,buf,tosend,req->offset);
         if (rd<0) {
             print_error("httpgw: MayWrite: error pread");
             HttpGwCloseConnection(req);
@@ -404,6 +404,21 @@ void HttpGwSwiftPlayingProgressCallback (int td, bin_t bin) {
     if (req->sinkevreq == NULL) // Conn closed
         return;
 
+    // LIVE
+    if (req->xcontentdur == "-1")
+    {
+	// Check if we re-hooked-in
+	uint64_t hookinoff = swift::GetHookinOffset(td);
+	if (hookinoff > req->startoff) // Sort of safety catch, only forward
+	{
+	    req->startoff = hookinoff;
+	    req->offset = hookinoff;
+
+	    fprintf(stderr,"httpgw: Live: Re-hook-in at %llu\n", hookinoff );
+	    dprintf("%s @%i http play: Re-hook-in at %llu\n",tintstr(),req->id, hookinoff );
+	}
+    }
+
     // Arno, 2011-12-20: We have new data to send, wait for HTTP socket writability
     HttpGwSubscribeToWrite(req);
 }
@@ -550,7 +565,7 @@ bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
         evhttp_send_error(req->sinkevreq,416,"Malformed range specification");
 	req->replied = true;
 
-        dprintf("%s @%i http get: invalid range %lld-%lld\n",tintstr(),req->id,req->rangefirst,req->rangelast );
+        dprintf("%s @%i http get: ERROR 416 invalid range %lld-%lld\n",tintstr(),req->id,req->rangefirst,req->rangelast );
         return false;
     }
 
@@ -583,7 +598,7 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     //
     // First bytes of content downloaded (first in absolute sense)
     // We can now determine if a request for a file inside a multi-file
-    // swarm is valid, and calculate the absolute offsets of the request
+    // swarm is valid, and calculate the absolute offsets of the requested
     // content, taking into account HTTP Range: headers. Or return error.
     //
     // If valid, next step is to subscribe a new callback for prebuffering.
@@ -609,12 +624,6 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     {
         dprintf("%s @%i http first: already set tosend\n",tintstr(),req->id);
         return;
-    }
-
-    if (req->xcontentdur == "-1")
-    {
-        fprintf(stderr,"httpgw: Live: hook-in at %llu\n", swift::GetHookinOffset(td) );
-        dprintf("%s @%i http first: hook-in at %llu\n",tintstr(),req->id, swift::GetHookinOffset(td) );
     }
 
     // MULTIFILE
@@ -657,7 +666,8 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
         }
         if (!found) {
             evhttp_send_error(req->sinkevreq,404,"Individual file not found in multi-file content.");
-                        req->replied = true;
+	    req->replied = true;
+	    dprintf("%s @%i http get: ERROR 404 file %s not found in multi-file\n",tintstr(),req->id,req->mfspecname.c_str() );
             return;
         }
     }
@@ -673,8 +683,13 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     // or file. Sets some headers or sends HTTP error.
     if (req->xcontentdur == "-1") //LIVE
     {
+	uint64_t hookinoff = swift::GetHookinOffset(td);
+	req->startoff = hookinoff;
         req->rangefirst = -1;
         req->replycode = 200;
+
+	fprintf(stderr,"httpgw: Live: hook-in at %llu\n", hookinoff );
+	dprintf("%s @%i http first: hook-in at %llu\n",tintstr(),req->id, hookinoff );
     }
     else if (!HttpGwParseContentRangeHeader(req,filesize))
         return;
@@ -694,13 +709,14 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     req->offset = req->startoff;
 
     // SEEKTODO: concurrent requests to same resource
-    if (req->startoff != 0)
+    if (req->startoff != 0 && req->xcontentdur != "-1")
     {
         // Seek to multifile/range start
         int ret = swift::Seek(req->td,req->startoff,SEEK_SET);
         if (ret < 0) {
             evhttp_send_error(req->sinkevreq,500,"Internal error: Cannot seek to file start in range request or multi-file content.");
             req->replied = true;
+            dprintf("%s @%i http get: ERROR 500 cannot seek to %llu\n",tintstr(),req->id, req->startoff);
             return;
         }
     }
@@ -870,12 +886,14 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     std::string hashstr = "", mfstr="", durstr="", chunksizestr = "";
     if (uri.length() <= 1)     {
         evhttp_send_error(evreq,400,"Path must be root hash in hex, 40 bytes.");
+        dprintf("%s @%i http get: ERROR 400 Path must be root hash in hex\n",tintstr(),0 );
         return;
     }
     parseduri_t puri;
     if (!swift::ParseURI(uri,puri))
     {
         evhttp_send_error(evreq,400,"Path format is /roothash-in-hex/filename$chunksize@duration");
+        dprintf("%s @%i http get: ERROR 400 Path format violation\n",tintstr(),0 );
         return;
     }
     hashstr = puri["hash"];
@@ -918,6 +936,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     if (existreq != NULL)
     {
         evhttp_send_error(evreq,409,"Conflict: server does not support concurrent requests to same swarm.");
+        dprintf("%s @%i http get: ERROR 409 No concurrent requests to same swarm\n",tintstr(),0 );
         return;
     }
 
