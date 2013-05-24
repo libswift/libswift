@@ -86,6 +86,7 @@ void ContentTransfer::GarbageCollectChannels()
             if (c->is_established ())
                 numestablishedpeers++;
 
+            // LIVE
             // If was connected to source and not responding, reconnect to tracker
             if (c->PeerIsSource() && (NOW > c->GetLastRecvTime()+LIVE_SOURCE_INACTIVE_BEFORE_RECONNECT_INTERVAL))
             {
