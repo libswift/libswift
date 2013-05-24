@@ -89,6 +89,9 @@ namespace swift {
 // Arno, 2012-12-12: Configure which PPSP version to use by default. Set to 0 for legacy swift.
 #define ENABLE_IETF_PPSP_VERSION      1
 
+// Whether to try legacy protocol when PPSP handshakes don't result in response
+#define ENABLE_FALLBACK_TO_LEGACY_PROTO	0
+
 // Arno, 2011-12-22: Enable Riccardo's VodPiecePicker
 #define ENABLE_VOD_PIECEPICKER        1
 
@@ -598,6 +601,9 @@ namespace swift {
 
         /** Returns the byte offset at which we hooked into the live stream */
         uint64_t        GetHookinOffset();
+
+        /** Source: Returns current write position in storage file */
+        uint64_t        GetSourceWriteOffset() { return offset_; }
 
         // SIGNPEAK
         /** Source: Return all chunks in ack_out_ covered by peaks */

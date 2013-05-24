@@ -453,8 +453,10 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
 void    Channel::AddHandshake (struct evbuffer *evb)
 {
     // If peer not responding, try legacy swift protocol
+#if ENABLE_FALLBACK_TO_LEGACY_PROTO == 1
     if (sent_since_recv_ >= 3 && last_recv_time_ == 0)
         hs_out_->ResetToLegacy();
+#endif
 
     int encoded = -1;
     if (hs_out_->version_ == VER_SWIFT_LEGACY)

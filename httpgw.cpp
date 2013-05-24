@@ -185,7 +185,8 @@ void HttpGwWrite(int td) {
     }
 
     // When writing first data, send reply header
-    if (req->offset == req->startoff) {
+    //if (req->offset == req->startoff) {
+    if (!req->replied) {
         // Not just for chunked encoding, see libevent2's http.c
 
 	dprintf("%s @%d http reply 2: %d\n",tintstr(),req->id, req->replycode );
@@ -960,7 +961,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
         }
         else {
             Address tracker;
-            td = swift::LiveOpen(filename,swarm_id,tracker,true,chunksize);
+            td = swift::LiveOpen(filename,swarm_id,tracker,true,httpgw_livesource_disc_wnd,chunksize);
         }
 
         // Arno, 2011-12-20: Only on new transfers, otherwise assume that CMD GW

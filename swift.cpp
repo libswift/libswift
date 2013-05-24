@@ -132,6 +132,7 @@ int livesource_fd=-1;
 struct evbuffer *livesource_evb = NULL;
 uint64_t livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
 std::string livesource_checkpoint_filename = "";
+bool livesource_isfile=false;
 
 long long int cmdgw_report_counter=0;
 long long int cmdgw_report_interval=REPORT_INTERVAL; // seconds
@@ -695,6 +696,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
 
             if (livesource_fd == -1)
                 quit("live: Could not open source input");
+            livesource_isfile = true;
         }
 
         // Create swarm
@@ -962,6 +964,20 @@ void LiveSourceFileTimerCallback(int fd, short event, void *arg) {
 
     Channel::Time();
     fprintf(stderr,"%s live: file: timer\n", tintstr() );
+
+    if (livesource_isfile)
+    {
+	// Little hack to facilitate testing of source restarts by ensuring
+	// we start reading where left off.
+	uint64_t seekoff = livesource_lt->GetSourceWriteOffset();
+	if (seekoff > 0)
+	{
+	    int ret = file_seek(livesource_fd,seekoff);
+	    if (ret < 0)
+		print_error("live: file: seek in input");
+	}
+	livesource_isfile = false; // bad bad thing
+    }
 
     int nread = -1;
     if (livesource_filep != NULL)
