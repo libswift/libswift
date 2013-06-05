@@ -9,11 +9,6 @@
 #include <iostream>
 #include <sstream>
 
-//MEMLEAK
-#ifndef WIN32
-#include <malloc.h>
-#endif
-
 #include "swift.h"
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
@@ -653,7 +648,7 @@ void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line)
     // New command received from user
 
     // CMD request line
-    char *copyline = (char *)malloc(strlen(line)+1);
+    char *copyline = new char[strlen(line)+1];
     strcpy(copyline,line);
 
     int ret = CmdGwHandleCommand(cmdsock,copyline);
@@ -675,7 +670,7 @@ void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line)
 	}
     }
 
-    free(copyline);
+    delete copyline;
 }
 
 
