@@ -239,7 +239,8 @@ std::string Address::ipstr(bool includeport) const
     }*/
 
     // See RFC3493
-    int ret = getnameinfo((const struct sockaddr *)&addr, (socklen_t)sizeof(addr),
+    // Arno, 2013-06-05: pass real IP sockaddr length
+    int ret = getnameinfo((const struct sockaddr *)&addr, get_real_sockaddr_length(),
                            node, (socklen_t)sizeof(node),
                            service, (socklen_t)sizeof(service),
                            NI_NUMERICHOST | NI_NUMERICSERV);
@@ -322,3 +323,19 @@ void Address::set_ip(const char* ip_str, int family)
 	freeaddrinfo(results);
 }
 
+
+socklen_t Address::get_real_sockaddr_length() const
+{
+    if (addr.ss_family == AF_INET)
+    {
+        return sizeof(struct sockaddr_in);
+    }
+    else if (addr.ss_family == AF_INET6)
+    {
+        return sizeof(struct sockaddr_in6);
+    }
+    else
+    {
+        return 0;
+    }
+}
