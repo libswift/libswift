@@ -17,6 +17,24 @@ using namespace swift;
 
 #define api_debug	false
 
+
+
+/*
+ * Local functions
+ */
+
+void StartLibraryCleanup()
+{
+    if (ContentTransfer::cleancounter == 0)
+    {
+	// Arno, 2012-10-01: Per-library timer for cleanup on transfers
+	evtimer_assign(&ContentTransfer::evclean,Channel::evbase,&ContentTransfer::LibeventGlobalCleanCallback,NULL);
+	evtimer_add(&ContentTransfer::evclean,tint2tv(TINT_SEC));
+	ContentTransfer::cleancounter = 481;
+    }
+}
+
+
 /*
  * Global Operations
  */
@@ -25,6 +43,8 @@ int     swift::Listen( Address addr)
 {
     if (api_debug)
         fprintf(stderr,"swift::Listen addr %s\n", addr.str().c_str() );
+
+    StartLibraryCleanup();
 
     sckrwecb_t cb;
     cb.may_read = &Channel::LibeventReceiveCallback;
@@ -55,14 +75,6 @@ int swift::Open( std::string filename, const Sha1Hash& hash, Address tracker, bo
 {
     if (api_debug)
 	fprintf(stderr,"swift::Open %s hash %s track %s cdisk %d cnet %d zs %d act %d cs %u\n", filename.c_str(), hash.hex().c_str(), tracker.str().c_str(), force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
-
-    if (ContentTransfer::cleancounter == 0)
-    {
-	// Arno, 2012-10-01: Per-library timer for cleanup on transfers
-	evtimer_assign(&ContentTransfer::evclean,Channel::evbase,&ContentTransfer::LibeventGlobalCleanCallback,NULL);
-	evtimer_add(&ContentTransfer::evclean,tint2tv(TINT_SEC));
-	ContentTransfer::cleancounter = 481;
-    }
 
     SwarmData* swarm = SwarmManager::GetManager().AddSwarm( filename, hash, tracker, force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
     if (swarm == NULL)
