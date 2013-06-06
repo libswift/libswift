@@ -1042,7 +1042,7 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
 
     cmd_evlistener = evconnlistener_new_bind(evbase, CmdGwNewConnectionCallback, NULL,
         LEV_OPT_CLOSE_ON_FREE|LEV_OPT_REUSEABLE, -1,
-        (const struct sockaddr *)&sin, cmdaddr.get_real_sockaddr_length());
+        (const struct sockaddr *)&sin, cmdaddr.get_family_sockaddr_length());
     if (!cmd_evlistener) {
         print_error("Couldn't create listener");
         return false;

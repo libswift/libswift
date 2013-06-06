@@ -168,7 +168,7 @@ namespace swift {
     bool operator != (const Address& b) const { return !(*this==b); }
     bool is_private() const;
     int get_family() const { return addr.ss_family; }
-    socklen_t get_real_sockaddr_length() const;
+    socklen_t get_family_sockaddr_length() const;
     };
 
 // Arno, 2011-10-03: Use libevent callback functions, no on_error?
