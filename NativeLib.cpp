@@ -7,7 +7,7 @@
  *  are asynchronously retrievable via NativeLib.asyncGetResult().
  *
  *  Created by Riccardo Petrocco, Arno Bakker
- *  Copyright 2010-2014 Delft University of Technology. All rights reserved.
+ *  Copyright 2010-2016 Delft University of Technology. All rights reserved.
  *
  */
 #include <stdio.h>
@@ -19,8 +19,12 @@
 #include "com_tudelft_triblerdroid_swift_NativeLib.h"
 #include <sstream>
 #include <map>
+#include <queue>
+
 
 using namespace swift;
+
+#define ASYNC_POLL_INTERVAL	(100*TINT_MSEC)
 
 // httpgw.cpp functions
 bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf );
@@ -30,7 +34,7 @@ std::string HttpGwStatsGetSpeedCallback(Sha1Hash swarmid);
 
 // Local functions
 // Libevent* functions are executed by Mainloop thread,
-void LibeventKeepaliveCallback(int fd, short event, void *arg);
+void LibeventPollAsyncCallback(int fd, short event, void *arg);
 void LibeventOpenCallback(int fd, short event, void *arg);
 void LibeventCloseCallback(int fd, short event, void *arg);
 void LibeventGetHTTPProgressCallback(int fd, short event, void *arg);
@@ -41,7 +45,7 @@ void LibeventLiveAddCallback(int fd, short event, void *arg);
 bool enginestarted = false;
 uint32_t chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;
 double maxspeed[2] = {DBL_MAX,DBL_MAX};
-struct event evkeepalive;
+struct event evasyncpoll;
 
 // for Live
 LiveTransfer *livesource_lt = NULL;
@@ -53,6 +57,7 @@ class AsyncParams
 {
   public:
     int      	callid_;
+    event_callback_fn	func_;
     Sha1Hash 	swarmid_;
     Address 	tracker_;
     std::string filename_;
@@ -61,26 +66,26 @@ class AsyncParams
     bool 	removestate_;
     bool 	removecontent_;
 
-    AsyncParams(Sha1Hash &swarmid, Address &tracker, std::string filename) :
-	callid_(-1), swarmid_(swarmid), tracker_(tracker), filename_(filename),
+    AsyncParams(event_callback_fn func, Sha1Hash &swarmid, Address &tracker, std::string filename) :
+	callid_(-1), func_(func), swarmid_(swarmid), tracker_(tracker), filename_(filename),
 	data_(NULL), datalen_(-1), removestate_(false), removecontent_(false)
     {
     }
 
-    AsyncParams(Sha1Hash &swarmid) :
-	callid_(-1), swarmid_(swarmid), tracker_(""), filename_(""),
+    AsyncParams(event_callback_fn func, Sha1Hash &swarmid) :
+	callid_(-1), func_(func), swarmid_(swarmid), tracker_(""), filename_(""),
 	data_(NULL), datalen_(-1), removestate_(false), removecontent_(false)
     {
     }
 
-    AsyncParams(char *data, int datalen) :
-	callid_(-1), swarmid_(Sha1Hash::ZERO), tracker_(""), filename_(""),
+    AsyncParams(event_callback_fn func, char *data, int datalen) :
+	callid_(-1), func_(func), swarmid_(Sha1Hash::ZERO), tracker_(""), filename_(""),
 	data_(data), datalen_(datalen), removestate_(false), removecontent_(false)
     {
     }
 
-    AsyncParams(Sha1Hash &swarmid, bool removestate, bool removecontent) :
-	callid_(-1), swarmid_(swarmid), tracker_(""), filename_(""),
+    AsyncParams(event_callback_fn func, Sha1Hash &swarmid, bool removestate, bool removecontent) :
+	callid_(-1), func_(func), swarmid_(swarmid), tracker_(""), filename_(""),
 	data_(NULL), datalen_(-1), removestate_(removestate), removecontent_(removecontent)
     {
     }
@@ -93,10 +98,12 @@ class AsyncParams
 };
 
 
+typedef std::queue<AsyncParams *>   asqueue_t;
 typedef std::map<int,std::string>  intstringmap_t;
 
 pthread_mutex_t         asyncMutex = PTHREAD_MUTEX_INITIALIZER;
 int 			asyncCallID=481; // protected by mutex
+asqueue_t		asyncReqQ;	// protected by mutex
 intstringmap_t		asyncResMap;    // protected by mutex
 
 
@@ -150,10 +157,11 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Init(JNI
 	}
     }
 
-    // Arno: always have some timer running. Otherwise in some cases libevent
-    // won't execute any evtimer events added later.
-    evtimer_assign(&evkeepalive, Channel::evbase, LibeventKeepaliveCallback, NULL);
-    evtimer_add(&evkeepalive, tint2tv(TINT_SEC));
+    // Arno: as libevent is used single threaded the only way to coordinate
+    // the Java calling thread and the libevent processing thread is to
+    // let the latter poll.
+    evtimer_assign(&evasyncpoll, Channel::evbase, LibeventPollAsyncCallback, NULL);
+    evtimer_add(&evasyncpoll, tint2tv(ASYNC_POLL_INTERVAL));
 
     // Start HTTP gateway, if requested
     if (errorstr == "" && httpgwaddr!=Address())
@@ -175,15 +183,6 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Init(JNI
 
     return env->NewStringUTF(errorstr.c_str());
 }
-
-
-
-void LibeventKeepaliveCallback(int fd, short event, void *arg)
-{
-    // Called every second to keep libevent timer processing alive?!
-    evtimer_add(&evkeepalive, tint2tv(TINT_SEC));
-}
-
 
 
 JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Mainloop(JNIEnv * env, jobject obj)
@@ -210,7 +209,7 @@ JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Shutdown(JN
 /**
  * Allocates a callid for an asynchronous call and schedules it.
  */
-int AsyncRegisterCallback(event_callback_fn func, AsyncParams *aptr)
+int AsyncRegisterCallback(AsyncParams *aptr)
 {
     int prc = pthread_mutex_lock(&asyncMutex);
     if (prc != 0)
@@ -221,6 +220,8 @@ int AsyncRegisterCallback(event_callback_fn func, AsyncParams *aptr)
 
     aptr->callid_ = asyncCallID;
     asyncCallID++;
+    asyncReqQ.push(aptr);
+    int retCallID = aptr->callid_;
 
     prc = pthread_mutex_unlock(&asyncMutex);
     if (prc != 0)
@@ -229,34 +230,55 @@ int AsyncRegisterCallback(event_callback_fn func, AsyncParams *aptr)
 	return -1;
     }
 
-    // Call timer
-    struct event *evtimerptr = new struct event;
-    evtimer_assign(evtimerptr,Channel::evbase,func,aptr);
-    evtimer_add(evtimerptr,tint2tv(0));
-
-    return aptr->callid_;
+    return retCallID;
 }
+
+
+/*
+ * Called every ASYNC_POLL_INTERVAL by Libevent thread to perform actual
+ * swift calls.
+ */
+void LibeventPollAsyncCallback(int fd, short event, void *arg)
+{
+    int prc = pthread_mutex_lock(&asyncMutex);
+    if (prc != 0)
+    {
+	dprintf("NativeLib::LibeventPollAsync: mutex_lock failed\n");
+	return;
+    }
+
+    while(!asyncReqQ.empty())
+    {
+	AsyncParams *aptr = asyncReqQ.front();
+	asyncReqQ.pop();
+
+	// Make callback
+	aptr->func_(fd,event,aptr);
+
+	delete aptr;
+    }
+
+    prc = pthread_mutex_unlock(&asyncMutex);
+    if (prc != 0)
+    {
+	dprintf("NativeLib::LibeventPollAsync: mutex_unlock failed\n");
+	return;
+    }
+
+    // Schedule next poll
+    evtimer_add(&evasyncpoll, tint2tv(ASYNC_POLL_INTERVAL));
+}
+
+
+
 
 /**
  * Sets the result of the asynchronous call identified by callid
  */
 void AsyncSetResult(int callid, std::string result)
 {
-    int prc = pthread_mutex_lock(&asyncMutex);
-    if (prc != 0)
-    {
-	dprintf("NativeLib::AsyncSetResult: mutex_lock failed\n");
-	return;
-    }
-
+    // Assumption: asyncMutex held
     asyncResMap[callid] = result;
-
-    prc = pthread_mutex_unlock(&asyncMutex);
-    if (prc != 0)
-    {
-	dprintf("NativeLib::AsyncSetResult: mutex_unlock failed\n");
-	return;
-    }
 }
 
 
@@ -323,10 +345,10 @@ JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncOpen( 
 	return -1; // "No destination could be determined"
 
     Address tracker(trackercstr);
-    AsyncParams *aptr = new AsyncParams(swarmid,tracker,dest);
+    AsyncParams *aptr = new AsyncParams(&LibeventOpenCallback,swarmid,tracker,dest);
 
     // Register callback
-    int callid = AsyncRegisterCallback(&LibeventOpenCallback,aptr);
+    int callid = AsyncRegisterCallback(aptr);
 
     (env)->ReleaseStringUTFChars(jswarmid, swarmidcstr); // release jstring
     (env)->ReleaseStringUTFChars(jtracker, trackercstr); // release jstring
@@ -357,8 +379,6 @@ void LibeventOpenCallback(int fd, short event, void *arg)
 
     // Register result
     AsyncSetResult(aptr->callid_,errorstr);
-
-    delete aptr;
 }
 
 
@@ -378,10 +398,10 @@ JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncClose(
     Sha1Hash swarmid = Sha1Hash(true,swarmidcstr);
     bool rs = (bool)jremovestate;
     bool rc = (bool)jremovecontent;
-    AsyncParams *aptr = new AsyncParams(swarmid,rs,rc);
+    AsyncParams *aptr = new AsyncParams(&LibeventCloseCallback,swarmid,rs,rc);
 
     // Register callback
-    int callid = AsyncRegisterCallback(&LibeventCloseCallback,aptr);
+    int callid = AsyncRegisterCallback(aptr);
 
     (env)->ReleaseStringUTFChars(jswarmid, swarmidcstr); // release jstring
 
@@ -411,8 +431,6 @@ void LibeventCloseCallback(int fd, short event, void *arg)
 
     // Register result
     AsyncSetResult(aptr->callid_,errorstr);
-
-    delete aptr;
 }
 
 
@@ -470,10 +488,10 @@ JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetHTT
     const char * swarmidcstr = (env)->GetStringUTFChars(jswarmid, &blnIsCopy);
     Sha1Hash swarmid = Sha1Hash(true,swarmidcstr);
 
-    AsyncParams *aptr = new AsyncParams(swarmid);
+    AsyncParams *aptr = new AsyncParams(&LibeventGetHTTPProgressCallback,swarmid);
 
     // Register callback
-    int callid = AsyncRegisterCallback(&LibeventGetHTTPProgressCallback,aptr);
+    int callid = AsyncRegisterCallback(aptr);
 
     (env)->ReleaseStringUTFChars(jswarmid , swarmidcstr); // release jstring
 
@@ -493,8 +511,6 @@ void LibeventGetHTTPProgressCallback(int fd, short event, void *arg)
 
     // Register result
     AsyncSetResult(aptr->callid_,errorstr);
-
-    delete aptr;
 }
 
 
@@ -509,10 +525,10 @@ JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetSta
     const char * swarmidcstr = (env)->GetStringUTFChars(jswarmid, &blnIsCopy);
     Sha1Hash swarmid = Sha1Hash(true,swarmidcstr);
 
-    AsyncParams *aptr = new AsyncParams(swarmid);
+    AsyncParams *aptr = new AsyncParams(&LibeventGetStatsCallback,swarmid);
 
     // Register callback
-    int callid = AsyncRegisterCallback(&LibeventGetStatsCallback,aptr);
+    int callid = AsyncRegisterCallback(aptr);
 
     (env)->ReleaseStringUTFChars(jswarmid , swarmidcstr); // release jstring
 
@@ -533,8 +549,6 @@ void LibeventGetStatsCallback(int fd, short event, void *arg)
 
     // Register result
     AsyncSetResult(aptr->callid_,errorstr);
-
-    delete aptr;
 }
 
 
@@ -594,7 +608,7 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_LiveAdd(
 
     char *data = (char *)b;
     int datalen = (int)dataLength;
-    dprintf("NativeLib::LiveAdd: Got %p bytes %d from java\n", data, datalen );
+    //dprintf("NativeLib::LiveAdd: Got %p bytes %d from java\n", data, datalen );
 
     if (data != NULL && datalen > 0)
     {
@@ -603,16 +617,18 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_LiveAdd(
 	char *copydata = new char[datalen];
 	memcpy(copydata,data,datalen);
 
-	AsyncParams *aptr = new AsyncParams(copydata,datalen);
+	AsyncParams *aptr = new AsyncParams(&LibeventLiveAddCallback,copydata,datalen);
 
 	// Register callback
-	(void)AsyncRegisterCallback(&LibeventLiveAddCallback,aptr);
+	(void)AsyncRegisterCallback(aptr);
     }
 
     env->ReleaseByteArrayElements(dataArray, b, JNI_ABORT);
 
     return env->NewStringUTF("");
 }
+
+
 
 /*
  * Add live data to libevent evbuffer, to be turned into chunks when >=chunk_size
@@ -641,8 +657,6 @@ void LibeventLiveAddCallback(int fd, short event, void *arg)
         if (ret < 0)
             print_error("live: create: error evbuffer_drain");
     }
-
-    delete aptr;
 }
 
 
