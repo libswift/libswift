@@ -175,6 +175,7 @@ bool Channel::IsComplete() {
 
 uint16_t Channel::GetMyPort() {
     Address addr;
+    // Arno, 2013-06-05: Retrieving addr, so use largest possible sockaddr
     socklen_t addrlen = sizeof(struct sockaddr_storage);
     if (getsockname(socket_, (struct sockaddr *)&addr.addr, &addrlen) < 0)
     {
@@ -258,7 +259,8 @@ tint Channel::Time () {
 evutil_socket_t Channel::Bind (Address address, sckrwecb_t callbacks) {
     struct sockaddr_storage sa = address;
     evutil_socket_t fd;
-    int len = sizeof(struct sockaddr_storage), sndbuf=1<<20, rcvbuf=1<<20;
+    // Arno, 2013-06-05: MacOS X bind fails if sizeof(struct sockaddr_storage) is passed.
+    int len = address.get_real_sockaddr_length(), sndbuf=1<<20, rcvbuf=1<<20;
     #define dbnd_ensure(x) { if (!(x)) { \
         print_error("binding fails"); close_socket(fd); return INVALID_SOCKET; } }
     dbnd_ensure ( (fd = socket(address.get_family(), SOCK_DGRAM, 0)) >= 0 );
@@ -286,7 +288,8 @@ evutil_socket_t Channel::Bind (Address address, sckrwecb_t callbacks) {
 Address Channel::BoundAddress(evutil_socket_t sock) {
 
     struct sockaddr_storage myaddr;
-    socklen_t mylen = sizeof(myaddr);
+    // Arno, 2013-06-05: Retrieving addr, so use largest possible sockaddr
+    socklen_t mylen = sizeof(struct sockaddr_storage);
     int ret = getsockname(sock,(sockaddr*)&myaddr,&mylen);
     if (ret >= 0) {
         return Address(myaddr);
@@ -305,7 +308,7 @@ Address swift::BoundAddress(evutil_socket_t sock) {
 int Channel::SendTo (evutil_socket_t sock, const Address& addr, struct evbuffer *evb) {
     int length = evbuffer_get_length(evb);
     int r = sendto(sock,(const char *)evbuffer_pullup(evb, length),length,0,
-                   (struct sockaddr*)&(addr.addr),sizeof(struct sockaddr_storage));
+                   (struct sockaddr*)&(addr.addr),addr.get_real_sockaddr_length());
     // SCHAAP: 2012-06-16 - How about EAGAIN and EWOULDBLOCK? Do we just drop the packet then as well?
     if (r<0) {
         print_error("can't send");
@@ -320,6 +323,7 @@ int Channel::SendTo (evutil_socket_t sock, const Address& addr, struct evbuffer 
 }
 
 int Channel::RecvFrom (evutil_socket_t sock, Address& addr, struct evbuffer *evb) {
+    // Arno, 2013-06-05: Incoming addr, so use largest possible sockaddr
     socklen_t addrlen = sizeof(struct sockaddr_storage);
     struct evbuffer_iovec vec;
     if (evbuffer_reserve_space(evb, SWIFT_MAX_RECV_DGRAM_SIZE, &vec, 1) < 0) {

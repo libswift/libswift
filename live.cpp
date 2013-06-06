@@ -43,6 +43,8 @@
  *  - avoid infinitely growing vector of channels.
  *
  *  - Policy for how far peer and source may be apart before rehook-in
+ *
+ *  - Crash on end-of-HTTP request for live.
  */
 //LIVE
 #include "swift.h"

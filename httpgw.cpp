@@ -46,37 +46,41 @@ static uint32_t HTTPGW_MIN_PREBUF_BYTES  = (256*1024); // configurable
 #define HTTPGW_MAX_REQUEST 128
 
 struct http_gw_t {
-    int      id;
-    uint64_t offset;
-    uint64_t tosend;
-    int      td;
-    uint64_t lastcpoffset; // last offset at which we checkpointed
-    struct evhttp_request *sinkevreq;
-    struct event           *sinkevwrite;
-    std::string    mfspecname; // (optional) name from multi-file spec
-    std::string xcontentdur;
-    std::string mimetype;
-    bool     replied;
-    bool     closing;
-    uint64_t startoff;   // MULTIFILE: starting offset in content range of desired file
+    int      id;	 // request id
+    // request
+    struct evhttp_request *sinkevreq;   // libevent HTTP request
+    struct event          *sinkevwrite; // libevent HTTP socket writable event
+    // what
+    int      td;	 // transfer being served
+    std::string mfspecname; // (optional) name from multi-file spec
+    int64_t  rangefirst; // (optional) First byte wanted in HTTP GET Range request or -1 (relative to any mfspecname)
+    int64_t  rangelast;  // (optional) Last byte wanted in HTTP GET Range request (also 99 for 100 byte interval) or -1
+    // reply
+    int      replycode;  // HTTP status code to return
+    std::string xcontentdur;   // (optional) duration of content in seconds, -1 for live (for Firefox HTML5)
+    std::string mimetype;      // MIME type to return
+    bool     replied;    // Whether or not a reply has been sent on the HTTP request
+    // reply progress
+    uint64_t offset;	 // current offset of request into content address space (bytes)
+    uint64_t tosend;	 // number of bytes still to send, or inf for live
+    uint64_t startoff;   // MULTIFILE: starting offset of desired file in content address space, or live hook-in point
     uint64_t endoff;     // MULTIFILE: ending offset (careful, for an e.g. 100 byte interval this is 99)
-    int replycode;         // HTTP status code
-    int64_t  rangefirst; // First byte wanted in HTTP GET Range request or -1
-    int64_t  rangelast;  // Last byte wanted in HTTP GET Range request (also 99 for 100 byte interval) or -1
-    bool     foundH264NALU;
+    bool     closing;	 // Whether we are finishing the HTTP connection
+    bool     foundH264NALU; // Raw H.264 live streaming: Whether a NALU has been found.
 
 } http_requests[HTTPGW_MAX_REQUEST];
 
 
 int http_gw_reqs_open = 0;
 int http_gw_reqs_count = 0;
-struct evhttp *http_gw_event;
-struct evhttp_bound_socket *http_gw_handle;
-uint64_t httpgw_livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
-uint32_t httpgw_chunk_size = SWIFT_DEFAULT_CHUNK_SIZE; // Copy of cmdline param
-double *httpgw_maxspeed = NULL;                         // Copy of cmdline param
-std::string httpgw_storage_dir="";
-Address httpgw_bindaddr;
+
+struct evhttp *http_gw_event; 	            // libevent HTTP request received event
+struct evhttp_bound_socket *http_gw_handle; // libevent HTTP server socket handle
+uint64_t httpgw_livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL; // Default live discard window. Copy of cmdline param
+uint32_t httpgw_chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;  // Default chunk size. Copy of cmdline param
+double *httpgw_maxspeed = NULL;                         // Default speed limits. Copy of cmdline param
+std::string httpgw_storage_dir="";			// Default storage location for swarm downloads
+Address httpgw_bindaddr;				// Address of HTTP server
 
 // Arno, 2010-11-30: for SwarmPlayer 3000 backend autoquit when no HTTP req is received
 bool sawhttpconn = false;
@@ -143,7 +147,9 @@ void HttpGwCloseConnection (http_gw_t* req) {
     //
     swift::Seek(req->td,swift::Size(req->td)-1,SEEK_CUR);
 
-    //swift::Close(req->td);
+    // Arno, 2013-05-24: Leave swarm for LIVE.
+    if (req->xcontentdur == "-1")
+	swift::Close(req->td);
 
     *req = http_requests[--http_gw_reqs_open];
 }
@@ -173,11 +179,9 @@ void HttpGwLibeventCloseCallback(struct evhttp_connection *evconn, void *evreqvo
 
 
 void HttpGwWrite(int td) {
-
     //
     // Write to HTTP socket.
     //
-
     http_gw_t* req = HttpGwFindRequestByTD(td);
     if (req == NULL) {
         print_error("httpgw: MayWrite: can't find req for transfer");
@@ -984,7 +988,6 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     req->offset = 0;
     req->tosend = 0;
     req->td = td;
-    req->lastcpoffset = 0;
     req->sinkevwrite = NULL;
     req->closing = false;
     req->replied = false;

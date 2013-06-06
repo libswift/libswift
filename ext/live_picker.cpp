@@ -168,7 +168,7 @@ class SimpleLivePiecePicker : public LivePiecePicker {
 
 	bin_t peerbasepos(peerpos.base_right());
 
-	fprintf(stderr,"live: pp: StartAddPeerPos: peerbasepos %s\n", peerbasepos.str().c_str());
+	//fprintf(stderr,"live: pp: StartAddPeerPos: peerbasepos %s\n", peerbasepos.str().c_str());
 	bin_t cand;
 	cand = bin_t(0,peerbasepos.layer_offset());
 

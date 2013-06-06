@@ -1,8 +1,8 @@
 # Written by Arno Bakker
 # see LICENSE.txt for license information
 #
+# - CHECKPOINT tested in vodmftest.py
 # TODO:
-# - CHECKPOINT
 # - Test effect of MAXSPEED
 #
 
@@ -31,7 +31,7 @@ from swiftconn import *
 DEBUG=False
 
 
-class TestHave(TestZeroSeedFramework):
+class TestCmdGw(TestZeroSeedFramework):
 
     def setUpPreSession(self):
         TestZeroSeedFramework.setUpPreSession(self)
@@ -323,7 +323,7 @@ class TestHave(TestZeroSeedFramework):
     
 def test_suite():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(TestHave))
+    suite.addTest(unittest.makeSuite(TestCmdGw))
     
     return suite
 
