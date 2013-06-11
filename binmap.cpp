@@ -1,3 +1,5 @@
+// Arno, 2013-06-11: Must come first to ensure SIZE_MAX etc are defined
+#include "compat.h"
 #include <cassert>
 #include <cstddef>
 #include <cstdlib>

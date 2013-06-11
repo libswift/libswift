@@ -64,6 +64,8 @@
 #ifndef SWIFT_H
 #define SWIFT_H
 
+// Arno, 2013-06-11: Must come first to ensure SIZE_MAX etc are defined
+#include "compat.h"
 #include <deque>
 #include <vector>
 #include <set>
@@ -72,7 +74,6 @@
 #include <algorithm>
 #include <string>
 
-#include "compat.h"
 #include <event2/event.h>
 #include <event2/event_struct.h>
 #include <event2/buffer.h>

@@ -6,13 +6,14 @@
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
+// Arno, 2013-06-11: Must come first to ensure SIZE_MAX etc are defined
+#include "compat.h"
 #include "bin_utils.h"
 #include "swift.h"
 #include <algorithm>  // kill it
 #include <cassert>
 #include <cfloat>
 #include <sstream>
-#include "compat.h"
 
 using namespace swift;
 using namespace std;

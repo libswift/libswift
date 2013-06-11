@@ -7,7 +7,7 @@
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
-
+#include "compat.h"
 #include "hashtree.h"
 #include "bin_utils.h"
 //#include <openssl/sha.h>
@@ -16,7 +16,6 @@
 #include <cstring>
 #include <cstdlib>
 #include <fcntl.h>
-#include "compat.h"
 #include "swift.h"
 
 #include <iostream>
