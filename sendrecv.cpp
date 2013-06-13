@@ -35,8 +35,11 @@ struct event Channel::evrecv;
  * get greater granularity. Set to 0 for original behavior.
  * Ric: set to 2, it should be smaller than 4 or we need to change the hint
  * strategy first
+ * Ric: 2013-05: We need to always send out at least one req. for each channel.
+ * Otherwise, if the link between two peers is heavily congested or has a high
+ * pkt loss rate, ledbat will close the connection. (short explanation)
  */
-#define HINT_GRANULARITY    2 // chunks
+#define HINT_GRANULARITY    1 // chunks
 
 /** Arno, 2012-03-16: Swift can now tunnel data from CMDGW over UDP to
  * CMDGW at another swift instance. This is the default channel ID on UDP
@@ -315,7 +318,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
     }
 
     // 1. Calc max of what we are allowed to request, uncongested bandwidth wise
-    tint plan_for = max(TINT_SEC*2,rtt_avg_*8);
+    tint plan_for = max(TINT_SEC*HINT_TIME,rtt_avg_*4);
     tint timed_out = NOW - plan_for*2;
 
     std::deque<bin_t> tbc;
@@ -339,24 +342,40 @@ void    Channel::AddHint (struct evbuffer *evb) {
     // 2. Calc max of what is allowed by the rate limiter
     int rate_allowed_hints = LONG_MAX;
     uint64_t rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
+    bool count_hints = false;
     if (transfer()->GetMaxSpeed(DDIR_DOWNLOAD) < DBL_MAX)
     {
-	channels_t::iterator iter;
-	for (iter=transfer()->GetChannels()->begin(); iter!=transfer()->GetChannels()->end(); iter++)
-	{
+        channels_t::iterator iter;
+        for (iter=transfer()->GetChannels()->begin(); iter!=transfer()->GetChannels()->end(); iter++)
+        {
             Channel *c = *iter;
-	    if (c != NULL)
-		rough_global_hint_out_size += c->hint_out_size_;
-	}
+            if (c != NULL)
+            rough_global_hint_out_size += c->hint_out_size_;
+        }
 
-	// Policy: this channel is allowed to hint at the limit - global_hinted_at
-	// Handle MaxSpeed = unlimited
-	double rate_hints_limit_float = transfer()->GetMaxSpeed(DDIR_DOWNLOAD)/((double)transfer()->chunk_size());
+        // Policy: this channel is allowed to hint at the limit - global_hinted_at
+        // Handle MaxSpeed = unlimited
+        double rate_hints_limit_float = HINT_TIME*transfer()->GetMaxSpeed(DDIR_DOWNLOAD)/((double)transfer()->chunk_size());
 
-	int rate_hints_limit = (int)min((double)LONG_MAX,rate_hints_limit_float);
+		// Ric: slow down if we just started the connection
+		double slowStart = (double)LONG_MAX;
+		tint running = now_t::now-start;
+		// It takes ~3 sec to get a stable DL speed estimation
+		if (running<TINT_SEC*3 && hint_out_size_>1) {
+			count_hints = true;
+			slowStart = rate_hints_limit_float*running/TINT_SEC;
+			if (slowStart>transfer()->GetSlowStartHints())
+				slowStart = slowStart-transfer()->GetSlowStartHints();
+			else
+				slowStart = 0;
+			if (DEBUGTRAFFIC)
+				fprintf(stderr, "slowStart: %ld [%u]\n", slowStart, transfer()->GetSlowStartHints());
+		}
+		
+        int rate_hints_limit = (int)min(slowStart,rate_hints_limit_float);
 
-	// Actually allowed is max minus what we already asked for, globally (=all channels)
-	rate_allowed_hints = max(0,rate_hints_limit-(int)rough_global_hint_out_size);
+        // Actually allowed is max minus what we already asked for, globally (=all channels)
+        rate_allowed_hints = max(0,rate_hints_limit-(int)rough_global_hint_out_size);
     }
     if (DEBUGTRAFFIC)
     	fprintf(stderr,"hint c%u: %lf want %d qallow %d rallow %d chanout %llu globout %llu\n", id(), transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, queue_allowed_hints, rate_allowed_hints, hint_out_size_, rough_global_hint_out_size );
@@ -366,7 +385,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
     // 4. Ask allowance in blocks of chunks to get pipelining going from serving peer.
     // Arno, 2012-10-30: not HINT_GRANULARITY for LIVE
-    if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY || transfer()->ttype() == LIVE_TRANSFER)
+    if (hint_out_size_ == 0 || plan_pck >= HINT_GRANULARITY || transfer()->ttype() == LIVE_TRANSFER)
     {
         bin_t hint = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2);
         if (!hint.is_none()) {
@@ -400,6 +419,11 @@ void    Channel::AddHint (struct evbuffer *evb) {
             }
             hint_out_.push_back(hint);
             hint_out_size_ += hint.base_length();
+
+            // Ric: keep track of the outstanding hints
+            if (count_hints)
+            	transfer()->SetSlowStartHints(hint.base_length());
+            return;
         }
         else
             dprintf("%s #%u Xhint\n",tintstr(),id_);
@@ -470,9 +494,10 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         dprintf("%s #%u sendctrl wait cwnd %f data_out %i next %s\n",
                 tintstr(),id_,cwnd_,(int)data_out_.size(),tintstr(last_data_out_time_+send_interval_));
 
-    if (tosend.is_none())// && (last_data_out_time_>NOW-TINT_SEC || data_out_.empty()))
+    if (tosend.is_none()) {// && (last_data_out_time_>NOW-TINT_SEC || data_out_.empty()))
+        transfer()->OnSendNoData();
         return bin_t::NONE; // once in a while, empty data is sent just to check rtt FIXED
-
+    }
 
     //LIVE
     if (transfer()->ttype() == FILE_TRANSFER) {
@@ -569,9 +594,31 @@ void    Channel::AddAck (struct evbuffer *evb) {
     if (data_in_.bin.layer()>2)
         data_in_dbl_ = data_in_.bin;
 
-    //fprintf(stderr,"data_in_ c%d\n", id() );
-    // Ric: TODO should not be a single element
-    //      keep single ack for the moment
+    // Ric: check that we are not sending a cancel msg for data_in_
+    std::deque<bin_t>::iterator it;
+    bin_t b = data_in_.bin;
+    for (it=cancel_out_.begin(); it!=cancel_out_.end(); it++) {
+        bin_t c = *it;
+        if (c == b) {
+            cancel_out_.erase(it);
+            break;
+        }
+        // b is always a single chunk :-)
+        else if (c.contains(b)) {
+            while (c.contains(b) && c!=b) {
+                if (c>b) {
+                    cancel_out_.insert(it+1,c.right());
+                    c.to_left();
+                }
+                else {
+                    cancel_out_.insert(it+1,c.left());
+                    c.to_right();
+                }
+            }
+            assert (c==b);
+            cancel_out_.erase(it);
+        }
+    }
     data_in_ = tintbin();
     //data_in_ = tintbin(NOW,bin64_t::NONE);
 }
@@ -803,6 +850,8 @@ void    Channel::CleanHintOut (bin_t pos) {
     	bin_t hint = hint_out_.front().bin;
         hint_out_size_ -= hint.base_length();
         hint_out_.pop_front();
+        // Ric: add to the cancel queue
+        cancel_out_.push_back(hint);
     }
     while (hint_out_.front().bin!=pos) {
         tintbin f = hint_out_.front();
@@ -818,8 +867,10 @@ void    Channel::CleanHintOut (bin_t pos) {
         hint_out_.front().bin = f.bin.sibling();
         hint_out_.push_front(f);
     }
+    // Ric: add to the cancel queue
+	cancel_out_.push_back(hint_out_.front().bin);
+	hint_out_size_ -= hint_out_.front().bin.base_length();
     hint_out_.pop_front();
-    hint_out_size_--;
 }
 
 
@@ -894,8 +945,9 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 
     bin_t cover = transfer()->ack_out()->cover(pos);
     transfer()->Progress(cover);
-    if (cover.layer() >= 5) // Arno: update DL speed. Tested with 32K, presently = 2 ** 5 * chunk_size CHUNKSIZE
-        transfer()->OnRecvData( pow((double)2,(double)5)*((double)transfer()->chunk_size()) );
+    //if (cover.layer() >= 5) // Arno: update DL speed. Tested with 32K, presently = 2 ** 5 * chunk_size CHUNKSIZE
+    //    transfer()->OnRecvData( pow((double)2,(double)5)*((double)transfer()->chunk_size()) );
+    transfer()->OnRecvData( transfer()->chunk_size() );
 
     data_in_ = tintbin(NOW,bin_t::NONE);
     data_in_.bin = pos;

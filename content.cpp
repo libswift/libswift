@@ -33,7 +33,7 @@ uint64_t ContentTransfer::cleancounter = 0;
 
 
 ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), mychannels_(), callbacks_(), picker_(NULL),
-    speedzerocount_(0), tracker_(),
+    speedupcount_(0), speeddwcount_(0), slow_start_hints_(0), tracker_(),
     tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START),
     tracker_retry_time_(NOW)
 {
@@ -116,8 +116,8 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
 
 	// Update speed measurements such that they decrease when DL/UL stops
 	// Always. Must be done on 1 s interval
-	ct->OnRecvData(0);
-	ct->OnSendData(0);
+	ct->OnRecvNoData();
+	ct->OnSendNoData();
 
 
 	// Arno: Call garage collect only once every CHANNEL_GARBAGECOLLECT_INTERVAL
@@ -217,28 +217,41 @@ Channel *ContentTransfer::RandomChannel(Channel *notc) {
 // RATELIMIT
 void      ContentTransfer::OnRecvData(int n)
 {
-    // Got n ~ 32K
-    cur_speed_[DDIR_DOWNLOAD].AddPoint((uint64_t)n);
+	speeddwcount_++;
+	uint32_t speed = cur_speed_[DDIR_DOWNLOAD].GetSpeedNeutral();
+	uint32_t rate = speed & ~1048575 ? 32:8;
+	if (speeddwcount_>=rate)
+	{
+		cur_speed_[DDIR_DOWNLOAD].AddPoint((uint64_t)n*rate);
+		speeddwcount_=0;
+	}
 }
 
 void      ContentTransfer::OnSendData(int n)
 {
-    // Sent n ~ 1K
-    cur_speed_[DDIR_UPLOAD].AddPoint((uint64_t)n);
+    speedupcount_++;
+	uint32_t speed = cur_speed_[DDIR_UPLOAD].GetSpeedNeutral();
+	uint32_t rate = speed & ~1048575 ? 32:8;
+    if (speedupcount_>=rate)
+    {
+        cur_speed_[DDIR_UPLOAD].AddPoint((uint64_t)n*rate);
+        speedupcount_ = 0;
+    }
 }
 
+
+void      ContentTransfer::OnRecvNoData()
+{
+    // AddPoint(0) everytime we don't AddData gives bad speed measurement
+	cur_speed_[DDIR_DOWNLOAD].AddPoint((uint64_t)0);
+}
 
 void      ContentTransfer::OnSendNoData()
 {
-    // AddPoint(0) everytime we don't AddData gives bad speed measurement
-    // batch 32 such events into 1.
-    speedzerocount_++;
-    if (speedzerocount_ >= 32)
-    {
-        cur_speed_[DDIR_UPLOAD].AddPoint((uint64_t)0);
-        speedzerocount_ = 0;
-    }
+    // AddPoint(0) everytime we don't SendData gives bad speed measurement
+	cur_speed_[DDIR_UPLOAD].AddPoint((uint64_t)0);
 }
+
 
 
 double      ContentTransfer::GetCurrentSpeed(data_direction_t ddir)

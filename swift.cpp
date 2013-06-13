@@ -760,8 +760,17 @@ void ReportCallback(int fd, short event, void *arg) {
                 Channel::global_dgrams_up, Channel::global_raw_bytes_up,
                 Channel::global_dgrams_down, Channel::global_raw_bytes_down );
 
-		fprintf(stderr,"upload %lf\n",swift::GetCurrentSpeed(single_td,DDIR_UPLOAD));
-		fprintf(stderr,"dwload %lf\n",swift::GetCurrentSpeed(single_td,DDIR_DOWNLOAD));
+        double up = swift::GetCurrentSpeed(single_td,DDIR_UPLOAD);
+        double dw = swift::GetCurrentSpeed(single_td,DDIR_DOWNLOAD);
+        if (up/1048576 > 1)
+            fprintf(stderr,"upload %.2f MB/s (%lf B/s)\n", up/(1<<20), up);
+        else
+            fprintf(stderr,"upload %.2f KB/s (%lf B/s)\n", up/(1<<10), up);
+        if (dw/1048576 > 1)
+            fprintf(stderr,"dwload %.2f MB/s (%lf B/s)\n", dw/(1<<20), dw);
+        else
+            fprintf(stderr,"dwload %.2f KB/s (%lf B/s)\n", dw/(1<<10), dw);
+
 		// Ric: remove. LEDBAT tests
 		Channel* c = swift::Channel::channel(1);
 		if (c!=NULL) {
@@ -800,6 +809,11 @@ void ReportCallback(int fd, short event, void *arg) {
             ContentTransfer *ct = swift::GetActivatedTransfer(td);
             if (ct != NULL)
         	nactive++;
+            double up = swift::GetCurrentSpeed(td,DDIR_UPLOAD);
+            if (up/1048576 > 1)
+                fprintf(stderr,"%d: upload %.2f MB/s\t", td, up/(1<<20));
+            else
+                fprintf(stderr,"%d: upload %.2f KB/s\t", td, up/(1<<10));
         }
         /*
         fprintf(stderr,

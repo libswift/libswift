@@ -18,7 +18,7 @@
  *  loaded into memory. In particular, content and hashes are read directly
  *  from disk.
  *
- *  Created by Victor Grishchenko, Arno Bakker
+ *  Created by Victor Grishchenko, Arno Bakker, Riccardo Petrocco
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
@@ -116,6 +116,10 @@ namespace swift {
 #define POPT_MAX_SWARMID_SIZE		     1024
 // Max size of a X.509 certificate in a PEX_REScert message.
 #define PEX_RES_MAX_CERT_SIZE		     1024
+
+// Ric: allowed hints in the future (e.g., 2 x TINT_SEC)
+#define HINT_TIME                       2
+
 
 
 /** IPv4/6 address, just a nice wrapping around struct sockaddr_storage. */
@@ -420,6 +424,8 @@ namespace swift {
         void            OnSendData(int n);
         /** Arno: Call when no bytes are sent due to rate limiting. */
         void            OnSendNoData();
+        /** Ric:  Call when no bytes are received. */
+        void            OnRecvNoData();
         /** Arno: Return current speed for the given direction in bytes/s */
         double          GetCurrentSpeed(data_direction_t ddir);
         /** Arno: Return maximum speed for the given direction in bytes/s */
@@ -441,6 +447,10 @@ namespace swift {
         /** Add a peer to the set of addresses to connect to */
         void            AddPeer(Address &peer);
 
+        /** Ric: add number of hints for slow start scenario */
+        void            SetSlowStartHints(uint hints) { slow_start_hints_ += hints; }
+        /** Ric: get the # of slow start hints */
+        uint            GetSlowStartHints() { return slow_start_hints_; }
 
         /** Arno: set the tracker for this transfer. Reseting it won't kill
          * any existing connections. */
@@ -477,14 +487,17 @@ namespace swift {
         // RATELIMIT
         MovingAverageSpeed    cur_speed_[2];
         double          max_speed_[2];
-        int             speedzerocount_;
-
+        int             speedupcount_;
+        int             speeddwcount_;
         // MULTIFILE
         Storage         *storage_;
 
         Address         tracker_; // Tracker for this transfer
         tint            tracker_retry_interval_;
         tint            tracker_retry_time_;
+
+        // Ric: slow start 4 requesting hints
+        uint            slow_start_hints_;
 
     };
 
