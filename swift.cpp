@@ -77,6 +77,7 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, Address &tracker, 
 int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate);
 int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool activate);
 void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Hash root_hash);
+void AttemptCheckpoint();
 
 void ReportCallback(int fd, short event, void *arg);
 void EndCallback(int fd, short event, void *arg);
@@ -481,6 +482,8 @@ int utf8main (int argc, char** argv)
         // event_base_loopexit() was called, shutting down
     }
 
+    AttemptCheckpoint();
+
     // Arno, 2012-01-03: Close all transfers
     tdlist_t tds = GetTransferDescriptors();
     tdlist_t::iterator iter;
@@ -727,6 +730,20 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
 
 
 
+void AttemptCheckpoint()
+{
+    if (swift::ttype(single_td) == FILE_TRANSFER && file_enable_checkpoint && !file_checkpointed && swift::IsComplete(single_td))
+    {
+	std::string binmap_filename = swift::GetOSPathName(single_td);
+	binmap_filename.append(".mbinmap");
+	fprintf(stderr,"swift: Complete, checkpointing %s\n", binmap_filename.c_str() );
+
+	if (swift::Checkpoint(single_td) >= 0)
+	    file_checkpointed = true;
+    }
+}
+
+
 void ReportCallback(int fd, short event, void *arg) {
     // Called every second to print/calc some stats
     // Arno, 2012-05-24: Why-oh-why, update NOW
@@ -754,16 +771,8 @@ void ReportCallback(int fd, short event, void *arg) {
 		//fprintf(stderr,"npeers %d\n",ft->GetNumLeechers()+ft->GetNumSeeders() );
 	}
 
-	if (swift::ttype(single_td) == FILE_TRANSFER && file_enable_checkpoint && !file_checkpointed && swift::IsComplete(single_td))
-	{
-	    std::string binmap_filename = swift::GetOSPathName(single_td);
-	    binmap_filename.append(".mbinmap");
-	    fprintf(stderr,"swift: Complete, checkpointing %s\n", binmap_filename.c_str() );
 
-	    if (swift::Checkpoint(single_td) >= 0)
-		file_checkpointed = true;
-        }
-
+        AttemptCheckpoint();
 
         if (exitoncomplete && swift::IsComplete(single_td))
             // Download and stop mode
