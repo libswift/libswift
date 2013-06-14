@@ -30,6 +30,9 @@ struct event Channel::evrecv;
 #define ENABLE_SENDERSIZE_PUSH 0
 
 
+#define ENABLE_CANCEL 		0
+
+
 /** Arno, 2011-11-24: When rate limit is on and the download is in progress
  * we send HINTs for 2 chunks at the moment. This constant can be used to
  * get greater granularity. Set to 0 for original behavior.
@@ -46,6 +49,9 @@ struct event Channel::evrecv;
  * for that traffic (cf. overlay swarm).
  */
 #define CMDGW_TUNNEL_DEFAULT_CHANNEL_ID        0xffffffff
+
+
+
 
 
 
@@ -274,7 +280,8 @@ void    Channel::Send () {
                 "Only call Reschedule for 'reverse PEX' if the channel is in keep-alive mode"
                  */
                 AddPexReq(evb);
-                AddCancel(evb);
+                if (ENABLE_CANCEL)
+                    AddCancel(evb);
             }
             AddPex(evb);
             TimeoutDataOut();
@@ -400,6 +407,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
             //fprintf(stderr,"send c%d: HINTLEN %i\n", id(), hint.base_length());
             //fprintf(stderr,"HL %i ", hint.base_length());
 
+#if ENABLE_CANCEL == 1
             // Ric: final cancel the hints that have been removed
             while (!tbc.empty()) {
                 bin_t c = tbc.front();
@@ -417,6 +425,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
 	                break;
                 tbc.pop_front();
             }
+#endif
             hint_out_.push_back(hint);
             hint_out_size_ += hint.base_length();
 
@@ -428,11 +437,13 @@ void    Channel::AddHint (struct evbuffer *evb) {
         else
             dprintf("%s #%u Xhint\n",tintstr(),id_);
     }
+#if ENABLE_CANCEL == 1
     // add the temporary cancel bin to the actual cancel queue
 	while (!tbc.empty()) {
 		cancel_out_.push_back(tbc.front());
 		tbc.pop_front();
     }
+#endif
 }
 
 static int ChunkAddrSize(popt_chunk_addr_t ca)
@@ -594,6 +605,7 @@ void    Channel::AddAck (struct evbuffer *evb) {
     if (data_in_.bin.layer()>2)
         data_in_dbl_ = data_in_.bin;
 
+#if ENABLE_CANCEL == 1
     // Ric: check that we are not sending a cancel msg for data_in_
     std::deque<bin_t>::iterator it;
     bin_t b = data_in_.bin;
@@ -619,6 +631,7 @@ void    Channel::AddAck (struct evbuffer *evb) {
             cancel_out_.erase(it);
         }
     }
+#endif
     data_in_ = tintbin();
     //data_in_ = tintbin(NOW,bin64_t::NONE);
 }
@@ -850,8 +863,10 @@ void    Channel::CleanHintOut (bin_t pos) {
     	bin_t hint = hint_out_.front().bin;
         hint_out_size_ -= hint.base_length();
         hint_out_.pop_front();
+#if ENABLE_CANCEL == 1
         // Ric: add to the cancel queue
         cancel_out_.push_back(hint);
+#endif
     }
     while (hint_out_.front().bin!=pos) {
         tintbin f = hint_out_.front();
@@ -867,9 +882,11 @@ void    Channel::CleanHintOut (bin_t pos) {
         hint_out_.front().bin = f.bin.sibling();
         hint_out_.push_front(f);
     }
+#if ENABLE_CANCEL == 1
     // Ric: add to the cancel queue
-	cancel_out_.push_back(hint_out_.front().bin);
-	hint_out_size_ -= hint_out_.front().bin.base_length();
+    cancel_out_.push_back(hint_out_.front().bin);
+#endif
+    hint_out_size_ -= hint_out_.front().bin.base_length();
     hint_out_.pop_front();
 }
 
