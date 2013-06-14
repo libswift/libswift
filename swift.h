@@ -118,7 +118,7 @@ namespace swift {
 #define PEX_RES_MAX_CERT_SIZE		     1024
 
 // Ric: allowed hints in the future (e.g., 2 x TINT_SEC)
-#define HINT_TIME                       2
+#define HINT_TIME                       2	// seconds
 
 
 
@@ -448,9 +448,9 @@ namespace swift {
         void            AddPeer(Address &peer);
 
         /** Ric: add number of hints for slow start scenario */
-        void            SetSlowStartHints(uint hints) { slow_start_hints_ += hints; }
+        void            SetSlowStartHints(uint32_t hints) { slow_start_hints_ += hints; }
         /** Ric: get the # of slow start hints */
-        uint            GetSlowStartHints() { return slow_start_hints_; }
+        uint32_t        GetSlowStartHints() { return slow_start_hints_; }
 
         /** Arno: set the tracker for this transfer. Reseting it won't kill
          * any existing connections. */
@@ -487,8 +487,8 @@ namespace swift {
         // RATELIMIT
         MovingAverageSpeed    cur_speed_[2];
         double          max_speed_[2];
-        int             speedupcount_;
-        int             speeddwcount_;
+        uint32_t        speedupcount_;
+        uint32_t        speeddwcount_;
         // MULTIFILE
         Storage         *storage_;
 
@@ -497,7 +497,7 @@ namespace swift {
         tint            tracker_retry_time_;
 
         // Ric: slow start 4 requesting hints
-        uint            slow_start_hints_;
+        uint32_t        slow_start_hints_;
 
     };
 
