@@ -432,6 +432,14 @@ void    Channel::AddHint (struct evbuffer *evb) {
             // Ric: keep track of the outstanding hints
             if (count_hints)
             	transfer()->SetSlowStartHints(hint.base_length());
+
+            // RTTFIX
+            if (rtt_hint_tintbin_.bin == bin_t::NONE)
+            {
+        	rtt_hint_tintbin_.bin = hint.base_left();
+        	rtt_hint_tintbin_.time = NOW;
+            }
+
             return;
         }
         else
@@ -439,9 +447,9 @@ void    Channel::AddHint (struct evbuffer *evb) {
     }
 #if ENABLE_CANCEL == 1
     // add the temporary cancel bin to the actual cancel queue
-	while (!tbc.empty()) {
-		cancel_out_.push_back(tbc.front());
-		tbc.pop_front();
+    while (!tbc.empty()) {
+	cancel_out_.push_back(tbc.front());
+	tbc.pop_front();
     }
 #endif
 }
@@ -702,6 +710,7 @@ void    Channel::Recv (struct evbuffer *evb) {
         dev_avg_ = rtt_avg_;
         dip_avg_ = rtt_avg_;
         dprintf("%s #%u sendctrl rtt init %lld\n",tintstr(),id_,rtt_avg_);
+        fprintf(stderr,"%s #%u sendctrl rtt init %lld\n",tintstr(),id_,rtt_avg_);
     }
 
     bin_t data = evbuffer_get_length(evb) ? bin_t::NONE : bin_t::ALL;
@@ -969,8 +978,8 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     data_in_ = tintbin(NOW,bin_t::NONE);
     data_in_.bin = pos;
     // Ric: the time of the ack is the owd.
-	if (peer_time!=TINT_NEVER)
-		data_in_.time = NOW - peer_time;
+    if (peer_time!=TINT_NEVER)
+	data_in_.time = NOW - peer_time;
 
     UpdateDIP(pos);
     CleanHintOut(pos);
@@ -988,6 +997,22 @@ void Channel::UpdateDIP(bin_t pos)
             dip_avg_ = ( dip_avg_*3 + dip ) >> 2;
         }
         last_data_in_time_ = NOW;
+    }
+
+    // RTTFIX
+    /* Arno: in a true client/server scenario the initial RTT is used to set
+     * rtt_avg_ and it is never updated. If that gets a bad sample this can
+     * kill performance. Simple workaround against too high values.
+     */
+    if (rtt_hint_tintbin_.bin == pos) {
+	tint diff = NOW - rtt_hint_tintbin_.time;
+	// Conservative: only adjust rtt_avg_ if 2x smaller
+	if (diff < rtt_avg_/2 && IsComplete())
+	{
+	    fprintf(stderr,"%s #%u rtt adjust %lld -> %lld\n",tintstr(),id_,rtt_avg_,diff);
+	    rtt_avg_ = diff;
+	}
+	rtt_hint_tintbin_.bin = bin_t::NONE;
     }
 }
 

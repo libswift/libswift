@@ -852,7 +852,7 @@ namespace swift {
         binmap_t    have_out_;
         /**    Transmit schedule: in most cases filled with the peer's hints */
         tbqueue     hint_in_;
-        uint64_t	hint_in_size_;
+        uint64_t    hint_in_size_;
         /** Hints sent (to detect and reschedule ignored hints). */
         tbqueue     hint_out_;
         uint64_t    hint_out_size_;
@@ -927,6 +927,9 @@ namespace swift {
         Handshake   *hs_out_;
         /** Handshake I got from peer. */
         Handshake   *hs_in_;
+
+        // RTTCS
+        tintbin	    rtt_hint_tintbin_;
 
         int         PeerBPS() const { return TINT_SEC / dip_avg_ * 1024; }
         /** Get a request for one packet from the queue of peer's requests. */
