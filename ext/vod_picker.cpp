@@ -34,7 +34,7 @@ class VodPiecePicker : public PiecePicker {
 public:
 
     VodPiecePicker (FileTransfer* file_to_pick_from) : ack_hint_out_(),
-           transfer_(file_to_pick_from), twist_(0), range_(bin_t::ALL), initseq_(0,0)
+           transfer_(file_to_pick_from), twist_(0), range_(bin_t::ALL), initseq_(bin_t::NONE)
     {
     	avail_ = transfer_->availability();
         binmap_t::copy(ack_hint_out_, *(hashtree()->ack_out()));
@@ -175,14 +175,17 @@ public:
 
         // get the first piece to estimate the size, whoever sends it first
         if (!hashtree()->size()) {
-
+            initseq_ = bin_t(0,0);
             return bin_t(0,0);
         }
         else if (hashtree()->ack_out()->is_empty(bin_t(0,0)))
         {
         	// Arno, 2012-05-03: big initial hint avoidance hack:
         	// Just ask sequentially till first chunk in.
-        	initseq_ = bin_t(initseq_.layer(),initseq_.layer_offset()+1);
+                if (initseq_ == bin_t::NONE)
+                    initseq_ = bin_t(0,0);
+                else
+        	    initseq_ = bin_t(initseq_.layer(),initseq_.layer_offset()+1);
         	return initseq_;
         }
 
@@ -250,7 +253,7 @@ public:
         // TODO clean ... printing percentage of completeness for the priority sets
         //status();
 
-        //fprintf(stderr,"%s #1 Picker -> picked %s\t from %c set\t max width %lu \n",tintstr(), hint.str().c_str(), set, max_width );
+        //fprintf(stderr,"%s #1 http Picker -> picked %s\t from %c set\t max width %lu \n",tintstr(), hint.str().c_str(), set, max_width );
         //if (avail_->size())
         return hint;
     }
