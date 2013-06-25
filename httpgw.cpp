@@ -549,7 +549,7 @@ bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
         evhttp_send_error(req->sinkevreq,416,"Malformed range specification");
 	req->replied = true;
 
-        dprintf("%s @%i http get: invalid range %lld-%lld\n",tintstr(),req->id,req->rangefirst,req->rangelast );
+        dprintf("%s @%i http get: ERROR 416 invalid range %lld-%lld\n",tintstr(),req->id,req->rangefirst,req->rangelast );
         return false;
     }
 
@@ -656,7 +656,8 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
         }
         if (!found) {
             evhttp_send_error(req->sinkevreq,404,"Individual file not found in multi-file content.");
-                        req->replied = true;
+            req->replied = true;
+            dprintf("%s @%i http get: ERROR 404 file %s not found in multi-file\n",tintstr(),req->id,req->mfspecname.c_str() );
             return;
         }
     }
@@ -700,6 +701,7 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
         if (ret < 0) {
             evhttp_send_error(req->sinkevreq,500,"Internal error: Cannot seek to file start in range request or multi-file content.");
             req->replied = true;
+            dprintf("%s @%i http get: ERROR 500 cannot seek to %llu\n",tintstr(),req->id, req->startoff);
             return;
         }
     }
@@ -869,12 +871,14 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     std::string hashstr = "", mfstr="", durstr="", chunksizestr = "";
     if (uri.length() <= 1)     {
         evhttp_send_error(evreq,400,"Path must be root hash in hex, 40 bytes.");
+        dprintf("%s @%i http get: ERROR 400 Path must be root hash in hex\n",tintstr(),0 );
         return;
     }
     parseduri_t puri;
     if (!swift::ParseURI(uri,puri))
     {
         evhttp_send_error(evreq,400,"Path format is /roothash-in-hex/filename$chunksize@duration");
+        dprintf("%s @%i http get: ERROR 400 Path format violation\n",tintstr(),0 );
         return;
     }
     hashstr = puri["hash"];
@@ -904,7 +908,13 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 	mimetype = "video/ogg";
     }
 
-    dprintf("%s @%i http get: demands %s mf %s dur %s mime %s\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str(),mfstr.c_str(),durstr.c_str(), mimetype.c_str() );
+    // More info
+    const char *contentrangecstr =evhttp_find_header(reqheaders,"Range");
+    if (contentrangecstr == NULL)
+	contentrangecstr = "";
+
+
+    dprintf("%s @%i http get: demands %s mf %s dur %s mime %s range %s\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str(),mfstr.c_str(),durstr.c_str(), mimetype.c_str(), contentrangecstr );
 
     uint32_t chunksize=httpgw_chunk_size; // default externally configured
     if (chunksizestr.length() > 0)
@@ -914,9 +924,11 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     // 3. Check for concurrent requests, currently not supported.
     Sha1Hash swarm_id = Sha1Hash(true,hashstr.c_str());
     http_gw_t *existreq = HttpGwFindRequestBySwarmID(swarm_id);
-    if (existreq != NULL)
+    // Arno, 2013-06-25: iOS player asks for finite range, concurrently.
+    if (existreq != NULL && existreq->tosend != 0)
     {
         evhttp_send_error(evreq,409,"Conflict: server does not support concurrent requests to same swarm.");
+        dprintf("%s @%i http get: ERROR 409 No concurrent requests to same swarm\n",tintstr(),0 );
         return;
     }
 
