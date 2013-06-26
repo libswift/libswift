@@ -160,7 +160,7 @@ public:
     }
 
 
-    virtual bin_t Pick (binmap_t& offer, uint64_t max_width, tint expires, uint32_t channelid)
+    virtual bin_t Pick (binmap_t& offer, uint64_t max_width, tint expires)
     {
     	bin_t hint;
     	bool retry;
