@@ -376,7 +376,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
 			else
 				slowStart = 0;
 			if (DEBUGTRAFFIC)
-				fprintf(stderr, "slowStart: %ld [%u]\n", slowStart, transfer()->GetSlowStartHints());
+				fprintf(stderr, "slowStart: %lf [%u]\n", slowStart, transfer()->GetSlowStartHints());
 		}
 		
         int rate_hints_limit = (int)min(slowStart,rate_hints_limit_float);
