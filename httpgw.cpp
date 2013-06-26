@@ -80,6 +80,18 @@ Address httpgw_bindaddr;
 // Arno, 2010-11-30: for SwarmPlayer 3000 backend autoquit when no HTTP req is received
 bool sawhttpconn = false;
 
+typedef std::pair<int,struct evhttp_request *> tdevreqpair;
+typedef std::vector<tdevreqpair>  tdevreqvector; // not a lot of reqs, so keep simple
+
+tdevreqvector	httpgw_tdevreqvec;
+
+/*
+ * Local prototypes
+ */
+
+void HttpGwSubscribeToWrite(http_gw_t *req);
+void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg);
+
 
 http_gw_t *HttpGwFindRequestByEV(struct evhttp_request *evreq) {
     for (int httpc=0; httpc<http_gw_reqs_open; httpc++) {
@@ -144,7 +156,27 @@ void HttpGwCloseConnection (http_gw_t* req) {
 
     //swift::Close(req->td);
 
+    int oldtd = req->td;
+
     *req = http_requests[--http_gw_reqs_open];
+
+    // Arno, 2013-06-26: See if there were concurrent requests for same swarm,
+    // we serve them sequentially.
+    //
+    tdevreqvector::iterator iter;
+    for (iter=httpgw_tdevreqvec.begin(); iter != httpgw_tdevreqvec.end(); iter++)
+    {
+	tdevreqpair pair = *iter;
+	int gottd = pair.first;
+	struct evhttp_request *evreq = pair.second;
+	if (gottd == oldtd)
+	{
+	    httpgw_tdevreqvec.erase(iter);
+	    dprintf("%s T%i http get: Dequeuing request\n",tintstr(), gottd );
+	    HttpGwNewRequestCallback(evreq,evreq); // note: second evreq significant!
+	    break;
+	}
+    }
 }
 
 
@@ -171,13 +203,13 @@ void HttpGwLibeventCloseCallback(struct evhttp_connection *evconn, void *evreqvo
 
 
 
-void HttpGwWrite(int td) {
+void HttpGwWrite(struct evhttp_request *evreq) {
 
     //
     // Write to HTTP socket.
     //
 
-    http_gw_t* req = HttpGwFindRequestByTD(td);
+    http_gw_t* req = HttpGwFindRequestByEV(evreq);
     if (req == NULL) {
         print_error("httpgw: MayWrite: can't find req for transfer");
         return;
@@ -340,7 +372,6 @@ void HttpGwWrite(int td) {
     }
 }
 
-void HttpGwSubscribeToWrite(http_gw_t * req);
 
 void HttpGwLibeventMayWriteCallback(evutil_socket_t fd, short events, void *evreqvoid )
 {
@@ -351,7 +382,7 @@ void HttpGwLibeventMayWriteCallback(evutil_socket_t fd, short events, void *evre
     if (req == NULL)
         return;
 
-    HttpGwWrite(req->td);
+    HttpGwWrite(req->sinkevreq);
 
     if (swift::ttype(req->td) == FILE_TRANSFER) {
 
@@ -368,7 +399,7 @@ void HttpGwLibeventMayWriteCallback(evutil_socket_t fd, short events, void *evre
 }
 
 
-void HttpGwSubscribeToWrite(http_gw_t * req) {
+void HttpGwSubscribeToWrite(http_gw_t *req) {
     //
     // Subscribing to writability of the socket requires libevent2 >= 2.0.17
     // (or our backported version)
@@ -426,7 +457,7 @@ void HttpGwSwiftPrebufferProgressCallback (int td, bin_t bin) {
 
     // ARNOSMPTODO: bitrate-dependent prebuffering?
 
-    dprintf("%s T%i http prebuf progress: endoff startoff %llu endoff %llu\n",tintstr(),td, req->startoff, req->endoff);
+    dprintf("%s T%i http prebuf progress: startoff %llu endoff %llu\n",tintstr(),td, req->startoff, req->endoff);
 
     int64_t wantsize = std::min(req->endoff+1-req->startoff,(uint64_t)HTTPGW_MIN_PREBUF_BYTES);
 
@@ -924,12 +955,31 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     // 3. Check for concurrent requests, currently not supported.
     Sha1Hash swarm_id = Sha1Hash(true,hashstr.c_str());
     http_gw_t *existreq = HttpGwFindRequestBySwarmID(swarm_id);
-    // Arno, 2013-06-25: iOS player asks for finite range, concurrently.
-    if (existreq != NULL && existreq->tosend != 0)
+    if (existreq != NULL)
     {
-        evhttp_send_error(evreq,409,"Conflict: server does not support concurrent requests to same swarm.");
-        dprintf("%s @%i http get: ERROR 409 No concurrent requests to same swarm\n",tintstr(),0 );
-        return;
+	// Arno, 2013-06-26: Queue requests for same swarm. Running them
+	// concurrently is complex because there is just a single piece picker
+	// cursor, and swift only supports 1 progress callback per swarm.
+	//
+	if (evreq == arg)
+	{
+	    // Safety catch against repeated queuing
+	    evhttp_send_error(evreq,508,"Loop detected serving concurrent requests to same swarm.");
+	    dprintf("%s @%i http get: ERROR 508 Loop detected serving concurrent requests to same swarm.\n",tintstr(),0 );
+	    return;
+	}
+
+	httpgw_tdevreqvec.push_back(tdevreqpair(existreq->td,evreq));
+
+	// We need delayed replying, so take ownership.
+	// See http://code.google.com/p/libevent-longpolling/source/browse/trunk/main.c
+	// Careful: libevent docs are broken. It doesn't say that evhttp_send_reply_send
+	// actually calls evhttp_request_free, i.e. releases ownership for you.
+	//
+	evhttp_request_own(evreq);
+
+	dprintf("%s @%i http get: Queuing request, already serving same swarm.\n",tintstr(),0 );
+	return;
     }
 
     // ANDROID
