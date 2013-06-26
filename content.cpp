@@ -33,9 +33,10 @@ uint64_t ContentTransfer::cleancounter = 0;
 
 
 ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), mychannels_(), callbacks_(), picker_(NULL),
-    speedupcount_(0), speeddwcount_(0), slow_start_hints_(0), tracker_(),
+    speedupcount_(0), speeddwcount_(0), tracker_(),
     tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START),
-    tracker_retry_time_(NOW)
+    tracker_retry_time_(NOW),
+    slow_start_hints_(0)
 {
     cur_speed_[DDIR_UPLOAD] = MovingAverageSpeed();
     cur_speed_[DDIR_DOWNLOAD] = MovingAverageSpeed();
