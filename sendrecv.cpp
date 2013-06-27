@@ -1716,7 +1716,12 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         	// to rehandshake, now just close old.
                 dprintf("%s #0 have a channel already to %s, closing old\n",tintstr(),addr.str());
 
-                existchannel->Close(CLOSE_DO_NOT_SEND);
+                // Arno, 2012-12-17: On Android closing the channel causes swift
+                // to crash. On Win32 I don't see this behaviour. For now, let
+                // the channel die out by itself. The sender will not accept
+                // the datagrams sent by this peer on the old channel because
+                // it doesn't know the old channel ID.
+                // existchannel->Close(CLOSE_DO_NOT_SEND);
                 channel = NULL;
             } else {
                 channel = existchannel;
