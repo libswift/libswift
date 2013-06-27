@@ -1711,10 +1711,16 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
                 // attempt is to new channel or to existing. Currently read
                 // in OnHandshake()
                 //
-                return_log("%s #0 have a channel already to %s\n",tintstr(),addr.str().c_str());
+        	// Arno, 2012-12-17: in Android app peers have hardwired port
+        	// so this happens often. Assuming that sender has reasons
+        	// to rehandshake, now just close old.
+                dprintf("%s #0 have a channel already to %s, closing old\n",tintstr(),addr.str());
+
+                existchannel->Close(CLOSE_DO_NOT_SEND);
+                channel = NULL;
             } else {
                 channel = existchannel;
-                //fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: reuse channel %s\n", channel->peer_.str().c_str() );
+                //fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: reuse channel %s\n", channel->peer_.str() );
             }
         }
         if (channel == NULL) {
