@@ -121,7 +121,8 @@ Channel::~Channel () {
         if (transfer_->ttype() == LIVE_TRANSFER)
         {
             LivePiecePicker *lpp = (LivePiecePicker *)transfer_->picker();
-            lpp->ClearPeerPos(id());
+            if (lpp != NULL)
+        	lpp->ClearPeerPos(id());
         }
     }
 
