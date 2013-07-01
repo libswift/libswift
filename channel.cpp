@@ -70,7 +70,8 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     direct_sending_(false),
     peer_is_source_(peerissource),
     hs_out_(NULL), hs_in_(NULL),
-    last_sent_munro_(bin_t::NONE)
+    last_sent_munro_(bin_t::NONE),
+    munro_ack_rcvd_(false)
 {
     if (peer_==Address())
         peer_ = tracker;

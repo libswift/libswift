@@ -77,9 +77,13 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
 	{
 	    // Initially send last signed munro
 	    bin_t munro = umt->GetLastMunro();
-	    dprintf("%s #%u last munro %s\n",tintstr(),id_,munro.str().c_str());
-	    if (munro != bin_t::NONE)
+	    dprintf("%s #%u last munro %s\n",tintstr(),id_,munro.str().c_str() );
+
+	    if (munro != bin_t::NONE && ack_in_.is_empty(munro) && !munro_ack_rcvd_)
+	    {
 		AddLiveSignedMunroHash(evb,munro);
+		last_sent_munro_ = munro;
+	    }
 	}
 	else
 	{
@@ -88,12 +92,12 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
 		return;
 
 	    // Don't repeat if same and not retransmit
-	    bool diff = (munro == last_sent_munro_);
+	    bool diff = (munro != last_sent_munro_);
 	    last_sent_munro_ = munro;
 
-	    dprintf("%s #%u munro for is %s\n",tintstr(),id_,pos.str().c_str(), munro.str().c_str());
+	    dprintf("%s #%u munro for %s is %s\n",tintstr(),id_,pos.str().c_str(), munro.str().c_str());
 
-	    if (ack_in_.is_empty() || isretransmit || diff)
+	    if (isretransmit || diff)
 		AddLiveSignedMunroHash(evb,munro);
 
 	    AddLiveUncleHashes(evb,pos,munro,isretransmit);
@@ -1120,6 +1124,8 @@ void    Channel::OnAck (struct evbuffer *evb) {
         return;
     }
     tint peer_owd = evbuffer_remove_64be(evb);
+
+    munro_ack_rcvd_ = true;
 
     binvector::iterator iter;
     for (iter=bv.begin(); iter != bv.end(); iter++)

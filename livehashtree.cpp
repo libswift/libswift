@@ -548,7 +548,7 @@ bin_t LiveHashTree::GetMunro(bin_t pos)
     for (int i=0; i<nchunks_per_sign_layer; i++)
 	p = p.parent();
 
-    fprintf(stderr,"umt: GetMunro: %s nchunks %u layer %d computed %u\n", pos.str().c_str(), nchunks_per_sign_layer, p.layer() );
+    fprintf(stderr,"umt: GetMunro: %s nchunks %u layer %d computed %u\n", pos.str().c_str(), nchunks_per_sig_, nchunks_per_sign_layer, p.layer() );
 
     assert(p.layer() == nchunks_per_sign_layer);
     return p;
@@ -577,7 +577,7 @@ BinHashSigTuple LiveHashTree::GetSignedMunro(bin_t munro)
 bool LiveHashTree::OfferSignedMunroHash(bin_t pos, Signature &sig)
 {
     if (tree_debug)
-        fprintf(stderr,"umt: OfferSignedMunroHash: peak %s\n", pos.str().c_str() );
+        fprintf(stderr,"umt: OfferSignedMunroHash: munro %s\n", pos.str().c_str() );
 
     BinHashSigTuple bhst(cand_munro_bin_,cand_munro_hash_,sig);
 
@@ -601,13 +601,14 @@ bool LiveHashTree::OfferSignedMunroHash(bin_t pos, Signature &sig)
 
     // New munro
 
+    // MUNROTODO: source RESTART
+
     // Check if sane
     bin_t oldmunro = GetLastMunro();
     if (oldmunro != bin_t::NONE && oldmunro.layer_offset()+1 != pos.layer_offset())
     {
         if (tree_debug)
-            fprintf(stderr,"umt: OfferSignedMunroHash: old munro %s layer off %u new %u\n", oldmunro.str().c_str(), oldmunro.layer_offset(), pos.layer_offset() );
-        return false;
+            fprintf(stderr,"umt: OfferSignedMunroHash: SKIP old munro %s layer off %u new %u\n", oldmunro.str().c_str(), oldmunro.layer_offset(), pos.layer_offset() );
     }
 
     //
@@ -615,7 +616,7 @@ bool LiveHashTree::OfferSignedMunroHash(bin_t pos, Signature &sig)
     //
 
 
-    sizec_ += pos.base_length();
+    sizec_ = (pos.layer_offset()+1) * pos.base_length();
     size_ = sizec_ * chunk_size_;
 
     // Recalculate peaks

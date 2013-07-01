@@ -974,7 +974,7 @@ namespace swift {
         bool	    live_have_no_hint_;
 
         /** Recent acknowlegements for data previously sent.    */
-        int         ack_rcvd_recent_;
+        int         ack_rcvd_recent_; // Arno, 2013-07-01: appears broken at the moment
         /** Recent non-acknowlegements (losses) of data previously sent.    */
         int         ack_not_rcvd_recent_;
         /** LEDBAT one-way delay machinery */
@@ -1009,6 +1009,7 @@ namespace swift {
 
         // SIGNMUNRO
         bin_t	    last_sent_munro_;
+        bool 	    munro_ack_rcvd_;
 
 
         int         PeerBPS() const { return TINT_SEC / dip_avg_ * 1024; }
