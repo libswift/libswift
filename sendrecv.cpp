@@ -1714,7 +1714,7 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         	// Arno, 2012-12-17: in Android app peers have hardwired port
         	// so this happens often. Assuming that sender has reasons
         	// to rehandshake, now just close old.
-                dprintf("%s #0 have a channel already to %s, closing old\n",tintstr(),addr.str());
+                dprintf("%s #0 have a channel already to %s, closing old\n",tintstr(),addr.str().c_str() );
 
                 // Arno, 2012-12-17: On Android closing the channel causes swift
                 // to crash. On Win32 I don't see this behaviour. For now, let
