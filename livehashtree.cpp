@@ -12,7 +12,7 @@
 using namespace swift;
 
 
-#define  tree_debug	false
+#define  tree_debug	true
 
 
 
@@ -460,7 +460,7 @@ BinHashSigTuple LiveHashTree::AddSignedMunro()
 void LiveHashTree::ComputeTree(Node *start)
 {
     if (tree_debug)
-        fprintf(stderr,"umt: ComputeTree: start %s\n", start->GetBin().str().c_str() );
+        fprintf(stderr,"umt: ComputeTree: start %s %s\n", start->GetBin().str().c_str(), start->GetVerified() ? "true" : "false" );
     if (!start->GetVerified())
     {
         ComputeTree(start->GetLeft());
@@ -505,32 +505,36 @@ Sha1Hash  LiveHashTree::DeriveRoot()
 }
 
 
-// MUNROTODO: use lasttup.
-
-BinHashSigTuple LiveHashTree::InitFromCheckpoint(BinHashSigTuple roottup)
+bool LiveHashTree::InitFromCheckpoint(BinHashSigTuple lastmunrotup)
 {
-    /*OfferHash(roottup.bin(),roottup.hash());
-    BinHashSigTuple gottup = OfferSignedMunroHash(roottup.bin(),roottup.sig());
+    fprintf(stderr,"umt: InitFromCheckpoint: %s %s %s\n", lastmunrotup.bin().str().c_str(), lastmunrotup.hash().hex().c_str(), lastmunrotup.sig().hex().c_str() );
 
-    if (tree_debug)
+    // Build fake tree to hold lastmunrotup
+    bin_t fbin = lastmunrotup.bin();
+    uint64_t fsize = (fbin.layer_offset()+1) * fbin.base_length();
+    bin_t fpeaks[64];
+    int fcount = gen_peaks(fsize,fpeaks);
+    for (int i=0; i<fcount; i++)
     {
-        check_signed_peak_coverage();
-        check_peak_coverage();
+	OfferHash(fpeaks[i],lastmunrotup.hash()); // bad hash
     }
 
-    fprintf(stderr,"umt: InitFromCheckpoint: %s %s %s\n", gottup.bin().str().c_str(), gottup.hash().hex().c_str(), gottup.sig().hex().c_str() );
+    // Add lastmunrotup hash to tree
+    OfferHash(lastmunrotup.bin(),lastmunrotup.hash());
+
+    // Add lastmunrotup sig to tree
+    if (!OfferSignedMunroHash(lastmunrotup.bin(),lastmunrotup.sig()))
+    {
+	fprintf(stderr,"umt: InitFromCheckpoint: failed!\n");
+	return false;
+    }
 
     // Create fake right ridge to set addcursor_
-    bin_t baseright = gottup.bin().base_right();
+    bin_t baseright = lastmunrotup.bin().base_right();
     CreateAndVerifyNode(baseright,Sha1Hash::ZERO,true);
     addcursor_ = FindNode(baseright);
 
-    // Set fake sizes
-    sizec_ = gottup.bin().base_length();
-    size_ = sizec_ * chunk_size_;
-
-    return gottup;*/
-    return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature::NOSIG);
+    return true;
 }
 
 

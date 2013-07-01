@@ -80,7 +80,7 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const p
 
     picker_ = NULL;
 
-    BinHashSigTuple roottup = ReadCheckpoint();
+    BinHashSigTuple lastmunrotup = ReadCheckpoint();
     if (GetDefaultHandshake().cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
     {
 	// Start generating chunks from rootbin.base_right()+1
@@ -89,8 +89,8 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const p
     {
 	/*
 	 * Read live source state from checkpoint. This is the info about
-	 * the virtual root node of the last tree from the previous instance.
-	 * We turn this root node into a first peak in our new tree, but
+	 * the last munro in the tree from the previous instance.
+	 * We turn this munro into a first munro in our new tree, but
 	 * do not advertise its chunks. Clients should skip over the unused
 	 * parts of the old tree and start downloading the chunks in the new
 	 * part of our tree.
@@ -101,22 +101,20 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const p
 	 *     checkpoint        first new chunk
 	 *         root
 	 */
-/*	LiveHashTree *umt = (LiveHashTree *)hashtree_;
-	if (roottup.bin() != bin_t::NONE)
+	LiveHashTree *umt = (LiveHashTree *)hashtree_;
+	if (lastmunrotup.bin() != bin_t::NONE)
 	{
-	    BinHashSigTuple gottup = umt->InitFromCheckpoint(roottup);
-	    checkpoint_bin_ = gottup.bin();
-	    last_chunkid_ = checkpoint_bin_.base_right().base_offset()+1;
-	    offset_ = last_chunkid_ * chunk_size_;
+	    fprintf(stderr,"live: source: found checkpoint\n");
+
+	    if (umt->InitFromCheckpoint(lastmunrotup))
+	    {
+		checkpoint_bin_ = lastmunrotup.bin();
+		last_chunkid_ = checkpoint_bin_.base_right().base_offset()+1;
+		offset_ = last_chunkid_ * chunk_size_;
+	    }
 	}
 
-	bhstvector cursignpeaktuples = umt->GetCurrentSignedPeakTuples();
-	bhstvector::iterator iter;
-	for (iter= cursignpeaktuples.begin(); iter != cursignpeaktuples.end(); iter++)
-	{
-	    BinHashSigTuple bhst = *iter;
-	    fprintf(stderr,"live: source: restored sigpeak: %s %s %s lastchunkid %llu\n", bhst.bin().str().c_str(), bhst.hash().hex().c_str(), bhst.sig().hex().c_str(), last_chunkid_ );
-	}*/
+	fprintf(stderr,"live: source: restored lastchunkid %llu\n", last_chunkid_ );
     }
     else // SIGNALL
     {
@@ -343,17 +341,23 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
 		    signed_ack_out_.set(sigpeak);
 		}
 		// LIVECHECKPOINT, see constructor
-		// MUNROTODO: RESET ALL BEFORE TOO
-		signed_ack_out_.reset(checkpoint_bin_);
+		// SIGNMUNRO
+		if (checkpoint_bin_ != bin_t::NONE)
+		{
+		    for (int i=0; i<=checkpoint_bin_.layer_offset(); i++)
+		    {
+			bin_t clearbin(checkpoint_bin_.layer(),i);
+			signed_ack_out_.reset(clearbin);
+		    }
+		    // TEST
+		    /* fprintf(stderr,"live: AddData: UMT: checkp %s\n", checkpoint_bin_.str().c_str() );
+		    bin_t bf = signed_ack_out_.find_filled();
+		    bin_t be = signed_ack_out_.find_empty();
+		    bin_t sbe = signed_ack_out_.find_empty(checkpoint_bin_);
 
-		// TEST
-		/* fprintf(stderr,"live: AddData: UMT: checkp %s\n", checkpoint_bin_.str().c_str() );
-		bin_t bf = signed_ack_out_.find_filled();
-		bin_t be = signed_ack_out_.find_empty();
-		bin_t sbe = signed_ack_out_.find_empty(checkpoint_bin_);
-
-		fprintf(stderr,"live: AddData: UMT: bf %s be %s sbe %s\n", bf.str().c_str(), be.str().c_str(), sbe.str().c_str() );
-		*/
+		    fprintf(stderr,"live: AddData: UMT: bf %s be %s sbe %s\n", bf.str().c_str(), be.str().c_str(), sbe.str().c_str() );
+		    */
+		}
 
 		// Forget old part of tree
 		if (def_hs_out_.live_disc_wnd_ != POPT_LIVE_DISC_WND_ALL)

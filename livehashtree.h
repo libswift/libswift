@@ -178,8 +178,7 @@ class LiveHashTree: public HashTree
      bool SetVerifiedIfNot0(Node *piter, bin_t p, int verclass);
 
      // LIVECHECKPOINT
-     BinHashSigTuple InitFromCheckpoint(BinHashSigTuple roottup);
-
+     bool InitFromCheckpoint(BinHashSigTuple lastmunrotup);
 
 
      // Sanity checks
