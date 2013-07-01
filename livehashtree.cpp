@@ -12,7 +12,7 @@
 using namespace swift;
 
 
-#define  tree_debug	true
+#define  tree_debug	false
 
 
 
@@ -548,7 +548,7 @@ bin_t LiveHashTree::GetMunro(bin_t pos)
     for (int i=0; i<nchunks_per_sign_layer; i++)
 	p = p.parent();
 
-    fprintf(stderr,"umt: GetMunro: %s nchunks %u layer %d computed %u\n", pos.str().c_str(), nchunks_per_sig_, nchunks_per_sign_layer, p.layer() );
+    //fprintf(stderr,"umt: GetMunro: %s nchunks %u layer %d computed %u\n", pos.str().c_str(), nchunks_per_sig_, nchunks_per_sign_layer, p.layer() );
 
     return p;
 }

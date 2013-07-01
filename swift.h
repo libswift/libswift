@@ -793,6 +793,7 @@ namespace swift {
         void        Recv (struct evbuffer *evb);
         void        Send ();  // Called by LibeventSendCallback
         void        Close (close_send_t closesend);
+        void        ClearTransfer() { transfer_ = NULL; } // for swarm cleanup
 
         void        OnAck (struct evbuffer *evb);
         void        OnHave (struct evbuffer *evb);

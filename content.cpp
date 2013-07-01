@@ -62,6 +62,7 @@ void ContentTransfer::CloseChannels(channels_t delset)
         Channel *c = *iter;
         dprintf("%s F%d content close chans\n",tintstr(),td_);
         c->Close(CLOSE_SEND_IF_ESTABLISHED);
+        c->ClearTransfer();
         delete c;
         // ~Channel removes it from Channel::channels and mychannels_.erase(c);
     }

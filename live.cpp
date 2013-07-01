@@ -202,7 +202,10 @@ void LiveTransfer::Initialize(bool check_netwvshash,uint64_t disc_wnd,uint32_t n
 LiveTransfer::~LiveTransfer()
 {
     if (picker_ != NULL)
+    {
 	delete picker_;
+        picker_ = NULL;
+    }
 
     GlobalDel();
 }
@@ -426,6 +429,9 @@ void LiveTransfer::OnVerifiedMunroHash(bin_t munro, Channel *sendc)
 
 void LiveTransfer::OnDataPruneTree(Handshake &hs_out, bin_t pos, uint32_t nchunks2forget)
 {
+    if (nchunks2forget < 1) // nchunks_per_sig_ unknown
+	return;
+
     if (ack_out_right_basebin_ == bin_t::NONE || pos > ack_out_right_basebin_)
 	ack_out_right_basebin_ = pos;
     else
