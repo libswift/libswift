@@ -550,7 +550,6 @@ bin_t LiveHashTree::GetMunro(bin_t pos)
 
     fprintf(stderr,"umt: GetMunro: %s nchunks %u layer %d computed %u\n", pos.str().c_str(), nchunks_per_sig_, nchunks_per_sign_layer, p.layer() );
 
-    assert(p.layer() == nchunks_per_sign_layer);
     return p;
 }
 
@@ -559,10 +558,14 @@ BinHashSigTuple LiveHashTree::GetSignedMunro(bin_t munro)
 {
     Node *n = FindNode(munro);
     if (n == NULL)
+    {
 	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature::NOSIG);
+    }
     Signature *sptr = n->GetSig();
     if (sptr == NULL)
+    {
 	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature::NOSIG);
+    }
 
     BinHashSigTuple bhst(munro,n->GetHash(),*sptr);
     return bhst;
@@ -578,8 +581,6 @@ bool LiveHashTree::OfferSignedMunroHash(bin_t pos, Signature &sig)
 {
     if (tree_debug)
         fprintf(stderr,"umt: OfferSignedMunroHash: munro %s\n", pos.str().c_str() );
-
-    BinHashSigTuple bhst(cand_munro_bin_,cand_munro_hash_,sig);
 
     if (pos != cand_munro_bin_)
     {
@@ -628,11 +629,24 @@ bool LiveHashTree::OfferSignedMunroHash(bin_t pos, Signature &sig)
 
     CreateAndVerifyNode(cand_munro_bin_,cand_munro_hash_,true);
 
-    // Could recalc root hash here, but never really used. Doing it on-demand
-    // in root_hash() conflicts with const def :-(
-    //root_->SetHash(DeriveRoot());
+    Node *n = FindNode(cand_munro_bin_);
+    if (n == NULL)
+    {
+        if (tree_debug)
+            fprintf(stderr,"umt: OfferSignedMunroHash: Added verified node, now can't find it?!\n" );
+        return false;
+    }
+    else
+    {
+	Signature *sigptr = new Signature(sig);
+	n->SetSig(sigptr);
 
-    return true; // signal new
+	// Could recalc root hash here, but never really used. Doing it on-demand
+	// in root_hash() conflicts with const def :-(
+	//root_->SetHash(DeriveRoot());
+
+	return true; // signal new
+    }
 }
 
 
@@ -803,7 +817,7 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     Node *piter = iter;
     Sha1Hash uphash = hash;
 
-    if (!pos.is_base())
+    /* if (!pos.is_base())
     {
 	// Arno, 2013-05-14: Optimization for ridge hashes
         piter = iter;
@@ -848,7 +862,7 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 	    return true;
 	}
 	return false;
-    }
+    }*/
 
 
 

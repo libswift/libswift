@@ -124,6 +124,11 @@ void    Channel::AddLiveSignedMunroHash(struct evbuffer *evb, bin_t munro)
     // Send signed munro hash
     LiveHashTree *umt = (LiveHashTree *)hashtree();
     BinHashSigTuple bhst = umt->GetSignedMunro(munro);
+    if (bhst.bin() == bin_t::NONE)
+    {
+	dprintf("%s #%u !mhash %s\n",tintstr(),id_,munro.str().c_str());
+	return;
+    }
 
     evbuffer_add_8(evb, SWIFT_INTEGRITY);
     evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
