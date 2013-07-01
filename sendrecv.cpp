@@ -46,7 +46,7 @@ struct event Channel::evrecv;
 
 
 
-void    Channel::AddPeakHashes (struct evbuffer *evb)
+void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretransmit)
 {
     // We're either seeder or know what content integrity protection method
     // is because seeder told us, so hs_out_ is guiding here so we can
@@ -62,20 +62,47 @@ void    Channel::AddPeakHashes (struct evbuffer *evb)
         {
             AddUnsignedPeakHashes(evb);
         }
+
+        if (pos != bin_t::NONE)
+            AddFileUncleHashes(evb,pos);
     }
     else if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
-        // SIGNPEAK
-	if (!PeerIsSource())
-	    AddLiveSignedPeakHashes(evb);
-    }
+	if (PeerIsSource())
+	    return;
 
-    // Send hashes in separate datagram if first would get too big
-    SendIfTooBig(evb);
+	// SIGNMUNRO
+	LiveHashTree *umt = (LiveHashTree *)hashtree();
+	if (pos == bin_t::NONE)
+	{
+	    // Initially send last signed munro
+	    bin_t munro = umt->GetLastMunro();
+	    dprintf("%s #%u last munro %s\n",tintstr(),id_,munro.str().c_str());
+	    if (munro != bin_t::NONE)
+		AddLiveSignedMunroHash(evb,munro);
+	}
+	else
+	{
+	    bin_t munro = umt->GetMunro(pos);
+	    if (munro == bin_t::NONE)
+		return;
+
+	    // Don't repeat if same and not retransmit
+	    bool diff = (munro == last_sent_munro_);
+	    last_sent_munro_ = munro;
+
+	    dprintf("%s #%u munro for is %s\n",tintstr(),id_,pos.str().c_str(), munro.str().c_str());
+
+	    if (ack_in_.is_empty() || isretransmit || diff)
+		AddLiveSignedMunroHash(evb,munro);
+
+	    AddLiveUncleHashes(evb,pos,munro,isretransmit);
+	}
+    }
 }
 
 
-void Channel::AddUnsignedPeakHashes (struct evbuffer *evb)
+void Channel::AddUnsignedPeakHashes(struct evbuffer *evb)
 {
     for(int i=0; i<hashtree()->peak_count(); i++) {
         bin_t peak = hashtree()->peak(i);
@@ -88,206 +115,27 @@ void Channel::AddUnsignedPeakHashes (struct evbuffer *evb)
 
 
 // SIGNPEAK
-void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb)
+void    Channel::AddLiveSignedMunroHash(struct evbuffer *evb, bin_t munro)
 {
-    // Send signed peaks generated since last send, or initial peaks when handshaking
-    bhstvector::iterator iter;
-    bhstvector sincesignedpeaktuples = GetSinceSignedPeakTuples();
-
-    if (!is_established()) // Always send initial peaks for easy restart of source
-    {
-        bhstvector initialsigpeaktuples;
-        if (initial_peak_count_ == -1)
-        {
-            // Send current signed peaks as initial peaks
-            LiveHashTree *umt = (LiveHashTree *)hashtree();
-            initialsigpeaktuples = umt->GetCurrentSignedPeakTuples();
-
-            // Add to since signed
-            AddSinceSignedPeakTuples(initialsigpeaktuples);
-
-            // Remember which are initial for retransmit
-            initial_peak_count_ = initialsigpeaktuples.size();
-        }
-        else
-        {
-            // Retransmit of initial HS. Transmit same initial peaks
-            // Copy
-            initialsigpeaktuples = sincesignedpeaktuples;
-            // Remove since signed peaks
-            initialsigpeaktuples.erase(initialsigpeaktuples.begin()+initial_peak_count_,initialsigpeaktuples.end());
-        }
-
-        // DEBUG
-        /*fprintf(stderr,"AddLiveSignedPeakHashes: Initial peak count %d vector %d \n", initial_peak_count_, initialsigpeaktuples.size() );
-        for (iter=initialsigpeaktuples.begin(); iter != initialsigpeaktuples.end(); iter++)
-        {
-            BinHashSigTuple bhst = *iter;
-            fprintf(stderr,"AddLiveSignedPeakHashes: Initial peak %s\n", bhst.bin().str().c_str() );
-        }*/
-
-        // Put in datagram
-        AddLiveSignedPeakHashes(evb,initialsigpeaktuples,false);
-    }
-    else
-    {
-        // Send signed peaks generated since last send
-        if (initial_peak_count_ != -1)
-        {
-            // Initial peaks arrived, don't resend
-            sincesignedpeaktuples.erase(sincesignedpeaktuples.begin(),sincesignedpeaktuples.begin()+initial_peak_count_);
-            initial_peak_count_ = -1;
-        }
-
-        // DEBUG
-        /*fprintf(stderr,"AddLiveSignedPeakHashes: Peaks signed since %d\n", sincesignedpeaktuples.size() );
-        for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
-        {
-            BinHashSigTuple bhst = *iter;
-            fprintf(stderr,"AddLiveSignedPeakHashes: Adding since signed peak %s\n", bhst.bin().str().c_str() );
-        }*/
-
-        // Arno, 2013-03-25: If not source, forward only unknown signed peaks
-        // to connected peer
-        bhstvector unknownpeaktuples;
-        if (((LiveTransfer *)transfer())->am_source())
-            unknownpeaktuples = sincesignedpeaktuples;
-        else
-        {
-            for (iter=sincesignedpeaktuples.begin(); iter != sincesignedpeaktuples.end(); iter++)
-            {
-                BinHashSigTuple bhst = *iter;
-                if (!ack_in_.is_filled(bhst.bin()))
-                    unknownpeaktuples.push_back(bhst);
-            }
-        }
-
- #ifdef LOSS
-        // TEST LOSS
-        int count = unknownpeaktuples.size() / 2;
-        for (int i=0; i<count; i++)
-            unknownpeaktuples.erase(unknownpeaktuples.begin()+i+1);
- #endif
-
-        // Put in datagram, including ridge hashes
-        AddLiveSignedPeakHashes(evb,unknownpeaktuples,true);
-
-        // Forget, on loss the latest signed peak is sent with all uncles,
-        // see AddLiveUncleHashes(retransmit=true)
-        //fprintf(stderr,"ClearSinceSignedPeakTuples\n");
-        ClearSinceSignedPeakTuples();
-    }
-}
-
-
-void    Channel::AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &peaktuples, bool includeridge)
-{
-    bhstvector::iterator iter;
-    for (iter= peaktuples.begin(); iter != peaktuples.end(); iter++)
-    {
-        BinHashSigTuple bhst = *iter;
-
-        evbuffer_add_8(evb, SWIFT_INTEGRITY);
-        evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
-        evbuffer_add_hash(evb, bhst.hash());
-
-        dprintf("%s #%u +phash %s\n",tintstr(),id_,bhst.bin().str().c_str());
-
-        //fprintf(stderr,"AddLiveSignedPeakHashess: speak %s %s\n", bhst.bin().str().c_str(), bhst.hash().hex().c_str() );
-
-        evbuffer_add_8(evb, SWIFT_SIGNED_INTEGRITY);
-        evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
-        evbuffer_add(evb, bhst.sig().bits(), bhst.sig().length() );
-
-        dprintf("%s #%u +sigh %s %d\n",tintstr(),id_,bhst.bin().str().c_str(), bhst.sig().length() );
-
-        if (includeridge)
-        {
-            // Arno, 2013-05-13: With Unified Merkle Trees, say we have a tree of 4
-            // chunks with peak (2,0). When the tree is expanded from 4 to 8 chunks,
-            // the new peak becomes (3,0). The uncle hash algorithm assumes that (2,1)
-            // the hash of the 4 new chunks was sent to the peer when chunks from (2,0)
-            // where sent (after all, (2,1) is their uncle). However, that part of
-            // the tree did not yet exist, so it wasn't sent. To fix this we send
-            // the hashes to the right of the new peak (3,0) as these are "hashes
-            // needed to verify the integrity of the chunk" (PPSP spec). We call
-            // these hashes "ridge hashes".
-            //
-            AddLivePeakRidgeHashes(evb,bhst.bin());
-        }
-    }
-}
-
-
-bin_t  Channel::AddLiveSignedPeakHash4Retransmit(struct evbuffer *evb, bin_t pos)
-{
+    // Send signed munro hash
     LiveHashTree *umt = (LiveHashTree *)hashtree();
-    bhstvector::iterator iter;
-    bhstvector curpeaktuples = umt->GetCurrentSignedPeakTuples();
-    bhstvector containpeaktuples;
-    bin_t signedpeak(bin_t::NONE);
+    BinHashSigTuple bhst = umt->GetSignedMunro(munro);
 
-    // Find signed peak covering pos
-    for (iter=curpeaktuples.begin(); iter != curpeaktuples.end(); iter++)
-    {
-        BinHashSigTuple bhst = *iter;
-        if (bhst.bin().contains(pos))
-        {
-            fprintf(stderr,"AddLiveRepeat: speak %s for %s\n", bhst.bin().str().c_str(), pos.str().c_str() );
-            containpeaktuples.push_back(bhst);
-            signedpeak = bhst.bin();
-            break;
-        }
-    }
+    evbuffer_add_8(evb, SWIFT_INTEGRITY);
+    evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
+    evbuffer_add_hash(evb, bhst.hash());
 
-    // Put in datagram, including ridge hashes
-    AddLiveSignedPeakHashes(evb,containpeaktuples,true);
+    dprintf("%s #%u +mhash %s\n",tintstr(),id_,bhst.bin().str().c_str());
 
-    return signedpeak;
+    //fprintf(stderr,"AddLiveSignedMunroHash: speak %s %s\n", bhst.bin().str().c_str(), bhst.hash().hex().c_str() );
+
+    evbuffer_add_8(evb, SWIFT_SIGNED_INTEGRITY);
+    evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
+    evbuffer_add(evb, bhst.sig().bits(), bhst.sig().length() );
+
+    dprintf("%s #%u +sigh %s %d\n",tintstr(),id_,bhst.bin().str().c_str(), bhst.sig().length() );
 }
 
-
-void    Channel::AddLivePeakRidgeHashes(struct evbuffer *evb, bin_t pos)
-{
-    dprintf("%s #%u +ridge hash for %s\n",tintstr(),id_,pos.str().c_str());
-
-    // Only need to send down to smallest peak subtree
-    LiveTransfer *lt = (LiveTransfer *)transfer();
-    uint32_t nchunks_per_sign = lt->GetNChunksPerSign();
-    int nchunks_per_sign_layer = (int)log2((double)nchunks_per_sign);
-
-    bin_t p = pos.right();
-    //fprintf(stderr,"AddLiveridgeHashes: till layer %d got layer %d\n", nchunks_per_sign_layer, p.layer() );
-
-    while (p.layer() >= nchunks_per_sign_layer)
-    {
-    	Sha1Hash h = hashtree()->hash(p);
-        evbuffer_add_8(evb, SWIFT_INTEGRITY);
-        evbuffer_add_chunkaddr(evb,p,hs_out_->chunk_addr_);
-        evbuffer_add_hash(evb,h);
-
-        dprintf("%s #%u +rhash %s\n",tintstr(),id_,p.str().c_str());
-        if (p.layer() == 0) // safety catch
-            break;
-        p = p.right();
-    }
-}
-
-
-
-void    Channel::AddUncleHashes (struct evbuffer *evb, bin_t pos, bool isretransmit) {
-
-    dprintf("%s #%u +uncle hash for %s\n",tintstr(),id_,pos.str().c_str());
-
-    if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE)
-    {
-        AddFileUncleHashes(evb,pos);
-    }
-    else if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
-    {
-        AddLiveUncleHashes(evb,pos,isretransmit);
-    }
-}
 
 
 void    Channel::AddFileUncleHashes (struct evbuffer *evb, bin_t pos) {
@@ -316,25 +164,13 @@ void    Channel::AddFileUncleHashes (struct evbuffer *evb, bin_t pos) {
 }
 
 //SIGNPEAK
-void    Channel::AddLiveUncleHashes (struct evbuffer *evb, bin_t pos, bool isretransmit)
+void    Channel::AddLiveUncleHashes (struct evbuffer *evb, bin_t pos, bin_t munro, bool isretransmit)
 {
-    bin_t peak(bin_t::NONE);
-    if (isretransmit)
-    {
-        // When retransmitting a live chunk, resend highest signed peak and all
-        // uncle hashes leading up to this.
-        peak = AddLiveSignedPeakHash4Retransmit(evb,pos);
-        if (peak == bin_t::NONE)
-            return; // Shouldn't happen
-    }
-    else
-        peak = hashtree()->peak_for(pos);
-
     binvector bv;
     if (isretransmit)
     {
         // Select all uncles
-        while (pos!=peak) {
+        while (pos!=munro) {
             bin_t uncle = pos.sibling();
             bv.push_back(uncle);
             pos = pos.parent();
@@ -345,9 +181,9 @@ void    Channel::AddLiveUncleHashes (struct evbuffer *evb, bin_t pos, bool isret
         // Select only unsent uncles
         // Ric: TODO check (remove data_out_cap??)
         //      For the moment lets keep the old behaviour
-        while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
+        while (pos!=munro && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
                 ack_in_.is_empty(pos.parent()) ) {
-        //while (pos!=peak && ack_in_.is_empty(pos.parent()) ) {
+        //while (pos!=munro && ack_in_.is_empty(pos.parent()) ) {
             bin_t uncle = pos.sibling();
             bv.push_back(uncle);
             pos = pos.parent();
@@ -372,6 +208,9 @@ void    Channel::AddLiveUncleHashes (struct evbuffer *evb, bin_t pos, bool isret
         pos = pos.parent();
     }
 }
+
+
+
 
 
 bin_t    Channel::ImposeHint () {
@@ -557,7 +396,6 @@ void    Channel::Send () {
     {
         if (is_established()) {
             // FIXME: seeder check
-            AddPeakHashes(evb);
             AddHave(evb);
             AddAck(evb);
             //LIVE
@@ -574,7 +412,6 @@ void    Channel::Send () {
             data = AddData(evb);
         } else  {
             AddHandshake(evb);
-            AddPeakHashes(evb);
             AddHave(evb); // Arno, 2011-10-28: from AddHandShake. Why double?
             AddHave(evb);
             AddAck(evb);
@@ -775,12 +612,12 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         dprintf("%s #%u sendctrl wait cwnd %f data_out %i next %s\n",
                 tintstr(),id_,cwnd_,(int)data_out_.size(),tintstr(last_data_out_time_+send_interval_));
 
+    // Add required hashes. Also for initial peaks and munros
+    if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+        AddRequiredHashes(evb,tosend,isretransmit);
+
     if (tosend.is_none())// && (last_data_out_time_>NOW-TINT_SEC || data_out_.empty()))
         return bin_t::NONE; // once in a while, empty data is sent just to check rtt FIXED
-
-    // Add required hashes first
-    if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
-        AddUncleHashes(evb,tosend,isretransmit);
 
     if (!ack_in_.is_empty()) // TODO: cwnd_>1
         data_out_cap_ = tosend;
@@ -1254,7 +1091,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
         // Discard parts of tree no longer in window
         LiveTransfer *lt = (LiveTransfer *)transfer();
         LiveHashTree *umt = (LiveHashTree *)hashtree();
-        lt->OnDataPruneTree(*hs_out_,pos,umt->GetGuessedNChunksPerSig());
+        lt->OnDataPruneTree(*hs_out_,pos,umt->GetNChunksPerSig());
     }
 
     return pos;
@@ -1848,13 +1685,13 @@ void Channel::OnSignedHash(struct evbuffer *evb)
         LiveHashTree *umt = (LiveHashTree *)hashtree();
         uint8_t dummy[DUMMY_DEFAULT_SIG_LENGTH];
         Signature sig(dummy, DUMMY_DEFAULT_SIG_LENGTH);
-        BinHashSigTuple bhst = umt->OfferSignedPeakHash(pos,sig);
-        if (bhst.bin() == bin_t::NONE)
+        bool newverified = umt->OfferSignedMunroHash(pos,sig);
+        if (!newverified)
             dprintf("%s #%u !sigh %s\n",tintstr(),id_,pos.str().c_str());
         else
         {
             LiveTransfer *lt = (LiveTransfer *)transfer();
-            lt->OnVerifiedPeakHash(bhst,this);
+            lt->OnVerifiedMunroHash(pos,this);
         }
     }
 }

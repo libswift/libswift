@@ -72,11 +72,11 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const p
 	ContentTransfer(LIVE_TRANSFER), ack_out_right_basebin_(bin_t::NONE),
 	chunk_size_(chunk_size), am_source_(true),
 	filename_(filename), last_chunkid_(0), offset_(0),
-	chunks_since_sign_(0),nchunks_per_sign_(nchunks_per_sign),
+	chunks_since_sign_(0),
 	pubkey_(pubkey), privkey_(privkey),
 	checkpoint_filename_(checkpoint_filename), checkpoint_bin_(bin_t::NONE)
 {
-    Initialize(check_netwvshash,disc_wnd);
+    Initialize(check_netwvshash,disc_wnd,nchunks_per_sign);
 
     picker_ = NULL;
 
@@ -101,7 +101,7 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const p
 	 *     checkpoint        first new chunk
 	 *         root
 	 */
-	LiveHashTree *umt = (LiveHashTree *)hashtree_;
+/*	LiveHashTree *umt = (LiveHashTree *)hashtree_;
 	if (roottup.bin() != bin_t::NONE)
 	{
 	    BinHashSigTuple gottup = umt->InitFromCheckpoint(roottup);
@@ -116,7 +116,7 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const p
 	{
 	    BinHashSigTuple bhst = *iter;
 	    fprintf(stderr,"live: source: restored sigpeak: %s %s %s lastchunkid %llu\n", bhst.bin().str().c_str(), bhst.hash().hex().c_str(), bhst.sig().hex().c_str(), last_chunkid_ );
-	}
+	}*/
     }
     else // SIGNALL
     {
@@ -129,17 +129,17 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const p
 LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, bool check_netwvshash, uint64_t disc_wnd, uint32_t chunk_size) :
         ContentTransfer(LIVE_TRANSFER), pubkey_(pubkey), chunk_size_(chunk_size), am_source_(false),
         filename_(filename), last_chunkid_(0), offset_(0),
-        chunks_since_sign_(0),nchunks_per_sign_(0),
+        chunks_since_sign_(0),
         checkpoint_filename_(""), checkpoint_bin_(bin_t::NONE)
 {
-    Initialize(check_netwvshash,disc_wnd);
+    Initialize(check_netwvshash,disc_wnd,0);
 
     picker_ = new SharingLivePiecePicker(this);
     picker_->Randomize(rand()&63);
 }
 
 
-void LiveTransfer::Initialize(bool check_netwvshash,uint64_t disc_wnd)
+void LiveTransfer::Initialize(bool check_netwvshash,uint64_t disc_wnd,uint32_t nchunks_per_sign)
 {
     GlobalAdd();
 
@@ -147,7 +147,7 @@ void LiveTransfer::Initialize(bool check_netwvshash,uint64_t disc_wnd)
     if (check_netwvshash)
     {
 #if ENABLE_LIVE_AUTH == 1
-    	if (nchunks_per_sign_ == 1)
+    	if (nchunks_per_sign == 1)
             hs.cont_int_prot_ = POPT_CONT_INT_PROT_SIGNALL;
         else
             hs.cont_int_prot_ = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
@@ -189,7 +189,10 @@ void LiveTransfer::Initialize(bool check_netwvshash,uint64_t disc_wnd)
 
     if (hs.cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
-	hashtree_ = new LiveHashTree(storage_,481,chunk_size_);
+	if (nchunks_per_sign > 1)
+	    hashtree_ = new LiveHashTree(storage_,(privkey_t)481,chunk_size_,nchunks_per_sign); // source
+	else
+	    hashtree_ = new LiveHashTree(storage_,Sha1Hash::ZERO,chunk_size_); //client
     }
     else
 	hashtree_ = NULL;
@@ -316,36 +319,28 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
             // Note: this means that if we use a file as input, the last < N
             // chunks never get announced.
             chunks_since_sign_++;
-            if (chunks_since_sign_ == nchunks_per_sign_)
+            if (chunks_since_sign_ == umt->GetNChunksPerSig())
             {
-        	int old = umt->GetCurrentSignedPeakTuples().size();
-
-        	bhstvector newpeaktuples = umt->UpdateSignedPeaks();
-        	fprintf(stderr,"live: AddData: UMT: adding %d to %d\n", newpeaktuples.size(), totalnewpeaktuples.size() );
-
-        	totalnewpeaktuples.insert(totalnewpeaktuples.end(), newpeaktuples.begin(), newpeaktuples.end() );
-        	fprintf(stderr,"live: AddData: UMT: signed peaks old %d new %d\n", old, umt->GetCurrentSignedPeakTuples().size() );
-
+        	BinHashSigTuple lasttup = umt->AddSignedMunro();
         	// LIVECHECKPOINT
         	if (checkpoint_filename_.length() > 0)
         	{
-        	    BinHashSigTuple roottup = umt->GetRootTuple();
-        	    WriteCheckpoint(roottup);
+        	    WriteCheckpoint(lasttup);
         	}
 
         	chunks_since_sign_ = 0;
         	newepoch = true;
 
 		// Arno, 2013-02-26: Can only send HAVEs covered by signed peaks
+        	// At this point in time, peaks == signed peaks
 		signed_ack_out_.clear();
-		bhstvector cursignpeaktuples = umt->GetCurrentSignedPeakTuples();
-		bhstvector::iterator iter;
-		for (iter= cursignpeaktuples.begin(); iter != cursignpeaktuples.end(); iter++)
+		for (int i=0; i<umt->peak_count(); i++)
 		{
-		    BinHashSigTuple bhst = *iter;
-		    signed_ack_out_.set(bhst.bin());
+		    bin_t sigpeak = umt->peak(i);
+		    signed_ack_out_.set(sigpeak);
 		}
 		// LIVECHECKPOINT, see constructor
+		// MUNROTODO: RESET ALL BEFORE TOO
 		signed_ack_out_.reset(checkpoint_bin_);
 
 		// TEST
@@ -360,7 +355,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
 		// Forget old part of tree
 		if (def_hs_out_.live_disc_wnd_ != POPT_LIVE_DISC_WND_ALL)
 		{
-		    OnDataPruneTree(def_hs_out_,bin_t(0,last_chunkid_),nchunks_per_sign_);
+		    OnDataPruneTree(def_hs_out_,bin_t(0,last_chunkid_),umt->GetNChunksPerSig());
 		}
             }
         }
@@ -376,14 +371,12 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
     if (!newepoch)
 	return 0;
 
-    // Announce chunks to peers
-    //fprintf(stderr,"live: AddData: announcing to %d channel\n", mychannels_.size() );
+    // Announce chunks to peers via HAVEs
+    fprintf(stderr,"live: AddData: announcing to %d channel\n", mychannels_.size() );
     channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
         Channel *c = *iter;
-        dprintf("%s %%0 live: AddData: record %d peaks for channel %d\n", tintstr(), totalnewpeaktuples.size(), c->id() );
-        c->AddSinceSignedPeakTuples(totalnewpeaktuples);
         //DDOS
         if (c->is_established())
         {
@@ -419,36 +412,15 @@ binmap_t *LiveTransfer::ack_out()
 }
 
 
-void LiveTransfer::OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *sendc)
+void LiveTransfer::OnVerifiedMunroHash(bin_t munro, Channel *sendc)
 {
-    // Channel sendc received a correctly signed peak hash. Schedule for
-    // distribution to other channels.
-
-    bhstvector newpeaktuples;
-    newpeaktuples.push_back(bhst);
-
-    channels_t::iterator iter;
-    for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
-    {
-        Channel *c = *iter;
-        // Arno, 2013-05-13: Also record for channels being established
-        if (c != sendc && !c->PeerIsSource())
-        {
-            //fprintf(stderr,"live: OnVerified: schedule for channel %d\n", c->id() );
-            c->AddSinceSignedPeakTuples(newpeaktuples);
-        }
-    }
-
-    // Arno, 2013-05-13: clients need to know nchunks_per_sig for right hashes
-    // (see sendrecv.cpp::AddLivePeakRightHashes(). Do autodetect.
-    if (nchunks_per_sign_ == 0 || bhst.bin().base_length() < nchunks_per_sign_)
-    {
-	nchunks_per_sign_ = bhst.bin().base_length();
-    }
+    // Channel sendc received a correctly signed munro.
+    LiveHashTree *umt = (LiveHashTree *)hashtree();
+    umt->SetNChunksPerSig(munro.base_length());
 
     // Arno, 2013-05-22: Hook-in using signed peaks in UMT.
     LivePiecePicker *lpp = (LivePiecePicker *)picker_;
-    lpp->StartAddPeerPos(sendc->id(), bhst.bin(), sendc->PeerIsSource());
+    lpp->StartAddPeerPos(sendc->id(), munro, sendc->PeerIsSource());
 }
 
 

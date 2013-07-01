@@ -69,8 +69,8 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     scheduled4del_(false),
     direct_sending_(false),
     peer_is_source_(peerissource),
-    initial_peak_count_(-1),
-    hs_out_(NULL), hs_in_(NULL)
+    hs_out_(NULL), hs_in_(NULL),
+    last_sent_munro_(bin_t::NONE)
 {
     if (peer_==Address())
         peer_ = tracker;
@@ -642,17 +642,3 @@ binvector swift::bin_fragment(bin_t &origbin, bin_t &cancelbin)
 }
 
 
-void Channel::AddSinceSignedPeakTuples(bhstvector &sbv)
-{
-    since_signed_peak_tuples_.insert( since_signed_peak_tuples_.end(), sbv.begin(), sbv.end() );
-}
-
-bhstvector   &Channel::GetSinceSignedPeakTuples()
-{
-    return since_signed_peak_tuples_;
-}
-
-void Channel::ClearSinceSignedPeakTuples()
-{
-    since_signed_peak_tuples_.clear();
-}

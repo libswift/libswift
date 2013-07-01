@@ -51,37 +51,6 @@ namespace swift {
 
 #define DUMMY_DEFAULT_SIG_LENGTH	20	// SIGNPEAKTODO
 
-class Node;
-
-class Node
-{
-    /** Class representing a node in a hashtree */
-  public:
-    Node();
-    void SetParent(Node *parent);
-    Node *GetParent();
-    void SetChildren(Node *leftc, Node *rightc);
-    Node *GetLeft();
-    Node *GetRight();
-    Sha1Hash &GetHash();
-    void SetHash(const Sha1Hash &hash);
-    bin_t &GetBin();
-    void SetBin(bin_t b);
-    /** whether hash checked against signed peak (client) or calculated (source) */
-    void SetVerified(bool val);
-    bool GetVerified();
-
-
-  protected:
-    Node *parent_;
-    Node *leftc_;
-    Node *rightc_;
-    bin_t b_;
-    Sha1Hash h_;
-    bool  verified_;
-};
-
-
 /** States for the live hashtree */
 typedef enum {
     LHT_STATE_SIGN_EMPTY,      // live source, no chunks yet
@@ -110,7 +79,46 @@ struct Signature
     uint8_t  *bits()  { return sigbits_; }
     uint16_t length() { return siglen_; }
     std::string hex() const;
+
+    const static Signature NOSIG;
 };
+
+
+
+class Node;
+
+class Node
+{
+    /** Class representing a node in a hashtree */
+  public:
+    Node();
+    ~Node();
+    void SetParent(Node *parent);
+    Node *GetParent();
+    void SetChildren(Node *leftc, Node *rightc);
+    Node *GetLeft();
+    Node *GetRight();
+    Sha1Hash &GetHash();
+    void SetHash(const Sha1Hash &hash);
+    bin_t &GetBin();
+    void SetBin(bin_t b);
+    /** whether hash checked against signed peak (client) or calculated (source) */
+    void SetVerified(bool val);
+    bool GetVerified();
+    void SetSig(Signature *sptr);
+    Signature *GetSig();
+
+
+  protected:
+    Node *parent_;
+    Node *leftc_;
+    Node *rightc_;
+    bin_t b_;
+    Sha1Hash h_;
+    Signature *sptr_;
+    bool  verified_;
+};
+
 
 
 /** Structure for holding a (bin,hash,signature) tuple */
@@ -139,26 +147,31 @@ class LiveHashTree: public HashTree
 {
    public:
      /** live source */
-     LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_size);
+     LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_size, uint32_t nchunks_per_sign);
      /** live client */
      LiveHashTree(Storage *storage, pubkey_t swarmid, uint32_t chunk_size);
      ~LiveHashTree();
 
      /** Called when a chunk is added */
      bin_t          AddData(const char* data, size_t length);
-     /** Called after N chunks have been added, following -06. Returns new peaks */
-     bhstvector	    UpdateSignedPeaks();
-     /** Retrieve list of current signed peaks */
-     bhstvector	    GetCurrentSignedPeakTuples();
-     /** Live client: guess source's nchunks_per_sig_ for tree pruning */
-     uint32_t	    GetGuessedNChunksPerSig() { return guessed_nchunks_per_sig_; }
+     bin_t          GetMunro(bin_t pos);
+     bin_t          GetLastMunro();
+     /** Called after N chunks have been added, following -06. Returns new munro */
+     BinHashSigTuple AddSignedMunro();
+
+     /** Return bin,hash,sig of munro */
+     BinHashSigTuple GetSignedMunro(bin_t munro); // LIVECHECKPOINT
+
+     /** Live NCHUNKS_PER_SIG  */
+     void 	    SetNChunksPerSig(uint32_t nchunks_per_sig) { nchunks_per_sig_=nchunks_per_sig; }
+     uint32_t	    GetNChunksPerSig() { return nchunks_per_sig_; }
+
+
      /** Remove subtree rooted at pos */
      void           PruneTree(bin_t pos);
-     /** Return bin,hash,sig for current root */
-     BinHashSigTuple GetRootTuple();  // LIVECHECKPOINT
 
-     /** If bhst.bin() != bin_t::NONE the signature was good. */
-     BinHashSigTuple OfferSignedPeakHash(bin_t pos, Signature &sig);
+     bool           OfferSignedMunroHash(bin_t pos, Signature &sig);
+
      /** Add node to the hashtree */
      bool CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified);
      /** Mark node as verified. verclass indicates where verification decision came from for debugging */
@@ -166,6 +179,8 @@ class LiveHashTree: public HashTree
 
      // LIVECHECKPOINT
      BinHashSigTuple InitFromCheckpoint(BinHashSigTuple roottup);
+
+
 
      // Sanity checks
      void sane_tree();
@@ -230,19 +245,14 @@ class LiveHashTree: public HashTree
      //MULTIFILE
      Storage *	     storage_;
 
-     // SIGNPEAK
-     /** List of currently signed peak hashes. Updated every N chunks */
-     // ARNOTODO: replace with BHST
-     bin_t           signed_peak_bins_[64];
-     int             signed_peak_count_;
-     /** Actual signatures */
-     Signature       signed_peak_sigs_[64];
+     bin_t           source_last_munro_;
 
      /** Temp storage for candidate peak. */
-     bin_t           cand_peak_bin_;
-     Sha1Hash	     cand_peak_hash_;
+     bin_t           cand_munro_bin_;
+     Sha1Hash	     cand_munro_hash_;
 
-     uint32_t	     guessed_nchunks_per_sig_;
+     /** Number of chunks before signing new peaks (NCHUNKS_PER_SIG param in -06) */
+     uint32_t        nchunks_per_sig_;
 
      /** Create a new leaf Node next to the current latest leaf (pointed to by
       * addcursor_). This may involve creating a new root and subtree to
@@ -254,6 +264,9 @@ class LiveHashTree: public HashTree
      void 	     FreeTree(Node *n);
      /** Calculate root hash of current tree (unused). */
      Sha1Hash        DeriveRoot();
+
+     bin_t          GetClientLastMunro();
+
 };
 
 }

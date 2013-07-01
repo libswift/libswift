@@ -12,8 +12,11 @@
 using namespace swift;
 
 
-#define  tree_debug	false
+#define  tree_debug	true
 
+
+
+const Signature Signature::NOSIG = Signature();
 
 /*
  * Signature
@@ -112,8 +115,14 @@ std::string    Signature::hex() const {
  * Node
  */
 
-Node::Node() : parent_(NULL), leftc_(NULL), rightc_(NULL), b_(bin_t::NONE), h_(Sha1Hash::ZERO), verified_(false)
+Node::Node() : parent_(NULL), leftc_(NULL), rightc_(NULL), b_(bin_t::NONE), h_(Sha1Hash::ZERO), sptr_(NULL), verified_(false)
 {
+}
+
+Node::~Node()
+{
+    if (sptr_ != NULL)
+	delete sptr_;
 }
 
 void Node::SetParent(Node *parent)
@@ -174,20 +183,33 @@ void Node::SetVerified(bool val)
     verified_ = val;
 }
 
+Signature *Node::GetSig()
+{
+    return sptr_;
+}
+
+void Node::SetSig(Signature *sptr)
+{
+    sptr_ = sptr;
+}
+
+
 
 /*
  * LiveHashTree
  */
 
-LiveHashTree::LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_size) :
+LiveHashTree::LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_size,uint32_t nchunks_per_sig) :
          HashTree(), state_(LHT_STATE_SIGN_EMPTY), root_(NULL), addcursor_(NULL), privkey_(privkey), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
-         chunk_size_(chunk_size), storage_(storage), signed_peak_count_(0), guessed_nchunks_per_sig_(SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN)
+         chunk_size_(chunk_size), storage_(storage), nchunks_per_sig_(nchunks_per_sig),
+         source_last_munro_(bin_t::NONE)
 {
 }
 
 LiveHashTree::LiveHashTree(Storage *storage, pubkey_t swarmid, uint32_t chunk_size) :
          HashTree(), state_(LHT_STATE_VER_AWAIT_PEAK), root_(NULL), addcursor_(NULL), pubkey_(swarmid), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
-         chunk_size_(chunk_size), storage_(storage), signed_peak_count_(0), guessed_nchunks_per_sig_(SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN)
+         chunk_size_(chunk_size), storage_(storage), nchunks_per_sig_(0),
+         source_last_munro_(bin_t::NONE)
 {
 }
 
@@ -269,9 +291,6 @@ bin_t LiveHashTree::AddData(const char* data, size_t length)
     peak_count_ = gen_peaks(size_in_chunks(),peak_bins_);
 
     state_ = LHT_STATE_SIGN_DATA;
-
-
-
 
     return next->GetBin();
 }
@@ -380,117 +399,61 @@ Node *LiveHashTree::CreateNext()
 }
 
 
-bhstvector LiveHashTree::UpdateSignedPeaks()
+bin_t LiveHashTree::GetLastMunro()
 {
-    if (tree_debug)
-    {
-	fprintf(stderr,"umt: UpdateSignedPeaks\n");
-        check_signed_peak_coverage();
-        check_peak_coverage();
-    }
-
-    // Calc peak diffs
-    bool changed=false;
-
-    int i=0;
-    if (signed_peak_count_ == peak_count_ && peak_count_ != 0)
-    {
-        for (i=0; i<signed_peak_count_; i++)
-        {
-            if (signed_peak_bins_[i] != peak_bins_[i])
-            {
-                changed = true;
-                break;
-            }
-        }
-    }
+    if (source_last_munro_ != bin_t::NONE)
+	return source_last_munro_;
     else
-        changed = true;
-
-    bhstvector newpeaktuples;
-    if (!changed)
-        return newpeaktuples;
-
-    int startidx=0;
-    changed = false;
-
-    // Copy new peaks to signed peaks
-    signed_peak_count_ = peak_count_;
-    for (i=0; i<peak_count_; i++)
-    {
-        if (peak_bins_[i] != signed_peak_bins_[i])
-        {
-            if (tree_debug)
-                fprintf(stderr,"umt: UpdateSignedPeaks: new %s \n", peak_bins_[i].str().c_str() );
-
-            signed_peak_bins_[i] = peak_bins_[i];
-
-            if (!changed)
-            {
-                startidx = i;
-                changed = true;
-            }
-        }
-    }
-    // Clear old peaks
-    for (i=peak_count_; i<signed_peak_count_; i++)
-    {
-        signed_peak_sigs_[i] = Signature();
-    }
-
-    if (tree_debug)
-        check_signed_peak_coverage();
-
-
-    // Now the trees below peaks are stable, so we can calculate the hash tree
-    // for them.
-    for (i=startidx; i<signed_peak_count_; i++)
-    {
-        bin_t newpeak = signed_peak_bins_[i];
-        if (tree_debug)
-            fprintf(stderr,"umt: UpdateSignedPeaks: compute till %s\n", signed_peak_bins_[i].str().c_str() );
-        Node *spnode = FindNode(newpeak);
-        if (spnode == NULL)
-        {
-            fprintf(stderr,"umt: UpdateSignedPeaks: cannot find peak?!\n");
-            return newpeaktuples;
-        }
-        ComputeTree(spnode);
-
-        // Hash of new peak known, now sign and store for transmission
-        Sha1Hash hash = spnode->GetHash();
-        uint8_t* signedhash = new uint8_t[DUMMY_DEFAULT_SIG_LENGTH]; // placeholder
-        for (int k=0; k<20; k++)
-            signedhash[k] = 'v';
-        signedhash[19] = '\0';
-        Signature sig(signedhash,DUMMY_DEFAULT_SIG_LENGTH);
-        delete signedhash;
-
-        signed_peak_sigs_[i] = sig;
-
-        BinHashSigTuple bhst(newpeak,hash,sig);
-        newpeaktuples.push_back(bhst);
-    }
-
-    check_new_peaks(newpeaktuples);
-
-    return newpeaktuples;
+	return GetClientLastMunro();
 }
 
 
-bhstvector LiveHashTree::GetCurrentSignedPeakTuples()
+bin_t LiveHashTree::GetClientLastMunro()
 {
-    bhstvector peaktuples;
+    if (peak_count_ == 0)
+	return bin_t::NONE;
 
-    for (int j=0; j<signed_peak_count_; j++)
+    bin_t lastpeak = peak_bins_[peak_count_-1];
+    int nchunks_per_sign_layer = (int)log2((double)nchunks_per_sig_);
+
+    bin_t newmunro = lastpeak;
+    while (newmunro.layer() > nchunks_per_sign_layer)
+	newmunro = newmunro.right();
+
+    return newmunro;
+}
+
+
+
+BinHashSigTuple LiveHashTree::AddSignedMunro()
+{
+    bin_t newmunro = GetClientLastMunro();
+
+    if (tree_debug)
+	fprintf(stderr,"umt: AddSignedMunro: %s\n", newmunro.str().c_str() );
+    Node *n = FindNode(newmunro);
+    if (n == NULL)
     {
-        bin_t signed_peak = signed_peak_bins_[j];
-        Signature copysig = signed_peak_sigs_[j];
-        BinHashSigTuple bhst(signed_peak,hash(signed_peak),copysig);
-
-        peaktuples.push_back(bhst);
+	fprintf(stderr,"umt: AddSignedMunro: cannot find munro in tree?!\n");
+	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature::NOSIG);
     }
-    return peaktuples;
+    ComputeTree(n);
+
+    // Hash of new munro known, now sign and store for transmission
+    Sha1Hash hash = n->GetHash();
+    uint8_t* signedhash = new uint8_t[DUMMY_DEFAULT_SIG_LENGTH]; // placeholder
+    for (int k=0; k<20; k++)
+	signedhash[k] = 'v';
+    signedhash[19] = '\0';
+    Signature *sigptr = new Signature(signedhash,DUMMY_DEFAULT_SIG_LENGTH);
+    delete signedhash;
+
+    // Store in tree
+    n->SetSig(sigptr);
+
+    source_last_munro_ = newmunro;
+
+    return BinHashSigTuple(newmunro,hash,*sigptr);
 }
 
 
@@ -542,28 +505,12 @@ Sha1Hash  LiveHashTree::DeriveRoot()
 }
 
 
-BinHashSigTuple LiveHashTree::GetRootTuple()
-{
-    if (root_ == NULL)
-	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
-
-    Sha1Hash roothash = DeriveRoot();
-
-    uint8_t* signedhash = new uint8_t[DUMMY_DEFAULT_SIG_LENGTH]; // placeholder
-    for (int k=0; k<20; k++)
-        signedhash[k] = 'v';
-    signedhash[19] = '\0';
-    Signature sig(signedhash,DUMMY_DEFAULT_SIG_LENGTH);
-    delete signedhash;
-
-    return BinHashSigTuple(root_->GetBin(),roothash,sig);
-}
-
+// MUNROTODO: use lasttup.
 
 BinHashSigTuple LiveHashTree::InitFromCheckpoint(BinHashSigTuple roottup)
 {
-    OfferHash(roottup.bin(),roottup.hash());
-    BinHashSigTuple gottup = OfferSignedPeakHash(roottup.bin(),roottup.sig());
+    /*OfferHash(roottup.bin(),roottup.hash());
+    BinHashSigTuple gottup = OfferSignedMunroHash(roottup.bin(),roottup.sig());
 
     if (tree_debug)
     {
@@ -582,204 +529,110 @@ BinHashSigTuple LiveHashTree::InitFromCheckpoint(BinHashSigTuple roottup)
     sizec_ = gottup.bin().base_length();
     size_ = sizec_ * chunk_size_;
 
-    return gottup;
+    return gottup;*/
+    return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature::NOSIG);
 }
+
+
+bin_t LiveHashTree::GetMunro(bin_t pos)
+{
+    if (nchunks_per_sig_ == 0)
+	return bin_t::NONE;
+
+    int nchunks_per_sign_layer = (int)log2((double)nchunks_per_sig_);
+
+    if (pos.layer() == nchunks_per_sign_layer)
+	return pos;
+
+    bin_t p = pos.base_left();
+    for (int i=0; i<nchunks_per_sign_layer; i++)
+	p = p.parent();
+
+    fprintf(stderr,"umt: GetMunro: %s nchunks %u layer %d computed %u\n", pos.str().c_str(), nchunks_per_sign_layer, p.layer() );
+
+    assert(p.layer() == nchunks_per_sign_layer);
+    return p;
+}
+
+
+BinHashSigTuple LiveHashTree::GetSignedMunro(bin_t munro)
+{
+    Node *n = FindNode(munro);
+    if (n == NULL)
+	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature::NOSIG);
+    Signature *sptr = n->GetSig();
+    if (sptr == NULL)
+	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature::NOSIG);
+
+    BinHashSigTuple bhst(munro,n->GetHash(),*sptr);
+    return bhst;
+}
+
 
 
 /*
  * Live client specific
  */
 
-BinHashSigTuple LiveHashTree::OfferSignedPeakHash(bin_t pos, Signature &sig)
+bool LiveHashTree::OfferSignedMunroHash(bin_t pos, Signature &sig)
 {
-    // TODO check sig
-    // return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,sig);
-
     if (tree_debug)
-        fprintf(stderr,"umt: OfferSignedPeakHash: peak %s\n", pos.str().c_str() );
+        fprintf(stderr,"umt: OfferSignedMunroHash: peak %s\n", pos.str().c_str() );
 
-    BinHashSigTuple bhst(cand_peak_bin_,cand_peak_hash_,sig);
+    BinHashSigTuple bhst(cand_munro_bin_,cand_munro_hash_,sig);
 
-    if (pos != cand_peak_bin_)
+    if (pos != cand_munro_bin_)
     {
         // Ignore duplicate (or message mixup)
         if (tree_debug)
-            fprintf(stderr,"umt: OfferSignedPeakHash: message mixup! %s %s\n", pos.str().c_str(), cand_peak_bin_.str().c_str() );
-        return bhst;
+            fprintf(stderr,"umt: OfferSignedMunroHash: message mixup! %s %s\n", pos.str().c_str(), cand_munro_bin_.str().c_str() );
+        return false;
     }
 
-    // Remove old peaks if consumed by new
+    // Check if new munro
     int i=0;
-    bool stored=false;
-    while (i<signed_peak_count_)
+    for (i=0; i<peak_count_; i++)
     {
-        if (pos == signed_peak_bins_[i])
+        if (pos == peak_bins_[i])
         {
-            //stored = true;
-            //break;
-            return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,sig);
+            return false;
         }
-        else if (pos.contains(signed_peak_bins_[i]))
-        {
-            if (tree_debug)
-                fprintf(stderr,"umt: OfferSignedPeakHash: %s contains %s, update\n", pos.str().c_str(), signed_peak_bins_[i].str().c_str() );
-
-            if (!stored)
-            {
-                if (tree_debug)
-                    fprintf(stderr,"umt: OfferSignedPeakHash: overwriting\n" );
-                signed_peak_bins_[i] = pos;
-                signed_peak_sigs_[i] = sig;
-                stored = true;
-            }
-            else
-            {
-                if (tree_debug)
-                    fprintf(stderr,"umt: OfferSignedPeakHash: subsume %i\n", i );
-
-                // This peak subsumed by new peak
-                signed_peak_count_--;
-                for (int j=i; j<signed_peak_count_; j++)
-                {
-                    //if (tree_debug)
-                    //    fprintf(stderr,"umt: OfferSignedPeakHash: copy %d to %d\n", j, j+1 );
-                    signed_peak_bins_[j] = signed_peak_bins_[j+1];
-                    signed_peak_sigs_[j] = signed_peak_sigs_[j+1];
-                }
-                // Retest current i as it has been replaced
-                continue;
-            }
-        }
-        else if (signed_peak_bins_[i].contains(pos))
-        {
-            // Resend of signed peak by peer other than source, ignore
-            if (tree_debug)
-                fprintf(stderr,"umt: OfferSignedPeakHash: outdated\n" );
-
-            return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,sig);
-        }
-        i++;
     }
-    if (!stored)
+
+    // New munro
+
+    // Check if sane
+    bin_t oldmunro = GetLastMunro();
+    if (oldmunro != bin_t::NONE && oldmunro.layer_offset()+1 != pos.layer_offset())
     {
-        signed_peak_bins_[signed_peak_count_] = pos;
-        signed_peak_sigs_[signed_peak_count_] = sig;
-        signed_peak_count_++;
+        if (tree_debug)
+            fprintf(stderr,"umt: OfferSignedMunroHash: old munro %s layer off %u new %u\n", oldmunro.str().c_str(), oldmunro.layer_offset(), pos.layer_offset() );
+        return false;
     }
 
-    // Sync peak_* to signed_peak_*
-    peak_count_ = signed_peak_count_;
-    for (int i=0; i<peak_count_; i++)
-    {
-        peak_bins_[i] = signed_peak_bins_[i];
-    }
+    //
+    // SUMMITTODO check sig
+    //
 
-    if (tree_debug)
-    {
-        check_signed_peak_coverage();
-        check_peak_coverage();
-    }
 
-    sizec_ = signed_peak_bins_[signed_peak_count_].base_right().layer_offset();
+    sizec_ += pos.base_length();
     size_ = sizec_ * chunk_size_;
+
+    // Recalculate peaks
+    peak_count_ = gen_peaks(size_in_chunks(),peak_bins_);
+
 
     if (state_ == LHT_STATE_VER_AWAIT_PEAK)
         state_ = LHT_STATE_VER_AWAIT_DATA;
 
-    CreateAndVerifyNode(cand_peak_bin_,cand_peak_hash_,true);
+    CreateAndVerifyNode(cand_munro_bin_,cand_munro_hash_,true);
 
     // Could recalc root hash here, but never really used. Doing it on-demand
     // in root_hash() conflicts with const def :-(
     //root_->SetHash(DeriveRoot());
 
-    // Guess how many chunks per sig are used, convenient for tree purging
-    if (pos.base_length() < guessed_nchunks_per_sig_)
-    {
-        guessed_nchunks_per_sig_ = pos.base_length();
-    }
-
-    return bhst;
+    return true; // signal new
 }
-
-
-void LiveHashTree::check_peak_coverage(bool fireassert)
-{
-    // Sanity check
-    bin_t::uint_t end = 0;
-    for (int i=0; i<peak_count_; i++)
-    {
-	fprintf(stderr,"umt: peak view: %s covers %s to %s\n", peak_bins_[i].str().c_str(), peak_bins_[i].base_left().str().c_str(), peak_bins_[i].base_right().str().c_str());
-
-        if (i == 0)
-        {
-            end = peak_bins_[i].base_right().layer_offset();
-            continue;
-        }
-        bin_t::uint_t start = peak_bins_[i].base_left().layer_offset();
-        if (start != end+1)
-        {
-            fprintf(stderr,"umt: ERROR peak broken!\n");
-            for (int j=0; j<peak_count_; j++)
-            {
-                fprintf(stderr,"umt: peak bork: %s covers %s to %s\n", peak_bins_[j].str().c_str(), peak_bins_[j].base_left().str().c_str(), peak_bins_[j].base_right().str().c_str());
-            }
-            if (fireassert)
-                assert(start == end+1);
-            /*fflush(stderr);
-            getchar();
-	    exit(-1);*/
-        }
-        end = peak_bins_[i].base_right().layer_offset();
-    }
-}
-
-
-void LiveHashTree::check_signed_peak_coverage(bool fireassert)
-{
-    // Sanity check
-    bin_t::uint_t end = 0;
-    for (int i=0; i<signed_peak_count_; i++)
-    {
-        fprintf(stderr,"umt: signed peak view: %s\n", signed_peak_bins_[i].str().c_str() );
-        if (i == 0)
-        {
-            end = signed_peak_bins_[i].base_right().layer_offset();
-            continue;
-        }
-        bin_t::uint_t start = signed_peak_bins_[i].base_left().layer_offset();
-        if (start != end+1)
-        {
-            fprintf(stderr,"umt: UpdateSignedPeaks: ERROR signed peak broken!\n");
-            for (int j=0; j<signed_peak_count_; j++)
-            {
-                fprintf(stderr,"umt: UpdateSignedPeaks: signed peak bork: %s covers %s to %s\n", signed_peak_bins_[j].str().c_str(), signed_peak_bins_[j].base_left().str().c_str(), signed_peak_bins_[j].base_right().str().c_str());
-            }
-            if (fireassert)
-                assert(start == end+1);
-            /* fprintf(stderr,"umt: Press...\n");
-            fflush(stderr);
-            getchar();
-	    exit(-1); */
-        }
-        end = signed_peak_bins_[i].base_right().layer_offset();
-    }
-}
-
-
-void LiveHashTree::check_new_peaks(bhstvector &newpeaktuples)
-{
-    if (tree_debug)
-    {
-        bhstvector::iterator iter;
-        for (iter=newpeaktuples.begin(); iter!=newpeaktuples.end(); iter++)
-        {    
-            BinHashSigTuple bhst = *iter;
-            fprintf(stderr,"umt: UpdateSignedPeaks: new peak: %s %s\n", bhst.bin().str().c_str(), bhst.hash().hex().c_str() );
-        }
-    }
-}
-
-
 
 
 bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified)
@@ -919,16 +772,16 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     if (tree_debug)
         fprintf(stderr,"umt: OfferHash: found node %s isverified %d\n",iter->GetBin().str().c_str(),iter->GetVerified() );
 
-    bin_t peak = peak_for(pos);
-    if (peak.is_none())
+    bin_t munro = GetMunro(pos);
+    if (munro.is_none())
         return false;
-    if (peak==pos)
+    if (munro==pos)
     {
-        // Diff from MmapHashTree: store peak here
+        // Diff from MmapHashTree: store munro here
         if (verified)
         {
             if (tree_debug)
-                fprintf(stderr,"umt: OfferHash: setting peak %s %s\n",pos.str().c_str(),hash.hex().c_str() );
+                fprintf(stderr,"umt: OfferHash: setting munro %s %s\n",pos.str().c_str(),hash.hex().c_str() );
 
             iter->SetHash(hash);
             iter->SetVerified(verified);
@@ -1005,8 +858,8 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     // under an old peak, but now that the tree has grown this doesn't indicate
     // verified status anymore.
     //
-    // while ( piter->GetBin()!=peak && ack_out_.is_empty(piter->GetBin()) && !piter->GetVerified() ) {
-    while ( piter->GetBin()!=peak && !piter->GetVerified() ) {
+    // while ( piter->GetBin()!=munro && ack_out_.is_empty(piter->GetBin()) && !piter->GetVerified() ) {
+    while ( piter->GetBin()!=munro && !piter->GetVerified() ) {
         piter->SetHash(uphash);
         piter = piter->GetParent();
 
@@ -1043,7 +896,7 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 
     if (tree_debug)
     {
-        fprintf(stderr,"umt: OfferHash: while %d %d %d\n", piter->GetBin()!=peak, ack_out_.is_empty(piter->GetBin()),  !piter->GetVerified() );
+        fprintf(stderr,"umt: OfferHash: while %d %d %d\n", piter->GetBin()!=munro, ack_out_.is_empty(piter->GetBin()),  !piter->GetVerified() );
         fprintf(stderr,"umt: OfferHash: %s computed %s truth %s\n", piter->GetBin().str().c_str(), uphash.hex().c_str(), piter->GetHash().hex().c_str() );
     }
 
@@ -1076,7 +929,7 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
         piter = iter;
         piter->SetVerified(true);
         // Arno, 2013-05-13: Not too high
-        while (p.layer() != (peak.layer()-1)) {
+        while (p.layer() != (munro.layer()-1)) {
             p = p.parent().sibling();
             if (piter->GetParent() == NULL)
                 break;
@@ -1096,7 +949,7 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
         // parents of peaks while live streaming with Unified Merkle Trees.
         p = pos;
         piter = iter;
-        while (p != peak) {
+        while (p != munro) {
             p = p.parent();
             piter = piter->GetParent();
 
@@ -1151,20 +1004,20 @@ bool LiveHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
 
     // SIGNED_INTEGRITY follows INTEGRITY, so store till we process that.
     // In the future atomic processing of the whole datagram would be better
-    cand_peak_bin_ = pos;
-    cand_peak_hash_ = hash;
+    cand_munro_bin_ = pos;
+    cand_munro_hash_ = hash;
 
-    bin_t peak = peak_for(pos);
-    if (peak.is_none())
+    bin_t munro = GetMunro(pos);
+    if (munro.is_none())
     {
         if (tree_debug)
-            fprintf(stderr,"umt: OfferHash: no peak\n");
+            fprintf(stderr,"umt: OfferHash: no munro\n");
         return false;
     }
     else
     {
         if (tree_debug)
-            fprintf(stderr,"umt: OfferHash: %s has peak %s\n", pos.str().c_str(), peak.str().c_str() );
+            fprintf(stderr,"umt: OfferHash: %s has munro %s\n", pos.str().c_str(), munro.str().c_str() );
         return CreateAndVerifyNode(pos,hash,false);
     }
 }
@@ -1175,7 +1028,7 @@ bool LiveHashTree::OfferData(bin_t pos, const char* data, size_t length)
     if (state_ == LHT_STATE_VER_AWAIT_PEAK)
     {
         if (tree_debug)
-            fprintf(stderr,"umt: OfferData: await peak\n");
+            fprintf(stderr,"umt: OfferData: await munro\n");
         return false;
     }
     if (!pos.is_base())
@@ -1196,11 +1049,11 @@ bool LiveHashTree::OfferData(bin_t pos, const char* data, size_t length)
             fprintf(stderr,"umt: OfferData: already have\n");
         return true; // to set data_in_
     }
-    bin_t peak = peak_for(pos);
-    if (peak.is_none())
+    bin_t munro = GetMunro(pos);
+    if (munro.is_none())
     {
         if (tree_debug)
-            fprintf(stderr,"umt: OfferData: couldn't find peak\n");
+            fprintf(stderr,"umt: OfferData: couldn't find munro\n");
         return false;
     }
 

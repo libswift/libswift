@@ -622,12 +622,8 @@ namespace swift {
         /** Source: Return all chunks in ack_out_ covered by peaks */
         binmap_t *      ack_out_signed();
 
-        /** Source: Returns the number of live chunks generated before a new peak is signed */
-        uint32_t        GetNChunksPerSign() { return nchunks_per_sign_; }
-
-        /** Channel sendc received a correctly signed peak hash. Schedule for
-         * distribution to other channels. */
-        void 		OnVerifiedPeakHash(BinHashSigTuple &bhst, Channel *sendc);
+        /** Channel sendc received a correctly signed munro hash. */
+        void 		OnVerifiedMunroHash(bin_t munro, Channel *sendc);
 
         /** If live discard window is used, purge unused parts of tree.
          * pos is last received chunk. */
@@ -677,8 +673,6 @@ namespace swift {
 
         /** Source: Count of chunks generated since last signed peak epoch */
         uint32_t        chunks_since_sign_;
-        /** Source: Number of chunks before signing new peaks (N param in -06) */
-        uint32_t        nchunks_per_sign_;
 
         privkey_t	privkey_;
         pubkey_t	pubkey_;
@@ -695,7 +689,7 @@ namespace swift {
         static std::vector<LiveTransfer*> liveswarms;
 
         /** Joint constructor code between source and client */
-        void Initialize(bool check_netwvshash,uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL);
+        void Initialize(bool check_netwvshash,uint64_t disc_wnd,uint32_t nchunks_per_sign);
     };
 
 
@@ -821,15 +815,11 @@ namespace swift {
         void        AddHave (struct evbuffer *evb);
         void        AddHint (struct evbuffer *evb);
         void        AddCancel (struct evbuffer *evb);
-        void        AddUncleHashes (struct evbuffer *evb, bin_t pos, bool isretransmit);
-        void        AddFileUncleHashes (struct evbuffer *evb, bin_t pos);
-        void        AddLiveUncleHashes (struct evbuffer *evb, bin_t pos, bool isretransmit); // SIGNPEAK
-        void        AddPeakHashes (struct evbuffer *evb);
+        void        AddRequiredHashes (struct evbuffer *evb, bin_t pos, bool isretransmit);
         void        AddUnsignedPeakHashes (struct evbuffer *evb);
-        void        AddLiveSignedPeakHashes(struct evbuffer *evb); // SIGNPEAK
-        bin_t       AddLiveSignedPeakHash4Retransmit(struct evbuffer *evb, bin_t pos); // SIGNPEAK
-        void        AddLiveSignedPeakHashes(struct evbuffer *evb, bhstvector &sbv, bool includeridge); // SIGNPEAK
-        void        AddLivePeakRidgeHashes(struct evbuffer *evb, bin_t pos); // SIGNPEAK
+        void        AddFileUncleHashes (struct evbuffer *evb, bin_t pos);
+        void        AddLiveSignedMunroHash(struct evbuffer *evb,bin_t munro); // SIGNMUNRO
+        void        AddLiveUncleHashes (struct evbuffer *evb, bin_t pos, bin_t munro, bool isretransmit); // SIGNMUNRO
         void        AddPex (struct evbuffer *evb);
         void        OnPexReq(void);
         void        AddPexReq(struct evbuffer *evb);
@@ -905,12 +895,6 @@ namespace swift {
         // LIVE
         /** Arno: Called when source generates chunk. */
         void        LiveSend();
-        /** SIGNPEAK: Add new signed peaks, to be sent to peer on next send */
-        void	    AddSinceSignedPeakTuples(bhstvector &sbv);
-        /** Get list of new signed peaks to send */
-        bhstvector &GetSinceSignedPeakTuples();
-        /** Clear list of peaks to send. Retransmit via AddLiveUncles */
-        void 	    ClearSinceSignedPeakTuples();
         bool        PeerIsSource() { return peer_is_source_; }
         tint	    GetLastRecvTime() { return last_recv_time_; }
 
@@ -1016,16 +1000,16 @@ namespace swift {
 
         //LIVE
         bool        peer_is_source_;
-        // SIGNPEAK
-        bhstvector   since_signed_peak_tuples_;
-        /** Index of last initial peak in since_signed_peak_tuples_ for handshaking or -1*/
-        int	     initial_peak_count_;
 
         // PPSP
         /** Handshake I sent to peer. swarmid not set. */
         Handshake   *hs_out_;
         /** Handshake I got from peer. */
         Handshake   *hs_in_;
+
+        // SIGNMUNRO
+        bin_t	    last_sent_munro_;
+
 
         int         PeerBPS() const { return TINT_SEC / dip_avg_ * 1024; }
         /** Get a request for one packet from the queue of peer's requests. */
