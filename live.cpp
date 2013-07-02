@@ -99,7 +99,7 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const p
 	 *             /          \
 	 *            /            \
 	 *     checkpoint        first new chunk
-	 *         root
+	 *         munro
 	 */
 	LiveHashTree *umt = (LiveHashTree *)hashtree_;
 	if (lastmunrotup.bin() != bin_t::NONE)
@@ -111,6 +111,8 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const p
 		checkpoint_bin_ = lastmunrotup.bin();
 		last_chunkid_ = checkpoint_bin_.base_right().base_offset()+1;
 		offset_ = last_chunkid_ * chunk_size_;
+
+                UpdateSignedAckOut();
 	    }
 	}
 
@@ -334,30 +336,7 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
 
 		// Arno, 2013-02-26: Can only send HAVEs covered by signed peaks
         	// At this point in time, peaks == signed peaks
-		signed_ack_out_.clear();
-		for (int i=0; i<umt->peak_count(); i++)
-		{
-		    bin_t sigpeak = umt->peak(i);
-		    signed_ack_out_.set(sigpeak);
-		}
-		// LIVECHECKPOINT, see constructor
-		// SIGNMUNRO
-		if (checkpoint_bin_ != bin_t::NONE)
-		{
-		    for (int i=0; i<=checkpoint_bin_.layer_offset(); i++)
-		    {
-			bin_t clearbin(checkpoint_bin_.layer(),i);
-			signed_ack_out_.reset(clearbin);
-		    }
-		    // TEST
-		    /* fprintf(stderr,"live: AddData: UMT: checkp %s\n", checkpoint_bin_.str().c_str() );
-		    bin_t bf = signed_ack_out_.find_filled();
-		    bin_t be = signed_ack_out_.find_empty();
-		    bin_t sbe = signed_ack_out_.find_empty(checkpoint_bin_);
-
-		    fprintf(stderr,"live: AddData: UMT: bf %s be %s sbe %s\n", bf.str().c_str(), be.str().c_str(), sbe.str().c_str() );
-		    */
-		}
+                UpdateSignedAckOut();
 
 		// Forget old part of tree
 		if (def_hs_out_.live_disc_wnd_ != POPT_LIVE_DISC_WND_ALL)
@@ -394,6 +373,44 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
 
     return 0;
 }
+
+
+void LiveTransfer::UpdateSignedAckOut()
+{
+    // Arno, 2013-02-26: Can only send HAVEs covered by signed peaks
+    // At this point in time, peaks == signed peaks
+    LiveHashTree *umt = (LiveHashTree *)hashtree();
+
+    signed_ack_out_.clear();
+    for (int i=0; i<umt->peak_count(); i++)
+    {
+        bin_t sigpeak = umt->peak(i);
+        signed_ack_out_.set(sigpeak);
+
+        fprintf(stderr,"live: AddData: UMT: DOHAVE %s %s %s\n", sigpeak.str().c_str(), sigpeak.base_left().str().c_str(), sigpeak.base_right().str().c_str() );
+    }
+    // LIVECHECKPOINT, see constructor
+    // SIGNMUNRO
+    if (checkpoint_bin_ != bin_t::NONE)
+    {
+        for (int i=0; i<=checkpoint_bin_.layer_offset(); i++)
+        {
+	    bin_t clearbin(checkpoint_bin_.layer(),i);
+	    signed_ack_out_.reset(clearbin);
+
+            fprintf(stderr,"live: AddData: UMT: UNHAVE %s %s %s\n", clearbin.str().c_str(), clearbin.base_left().str().c_str(), clearbin.base_right().str().c_str() );
+        }
+        // TEST
+        /* fprintf(stderr,"live: AddData: UMT: checkp %s\n", checkpoint_bin_.str().c_str() );
+        bin_t bf = signed_ack_out_.find_filled();
+        bin_t be = signed_ack_out_.find_empty();
+        bin_t sbe = signed_ack_out_.find_empty(checkpoint_bin_);
+
+        fprintf(stderr,"live: AddData: UMT: bf %s be %s sbe %s\n", bf.str().c_str(), be.str().c_str(), sbe.str().c_str() );
+        */
+    }
+}
+
 
 
 void LiveTransfer::UpdateOperational()
@@ -605,5 +622,6 @@ void Channel::LiveSend()
     //fprintf(stderr,"live: LiveSend: next %lld\n", next_send_time_ );
     evtimer_add(evsendlive_ptr_,tint2tv(next_send_time_));
 }
+
 
 

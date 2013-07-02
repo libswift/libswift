@@ -446,7 +446,7 @@ namespace swift {
         Channel *       RandomChannel(Channel *notc);
         /** Arno: Return the Channel to peer "addr" that is not equal to "notc". */
         Channel *       FindChannel(const Address &addr, Channel *notc);
-        void            CloseChannels(channels_t delset); // do not pass by reference
+        void            CloseChannels(channels_t delset, bool isall); // do not pass by reference
         void            GarbageCollectChannels();
 
         // RATELIMIT
@@ -466,7 +466,8 @@ namespace swift {
         uint32_t        GetNumLeechers();
         /** Arno: Return the number of seeders current channeled with. */
         uint32_t        GetNumSeeders();
-	/** Arno: Return (pointer to) the list of Channels for this transfer. MORESTATS */
+
+        /** Arno: Return (pointer to) the list of Channels for this transfer. MORESTATS */
         channels_t *	GetChannels() { return &mychannels_; }
         /** Arno: Return the list of callbacks for this transfer */
         progcallbackregs_t  GetProgressCallbackRegistrations() { return callbacks_; }
@@ -486,7 +487,7 @@ namespace swift {
         void            ConnectToTracker();
         /** Arno: Reconnect to the tracker if no established peers or is connected
          * to a live source that went silent and exp backoff allows it. */
-        void            ReConnectToTrackerIfAllowed(uint32_t numestablishedpeers, bool livesourceinactive);
+        void            ReConnectToTrackerIfAllowed(bool movingforward);
 
         /** Progress callback management **/
         void 		AddProgressCallback(ProgressCallback cb, uint8_t agg);
@@ -526,7 +527,6 @@ namespace swift {
         Address         tracker_; // Tracker for this transfer
         tint            tracker_retry_interval_;
         tint            tracker_retry_time_;
-
     };
 
 
@@ -611,6 +611,10 @@ namespace swift {
 
         /** Source: add a chunk to the swarm */
         int             AddData(const void *buf, size_t nbyte);
+
+        /** Source: announce only chunks under signed munros */
+        void            UpdateSignedAckOut();
+
 
         /** Returns the byte offset at which we hooked into the live stream */
         uint64_t        GetHookinOffset();
@@ -853,7 +857,7 @@ namespace swift {
 
         const std::string id_string () const;
         /** A channel is "established" if had already sent and received packets. */
-        bool        is_established () { return (hs_in_ == NULL) ? false  : hs_in_->peer_channel_id_ && own_id_mentioned_; }
+        bool        is_established ();
         HashTree *  hashtree();
         ContentTransfer *transfer() { return transfer_; }
         const Address& peer() const { return peer_; }
@@ -901,6 +905,10 @@ namespace swift {
 
         void 	    CloseOnError();
 
+        // MOVINGFWD
+        /** Whether or not channel is uploading when seeder, or downloading when leecher */
+        bool        IsMovingForward();
+
       protected:
         struct event    *evsend_ptr_; // Arno: timer per channel // SAFECLOSE
         //LIVE
@@ -932,7 +940,7 @@ namespace swift {
         binmap_t    have_out_;
         /**    Transmit schedule: in most cases filled with the peer's hints */
         tbqueue     hint_in_;
-        uint64_t	hint_in_size_;
+        uint64_t    hint_in_size_;
         /** Hints sent (to detect and reschedule ignored hints). */
         tbqueue     hint_out_;
         uint64_t    hint_out_size_;
@@ -988,7 +996,8 @@ namespace swift {
         int         dgrams_sent_;
         int         dgrams_rcvd_;
         // Arno, 2011-11-28: for detailed, per-peer stats. MORESTATS
-        uint64_t raw_bytes_up_, raw_bytes_down_, bytes_up_, bytes_down_;
+        uint64_t    raw_bytes_up_, raw_bytes_down_, bytes_up_, bytes_down_;
+        uint64_t    old_movingfwd_bytes_;
 
         // SAFECLOSE
         bool        scheduled4del_;

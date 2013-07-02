@@ -12,7 +12,7 @@
 using namespace swift;
 
 
-#define  tree_debug	true
+#define  tree_debug	false
 
 
 
@@ -608,6 +608,10 @@ bool LiveHashTree::OfferSignedMunroHash(bin_t pos, Signature &sig)
 
     // MUNROTODO: source RESTART
 
+    //
+    // SUMMITTODO check sig
+    //
+
     // Check if sane
     bin_t oldmunro = GetLastMunro();
     if (oldmunro != bin_t::NONE && oldmunro.layer_offset()+1 != pos.layer_offset())
@@ -616,10 +620,19 @@ bool LiveHashTree::OfferSignedMunroHash(bin_t pos, Signature &sig)
             fprintf(stderr,"umt: OfferSignedMunroHash: SKIP old munro %s layer off %u new %u\n", oldmunro.str().c_str(), oldmunro.layer_offset(), pos.layer_offset() );
     }
 
-    //
-    // SUMMITTODO check sig
-    //
+    // Bootstrap tree if this is the first
+    if (state_ == LHT_STATE_VER_AWAIT_PEAK)
+    {
+	state_ = LHT_STATE_VER_AWAIT_DATA;
+	// nchunks_per_sig known from trusted source
+	SetNChunksPerSig(cand_munro_bin_.base_length());
 
+	// Grow tree such that munro fits in it, and other peers can send
+	// other munros (e.g. older)
+	// NOTE: recursive call, InitFromCheckpoint calls OfferSignedMunroHash
+	InitFromCheckpoint(BinHashSigTuple(cand_munro_bin_,cand_munro_hash_,sig));
+	return true;
+    }
 
     sizec_ = (pos.layer_offset()+1) * pos.base_length();
     size_ = sizec_ * chunk_size_;
@@ -820,55 +833,6 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 
     Node *piter = iter;
     Sha1Hash uphash = hash;
-
-    /* if (!pos.is_base())
-    {
-	// Arno, 2013-05-14: Optimization for ridge hashes
-        piter = iter;
-	parent = piter->GetParent();
-	if (parent == NULL || !parent->GetVerified())
-	{
-	    if (tree_debug)
-	        fprintf(stderr,"umt: OfferHash: non-base hash %s could not be verified, parent bad\n",pos.str().c_str() );
-	    return false;
-	}
-
-	if (pos.is_left())
-	{
-	    piter = parent->GetRight();
-	    if (piter == NULL || !piter->GetVerified())
-	    {
-		 if (tree_debug)
-		     fprintf(stderr,"umt: OfferHash: non-base hash %s could not be verified, right sibling bad\n",pos.str().c_str() );
-
-		return false;
-	    }
-	    uphash = Sha1Hash(iter->GetHash(),piter->GetHash());
-	}
-	else
-	{
-	    piter = parent->GetLeft();
-	    if (piter == NULL || !piter->GetVerified())
-	    {
-		 if (tree_debug)
-		     fprintf(stderr,"umt: OfferHash: non-base hash %s could not be verified, left sibling bad\n",pos.str().c_str() );
-
-		return false;
-	    }
-	    uphash = Sha1Hash(piter->GetHash(),iter->GetHash());
-	}
-	if (uphash == parent->GetHash())
-	{
-	     iter->SetVerified(true);
-             if (tree_debug)
-	         fprintf(stderr,"umt: OfferHash: non-base hash %s verified OK\n",pos.str().c_str() );
-
-	    return true;
-	}
-	return false;
-    }*/
-
-
 
     if (tree_debug)
         fprintf(stderr,"umt: OfferHash: verifying %s\n", pos.str().c_str() );

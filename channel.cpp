@@ -128,9 +128,15 @@ Channel::~Channel () {
     }
 
     if (hs_in_ != NULL)
+    {
 	delete hs_in_;
+        hs_in_ = NULL;
+    }
     if (hs_out_ != NULL)
+    {
 	delete hs_out_;
+        hs_out_ = NULL;
+    }
 }
 
 
@@ -387,6 +393,65 @@ int Channel::DecodeID(int scrambled) {
 int Channel::EncodeID(int unscrambled) {
     return unscrambled ^ (int)start;
 }
+
+
+bool Channel::IsMovingForward()
+{
+    if (transfer() == NULL)
+	return false;
+
+    bool fwd=false;
+    if (transfer()->ttype() == FILE_TRANSFER)
+    {
+	//FileTranfer *ft=(FileTransfer *)transfer();
+	if (swift::IsComplete(transfer()->td()))
+	{
+	    // Seeding peer, moving forward is uploading
+	    if (bytes_up_ > old_movingfwd_bytes_)
+	    {
+		fwd=true;
+	    }
+	    old_movingfwd_bytes_ = bytes_up_;
+	}
+	else
+	{
+	    // Leeching peer, moving forward is downloading
+	    if (bytes_down_ > old_movingfwd_bytes_)
+	    {
+		fwd=true;
+	    }
+	    old_movingfwd_bytes_ = bytes_down_;
+	}
+
+    }
+    else
+    {
+	LiveTransfer *lt = (LiveTransfer *)transfer();
+	if (lt->am_source())
+	{
+	    fwd = true; // simplification
+	}
+	else
+	{
+	    // Live peer, moving forward is downloading
+	    if (bytes_down_ > old_movingfwd_bytes_)
+	    {
+		fwd=true;
+	    }
+	    old_movingfwd_bytes_ = bytes_down_;
+	}
+    }
+    return fwd;
+}
+
+bool Channel::is_established()
+{
+    if (hs_in_ == NULL)
+        return false;
+    else
+        return (hs_in_->peer_channel_id_ && own_id_mentioned_); 
+}
+
 
 
 /*

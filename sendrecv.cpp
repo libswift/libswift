@@ -79,6 +79,7 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
 	    bin_t munro = umt->GetLastMunro();
 	    dprintf("%s #%u last munro %s\n",tintstr(),id_,munro.str().c_str() );
 
+            // Don't send when peer has chunks in range, or when it's downloading from us (e.g. chunks earlier than munro)
 	    if (munro != bin_t::NONE && ack_in_.is_empty(munro) && !munro_ack_rcvd_)
 	    {
 		AddLiveSignedMunroHash(evb,munro);

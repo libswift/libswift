@@ -30,9 +30,6 @@ uint64_t ContentTransfer::cleancounter = 0;
 #define TRACKER_RETRY_INTERVAL_EXP	1.1	// exponent used to increase INTERVAL_START
 #define TRACKER_RETRY_INTERVAL_MAX	(1800*TINT_SEC) // 30 minutes
 
-#define LIVE_SOURCE_INACTIVE_BEFORE_RECONNECT_INTERVAL	(10*TINT_SEC)
-
-
 ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), mychannels_(), callbacks_(), picker_(NULL),
     speedzerocount_(0), tracker_(),
     tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START),
@@ -48,13 +45,13 @@ ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), mychannels_
 ContentTransfer::~ContentTransfer()
 {
     dprintf("%s F%d content deconstructor\n",tintstr(),td_);
-    CloseChannels(mychannels_);
+    CloseChannels(mychannels_,true);
     if (storage_ != NULL)
         delete storage_;
 }
 
 
-void ContentTransfer::CloseChannels(channels_t delset)
+void ContentTransfer::CloseChannels(channels_t delset,bool isall)
 {
     channels_t::iterator iter;
     for (iter=delset.begin(); iter!=delset.end(); iter++)
@@ -62,7 +59,8 @@ void ContentTransfer::CloseChannels(channels_t delset)
         Channel *c = *iter;
         dprintf("%s F%d content close chans\n",tintstr(),td_);
         c->Close(CLOSE_SEND_IF_ESTABLISHED);
-        c->ClearTransfer();
+        if (isall)
+            c->ClearTransfer();
         delete c;
         // ~Channel removes it from Channel::channels and mychannels_.erase(c);
     }
@@ -75,7 +73,7 @@ void ContentTransfer::GarbageCollectChannels()
     channels_t   delset;
     channels_t::iterator iter;
     uint32_t numestablishedpeers=0;
-    bool livesourceinactive=false;
+    bool movingforward=false;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
         Channel *c = *iter;
@@ -85,24 +83,28 @@ void ContentTransfer::GarbageCollectChannels()
                 delset.push_back(c);
 
             if (c->is_established ())
+            {
                 numestablishedpeers++;
 
-            // LIVE
-            // If was connected to source and not responding, reconnect to tracker
-            if (c->PeerIsSource() && (NOW > c->GetLastRecvTime()+LIVE_SOURCE_INACTIVE_BEFORE_RECONNECT_INTERVAL))
-            {
-        	livesourceinactive = true;
-        	//c->Schedule4Delete();
-        	//delset.push_back(c);
+                // Moving forward is when any channel is moving forward
+                if (c->IsMovingForward())
+                    movingforward = true;
             }
         }
     }
     //dprintf("%s F%d content gc chans\n",tintstr(),td_);
-    CloseChannels(delset);
+    CloseChannels(delset,false);
+
+    if (numestablishedpeers == 0)
+	movingforward = false;
 
     // Arno, 2012-02-24: Check for liveliness.
-    ReConnectToTrackerIfAllowed(numestablishedpeers,livesourceinactive);
+    ReConnectToTrackerIfAllowed(movingforward);
 }
+
+
+
+
 
 // Global method
 void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg)
@@ -147,13 +149,13 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
 
 
 
-void ContentTransfer::ReConnectToTrackerIfAllowed(uint32_t numestablishedpeers, bool livesourceinactive)
+void ContentTransfer::ReConnectToTrackerIfAllowed(bool movingforward)
 {
-    fprintf(stderr,"%s F%d content reconnect to tracker: npeers %u deadsource %s\n",tintstr(),td_,numestablishedpeers,(livesourceinactive ? "true":"false") );
+    fprintf(stderr,"%s F%d content reconnect to tracker: movingfwd %s\n",tintstr(),td_,(movingforward ? "true":"false") );
 
     // If I'm not connected to any
     // peers, try to contact the tracker again.
-    if (numestablishedpeers == 0 || livesourceinactive)
+    if (!movingforward)
     {
         if (NOW > tracker_retry_time_)
         {
