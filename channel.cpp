@@ -66,6 +66,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     ack_not_rcvd_recent_(0), owd_min_bin_(0), owd_min_bin_start_(NOW),
     owd_cur_bin_(0), dgrams_sent_(0), dgrams_rcvd_(0),
     raw_bytes_up_(0), raw_bytes_down_(0), bytes_up_(0), bytes_down_(0),
+    old_movingfwd_bytes_(0),
     scheduled4del_(false),
     direct_sending_(false),
     peer_is_source_(peerissource),
