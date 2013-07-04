@@ -66,6 +66,7 @@ struct http_gw_t {
     int64_t  rangefirst; // First byte wanted in HTTP GET Range request or -1
     int64_t  rangelast;  // Last byte wanted in HTTP GET Range request (also 99 for 100 byte interval) or -1
     bool     foundH264NALU;
+    int64_t  echofilesize;
 
 } http_requests[HTTPGW_MAX_REQUEST];
 
@@ -697,9 +698,13 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     else
     {
         // Single file
+        if (req->echofilesize != -1)
+	    filesize = req->echofilesize;
+        else
+	    filesize = swift::Size(td);
+      
         req->startoff = 0;
-        req->endoff = swift::Size(td)-1;
-        filesize = swift::Size(td);
+        req->endoff = filesize-1;
     }
 
     // Handle HTTP GET Range request, i.e. additional offset within content
@@ -921,6 +926,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 
     // Handle LIVE
     std::string mimetype = "video/mp2t";
+    std::string echofilesizestr="";
     if (hashstr.substr(hashstr.length()-5) == ".h264")
     {
 	// LIVESOURCE=ANDROID
@@ -931,8 +937,12 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     else if (hashstr.substr(hashstr.length()-4) == ".mp4")
     {
         // iOS .mp4 
-        hashstr = hashstr.substr(0,40); // strip ext
+        std::string hstr = hashstr.substr(0,40); // strip ext
+        if (hashstr.length() > 44)
+            echofilesizestr = hashstr.substr(41,hashstr.length()-45);
         mimetype = "video/mp4";
+      
+        hashstr = hstr;
     }
     else if (hashstr.length() > 40 && hashstr.substr(hashstr.length()-2) == "-1")
     {
@@ -952,14 +962,25 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     if (contentrangecstr == NULL)
 	contentrangecstr = "";
 
-
-    dprintf("%s @%i http get: demands %s mf %s dur %s mime %s range %s\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str(),mfstr.c_str(),durstr.c_str(), mimetype.c_str(), contentrangecstr );
+    dprintf("%s @%i http get: demands %s mf %s dur %s mime %s range %s echofs %s\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str(),mfstr.c_str(),durstr.c_str(), mimetype.c_str(), contentrangecstr, echofilesizestr.c_str() );
 
     uint32_t chunksize=httpgw_chunk_size; // default externally configured
     if (chunksizestr.length() > 0)
         std::istringstream(chunksizestr) >> chunksize;
 
-
+    // ARNO: QUICKFIX
+    int64_t  echofilesize=-1;
+    if (echofilesizestr != "")
+    {
+        int ret = sscanf(echofilesizestr.c_str(),"%llu",&echofilesize);
+        if (ret != 1)
+	{
+            evhttp_send_error(evreq,400,"Echo file size in path is bad");
+            dprintf("%s @%i http get: ERROR 400 Echo file size in path is bad\n",tintstr(),0 );
+            return;
+        }
+    }
+  
     // 3. Check for concurrent requests, currently not supported.
     Sha1Hash swarm_id = Sha1Hash(true,hashstr.c_str());
     http_gw_t *existreq = HttpGwFindRequestBySwarmID(swarm_id);
@@ -1039,7 +1060,8 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     req->startoff = 0;
     req->endoff = 0;
     req->foundH264NALU = false;
-
+    req->echofilesize = echofilesize;
+  
     fprintf(stderr,"httpgw: Opened %s dur %s\n",hashstr.c_str(), durstr.c_str() );
 
     // We need delayed replying, so take ownership.
