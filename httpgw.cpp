@@ -11,7 +11,9 @@
 #include <event2/bufferevent.h>
 #include <sstream>
 
-
+#ifndef WIN32
+#include <signal.h>
+#endif
 
 using namespace swift;
 
@@ -926,6 +928,12 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 	durstr = "-1";
 	mimetype = "video/h264";
     }
+    else if (hashstr.substr(hashstr.length()-4) == ".mp4")
+    {
+        // iOS .mp4 
+        hashstr = hashstr.substr(0,40); // strip ext
+        mimetype = "video/mp4";
+    }
     else if (hashstr.length() > 40 && hashstr.substr(hashstr.length()-2) == "-1")
     {
 	// Arno, 2012-06-15: LIVE: VLC can't take @-1 as in URL, so workaround
@@ -1060,6 +1068,14 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 
 
 bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf ) {
+
+    // Arno, 2013-07-04: libevent will get a SIGPIPE writing to socket 
+    // that the client has closed. Make sure that is ignored.
+#ifndef WIN32
+    signal(SIGPIPE, SIG_IGN);
+#endif
+
+
     // Arno, 2011-10-04: From libevent's http-server.c example
 
     // Arno, 2012-10-16: Made configurable for ANDROID
