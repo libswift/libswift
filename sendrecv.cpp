@@ -146,9 +146,10 @@ void    Channel::AddLiveSignedMunroHash(struct evbuffer *evb, bin_t munro)
 
     evbuffer_add_8(evb, SWIFT_SIGNED_INTEGRITY);
     evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
-    evbuffer_add(evb, bhst.sig().bits(), bhst.sig().length() );
+    evbuffer_add_64be(evb, bhst.sigtint().time());
+    evbuffer_add(evb, bhst.sigtint().sig().bits(), bhst.sigtint().sig().length() );
 
-    dprintf("%s #%u +sigh %s %d\n",tintstr(),id_,bhst.bin().str().c_str(), bhst.sig().length() );
+    dprintf("%s #%u +sigh %s %d\n",tintstr(),id_,bhst.bin().str().c_str(), bhst.sigtint().sig().length() );
 }
 
 
@@ -1682,6 +1683,8 @@ void Channel::OnSignedHash(struct evbuffer *evb)
     }
     bin_t pos = bv.front();
 
+    tint source_tint = evbuffer_remove_64be(evb);
+
     // PPSPTODO
     //if (hs_in_->live_sig_alg_ == POPT_LIVE_SIG_ALG_PRIVATEDNS)
 
@@ -1702,7 +1705,9 @@ void Channel::OnSignedHash(struct evbuffer *evb)
         LiveHashTree *umt = (LiveHashTree *)hashtree();
         uint8_t dummy[DUMMY_DEFAULT_SIG_LENGTH];
         Signature sig(dummy, DUMMY_DEFAULT_SIG_LENGTH);
-        bool newverified = umt->OfferSignedMunroHash(pos,sig);
+        SigTintTuple sigtint(sig,source_tint);
+
+        bool newverified = umt->OfferSignedMunroHash(pos,sigtint);
         if (!newverified)
             dprintf("%s #%u !sigh %s\n",tintstr(),id_,pos.str().c_str());
         else

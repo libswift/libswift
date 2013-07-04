@@ -84,6 +84,23 @@ struct Signature
 };
 
 
+struct SigTintTuple
+{
+    Signature	s_;
+    tint	t_;
+    SigTintTuple() : s_(Signature::NOSIG), t_(TINT_NEVER) {}
+    SigTintTuple(const Signature &s, tint t) : s_(s), t_(t) {}
+    SigTintTuple(const SigTintTuple &copy)
+    {
+	s_ = copy.s_;
+	t_ = copy.t_;
+    }
+    Signature &sig() { return s_; }
+    tint      time() { return t_; }
+
+    const static SigTintTuple NOSIGTINT;
+};
+
 
 class Node;
 
@@ -105,8 +122,8 @@ class Node
     /** whether hash checked against signed peak (client) or calculated (source) */
     void SetVerified(bool val);
     bool GetVerified();
-    void SetSig(Signature *sptr);
-    Signature *GetSig();
+    void SetSigTint(SigTintTuple *stptr);
+    SigTintTuple *GetSigTint();
 
 
   protected:
@@ -115,31 +132,31 @@ class Node
     Node *rightc_;
     bin_t b_;
     Sha1Hash h_;
-    Signature *sptr_;
+    SigTintTuple *stptr_; // use Tuple to same some memory
     bool  verified_;
 };
 
 
 
-/** Structure for holding a (bin,hash,signature) tuple */
+/** Structure for holding a (bin,hash,signature+timestamp) tuple */
 struct BinHashSigTuple
 {
     bin_t	b_;
     Sha1Hash	h_;
-    Signature	s_;
-    BinHashSigTuple(const bin_t &b, const Sha1Hash &h, const Signature &s) : b_(b), h_(h), s_(s) {}
+    SigTintTuple st_;
+    BinHashSigTuple(const bin_t &b, const Sha1Hash &h, const SigTintTuple &st) : b_(b), h_(h), st_(st) {}
     BinHashSigTuple(const BinHashSigTuple &copy)
     {
 	b_ = copy.b_;
 	h_ = copy.h_;
-	s_ = copy.s_;
+	st_ = copy.st_;
     }
     bin_t &bin() { return b_; }
     Sha1Hash &hash() { return h_; }
-    Signature &sig() { return s_; }
-};
+    SigTintTuple &sigtint() { return st_; }
 
-typedef std::vector<BinHashSigTuple>	bhstvector;
+    const static BinHashSigTuple NOBULL;
+};
 
 
 /** Dynamic hash tree */
@@ -170,7 +187,7 @@ class LiveHashTree: public HashTree
      /** Remove subtree rooted at pos */
      void           PruneTree(bin_t pos);
 
-     bool           OfferSignedMunroHash(bin_t pos, Signature &sig);
+     bool           OfferSignedMunroHash(bin_t pos, SigTintTuple &sigtint);
 
      /** Add node to the hashtree */
      bool CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified);
@@ -209,11 +226,6 @@ class LiveHashTree: public HashTree
 
      /** Find node for bin. (unprotected for testing) */
      Node *	     FindNode(bin_t pos) const;
-
-     /** Sanity checks */
-     void check_peak_coverage(bool fireassert=false);
-     void check_signed_peak_coverage(bool fireassert=false);
-     void check_new_peaks(bhstvector &newpeaktuples);
 
    protected:
      lht_state_t     state_;

@@ -22,7 +22,9 @@
  *      * don't have piece_due
  *      * need rarest or latest bla-bla (UTorino guy)
  *  - aux live seeders?
- *  - restartable live source (idea for UMT: just start new subtree, remembering transient root hash of previous to be used when tree grows in level above current size.)
+ *  - restartable live source (idea for UMT: just start new subtree,
+ *    remembering transient root hash of previous to be used when tree grows
+ *    in level above current size.)
  *
  *  - avg upload buggy? Check problem found by Riccardo.
  *
@@ -297,7 +299,6 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         fprintf(stderr,"%s live: AddData: stored " PRISIZET " bytes\n", tintstr(), nbyte);
 
     uint64_t till = std::max((size_t)1,nbyte/chunk_size_);
-    bhstvector totalnewpeaktuples;
     bool newepoch=false;
     for (uint64_t c=0; c<till; c++)
     {
@@ -387,7 +388,7 @@ void LiveTransfer::UpdateSignedAckOut()
         bin_t sigpeak = umt->peak(i);
         signed_ack_out_.set(sigpeak);
 
-        fprintf(stderr,"live: AddData: UMT: DOHAVE %s %s %s\n", sigpeak.str().c_str(), sigpeak.base_left().str().c_str(), sigpeak.base_right().str().c_str() );
+        //fprintf(stderr,"live: AddData: UMT: DOHAVE %s %s %s\n", sigpeak.str().c_str(), sigpeak.base_left().str().c_str(), sigpeak.base_right().str().c_str() );
     }
     // LIVECHECKPOINT, see constructor
     // SIGNMUNRO
@@ -398,7 +399,7 @@ void LiveTransfer::UpdateSignedAckOut()
 	    bin_t clearbin(checkpoint_bin_.layer(),i);
 	    signed_ack_out_.reset(clearbin);
 
-            fprintf(stderr,"live: AddData: UMT: UNHAVE %s %s %s\n", clearbin.str().c_str(), clearbin.base_left().str().c_str(), clearbin.base_right().str().c_str() );
+            //fprintf(stderr,"live: AddData: UMT: UNHAVE %s %s %s\n", clearbin.str().c_str(), clearbin.base_left().str().c_str(), clearbin.base_right().str().c_str() );
         }
         // TEST
         /* fprintf(stderr,"live: AddData: UMT: checkp %s\n", checkpoint_bin_.str().c_str() );
@@ -493,10 +494,12 @@ void LiveTransfer::OnDataPruneTree(Handshake &hs_out, bin_t pos, uint32_t nchunk
 }
 
 
-int LiveTransfer::WriteCheckpoint(BinHashSigTuple &roottup)
+int LiveTransfer::WriteCheckpoint(BinHashSigTuple &munrotup)
 {
-    // FORMAT: (layer,layeroff) roothash-in-hex rootsig-in-hex\n
-    std::string s = roottup.bin().str()+" "+roottup.hash().hex()+" "+roottup.sig().hex()+"\n";
+    // FORMAT: (layer,layeroff) munrohash-in-hex timestamp munrosig-in-hex\n
+    char tscstr[256];
+    sprintf(tscstr,"%lld",munrotup.sigtint().time());
+    std::string s = munrotup.bin().str()+" "+munrotup.hash().hex()+" "+std::string(tscstr)+" "+munrotup.sigtint().sig().hex()+"\n";
     char *cstr = new char[strlen(s.c_str())+1];
 
     strcpy(cstr,s.c_str());
@@ -530,14 +533,14 @@ BinHashSigTuple LiveTransfer::ReadCheckpoint()
     if (fd < 0)
     {
 	print_error("could not read live checkpoint file");
-	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
+	return BinHashSigTuple::NOBULL;
     }
     char buffer[1024];
     int ret = read(fd,buffer,1024);
     if (ret < 0)
     {
 	print_error("could not read live checkpoint data");
-	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
+	return BinHashSigTuple::NOBULL;
     }
     close(fd);
 
@@ -547,12 +550,13 @@ BinHashSigTuple LiveTransfer::ReadCheckpoint()
 
     std::string binstr;
     std::string hashstr;
+    std::string timestr;
     std::string sigstr;
     int sidx = pstr.find(" ");
     if (sidx == std::string::npos)
     {
 	print_error("could not parsing live checkpoint: no bin");
-	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
+	return BinHashSigTuple::NOBULL;
     }
     else
     {
@@ -561,12 +565,22 @@ BinHashSigTuple LiveTransfer::ReadCheckpoint()
 	if (midx == std::string::npos)
 	{
 	    print_error("could not parsing live checkpoint: no hash");
-	    return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
+	    return BinHashSigTuple::NOBULL;
 	}
 	else
 	{
 	    hashstr = pstr.substr(sidx+1,midx-sidx-1);
-	    sigstr = pstr.substr(midx+1);
+	    int m2idx = pstr.find(" ",midx+1);
+	    if (m2idx == std::string::npos)
+	    {
+		print_error("could not parsing live checkpoint: no timestamp");
+		return BinHashSigTuple::NOBULL;
+	    }
+	    else
+	    {
+		timestr = pstr.substr(midx+1,m2idx-midx-1);
+		sigstr = pstr.substr(m2idx+1);
+	    }
 	}
     }
 
@@ -574,8 +588,11 @@ BinHashSigTuple LiveTransfer::ReadCheckpoint()
     if (sidx == std::string::npos)
     {
 	print_error("could not parsing live checkpoint: bin bad");
-	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
+	return BinHashSigTuple::NOBULL;
     }
+
+
+    //fprintf(stderr,"CHECKPOINT read <%s> <%s> <%s> <%s>\n", binstr.c_str(), hashstr.c_str(), timestr.c_str(), sigstr.c_str() );
 
     std::string layerstr=binstr.substr(1,sidx-1);
     std::string layeroffstr=binstr.substr(sidx+1,binstr.length()-sidx-2);
@@ -585,23 +602,34 @@ BinHashSigTuple LiveTransfer::ReadCheckpoint()
     if (ret != 1)
     {
 	print_error("could not parsing live checkpoint: bin layer bad");
-	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
+	return BinHashSigTuple::NOBULL;
     }
     bin_t::uint_t layeroff;
     ret = sscanf(layeroffstr.c_str(),"%llu",&layeroff);
     if (ret != 1)
     {
 	print_error("could not parsing live checkpoint: bin layer off bad");
-	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature());
+	return BinHashSigTuple::NOBULL;
     }
 
-    bin_t rootbin(layer,layeroff);
-    Sha1Hash roothash = Sha1Hash(true,hashstr.c_str());
-    Signature rootsig = Signature(true,(const uint8_t *)sigstr.c_str(),(uint16_t)sigstr.length());
 
-    //fprintf(stderr,"CHECKPOINT parsed <%s> %d %llu <%s> <%s>\n", rootbin.str().c_str(), layer, layeroff, roothash.hex().c_str(), rootsig.hex().c_str() );
+    tint munrotimestamp;
+    ret = sscanf(timestr.c_str(),"%lld",&munrotimestamp);
+    if (ret != 1)
+    {
+	print_error("could not parsing live checkpoint: timestamp bad");
+	return BinHashSigTuple::NOBULL;
+    }
 
-    return BinHashSigTuple(rootbin,roothash,rootsig);
+
+    bin_t munrobin(layer,layeroff);
+    Sha1Hash munrohash = Sha1Hash(true,hashstr.c_str());
+    Signature munrosig = Signature(true,(const uint8_t *)sigstr.c_str(),(uint16_t)sigstr.length());
+    SigTintTuple munrost = SigTintTuple(munrosig,munrotimestamp);
+
+    //fprintf(stderr,"CHECKPOINT parsed <%s> %d %llu <%s> <%s> %lld <%s>\n", munrobin.str().c_str(), layer, layeroff, munrohash.hex().c_str(), timestr.c_str(), munrotimestamp, munrosig.hex().c_str() );
+
+    return BinHashSigTuple(munrobin,munrohash,munrost);
 }
 
 

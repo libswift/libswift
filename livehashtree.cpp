@@ -17,6 +17,8 @@ using namespace swift;
 
 
 const Signature Signature::NOSIG = Signature();
+const SigTintTuple SigTintTuple::NOSIGTINT = SigTintTuple();
+const BinHashSigTuple BinHashSigTuple::NOBULL = BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,SigTintTuple::NOSIGTINT);
 
 /*
  * Signature
@@ -115,14 +117,14 @@ std::string    Signature::hex() const {
  * Node
  */
 
-Node::Node() : parent_(NULL), leftc_(NULL), rightc_(NULL), b_(bin_t::NONE), h_(Sha1Hash::ZERO), sptr_(NULL), verified_(false)
+Node::Node() : parent_(NULL), leftc_(NULL), rightc_(NULL), b_(bin_t::NONE), h_(Sha1Hash::ZERO), stptr_(NULL), verified_(false)
 {
 }
 
 Node::~Node()
 {
-    if (sptr_ != NULL)
-	delete sptr_;
+    if (stptr_ != NULL)
+	delete stptr_;
 }
 
 void Node::SetParent(Node *parent)
@@ -183,14 +185,14 @@ void Node::SetVerified(bool val)
     verified_ = val;
 }
 
-Signature *Node::GetSig()
+SigTintTuple *Node::GetSigTint()
 {
-    return sptr_;
+    return stptr_;
 }
 
-void Node::SetSig(Signature *sptr)
+void Node::SetSigTint(SigTintTuple *stptr)
 {
-    sptr_ = sptr;
+    stptr_ = stptr;
 }
 
 
@@ -435,7 +437,7 @@ BinHashSigTuple LiveHashTree::AddSignedMunro()
     if (n == NULL)
     {
 	fprintf(stderr,"umt: AddSignedMunro: cannot find munro in tree?!\n");
-	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature::NOSIG);
+	return BinHashSigTuple::NOBULL;
     }
     ComputeTree(n);
 
@@ -445,15 +447,17 @@ BinHashSigTuple LiveHashTree::AddSignedMunro()
     for (int k=0; k<20; k++)
 	signedhash[k] = 'v';
     signedhash[19] = '\0';
-    Signature *sigptr = new Signature(signedhash,DUMMY_DEFAULT_SIG_LENGTH);
+    Signature sig(signedhash,DUMMY_DEFAULT_SIG_LENGTH);
     delete signedhash;
 
+    SigTintTuple *sigtintptr = new SigTintTuple(sig,NOW);
+
     // Store in tree
-    n->SetSig(sigptr);
+    n->SetSigTint(sigtintptr);
 
     source_last_munro_ = newmunro;
 
-    return BinHashSigTuple(newmunro,hash,*sigptr);
+    return BinHashSigTuple(newmunro,hash,*sigtintptr);
 }
 
 
@@ -507,7 +511,7 @@ Sha1Hash  LiveHashTree::DeriveRoot()
 
 bool LiveHashTree::InitFromCheckpoint(BinHashSigTuple lastmunrotup)
 {
-    fprintf(stderr,"umt: InitFromCheckpoint: %s %s %s\n", lastmunrotup.bin().str().c_str(), lastmunrotup.hash().hex().c_str(), lastmunrotup.sig().hex().c_str() );
+    fprintf(stderr,"umt: InitFromCheckpoint: %s %s %lld %s\n", lastmunrotup.bin().str().c_str(), lastmunrotup.hash().hex().c_str(), lastmunrotup.sigtint().time(), lastmunrotup.sigtint().sig().hex().c_str() );
 
     // Build fake tree to hold lastmunrotup
     bin_t fbin = lastmunrotup.bin();
@@ -523,7 +527,7 @@ bool LiveHashTree::InitFromCheckpoint(BinHashSigTuple lastmunrotup)
     OfferHash(lastmunrotup.bin(),lastmunrotup.hash());
 
     // Add lastmunrotup sig to tree
-    if (!OfferSignedMunroHash(lastmunrotup.bin(),lastmunrotup.sig()))
+    if (!OfferSignedMunroHash(lastmunrotup.bin(),lastmunrotup.sigtint()))
     {
 	fprintf(stderr,"umt: InitFromCheckpoint: failed!\n");
 	return false;
@@ -562,16 +566,12 @@ BinHashSigTuple LiveHashTree::GetSignedMunro(bin_t munro)
 {
     Node *n = FindNode(munro);
     if (n == NULL)
-    {
-	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature::NOSIG);
-    }
-    Signature *sptr = n->GetSig();
-    if (sptr == NULL)
-    {
-	return BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,Signature::NOSIG);
-    }
+	return BinHashSigTuple::NOBULL;
+    SigTintTuple *stptr = n->GetSigTint();
+    if (stptr == NULL)
+	return BinHashSigTuple::NOBULL;
 
-    BinHashSigTuple bhst(munro,n->GetHash(),*sptr);
+    BinHashSigTuple bhst(munro,n->GetHash(),*stptr);
     return bhst;
 }
 
@@ -581,7 +581,7 @@ BinHashSigTuple LiveHashTree::GetSignedMunro(bin_t munro)
  * Live client specific
  */
 
-bool LiveHashTree::OfferSignedMunroHash(bin_t pos, Signature &sig)
+bool LiveHashTree::OfferSignedMunroHash(bin_t pos, SigTintTuple &sigtint)
 {
     if (tree_debug)
         fprintf(stderr,"umt: OfferSignedMunroHash: munro %s\n", pos.str().c_str() );
@@ -630,7 +630,7 @@ bool LiveHashTree::OfferSignedMunroHash(bin_t pos, Signature &sig)
 	// Grow tree such that munro fits in it, and other peers can send
 	// other munros (e.g. older)
 	// NOTE: recursive call, InitFromCheckpoint calls OfferSignedMunroHash
-	InitFromCheckpoint(BinHashSigTuple(cand_munro_bin_,cand_munro_hash_,sig));
+	InitFromCheckpoint(BinHashSigTuple(cand_munro_bin_,cand_munro_hash_,sigtint));
 	return true;
     }
 
@@ -655,8 +655,8 @@ bool LiveHashTree::OfferSignedMunroHash(bin_t pos, Signature &sig)
     }
     else
     {
-	Signature *sigptr = new Signature(sig);
-	n->SetSig(sigptr);
+	SigTintTuple *stptr = new SigTintTuple(sigtint);
+	n->SetSigTint(stptr);
 
 	// Could recalc root hash here, but never really used. Doing it on-demand
 	// in root_hash() conflicts with const def :-(
