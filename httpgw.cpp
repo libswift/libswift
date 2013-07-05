@@ -67,7 +67,8 @@ struct http_gw_t {
     int64_t  rangelast;  // Last byte wanted in HTTP GET Range request (also 99 for 100 byte interval) or -1
     bool     foundH264NALU;
     int64_t  echofilesize;
-
+    bool     live;
+    bool     dash;
 } http_requests[HTTPGW_MAX_REQUEST];
 
 
@@ -155,9 +156,14 @@ void HttpGwCloseConnection (http_gw_t* req) {
     // will then no download anything. Better would be to seek to end when
     // swift partial download is done, not the serving via HTTP.
     //
-    swift::Seek(req->td,swift::Size(req->td)-1,SEEK_CUR);
+    if (!req->dash)
+    {
+         swift::Seek(req->td,swift::Size(req->td)-1,SEEK_CUR);
 
-    //swift::Close(req->td);
+         // Arno, 2013-05-24: Leave swarm for LIVE.
+         if (req->live)
+             swift::Close(req->td);
+    }
 
     int oldtd = req->td;
 
@@ -240,7 +246,9 @@ void HttpGwWrite(struct evhttp_request *evreq) {
         relcomplete = req->endoff+1-req->startoff;
     int64_t avail = relcomplete-(req->offset-req->startoff);
 
-    dprintf("%s @%d http write: avail %lld relcomp %llu offset %llu start %llu end %llu tosend %llu\n",tintstr(),req->id, avail, relcomplete, req->offset, req->startoff, req->endoff, req->tosend );
+    int64_t want = std::min(avail,(int64_t)req->tosend);
+
+    dprintf("%s @%d http write: avail %lld want %lld relcomp %llu offset %llu start %llu end %llu tosend %llu\n",tintstr(),req->id, avail, want, relcomplete, req->offset, req->startoff, req->endoff, req->tosend );
 
     struct evhttp_connection *evconn = evhttp_request_get_connection(req->sinkevreq);
     struct bufferevent* buffy = evhttp_connection_get_bufferevent(evconn);
@@ -251,7 +259,7 @@ void HttpGwWrite(struct evhttp_request *evreq) {
     // understanding of socket writability that may result in tens of megabytes
     // being cached in memory. Limit that amount at app level.
     //
-    if (avail > 0 && evbuffer_get_length(outbuf) < HTTPGW_MAX_OUTBUF_BYTES)
+    if (want > 0 && evbuffer_get_length(outbuf) < HTTPGW_MAX_OUTBUF_BYTES)
     {
         int64_t max_write_bytes = 0;
         if (swift::ttype(req->td) == FILE_TRANSFER)
@@ -262,7 +270,7 @@ void HttpGwWrite(struct evhttp_request *evreq) {
         // Allocate buffer to read into. TODO: let swift::Read accept evb
         char *buf = (char *)malloc(max_write_bytes);
 
-        uint64_t tosend = std::min(max_write_bytes,avail);
+        uint64_t tosend = std::min(max_write_bytes,want);
         size_t rd = swift::Read(req->td,buf,tosend,swift::GetHookinOffset(req->td)+req->offset);
         if (rd<0) {
             print_error("httpgw: MayWrite: error pread");
@@ -644,7 +652,7 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
         return;
     }
 
-    if (req->xcontentdur == "-1")
+    if (req->live)
     {
         fprintf(stderr,"httpgw: Live: hook-in at %llu\n", swift::GetHookinOffset(td) );
         dprintf("%s @%i http first: hook-in at %llu\n",tintstr(),req->id, swift::GetHookinOffset(td) );
@@ -702,17 +710,68 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
 	    filesize = req->echofilesize;
         else
 	    filesize = swift::Size(td);
-      
+
         req->startoff = 0;
         req->endoff = filesize-1;
     }
 
     // Handle HTTP GET Range request, i.e. additional offset within content
     // or file. Sets some headers or sends HTTP error.
-    if (req->xcontentdur == "-1") //LIVE
+    if (req->live) //LIVE
     {
         req->rangefirst = -1;
         req->replycode = 200;
+
+        fprintf(stderr,"HTTP tosend LIVE\n");
+
+        req->tosend = 0x0fffffffffffffffULL; // MAX
+
+        // DASH support hack duration is @-startoff-endoff
+        if (req->xcontentdur.length() > 2)
+        {
+            bool baddashspec=false;
+            uint64_t soff=0,eoff=0;
+
+            int sidx = req->xcontentdur.find("-",1);
+            if (sidx == std::string::npos)
+            {
+            	baddashspec=true;
+            }
+            else
+            {
+                std::string startstr = req->xcontentdur.substr(1,sidx-1);
+                std::string endstr = req->xcontentdur.substr(sidx+1,req->xcontentdur.length()-sidx);
+
+                fprintf(stderr,"HTTP FIRST DASH <%s> <%s>\n", startstr.c_str(), endstr.c_str() );
+
+                int ret = sscanf(startstr.c_str(),"%lld",&soff);
+                if (ret != 1)
+                	baddashspec = true;
+                else
+                {
+                    int ret = sscanf(endstr.c_str(),"%lld",&eoff);
+                    if (ret != 1)
+                    	baddashspec = true;
+                }
+            }
+
+            if (baddashspec)
+            {
+                 evhttp_send_error(req->sinkevreq,400,"Bad DASH spec in path.");
+                 req->replied = true;
+                 dprintf("%s @%i http get: ERROR 400 Bad DASH spec in path.\n",tintstr(),req->id);
+                 return;
+             }
+
+             req->dash = true;
+             req->startoff = soff;
+             req->endoff = eoff;
+
+             fprintf(stderr,"HTTP tosend DASH\n");
+             req->tosend = req->endoff+1-req->startoff;
+        }
+
+
     }
     else if (!HttpGwParseContentRangeHeader(req,filesize))
         return;
@@ -723,16 +782,19 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
         // Arno, 2012-06-15: Oops, use startoff before mod.
         req->endoff = req->startoff + req->rangelast;
         req->startoff += req->rangefirst;
+
+        fprintf(stderr,"HTTP tosend RANGE\n");
         req->tosend = req->rangelast+1-req->rangefirst;
     }
-    else
+    else if (!req->live)
     {
+    	fprintf(stderr,"HTTP tosend not DASH\n");
         req->tosend = filesize;
     }
     req->offset = req->startoff;
 
     // SEEKTODO: concurrent requests to same resource
-    if (req->startoff != 0)
+    if (!req->dash && req->startoff != 0)
     {
         // Seek to multifile/range start
         int ret = swift::Seek(req->td,req->startoff,SEEK_SET);
@@ -751,7 +813,7 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     //evhttp_add_header(reqheaders, "Connection", "keep-alive" );
     evhttp_add_header(reqheaders, "Connection", "close" );
     evhttp_add_header(reqheaders, "Content-Type", req->mimetype.c_str() );
-    if (req->xcontentdur != "-1")
+    if (!req->live)
     {
         if (req->xcontentdur.length() > 0)
             evhttp_add_header(reqheaders, "X-Content-Duration", req->xcontentdur.c_str() );
@@ -936,12 +998,12 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     }
     else if (hashstr.substr(hashstr.length()-4) == ".mp4")
     {
-        // iOS .mp4 
+        // iOS .mp4
         std::string hstr = hashstr.substr(0,40); // strip ext
         if (hashstr.length() > 44)
             echofilesizestr = hashstr.substr(41,hashstr.length()-45);
         mimetype = "video/mp4";
-      
+
         hashstr = hstr;
     }
     else if (hashstr.length() > 40 && hashstr.substr(hashstr.length()-2) == "-1")
@@ -951,7 +1013,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
         durstr = "-1";
         mimetype = "video/mp2t";
     }
-    else if (durstr.length() > 0 && durstr != "-1")
+    else if (durstr.length() > 0 && durstr[0] != '-')
     {
 	// Used in SwarmPlayer 3000
 	mimetype = "video/ogg";
@@ -980,7 +1042,14 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
             return;
         }
     }
-  
+
+    bool live=false;
+    if (durstr.length() > 0 && durstr[0] == '-')
+    {
+    	fprintf(stderr,"HTTP LIVE ENABLED\n");
+    	live = true;
+    }
+
     // 3. Check for concurrent requests, currently not supported.
     Sha1Hash swarm_id = Sha1Hash(true,hashstr.c_str());
     http_gw_t *existreq = HttpGwFindRequestBySwarmID(swarm_id);
@@ -1026,7 +1095,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     int td = swift::Find(swarm_id,activate);
     if (td == -1) {
         // LIVE
-        if (durstr != "-1") {
+        if (!live) {
             td = swift::Open(filename,swarm_id,Address(),false,true,false,activate,chunksize);
         }
         else {
@@ -1061,7 +1130,9 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     req->endoff = 0;
     req->foundH264NALU = false;
     req->echofilesize = echofilesize;
-  
+    req->live = live;
+    req->dash = false;
+
     fprintf(stderr,"httpgw: Opened %s dur %s\n",hashstr.c_str(), durstr.c_str() );
 
     // We need delayed replying, so take ownership.
@@ -1091,7 +1162,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 
 bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf ) {
 
-    // Arno, 2013-07-04: libevent will get a SIGPIPE writing to socket 
+    // Arno, 2013-07-04: libevent will get a SIGPIPE writing to socket
     // that the client has closed. Make sure that is ignored.
 #ifndef WIN32
     signal(SIGPIPE, SIG_IGN);
