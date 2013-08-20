@@ -107,7 +107,7 @@ std::string    Signature::hex() const {
     char *hex = new char[siglen_*2+1];
     for(int i=0; i<siglen_; i++)
         sprintf(hex+i*2, "%02x", (int)(unsigned char)sigbits_[i]);
-    std::string s(hex,HASHSZ*2);
+    std::string s(hex,siglen_*2);
     delete hex;
     return s;
 }

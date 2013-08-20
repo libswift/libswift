@@ -320,20 +320,7 @@ namespace swift {
 	POPT_CHUNK_ADDR_CHUNK64 = 4
     } popt_chunk_addr_t;
 
-    // http://www.iana.org/assignments/dns-sec-alg-numbers/dns-sec-alg-numbers.xml
-    typedef enum {
-	POPT_LIVE_SIG_ALG_DH = 2,
-	POPT_LIVE_SIG_ALG_DSA = 3,
-	POPT_LIVE_SIG_ALG_RSASHA1 = 5,
-	POPT_LIVE_SIG_ALG_DSA_NSEC3_SHA1 = 6,
-	POPT_LIVE_SIG_ALG_RSASHA1_NSEC3_SHA1 = 7,
-	POPT_LIVE_SIG_ALG_RSASHA256 = 8,
-	POPT_LIVE_SIG_ALG_RSASHA512 = 10,
-	POPT_LIVE_SIG_ALG_ECC_GOST = 12,
-	POPT_LIVE_SIG_ALG_ECDSAP256SHA256 = 13,
-	POPT_LIVE_SIG_ALG_ECDSAP384SHA384 = 14,
-	POPT_LIVE_SIG_ALG_PRIVATEDNS = 253     // supported. Hacks ECDSA with SHA1
-    } popt_live_sig_alg_t;
+    // popt_live_sig_alg_t: See livesig.h
 
 
     class Handshake

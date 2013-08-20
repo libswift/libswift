@@ -46,6 +46,8 @@
 
 #include "swift.h"
 #include "hashtree.h"
+#include "livesig.h"
+
 
 namespace swift {
 
@@ -58,11 +60,6 @@ typedef enum {
     LHT_STATE_VER_AWAIT_PEAK,  // live client, has pub key, needs peak
     LHT_STATE_VER_AWAIT_DATA,  // live client, has pub key, needs chunks
 } lht_state_t;
-
-#ifndef ARNOCRYPTO
-typedef int privkey_t;
-typedef Sha1Hash pubkey_t;
-#endif
 
 
 /** Structure for holding a signature */
