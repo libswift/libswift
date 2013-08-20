@@ -985,7 +985,7 @@ void LiveSourceFileTimerCallback(int fd, short event, void *arg) {
     else
         nread = read(livesource_fd,buf,sizeof(buf));
     fprintf(stderr,"%s live: file: read returned %d\n", tintstr(), nread );
-    if (nread < -1)
+    if (nread <= -1)
         print_error("error reading from live source");
     else if (nread > 0)
     {

@@ -629,6 +629,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
                 tintstr(),id_,cwnd_,(int)data_out_.size(),tintstr(last_data_out_time_+send_interval_));
 
     // Add required hashes. Also for initial peaks and munros
+    // Note this is called always, not just when there are requests pending.
     if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
         AddRequiredHashes(evb,tosend,isretransmit);
 
