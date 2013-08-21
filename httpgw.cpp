@@ -103,8 +103,8 @@ http_gw_t *HttpGwFindRequestByTD(int td) {
     return NULL;
 }
 
-http_gw_t *HttpGwFindRequestBySwarmID(Sha1Hash &wanthash) {
-    int td = swift::Find(wanthash);
+http_gw_t *HttpGwFindRequestBySwarmID(SwarmID &swarmid) {
+    int td = swift::Find(swarmid);
     if (td < 0)
         return NULL;
     return HttpGwFindRequestByTD(td);
@@ -801,7 +801,7 @@ bool swift::ParseURI(std::string uri,parseduri_t &map)
         path = uri;
 
 
-    std::string hashstr="";
+    std::string swarmidhexstr="";
     std::string filename="";
     std::string modstr="";
 
@@ -811,18 +811,18 @@ bool swift::ParseURI(std::string uri,parseduri_t &map)
         midx = path.find("@",1);
     if (sidx == std::string::npos && midx == std::string::npos) {
         // No multi-file, no modifiers
-        hashstr = path.substr(1,path.length());
+        swarmidhexstr = path.substr(1,path.length());
     } else if (sidx != std::string::npos && midx == std::string::npos) {
         // multi-file, no modifiers
-        hashstr = path.substr(1,sidx-1);
+        swarmidhexstr = path.substr(1,sidx-1);
         filename = path.substr(sidx+1,path.length()-sidx);
     } else if (sidx == std::string::npos && midx != std::string::npos) {
         // No multi-file, modifiers
-        hashstr = path.substr(1,midx-1);
+        swarmidhexstr = path.substr(1,midx-1);
         modstr = path.substr(midx,path.length()-midx);
     } else {
         // multi-file, modifiers
-        hashstr = path.substr(1,sidx-1);
+        swarmidhexstr = path.substr(1,sidx-1);
         filename = path.substr(sidx+1,midx-(sidx+1));
         modstr = path.substr(midx,path.length()-midx);
     }
@@ -856,7 +856,7 @@ bool swift::ParseURI(std::string uri,parseduri_t &map)
     map.insert(stringpair("server",server));
     map.insert(stringpair("path",path));
     // Derivatives
-    map.insert(stringpair("hash",hashstr));
+    map.insert(stringpair("swarmidhex",swarmidhexstr));
     map.insert(stringpair("filename",filename));
     map.insert(stringpair("chunksizestr",chunkstr));
     map.insert(stringpair("durationstr",durstr));
@@ -888,7 +888,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     evhttp_remove_header(reqheaders,"Connection"); // Remove Connection: keep-alive
 
     // 2. Parse swift URI
-    std::string hashstr = "", mfstr="", durstr="", chunksizestr = "";
+    std::string swarmidhexstr = "", mfstr="", durstr="", chunksizestr = "";
     if (uri.length() <= 1)     {
         evhttp_send_error(evreq,400,"Path must be root hash in hex, 40 bytes.");
         dprintf("%s @%i http get: ERROR 400 Path must be root hash in hex\n",tintstr(),0 );
@@ -901,24 +901,24 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
         dprintf("%s @%i http get: ERROR 400 Path format violation\n",tintstr(),0 );
         return;
     }
-    hashstr = puri["hash"];
+    swarmidhexstr = puri["swarmidhex"];
     mfstr = puri["filename"];
     durstr = puri["durationstr"];
     chunksizestr = puri["chunksizestr"];
 
     // Handle LIVE
     std::string mimetype = "video/mp2t";
-    if (hashstr.substr(hashstr.length()-5) == ".h264")
+    if (swarmidhexstr.substr(swarmidhexstr.length()-5) == ".h264")
     {
 	// LIVESOURCE=ANDROID
-	hashstr = hashstr.substr(0,40); // strip .h264
+	swarmidhexstr = swarmidhexstr.substr(0,swarmidhexstr.length()-5); // strip .h264
 	durstr = "-1";
 	mimetype = "video/h264";
     }
-    else if (hashstr.length() > 40 && hashstr.substr(hashstr.length()-2) == "-1")
+    else if (swarmidhexstr.length() > 40 && swarmidhexstr.substr(swarmidhexstr.length()-2) == "-1")
     {
 	// Arno, 2012-06-15: LIVE: VLC can't take @-1 as in URL, so workaround
-        hashstr = hashstr.substr(0,40);
+        swarmidhexstr = swarmidhexstr.substr(0,swarmidhexstr.length()-3);
         durstr = "-1";
         mimetype = "video/mp2t";
     }
@@ -928,7 +928,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 	mimetype = "video/ogg";
     }
 
-    dprintf("%s @%i http get: demands %s mf %s dur %s mime %s\n",tintstr(),http_gw_reqs_open+1,hashstr.c_str(),mfstr.c_str(),durstr.c_str(), mimetype.c_str() );
+    dprintf("%s @%i http get: demands %s mf %s dur %s mime %s\n",tintstr(),http_gw_reqs_open+1,swarmidhexstr.c_str(),mfstr.c_str(),durstr.c_str(), mimetype.c_str() );
 
     uint32_t chunksize=httpgw_chunk_size; // default externally configured
     if (chunksizestr.length() > 0)
@@ -936,7 +936,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 
 
     // 3. Check for concurrent requests, currently not supported.
-    Sha1Hash swarm_id = Sha1Hash(true,hashstr.c_str());
+    SwarmID swarm_id = SwarmID(swarmidhexstr);
     http_gw_t *existreq = HttpGwFindRequestBySwarmID(swarm_id);
     if (existreq != NULL)
     {
@@ -948,11 +948,11 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     // ANDROID
     std::string filename = "";
     if (httpgw_storage_dir == "") {
-    	filename = hashstr;
+    	filename = swarmidhexstr;
     }
     else {
     	filename = httpgw_storage_dir;
-    	filename += hashstr;
+    	filename += swarmidhexstr;
     }
 
     // 4. Initiate transfer, activating FileTransfer if needed
@@ -995,7 +995,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     req->endoff = 0;
     req->foundH264NALU = false;
 
-    fprintf(stderr,"httpgw: Opened %s dur %s\n",hashstr.c_str(), durstr.c_str() );
+    fprintf(stderr,"httpgw: Opened %s dur %s\n",swarmidhexstr.c_str(), durstr.c_str() );
 
     // We need delayed replying, so take ownership.
     // See http://code.google.com/p/libevent-longpolling/source/browse/trunk/main.c
@@ -1066,7 +1066,7 @@ bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint64_t di
  * which uses it to update the progress bar. Currently x is not the number of
  * bytes downloaded, but the number of bytes written to the HTTP connection.
  */
-std::string HttpGwGetProgressString(Sha1Hash swarmid)
+std::string HttpGwGetProgressString(SwarmID &swarmid)
 {
     std::stringstream rets;
     //rets << "httpgw: ";
@@ -1093,7 +1093,7 @@ std::string HttpGwGetProgressString(Sha1Hash swarmid)
 
 // ANDROID
 // Arno: dummy place holder
-std::string HttpGwStatsGetSpeedCallback(Sha1Hash swarmid)
+std::string HttpGwStatsGetSpeedCallback(SwarmID &swarmid)
 {
     int dspeed = 0, uspeed = 0;
     uint32_t nleech=0,nseed=0;

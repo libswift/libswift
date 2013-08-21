@@ -70,15 +70,23 @@ std::vector<LiveTransfer*> LiveTransfer::liveswarms;
 #define TRANSFER_DESCR_LIVE_OFFSET	4000000
 
 /** A constructor for a live source. */
-LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, std::string checkpoint_filename, bool check_netwvshash, uint32_t nchunks_per_sign, uint64_t disc_wnd, uint32_t chunk_size) :
+LiveTransfer::LiveTransfer(std::string filename, KeyPair &keypair, std::string checkpoint_filename, bool check_netwvshash, uint32_t nchunks_per_sign, uint64_t disc_wnd, uint32_t chunk_size) :
 	ContentTransfer(LIVE_TRANSFER), ack_out_right_basebin_(bin_t::NONE),
 	chunk_size_(chunk_size), am_source_(true),
 	filename_(filename), last_chunkid_(0), offset_(0),
 	chunks_since_sign_(0),
-	pubkey_(pubkey), privkey_(privkey),
+	keypair_(keypair),
 	checkpoint_filename_(checkpoint_filename), checkpoint_bin_(bin_t::NONE)
 {
     Initialize(check_netwvshash,disc_wnd,nchunks_per_sign);
+
+    SwarmPubKey    *spubkey_ptr = keypair_.GetSwarmPubKey();
+    if (spubkey_ptr == NULL)
+    {
+	SetBroken();
+	return;
+    }
+    swarm_id_ = SwarmID(*spubkey_ptr);
 
     picker_ = NULL;
 
@@ -128,12 +136,22 @@ LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, const p
 
 
 /** A constructor for live client. */
-LiveTransfer::LiveTransfer(std::string filename, const pubkey_t &pubkey, bool check_netwvshash, uint64_t disc_wnd, uint32_t chunk_size) :
-        ContentTransfer(LIVE_TRANSFER), pubkey_(pubkey), chunk_size_(chunk_size), am_source_(false),
+LiveTransfer::LiveTransfer(std::string filename, SwarmID &swarmid, bool check_netwvshash, uint64_t disc_wnd, uint32_t chunk_size) :
+        ContentTransfer(LIVE_TRANSFER), chunk_size_(chunk_size), am_source_(false),
         filename_(filename), last_chunkid_(0), offset_(0),
         chunks_since_sign_(0),
         checkpoint_filename_(""), checkpoint_bin_(bin_t::NONE)
 {
+    swarm_id_ = swarmid;
+    SwarmPubKey spubkey = swarm_id_.spubkey();
+    KeyPair *kp = spubkey.GetPublicKeyPair();
+    if (kp == NULL)
+    {
+	SetBroken();
+	return;
+    }
+    keypair_ = KeyPair(*kp);
+
     Initialize(check_netwvshash,disc_wnd,0);
 
     picker_ = new SharingLivePiecePicker(this);
@@ -171,7 +189,7 @@ void LiveTransfer::Initialize(bool check_netwvshash,uint64_t disc_wnd,uint32_t n
     if (ret == 2) {
         // Filename is a directory, download to swarmid-as-hex file there
         destdir = filename_;
-        filename_ = destdir+FILE_SEP+pubkey_.hex();
+        filename_ = destdir+FILE_SEP+swarm_id_.hex();
     } else {
         destdir = dirname_utf8(filename_);
         if (destdir == "")
@@ -192,9 +210,9 @@ void LiveTransfer::Initialize(bool check_netwvshash,uint64_t disc_wnd,uint32_t n
     if (hs.cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
 	if (nchunks_per_sign > 1)
-	    hashtree_ = new LiveHashTree(storage_,(privkey_t)481,chunk_size_,nchunks_per_sign); // source
+	    hashtree_ = new LiveHashTree(storage_,keypair_,chunk_size_,nchunks_per_sign); // source
 	else
-	    hashtree_ = new LiveHashTree(storage_,Sha1Hash::ZERO,chunk_size_); //client
+	    hashtree_ = new LiveHashTree(storage_,keypair_,chunk_size_); //client
     }
     else
 	hashtree_ = NULL;
@@ -237,7 +255,7 @@ LiveTransfer *LiveTransfer::FindByTD(int td)
     return idx<liveswarms.size() ? (LiveTransfer *)liveswarms[idx] : NULL;
 }
 
-LiveTransfer* LiveTransfer::FindBySwarmID(const Sha1Hash& swarmid) {
+LiveTransfer* LiveTransfer::FindBySwarmID(const SwarmID& swarmid) {
     for(int i=0; i<liveswarms.size(); i++)
         if (liveswarms[i] && liveswarms[i]->swarm_id()==swarmid)
             return liveswarms[i];

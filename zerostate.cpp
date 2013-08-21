@@ -112,7 +112,7 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
     for (iter=delset.begin(); iter!=delset.end(); iter++)
     {
 	int td = *iter;
-	dprintf("%s hash %s zero clean close\n",tintstr(),SwarmID(td).hex().c_str() );
+	dprintf("%s hash %s zero clean close\n",tintstr(),GetSwarmID(td).hex().c_str() );
 	//fprintf(stderr,"%s F%u zero clean close\n",tintstr(),td );
         swift::Close(td);
     }
@@ -169,7 +169,7 @@ int ZeroState::Find(const Sha1Hash &root_hash)
         return -1;
 
     // Open as ZeroState
-    return swift::Open(file_name, root_hash, Address(), false, true, true);
+    return swift::Open(file_name, SwarmID(root_hash), Address(), false, true, true);
 }
 
 

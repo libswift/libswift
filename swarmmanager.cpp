@@ -386,7 +386,7 @@ void SwarmManager::BuildSwarm( SwarmData* swarm ) {
         return;
     }
     if( swarm->rootHash_ == Sha1Hash::ZERO )
-        swarm->rootHash_ = swarm->ft_->swarm_id();
+        swarm->rootHash_ = swarm->ft_->swarm_id().roothash();
     assert( swarm->RootHash() != Sha1Hash::ZERO );
     if( swarm->cached_ ) {
         swarm->cached_ = false;

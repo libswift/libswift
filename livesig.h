@@ -13,43 +13,64 @@
 #include <openssl/rsa.h>
 #include <openssl/bn.h>
 
+#else
+
+// Dummy funcs, so swift will compile for VOD and live with no CIPM without OpenSSL
+typedef int	EVP_PKEY;
+typedef int	EVP_MD_CTX;
+#define EVP_PKEY_free(x)
+#define EVP_PKEY_size(x)
 #endif
 
 namespace swift {
 
 // http://www.iana.org/assignments/dns-sec-alg-numbers/dns-sec-alg-numbers.xml
 typedef enum {
-	POPT_LIVE_SIG_ALG_DH = 2,
-	POPT_LIVE_SIG_ALG_DSA = 3,
 	POPT_LIVE_SIG_ALG_RSASHA1 = 5,
-	POPT_LIVE_SIG_ALG_DSA_NSEC3_SHA1 = 6,
-	POPT_LIVE_SIG_ALG_RSASHA1_NSEC3_SHA1 = 7,
-	POPT_LIVE_SIG_ALG_RSASHA256 = 8,
-	POPT_LIVE_SIG_ALG_RSASHA512 = 10,
-	POPT_LIVE_SIG_ALG_ECC_GOST = 12,
 	POPT_LIVE_SIG_ALG_ECDSAP256SHA256 = 13,
 	POPT_LIVE_SIG_ALG_ECDSAP384SHA384 = 14,
-	POPT_LIVE_SIG_ALG_PRIVATEDNS = 253     // supported. Hacks ECDSA with SHA1
+	POPT_LIVE_SIG_ALG_PRIVATEDNS = 253
 } popt_live_sig_alg_t;
 
 
-#ifdef OPENSSL
+/** Structure for holding a signature */
+struct Signature
+{
+    uint8_t    *sigbits_;
+    uint16_t   siglen_;
+    Signature() : sigbits_(NULL), siglen_(0)  {}
+    Signature(uint8_t *sb, uint16_t len);
+    Signature(bool hex, const uint8_t *sb, uint16_t len);
+    Signature(const Signature &copy);
+    Signature & operator = (const Signature &source);
+    ~Signature();
+    uint8_t  *bits()  { return sigbits_; }
+    uint16_t length() { return siglen_; }
+    std::string hex() const;
+
+    const static Signature NOSIG;
+};
+
 
 #define SWIFT_RSA_DEFAULT_KEYSIZE	1024
 
-struct SwarmLiveID;
+
+struct SwarmPubKey;
 
 typedef void (*simple_openssl_callback_t)(int);
 
 struct KeyPair
 {
-    popt_live_sig_alg_t	alg_;
-    EVP_PKEY		*evp_;
-
-    KeyPair(popt_live_sig_alg_t alg,EVP_PKEY *rsa)
+  public:
+    KeyPair() // keep compiler happy
+    {
+	alg_ = POPT_LIVE_SIG_ALG_PRIVATEDNS;
+	evp_ = NULL;
+    }
+    KeyPair(popt_live_sig_alg_t alg,EVP_PKEY *evp)
     {
 	alg_ = alg;
-	evp_ = rsa;
+	evp_ = evp;
     }
     ~KeyPair()
     {
@@ -58,57 +79,45 @@ struct KeyPair
 	evp_ = NULL;
 
     }
-
     static KeyPair *Generate(popt_live_sig_alg_t alg, uint16_t keysize=SWIFT_RSA_DEFAULT_KEYSIZE, simple_openssl_callback_t callback=NULL);
     EVP_PKEY       *GetEVP() { return evp_; }
-    SwarmLiveID    *GetSwarmLiveID();
+    SwarmPubKey    *GetSwarmPubKey();
+
+    Signature *Sign(uint8_t *data, uint16_t datalength);
+    bool Verify(Signature &sig);
+
+    /** Returns the number of bytes a signature takes on the wire */
+    uint32_t	    GetSigSizeInBytes();
+
+  protected:
+    popt_live_sig_alg_t	alg_;
+    EVP_PKEY		*evp_;
 };
 
-
-struct SwarmLiveID
+/** -08: SwarmID for live streams is an Algorithm Byte followed by a public key
+ * encoded as in a DNSSEC DNSKEY resource record without BASE-64 encoding.
+ */
+struct SwarmPubKey
 {
-    uint8_t	*bits_;
-    uint16_t    len_;
-    SwarmLiveID(uint8_t	*bits, uint16_t len)
-    {
-	if (len == 0)
-	    return;
-	len_ = len;
-	bits_ = new uint8_t[len_];
-	memcpy(bits_,bits,len_);
-    }
-    ~SwarmLiveID()
-    {
-	if (bits_ != NULL)
-	    delete bits_;
-	bits_ = NULL;
-    }
+  public:
+    SwarmPubKey() : bits_(NULL), len_(0)  {}
+    SwarmPubKey(uint8_t	*bits, uint16_t len);
+    SwarmPubKey(const SwarmPubKey& copy);
+    SwarmPubKey(std::string hexstr);
+    ~SwarmPubKey();
+    SwarmPubKey & operator = (const SwarmPubKey &source);
+    bool    operator == (const SwarmPubKey& b) const
+        { return 0==memcmp(bits_,b.bits_,len_); }
     uint8_t  *bits()  { return bits_; }
     uint16_t length() { return len_; }
-    std::string hex() const
-    {
-	char *hex = new char[len_*2+1];
-	for(int i=0; i<len_; i++)
-	    sprintf(hex+i*2, "%02x", (int)(unsigned char)bits_[i]);
-	std::string s(hex,len_*2);
-	delete hex;
-	return s;
-    }
+    std::string hex() const;
+    KeyPair *GetPublicKeyPair() const;
 
-    KeyPair *GetPublicKey();
+    const static SwarmPubKey NOSPUBKEY;
+  protected:
+    uint8_t	*bits_;
+    uint16_t    len_;
 };
-
-
-typedef int privkey_t;
-typedef Sha1Hash pubkey_t;
-
-
-#else
-
-typedef int privkey_t;
-typedef Sha1Hash pubkey_t;
-
-#endif
 
 }
 

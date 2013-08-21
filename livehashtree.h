@@ -51,7 +51,6 @@
 
 namespace swift {
 
-#define DUMMY_DEFAULT_SIG_LENGTH	20	// SIGNPEAKTODO
 
 /** States for the live hashtree */
 typedef enum {
@@ -60,25 +59,6 @@ typedef enum {
     LHT_STATE_VER_AWAIT_PEAK,  // live client, has pub key, needs peak
     LHT_STATE_VER_AWAIT_DATA,  // live client, has pub key, needs chunks
 } lht_state_t;
-
-
-/** Structure for holding a signature */
-struct Signature
-{
-    uint8_t    *sigbits_;
-    uint16_t   siglen_;
-    Signature() : sigbits_(NULL), siglen_(0)  {}
-    Signature(uint8_t *sb, uint16_t len);
-    Signature(bool hex, const uint8_t *sb, uint16_t len);
-    Signature(const Signature &copy);
-    Signature & operator = (const Signature &source);
-    ~Signature();
-    uint8_t  *bits()  { return sigbits_; }
-    uint16_t length() { return siglen_; }
-    std::string hex() const;
-
-    const static Signature NOSIG;
-};
 
 
 struct SigTintTuple
@@ -161,9 +141,9 @@ class LiveHashTree: public HashTree
 {
    public:
      /** live source */
-     LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_size, uint32_t nchunks_per_sign);
+     LiveHashTree(Storage *storage, KeyPair &keypair, uint32_t chunk_size, uint32_t nchunks_per_sign);
      /** live client */
-     LiveHashTree(Storage *storage, pubkey_t swarmid, uint32_t chunk_size);
+     LiveHashTree(Storage *storage, KeyPair &pubkeypair, uint32_t chunk_size);
      ~LiveHashTree();
 
      /** Called when a chunk is added */
@@ -179,7 +159,6 @@ class LiveHashTree: public HashTree
      /** Live NCHUNKS_PER_SIG  */
      void 	    SetNChunksPerSig(uint32_t nchunks_per_sig) { nchunks_per_sig_=nchunks_per_sig; }
      uint32_t	    GetNChunksPerSig() { return nchunks_per_sig_; }
-
 
      /** Remove subtree rooted at pos */
      void           PruneTree(bin_t pos);
@@ -230,8 +209,7 @@ class LiveHashTree: public HashTree
      /** Live source: Right-most base layer node */
      Node 	     *addcursor_;
 
-     privkey_t	     privkey_;
-     pubkey_t	     pubkey_;
+     KeyPair	     keypair_;
 
      // From MmapHashTree
      /** Merkle hash tree: peak hashes */

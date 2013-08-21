@@ -165,9 +165,9 @@ cmd_gw_t* CmdGwFindRequestByFD(int td)
     return NULL;
 }
 
-cmd_gw_t* CmdGwFindRequestBySwarmID(Sha1Hash &want_hash)
+cmd_gw_t* CmdGwFindRequestBySwarmID(SwarmID &swarmid)
 {
-    int td = swift::Find(want_hash);
+    int td = swift::Find(swarmid);
     if (td < 0)
 	return NULL;
     else
@@ -175,13 +175,13 @@ cmd_gw_t* CmdGwFindRequestBySwarmID(Sha1Hash &want_hash)
 }
 
 
-void CmdGwGotCHECKPOINT(Sha1Hash &want_hash)
+void CmdGwGotCHECKPOINT(SwarmID &swarmid)
 {
     // Checkpoint the specified download
     if (cmd_gw_debug)
-        fprintf(stderr,"cmd: GotCHECKPOINT: %s\n",want_hash.hex().c_str());
+        fprintf(stderr,"cmd: GotCHECKPOINT: %s\n",swarmid.hex().c_str());
 
-    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
     if (req == NULL)
         return;
 
@@ -189,17 +189,17 @@ void CmdGwGotCHECKPOINT(Sha1Hash &want_hash)
 }
 
 
-void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
+void CmdGwGotREMOVE(SwarmID &swarmid, bool removestate, bool removecontent)
 {
     // Remove the specified download
     if (cmd_gw_debug)
-        fprintf(stderr,"cmd: GotREMOVE: %s %d %d\n",want_hash.hex().c_str(),removestate,removecontent);
+        fprintf(stderr,"cmd: GotREMOVE: %s %d %d\n",swarmid.hex().c_str(),removestate,removecontent);
 
-    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
     if (req == NULL)
     {
 	if (cmd_gw_debug)
-	    fprintf(stderr,"cmd: GotREMOVE: %s not found, bad swarm?\n",want_hash.hex().c_str());
+	    fprintf(stderr,"cmd: GotREMOVE: %s not found, bad swarm?\n",swarmid.hex().c_str());
 	return;
     }
     dprintf("%s @%i remove transfer %i\n",tintstr(),req->id,req->td);
@@ -212,42 +212,42 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 }
 
 
-void CmdGwGotMAXSPEED(Sha1Hash &want_hash, data_direction_t ddir, double speed)
+void CmdGwGotMAXSPEED(SwarmID &swarmid, data_direction_t ddir, double speed)
 {
     // Set maximum speed on the specified download
-    //fprintf(stderr,"cmd: GotMAXSPEED: %s %d %lf\n",want_hash.hex().c_str(),ddir,speed);
+    //fprintf(stderr,"cmd: GotMAXSPEED: %s %d %lf\n",swarmid.hex().c_str(),ddir,speed);
 
-    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
     if (req == NULL)
     	return;
     swift::SetMaxSpeed(req->td, ddir, speed);
 }
 
 
-void CmdGwGotSETMOREINFO(Sha1Hash &want_hash, bool enable)
+void CmdGwGotSETMOREINFO(SwarmID &swarmid, bool enable)
 {
-    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
     if (req == NULL)
         return;
     req->moreinfo = enable;
 }
 
-void CmdGwGotPEERADDR(Sha1Hash &want_hash, Address &peer)
+void CmdGwGotPEERADDR(SwarmID &swarmid, Address &peer)
 {
-    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
     if (req == NULL)
     	return;
-    swift::AddPeer(peer, want_hash);
+    swift::AddPeer(peer, swarmid);
 }
 
 
 
-void CmdGwSendINFOHashChecking(evutil_socket_t cmdsock, Sha1Hash swarm_id)
+void CmdGwSendINFOHashChecking(evutil_socket_t cmdsock, SwarmID &swarmid)
 {
     // Send INFO DLSTATUS_HASHCHECKING message.
 
     char cmd[MAX_CMD_MESSAGE];
-    sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",swarm_id.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,0.0,0,0);
+    sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",swarmid.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,0.0,0,0);
 
     //fprintf(stderr,"cmd: SendINFO: %s", cmd);
     send(cmdsock,cmd,strlen(cmd),0);
@@ -260,8 +260,8 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
     //if (cmd_gw_debug)
     //    fprintf(stderr,"cmd: SendINFO: F%d initdlstatus %d\n", req->td, dlstatus );
 
-    Sha1Hash swarm_id = swift::SwarmID(req->td);
-    if (swarm_id == Sha1Hash::ZERO)
+    SwarmID swarmid = swift::GetSwarmID(req->td);
+    if (swarmid == SwarmID::NOSWARMID)
 	return; // Arno: swarm deleted, ignore
 
     uint64_t size = swift::Size(req->td);
@@ -284,7 +284,7 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
     double ulspeed = swift::GetCurrentSpeed(req->td,DDIR_UPLOAD);
 
     char cmd[MAX_CMD_MESSAGE];
-    sprintf(cmd,"INFO %s %d %llu/%ld %lf %lf %u %u\r\n",swarm_id.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds);
+    sprintf(cmd,"INFO %s %d %llu/%ld %lf %lf %u %u\r\n",swarmid.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds);
 
     send(req->cmdsock,cmd,strlen(cmd),0);
 
@@ -301,7 +301,7 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
         if (ct)
             peerchans = ct->GetChannels();
 
-        oss << "MOREINFO" << " " << swarm_id.hex() << " ";
+        oss << "MOREINFO" << " " << swarmid.hex() << " ";
 
         double tss = (double)Channel::Time() / 1000000.0L;
         oss << "{\"timestamp\":\"" << tss << "\", ";
@@ -348,15 +348,15 @@ void CmdGwSendPLAY(cmd_gw_t *req)
     if (cmd_gw_debug)
         fprintf(stderr,"cmd: SendPLAY: %d\n", req->td);
 
-    Sha1Hash swarm_id = swift::SwarmID(req->td);
+    SwarmID swarmid = swift::GetSwarmID(req->td);
 
     std::ostringstream oss;
     oss << "PLAY ";
-    oss << swarm_id.hex() << " ";
+    oss << swarmid.hex() << " ";
     oss << "http://";
     oss << cmd_gw_httpaddr.str();
     oss << "/";
-    oss << swarm_id.hex();
+    oss << swarmid.hex();
     if (swift::ChunkSize(req->td) != SWIFT_DEFAULT_CHUNK_SIZE)
 	oss << "$" <<  swift::ChunkSize(req->td);
     if (req->xcontentdur != "")
@@ -371,10 +371,10 @@ void CmdGwSendPLAY(cmd_gw_t *req)
 }
 
 
-void CmdGwSendERRORBySocket(evutil_socket_t cmdsock, std::string msg, const Sha1Hash& roothash=Sha1Hash::ZERO)
+void CmdGwSendERRORBySocket(evutil_socket_t cmdsock, std::string msg, const SwarmID& swarmid=SwarmID::NOSWARMID)
 {
      std::string cmd = "ERROR ";
-     cmd += roothash.hex();
+     cmd += swarmid.hex();
      cmd += " ";
      cmd += msg;
      cmd += "\r\n";
@@ -508,7 +508,7 @@ void CmdGwSwiftVODFirstProgressCallback (int td, bin_t bin)
             if (cmd_gw_debug)
                 fprintf(stderr,"cmd: SwiftFirstProgress: Error file not found %d\n", td );
 
-	        CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.",SwarmID(req->td));
+	        CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.",GetSwarmID(req->td));
 	        return;
 	    }
     }
@@ -725,13 +725,13 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         }
 
         std::string trackerstr = puri["server"];
-        std::string hashstr = puri["hash"];
+        std::string swarmidhexstr = puri["swarmidhex"];
         std::string mfstr = puri["filename"];
         std::string chunksizestr = puri["chunksizestr"];
         std::string durationstr = puri["durationstr"];
 
-        if (hashstr.length()!=40) {
-            dprintf("cmd: START: roothash too short %lu\n", hashstr.length() );
+        if (swarmidhexstr.length()!=40) {
+            dprintf("cmd: START: roothash too short %lu\n", swarmidhexstr.length() );
             return ERROR_BAD_ARG;
         }
         uint32_t chunksize=SWIFT_DEFAULT_CHUNK_SIZE;
@@ -741,7 +741,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         if (durationstr.length() > 0)
             std::istringstream(durationstr) >> duration;
 
-        dprintf("cmd: START: %s with tracker %s chunksize %i duration %d\n",hashstr.c_str(),trackerstr.c_str(),chunksize,duration);
+        dprintf("cmd: START: %s with tracker %s chunksize %i duration %d\n",swarmidhexstr.c_str(),trackerstr.c_str(),chunksize,duration);
 
         Address trackaddr;
         trackaddr = Address(trackerstr.c_str());
@@ -753,10 +753,10 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         // SetTracker(trackaddr); == set default tracker
 
         // initiate transmission
-        Sha1Hash swarm_id = Sha1Hash(true,hashstr.c_str());
+        SwarmID swarmid = SwarmID(swarmidhexstr);
 
         // Arno, 2012-06-12: Check for duplicate requests
-        cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarm_id);
+        cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
         if (req != NULL)
         {
             dprintf("cmd: START: request for given root hash already exists\n");
@@ -764,26 +764,26 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         }
 
         // Send INFO DLSTATUS_HASHCHECKING
-        CmdGwSendINFOHashChecking(cmdsock,swarm_id);
+        CmdGwSendINFOHashChecking(cmdsock,swarmid);
 
         // ARNOSMPTODO: disable/interleave hashchecking at startup
 
         // ARNOTODO: Allow for deactivated swarms. Needs cheap tracker registration
         bool activate=true;
-        int td = swift::Find(swarm_id,activate);
+        int td = swift::Find(swarmid,activate);
         if (td==-1) {
             std::string filename;
             if (storagepath != "")
                 filename = storagepath;
             else
-                filename = hashstr;
+                filename = swarmidhexstr;
 
             if (duration != -1)
-                td = swift::Open(filename,swarm_id,trackaddr,false,true,false,activate,chunksize);
+                td = swift::Open(filename,swarmid,trackaddr,false,true,false,activate,chunksize);
             else
-                td = swift::LiveOpen(filename,swarm_id,trackaddr,true,chunksize);
+                td = swift::LiveOpen(filename,swarmid,trackaddr,true,chunksize);
             if (td == -1) {
-            	CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarm_id);
+            	CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarmid);
             	return ERROR_BAD_SWARM;
             }
         }
@@ -817,7 +817,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             if (storage == NULL)
             {
                 dprintf("cmd: START: cannot get storage td %d\n", req->td );
-                CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarm_id);
+                CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarmid);
         	return ERROR_BAD_SWARM;
             }
             storage_files_t sfs = storage->GetStorageFiles();
@@ -857,7 +857,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         token = strtok_r(paramstr," ",&savetok); //
         if (token == NULL)
             return ERROR_MISS_ARG;
-        char *hashstr = token;
+        char *swarmidhexcstr = token;
         token = strtok_r(NULL," ",&savetok);      // removestate
         if (token == NULL)
             return ERROR_MISS_ARG;
@@ -867,8 +867,9 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             return ERROR_MISS_ARG;
         removecontent = !strcmp(token,"1");
 
-        Sha1Hash swarm_id = Sha1Hash(true,hashstr);
-        CmdGwGotREMOVE(swarm_id,removestate,removecontent);
+        std::string swarmidhexstr(swarmidhexcstr);
+        SwarmID swarmid(swarmidhexstr);
+        CmdGwGotREMOVE(swarmid,removestate,removecontent);
     }
     else if (!strcmp(method,"MAXSPEED"))
     {
@@ -879,7 +880,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         token = strtok_r(paramstr," ",&savetok); //
         if (token == NULL)
             return ERROR_MISS_ARG;
-        char *hashstr = token;
+        char *swarmidhexcstr = token;
         token = strtok_r(NULL," ",&savetok);      // direction
         if (token == NULL)
             return ERROR_MISS_ARG;
@@ -892,14 +893,17 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             dprintf("cmd: MAXSPEED: speed is not a float\n");
             return ERROR_MISS_ARG;
         }
-        Sha1Hash swarm_id = Sha1Hash(true,hashstr);
-        CmdGwGotMAXSPEED(swarm_id,ddir,speed*1024.0);
+        std::string swarmidhexstr(swarmidhexcstr);
+        SwarmID swarmid(swarmidhexstr);
+        CmdGwGotMAXSPEED(swarmid,ddir,speed*1024.0);
     }
     else if (!strcmp(method,"CHECKPOINT"))
     {
         // CHECKPOINT roothash\r\n
-        Sha1Hash swarm_id = Sha1Hash(true,paramstr);
-        CmdGwGotCHECKPOINT(swarm_id);
+	char *swarmidhexcstr = paramstr;
+        std::string swarmidhexstr(swarmidhexcstr);
+        SwarmID swarmid(swarmidhexstr);
+        CmdGwGotCHECKPOINT(swarmid);
     }
     else if (!strcmp(method,"SETMOREINFO"))
     {
@@ -907,13 +911,15 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         token = strtok_r(paramstr," ",&savetok); // hash
         if (token == NULL)
             return ERROR_MISS_ARG;
-        char *hashstr = token;
+        char *swarmidhexcstr = token;
         token = strtok_r(NULL," ",&savetok);      // bool
         if (token == NULL)
             return ERROR_MISS_ARG;
         bool enable = (bool)!strcmp(token,"1");
-        Sha1Hash swarm_id = Sha1Hash(true,hashstr);
-        CmdGwGotSETMOREINFO(swarm_id,enable);
+
+        std::string swarmidhexstr(swarmidhexcstr);
+        SwarmID swarmid(swarmidhexstr);
+        CmdGwGotSETMOREINFO(swarmid,enable);
     }
     else if (!strcmp(method,"SHUTDOWN"))
     {
@@ -955,14 +961,16 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         token = strtok_r(paramstr," ",&savetok); // hash
         if (token == NULL)
             return ERROR_MISS_ARG;
-        char *hashstr = token;
+        char *swarmidhexcstr = token;
         token = strtok_r(NULL," ",&savetok);      // bool
         if (token == NULL)
             return ERROR_MISS_ARG;
         char *addrstr = token;
+
         Address peer(addrstr);
-        Sha1Hash swarm_id = Sha1Hash(true,hashstr);
-        CmdGwGotPEERADDR(swarm_id,peer);
+        std::string swarmidhexstr(swarmidhexcstr);
+        SwarmID swarmid(swarmidhexstr);
+        CmdGwGotPEERADDR(swarmid,peer);
     }
     else
     {

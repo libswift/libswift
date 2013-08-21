@@ -36,7 +36,8 @@ struct Sha1Hash {
     bool    operator == (const Sha1Hash& b) const
         { return 0==memcmp(bits,b.bits,SIZE); }
     bool    operator != (const Sha1Hash& b) const { return !(*this==b); }
-    const char* operator * () const { return (char*) bits; }
+    const char* operator * () const { return (char*) bits; } // where used?
+    uint8_t  *bytes() { return (uint8_t*)bits; } // bits already taken
     Sha1Hash & operator = (const Sha1Hash &source);
 
     const static Sha1Hash ZERO;

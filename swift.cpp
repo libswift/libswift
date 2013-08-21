@@ -2,7 +2,7 @@
  *  swift.cpp
  *  swift the multiparty transport protocol
  *
- *  Created by Victor Grishchenko on 2/15/10.
+ *  Created by Victor Grishchenko, Arno Bakker
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
@@ -73,17 +73,18 @@ void usage(void)
     fprintf(stderr,"  -T time-out\tin seconds for slow zero state connections\n");
     fprintf(stderr,"  -G GTest mode\n");
     fprintf(stderr,"  -W live discard window in chunks\n");
+    fprintf(stderr,"  -K live keypair filename\n");
     fprintf(stderr,"  -P live checkpoint filename\n");
 
     fprintf(stderr, "%s\n", SubversionRevisionString.c_str() );
 
 }
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
-int HandleSwiftFile(std::string filename, Sha1Hash root_hash, Address &tracker, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
-int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address &tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate);
+int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
+int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate);
 int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool activate);
-// SIGNPEAKTODO replace root_hash with generic swarm ID
-void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Hash root_hash, uint32_t chunk_size);
+// SIGNPEAKTODO replace swarmid with generic swarm ID
+void HandleLiveSource(std::string livesource_input, std::string filename, std::string keypairfilename, uint32_t chunk_size);
 
 void ReportCallback(int fd, short event, void *arg);
 void EndCallback(int fd, short event, void *arg);
@@ -173,11 +174,12 @@ int utf8main (int argc, char** argv)
         {"test",no_argument, 0, 'G'},  // Less command line testing for GTest usage
         {"ldw",required_argument, 0, 'W'}, // PPSP
         {"lcf",required_argument, 0, 'P'}, // LIVECHECKPOINT
+        {"kpf",required_argument, 0, 'K'}, // UMT
         {0, 0, 0, 0}
     };
 
-    Sha1Hash root_hash=Sha1Hash::ZERO;
-    std::string filename = "",destdir = "", trackerargstr= "", zerostatedir="", urlfilename="";
+    SwarmID swarmid=SwarmID::NOSWARMID;
+    std::string filename = "",destdir = "", trackerargstr= "", zerostatedir="", urlfilename="", keypairfilename="";
     bool printurl=false, livestream=false, gtesting=false;
     Address bindaddr;
     Address httpaddr;
@@ -190,15 +192,15 @@ int utf8main (int argc, char** argv)
     LibraryInit();
     Channel::evbase = event_base_new();
 
+    std::string optargstr;
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:ji:kC:1:2:3:T:GW:P:", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:ji:kC:1:2:3:T:GW:P:K:", long_options, 0)) ) {
         switch (c) {
             case 'h':
-                if (strlen(optarg)!=40)
-                    quit("SHA1 hash must be 40 hex symbols\n");
-                root_hash = Sha1Hash(true,optarg); // FIXME ambiguity
-                if (root_hash==Sha1Hash::ZERO)
-                    quit("SHA1 hash must be 40 hex symbols\n");
+        	optargstr = optarg;
+                swarmid = SwarmID(optargstr);
+                if (swarmid==SwarmID::NOSWARMID)
+                    quit("SwarmID must be in hex symbols\n");
                 break;
             case 'f':
                 filename = strdup(optarg);
@@ -342,6 +344,9 @@ int utf8main (int argc, char** argv)
             case 'P':
                 livesource_checkpoint_filename = strdup(optarg);
                 break;
+            case 'K':
+                keypairfilename = strdup(optarg);
+                break;
             case 'T': // ZEROSTATE
                 double t=0.0;
                 n = sscanf(optarg,"%lf",&t);
@@ -418,10 +423,10 @@ int utf8main (int argc, char** argv)
         int ret = -1;
         if (!generate_multifile)
         {
-            if (filename != "" || root_hash != Sha1Hash::ZERO) {
+            if (filename != "" || !(swarmid == SwarmID::NOSWARMID)) {
 
                 // Single file
-                ret = HandleSwiftFile(filename,root_hash,tracker,trackerargstr,printurl,livestream,urlfilename,maxspeed);
+                ret = HandleSwiftSwarm(filename,swarmid,tracker,trackerargstr,printurl,livestream,urlfilename,maxspeed);
             }
             else if (scan_dirname != "")
             {
@@ -448,7 +453,7 @@ int utf8main (int argc, char** argv)
                 quit("Cannot generate multi-file spec")
             else
                 // Calc roothash
-                ret = HandleSwiftFile(filename,root_hash,tracker,trackerargstr,printurl,false,urlfilename,maxspeed);
+                ret = HandleSwiftSwarm(filename,swarmid,tracker,trackerargstr,printurl,false,urlfilename,maxspeed);
         }
 
         // For testing
@@ -465,14 +470,14 @@ int utf8main (int argc, char** argv)
     {
         // LIVE
         // Act as live source
-        HandleLiveSource(livesource_input,filename,root_hash,chunk_size);
+        HandleLiveSource(livesource_input,filename,keypairfilename,chunk_size);
     }
     else if (!cmdgw_enabled && !httpgw_enabled && zerostatedir == "")
         quit("Not client, not live server, not a gateway, not zero state seeder?");
 
 
     // Arno, 2012-01-04: Allow download and quit mode
-    if (single_td != -1 && root_hash != Sha1Hash::ZERO && wait_time == 0) {
+    if (single_td != -1 && !(swarmid == SwarmID::NOSWARMID) && wait_time == 0) {
         wait_time = TINT_NEVER;
         exitoncomplete = true;
     }
@@ -517,12 +522,12 @@ int utf8main (int argc, char** argv)
 }
 
 
-int HandleSwiftFile(std::string filename, Sha1Hash root_hash, Address &tracker, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed)
+int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed)
 {
-    if (root_hash!=Sha1Hash::ZERO && filename == "")
-        filename = strdup(root_hash.hex().c_str());
+    if (!(swarmid == SwarmID::NOSWARMID) && filename == "")
+        filename = swarmid.hex();
 
-    single_td = OpenSwiftFile(filename,root_hash,tracker,false,chunk_size,livestream,true); //activate always
+    single_td = OpenSwiftSwarm(filename,swarmid,tracker,false,chunk_size,livestream,true); //activate always
     if (single_td < 0)
         quit("cannot open file %s",filename.c_str());
     if (printurl)
@@ -545,7 +550,7 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, Address &tracker, 
         oss << "tswift:";
         if (trackerargstr != "")
            oss << "//" << trackerargstr; // use unresolved tracker hostname here as specified on cmd line
-        oss << "/" << swift::SwarmID(single_td).hex();
+        oss << "/" << swift::GetSwarmID(single_td).hex();
         if (chunk_size != SWIFT_DEFAULT_CHUNK_SIZE)
            oss << "$" << chunk_size;
         oss << "\n";
@@ -567,7 +572,7 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, Address &tracker, 
     }
     else
     {
-        printf("Root hash: %s\n", swift::SwarmID(single_td).hex().c_str());
+        printf("Root hash: %s\n", swift::GetSwarmID(single_td).hex().c_str());
         fflush(stdout); // For testing
     }
 
@@ -579,7 +584,7 @@ int HandleSwiftFile(std::string filename, Sha1Hash root_hash, Address &tracker, 
 }
 
 
-int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address &tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate)
+int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate)
 {
     if (!quiet)
 	fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
@@ -590,9 +595,9 @@ int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address &tracker, 
     // Client mode: regular or live download
     int td = -1;
     if (!livestream)
-	td = swift::Open(filename,hash,tracker,force_check_diskvshash,true,false,activate,chunk_size);
+	td = swift::Open(filename,swarmid,tracker,force_check_diskvshash,true,false,activate,chunk_size);
     else
-	td = swift::LiveOpen(filename,hash,tracker,true,livesource_disc_wnd,chunk_size);
+	td = swift::LiveOpen(filename,swarmid,tracker,true,livesource_disc_wnd,chunk_size);
     return td;
 }
 
@@ -611,7 +616,8 @@ int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_di
             std::string path = dirname;
             path.append(FILE_SEP);
             path.append(de->filename_);
-            int td = OpenSwiftFile(path,Sha1Hash::ZERO,tracker,force_check_diskvshash,chunk_size,false,activate);
+            SwarmID swarmid = SwarmID::NOSWARMID;
+            int td = OpenSwiftSwarm(path,swarmid,tracker,force_check_diskvshash,chunk_size,false,activate);
             if (td >= 0) // Support case where dir of content has not been pre-hashchecked and checkpointed
                 Checkpoint(td);
         }
@@ -654,18 +660,26 @@ int CleanSwiftDirectory(std::string dirname)
 }
 
 
-void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Hash root_hash, uint32_t chunk_size)
+void OpenSSLGenerateCallback(int p)
+{
+    fprintf(stderr,"GenKey %d ", p);
+}
+
+
+void HandleLiveSource(std::string livesource_input, std::string filename, std::string keypairfilename, uint32_t chunk_size)
 {
     // LIVE
     // Server mode: read from http source or pipe or file
     livesource_evb = evbuffer_new();
 
-    // LIVETODO: swarmID is hash of public key
-    Sha1Hash swarmid = root_hash;
-    if (swarmid == Sha1Hash::ZERO)
+    KeyPair *keypairptr=NULL;
+    if (keypairfilename == "")
     {
-        std::string swarmidstr = "ArnosFirstSwarm";
-        swarmid = Sha1Hash(swarmidstr.c_str(), swarmidstr.length());
+	keypairptr = KeyPair::Generate(POPT_LIVE_SIG_ALG_RSASHA1, SWIFT_RSA_DEFAULT_KEYSIZE, OpenSSLGenerateCallback );
+    }
+    else
+    {
+	// OPENSSLTODO
     }
 
     std::string httpscheme = "http:";
@@ -700,7 +714,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
         }
 
         // Create swarm
-        livesource_lt = swift::LiveCreate(filename,swarmid,481,livesource_checkpoint_filename,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,livesource_disc_wnd,chunk_size); // SIGNPEAKTODO
+        livesource_lt = swift::LiveCreate(filename,*keypairptr,livesource_checkpoint_filename,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,livesource_disc_wnd,chunk_size); // SIGNPEAKTODO
 
         // Periodically create chunks by reading from source
         evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
@@ -732,7 +746,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, Sha1Ha
         fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str() );
 
         // Create swarm
-        livesource_lt = swift::LiveCreate(filename,swarmid,481,livesource_checkpoint_filename,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,livesource_disc_wnd,chunk_size); // SIGNPEAKTODO
+        livesource_lt = swift::LiveCreate(filename,*keypairptr,livesource_checkpoint_filename,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,livesource_disc_wnd,chunk_size); // SIGNPEAKTODO
 
         // Create HTTP client
         struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, httpservname.c_str(), httpport);

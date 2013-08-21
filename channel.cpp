@@ -384,10 +384,6 @@ void Channel::Shutdown () {
         CloseSocket(sock_open[sock_count].sock);
 }
 
-void     swift::SetTracker(const Address& tracker) {
-    Channel::tracker = tracker;
-}
-
 int Channel::DecodeID(int scrambled) {
     return scrambled ^ (int)start;
 }

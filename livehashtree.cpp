@@ -15,102 +15,8 @@ using namespace swift;
 #define  tree_debug	false
 
 
-
-const Signature Signature::NOSIG = Signature();
 const SigTintTuple SigTintTuple::NOSIGTINT = SigTintTuple();
 const BinHashSigTuple BinHashSigTuple::NOBULL = BinHashSigTuple(bin_t::NONE,Sha1Hash::ZERO,SigTintTuple::NOSIGTINT);
-
-/*
- * Signature
- */
-
-
-Signature::Signature(uint8_t *sb, uint16_t len) : sigbits_(NULL), siglen_(0)
-{
-    if (len == 0)
-        return;
-    siglen_ = len;
-    sigbits_ = new uint8_t[siglen_];
-    memcpy(sigbits_,sb,siglen_);
-}
-
-Signature::Signature(const Signature &copy) : sigbits_(NULL), siglen_(0)
-{
-    if (copy.siglen_ == 0)
-        return;
-
-    siglen_ = copy.siglen_;
-    sigbits_ = new uint8_t[siglen_];
-    memcpy(sigbits_,copy.sigbits_,siglen_);
-}
-
-Signature::Signature(bool hex, const uint8_t *sb, uint16_t len)
-{
-    if (len == 0)
-        return;
-    if (hex)
-    {
-	siglen_ = len/2;
-	sigbits_ = new uint8_t[siglen_];
-
-        int val;
-        for(int i=0; i<siglen_; i++)
-        {
-            if (sscanf((const char *)(sb+i*2), "%2x", &val)!=1)
-            {
-                memset(sigbits_,0,siglen_);
-                return;
-            }
-            sigbits_[i] = val;
-        }
-        assert(this->hex()==std::string((const char *)sb));
-    }
-    else
-    {
-	siglen_ = len;
-	sigbits_ = new uint8_t[siglen_];
-	memcpy(sigbits_,sb,siglen_);
-    }
-}
-
-
-Signature::~Signature()
-{
-    if (sigbits_ != NULL)
-        delete sigbits_;
-    sigbits_ = NULL;
-}
-
-Signature & Signature::operator= (const Signature & source)
-{
-    if (this != &source)
-    {
-        if (source.siglen_ == 0)
-        {
-            siglen_ = 0;
-            if (sigbits_ != NULL)
-                delete sigbits_;
-            sigbits_ = NULL;
-        }
-        else
-        {
-            siglen_ = source.siglen_;
-            sigbits_ = new uint8_t[source.siglen_];
-            memcpy(sigbits_,source.sigbits_,source.siglen_);
-        }
-    }
-    return *this;
-}
-
-
-std::string    Signature::hex() const {
-    char *hex = new char[siglen_*2+1];
-    for(int i=0; i<siglen_; i++)
-        sprintf(hex+i*2, "%02x", (int)(unsigned char)sigbits_[i]);
-    std::string s(hex,siglen_*2);
-    delete hex;
-    return s;
-}
 
 
 /*
@@ -201,15 +107,15 @@ void Node::SetSigTint(SigTintTuple *stptr)
  * LiveHashTree
  */
 
-LiveHashTree::LiveHashTree(Storage *storage, privkey_t privkey, uint32_t chunk_size,uint32_t nchunks_per_sig) :
-         HashTree(), state_(LHT_STATE_SIGN_EMPTY), root_(NULL), addcursor_(NULL), privkey_(privkey), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
+LiveHashTree::LiveHashTree(Storage *storage, KeyPair &keypair, uint32_t chunk_size,uint32_t nchunks_per_sig) :
+         HashTree(), state_(LHT_STATE_SIGN_EMPTY), root_(NULL), addcursor_(NULL), keypair_(keypair), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
          chunk_size_(chunk_size), storage_(storage), nchunks_per_sig_(nchunks_per_sig),
          source_last_munro_(bin_t::NONE)
 {
 }
 
-LiveHashTree::LiveHashTree(Storage *storage, pubkey_t swarmid, uint32_t chunk_size) :
-         HashTree(), state_(LHT_STATE_VER_AWAIT_PEAK), root_(NULL), addcursor_(NULL), pubkey_(swarmid), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
+LiveHashTree::LiveHashTree(Storage *storage, KeyPair &pubkeypair, uint32_t chunk_size) :
+         HashTree(), state_(LHT_STATE_VER_AWAIT_PEAK), root_(NULL), addcursor_(NULL), keypair_(pubkeypair), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
          chunk_size_(chunk_size), storage_(storage), nchunks_per_sig_(0),
          source_last_munro_(bin_t::NONE)
 {
@@ -443,14 +349,12 @@ BinHashSigTuple LiveHashTree::AddSignedMunro()
 
     // Hash of new munro known, now sign and store for transmission
     Sha1Hash hash = n->GetHash();
-    uint8_t* signedhash = new uint8_t[DUMMY_DEFAULT_SIG_LENGTH]; // placeholder
-    for (int k=0; k<20; k++)
-	signedhash[k] = 'v';
-    signedhash[19] = '\0';
-    Signature sig(signedhash,DUMMY_DEFAULT_SIG_LENGTH);
-    delete signedhash;
 
-    SigTintTuple *sigtintptr = new SigTintTuple(sig,NOW);
+    Signature *sig = keypair_.Sign(hash.bytes(),Sha1Hash::SIZE);
+    if (sig == NULL)
+	return BinHashSigTuple::NOBULL;
+
+    SigTintTuple *sigtintptr = new SigTintTuple(*sig,NOW);
 
     // Store in tree
     n->SetSigTint(sigtintptr);
@@ -608,9 +512,13 @@ bool LiveHashTree::OfferSignedMunroHash(bin_t pos, SigTintTuple &sigtint)
 
     // MUNROTODO: source RESTART
 
-    //
-    // SUMMITTODO check sig
-    //
+    bool sigok = keypair_.Verify(sigtint.sig());
+    if (!sigok)
+    {
+        if (tree_debug)
+            fprintf(stderr,"umt: OfferSignedMunroHash: signature wrong! %s\n", pos.str().c_str() );
+	return false;
+    }
 
     // Check if sane
     bin_t oldmunro = GetLastMunro();
@@ -1214,3 +1122,4 @@ void LiveHashTree::sane_node(Node *n, Node *parent)
         sane_node(n->GetRight(),n);
     }
 }
+

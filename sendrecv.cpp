@@ -319,7 +319,7 @@ void    Channel::AddHandshake (struct evbuffer *evb)
         if (hs_in_ == NULL) { // initiating
             evbuffer_add_8(evb, SWIFT_INTEGRITY);
             evbuffer_add_32be(evb, bin_toUInt32(bin_t::ALL));
-            evbuffer_add_hash(evb, transfer()->swarm_id());
+            evbuffer_add_hash(evb, transfer()->swarm_id().roothash());
             dprintf("%s #%u +hash ALL %s\n",
                     tintstr(),id_,transfer()->swarm_id().hex().c_str());
         }
@@ -357,8 +357,17 @@ void    Channel::AddHandshake (struct evbuffer *evb)
 
             if (hs_in_ == NULL) { // initiating, send swarm ID
                 evbuffer_add_8(evb, POPT_SWARMID);
-                evbuffer_add_16be(evb, Sha1Hash::SIZE); // PPSPTODO LIVE
-                evbuffer_add_hash(evb, transfer()->swarm_id() );
+                if (transfer()->ttype() == FILE_TRANSFER)
+                {
+                    evbuffer_add_16be(evb, Sha1Hash::SIZE);
+                    evbuffer_add_hash(evb, transfer()->swarm_id().roothash() );
+                }
+                else
+                {
+                    SwarmPubKey spubkey = transfer()->swarm_id().spubkey();
+                    evbuffer_add_16be(evb, spubkey.length() );
+                    evbuffer_add(evb,spubkey.bits(),spubkey.length());
+                }
                 cross << "sid " << transfer()->swarm_id().hex() << " ";
             }
             evbuffer_add_8(evb, POPT_CONT_INT_PROT);
@@ -806,9 +815,9 @@ void    Channel::Recv (struct evbuffer *evb) {
     dgrams_rcvd_++;
 
     if (!transfer()->IsOperational()) {
-            dprintf("%s #%u recvd on broken transfer %d \n",tintstr(),id_, transfer()->td() );
+	dprintf("%s #%u recvd on broken transfer %d \n",tintstr(),id_, transfer()->td() );
         CloseOnError();
-            return;
+	return;
     }
 
     lastrecvwaskeepalive_ = (evbuffer_get_length(evb) == 0);
@@ -934,7 +943,7 @@ void    Channel::Recv (struct evbuffer *evb) {
     // Arno: see if transfer still in working order
     transfer()->UpdateOperational();
     if (!transfer()->IsOperational()) {
-            dprintf("%s #%u recvd broke transfer %d \n",tintstr(),id_, transfer()->td() );
+	dprintf("%s #%u recvd broke transfer %d \n",tintstr(),id_, transfer()->td() );
         CloseOnError();
         return;
     }
@@ -965,6 +974,7 @@ void    Channel::OnHash (struct evbuffer *evb) {
     {
         // chunk spec for hash must be power-of-2 range, so must fit in single bin
         dprintf("%s #%u ?hash bad chunk spec\n",tintstr(),id_);
+        evbuffer_drain(evb, evbuffer_get_length(evb));
         Close(CLOSE_DO_NOT_SEND);
         return;
     }
@@ -1025,6 +1035,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
         // Chunk spec must denote single chunk
         dprintf("%s #%u ?data bad chunk spec\n",tintstr(),id_);
         Close(CLOSE_DO_NOT_SEND);
+        evbuffer_drain(evb, evbuffer_get_length(evb));
         return bin_t::NONE;
     }
     bin_t pos = bv.front();
@@ -1134,6 +1145,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
         // Could not parse chunk spec
         dprintf("%s #%u ?ack bad chunk spec\n",tintstr(),id_);
         Close(CLOSE_DO_NOT_SEND);
+        evbuffer_drain(evb, evbuffer_get_length(evb));
         return;
     }
     tint peer_owd = evbuffer_remove_64be(evb);
@@ -1237,6 +1249,7 @@ void Channel::OnHave (struct evbuffer *evb) {
         // Could not parse chunk spec
         dprintf("%s #%u ?have bad chunk spec\n",tintstr(),id_);
         Close(CLOSE_DO_NOT_SEND);
+        evbuffer_drain(evb, evbuffer_get_length(evb));
         return;
     }
     binvector::iterator iter;
@@ -1336,6 +1349,7 @@ void    Channel::OnHint (struct evbuffer *evb) {
         // Could not parse chunk spec
         dprintf("%s #%u ?hint bad chunk spec\n",tintstr(),id_);
         Close(CLOSE_DO_NOT_SEND);
+        evbuffer_drain(evb, evbuffer_get_length(evb));
         return;
     }
 
@@ -1398,7 +1412,8 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
                delete hs;
                return NULL;
             }
-            Sha1Hash swarmid = evbuffer_remove_hash(evb);
+            Sha1Hash roothash = evbuffer_remove_hash(evb);
+            SwarmID swarmid(roothash);
             hs->SetSwarmID(swarmid);
             dprintf("%s #%u -hash ALL %s\n",tintstr(),cid,swarmid.hex().c_str());
         }
@@ -1420,7 +1435,7 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
         uint16_t size = 0;
         uint8_t *swarmidbytes = NULL;
         uint8_t *msgbitmapbytes = NULL;
-        Sha1Hash swarmid;
+        SwarmID swarmid;
         std::ostringstream cross;
         while (!end && evbuffer_get_length(evb) > 0)
         {
@@ -1442,11 +1457,12 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
                         delete hs;
                         return NULL;
                     }
-                    swarmidbytes = evbuffer_pullup(evb,size);
-                    swarmid = Sha1Hash(false,(const char *)swarmidbytes);
+                    swarmidbytes = new uint8_t[size];
+                    evbuffer_remove(evb,swarmidbytes,size);
+                    swarmid = SwarmID(swarmidbytes,size);
+                    delete swarmidbytes;
                     hs->SetSwarmID(swarmid);
                     cross << "sid " << swarmid.hex() << " ";
-                    evbuffer_drain(evb, size);
                     break;
                 case POPT_CONT_INT_PROT:
                     hs->cont_int_prot_ = (popt_cont_int_prot_t)evbuffer_remove_8(evb);
@@ -1555,6 +1571,7 @@ void    Channel::OnCancel (struct evbuffer *evb) {
         // Could not parse chunk spec
         dprintf("%s #%u ?cancel bad chunk spec\n",tintstr(),id_);
         Close(CLOSE_DO_NOT_SEND);
+        evbuffer_drain(evb, evbuffer_get_length(evb));
         return;
     }
 
@@ -1674,26 +1691,47 @@ void Channel::OnUnchoke(struct evbuffer *evb)
 
 void Channel::OnSignedHash(struct evbuffer *evb)
 {
+    if (transfer()->ttype() != LIVE_TRANSFER)
+    {
+        dprintf("%s #%u ?sigh not live swarm\n",tintstr(),id_);
+        Close(CLOSE_DO_NOT_SEND);
+        evbuffer_drain(evb, evbuffer_get_length(evb));
+        return;
+    }
+
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
     if (bv.size() == 0 || bv.size() > 1)
     {
         // chunk spec for hash must be power-of-2 range, so must fit in single bin
         dprintf("%s #%u ?sigh bad chunk spec\n",tintstr(),id_);
         Close(CLOSE_DO_NOT_SEND);
+        evbuffer_drain(evb, evbuffer_get_length(evb));
         return;
     }
     bin_t pos = bv.front();
 
     tint source_tint = evbuffer_remove_64be(evb);
 
-    // PPSPTODO
-    //if (hs_in_->live_sig_alg_ == POPT_LIVE_SIG_ALG_PRIVATEDNS)
-
-    // SIGNPEAKTODO support diff sig algo
-    evbuffer_drain(evb, DUMMY_DEFAULT_SIG_LENGTH);
-
-    if (transfer()->ttype() != LIVE_TRANSFER)
-	return;
+    KeyPair *kp = transfer()->swarm_id().spubkey().GetPublicKeyPair();
+    if (kp == NULL)
+    {
+        dprintf("%s #%u ?sigh bad keypair\n",tintstr(),id_);
+        Close(CLOSE_DO_NOT_SEND);
+        evbuffer_drain(evb, evbuffer_get_length(evb));
+        return;
+    }
+    uint32_t siglen = kp->GetSigSizeInBytes();
+    uint8_t *sigdata = new uint8_t[siglen];
+    if (sigdata == NULL)
+    {
+        dprintf("%s #%u ?sigh no mem siglen %u\n",tintstr(),id_,siglen);
+        Close(CLOSE_DO_NOT_SEND);
+        evbuffer_drain(evb, evbuffer_get_length(evb));
+        return;
+    }
+    evbuffer_remove(evb,sigdata,siglen);
+    Signature sig(sigdata,siglen);
+    delete sigdata;
 
     // Don't accept signed hashes from others as source
     LiveTransfer *lt = (LiveTransfer *)transfer();
@@ -1704,8 +1742,6 @@ void Channel::OnSignedHash(struct evbuffer *evb)
     {
         dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
         LiveHashTree *umt = (LiveHashTree *)hashtree();
-        uint8_t dummy[DUMMY_DEFAULT_SIG_LENGTH];
-        Signature sig(dummy, DUMMY_DEFAULT_SIG_LENGTH);
         SigTintTuple sigtint(sig,source_tint);
 
         bool newverified = umt->OfferSignedMunroHash(pos,sigtint);
@@ -1868,12 +1904,13 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         if (hishs == NULL) // dprintf already called
             return_log ("%s #0 ?hs bad\n",tintstr());
 
-        int td = swift::Find(hishs->GetSwarmID(),true); // Activate
+        SwarmID swarmid = hishs->GetSwarmID();
+        int td = swift::Find(swarmid,true); // Activate
         if (td < 0)
         {
             // No known swarm, check if available as zero state
             ZeroState *zs = ZeroState::GetInstance();
-            td = zs->Find(hishs->GetSwarmID());
+            td = zs->Find(swarmid.roothash());
             if (td == -1)
                 return_log ("%s #0 hash %s unknown, requested by %s\n",tintstr(),hishs->GetSwarmID().hex().c_str(),addr.str().c_str());
         }

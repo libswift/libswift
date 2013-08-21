@@ -30,7 +30,7 @@ uint64_t ContentTransfer::cleancounter = 0;
 #define TRACKER_RETRY_INTERVAL_EXP	1.1	// exponent used to increase INTERVAL_START
 #define TRACKER_RETRY_INTERVAL_MAX	(1800*TINT_SEC) // 30 minutes
 
-ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), mychannels_(), callbacks_(), picker_(NULL),
+ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), swarm_id_(), mychannels_(), callbacks_(), picker_(NULL),
     speedzerocount_(0), tracker_(),
     tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START),
     tracker_retry_time_(NOW)

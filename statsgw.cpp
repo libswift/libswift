@@ -133,10 +133,10 @@ void StatsOverviewCallback(struct evhttp_request *evreq)
         uint64_t down  = (int)swift::Complete(td);
         int perc = (int)((down * 100) / total);
 
-        char roothashhexstr[256];
-        sprintf(roothashhexstr,"%s", SwarmID(td).hex().c_str() );
+        char roothashhexstr[1024];
+        sprintf(roothashhexstr,"%s", GetSwarmID(td).hex().c_str() );
 
-        char templ[1024];
+        char templ[2048];
         sprintf(templ,swarm_page_templ,roothashhexstr, perc, '%', dspeed, uspeed );
         strcat(bodystr,templ);
     }

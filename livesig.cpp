@@ -10,11 +10,125 @@
 
 using namespace swift;
 
-#ifdef OPENSSL
+/*
+ * Global class variables
+ */
 
+const Signature Signature::NOSIG = Signature();
+const SwarmPubKey SwarmPubKey::NOSPUBKEY = SwarmPubKey();
+
+
+/*
+ * Local functions (dummy implementations when compiled without OpenSSL
+ */
+
+static EVP_MD_CTX *opensslrsa_createctx();
+static void opensslrsa_destroyctx(EVP_MD_CTX *evp_md_ctx);
+static int opensslrsa_adddata(EVP_MD_CTX *evp_md_ctx, unsigned char *data, unsigned int datalength);
+static int opensslrsa_sign(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, struct evbuffer *evb);
+static int opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned char *sig, unsigned int siglen);
 static EVP_PKEY *opensslrsa_generate(uint16_t keysize, int exp, simple_openssl_callback_t callback);
 static struct evbuffer *opensslrsa_todns(struct evbuffer *evb,EVP_PKEY *pkey);
 static EVP_PKEY *opensslrsa_fromdns(struct evbuffer *evb);
+
+
+
+/*
+ * Signature
+ */
+
+
+Signature::Signature(uint8_t *sb, uint16_t len) : sigbits_(NULL), siglen_(0)
+{
+    if (len == 0)
+        return;
+    siglen_ = len;
+    sigbits_ = new uint8_t[siglen_];
+    memcpy(sigbits_,sb,siglen_);
+}
+
+Signature::Signature(const Signature &copy) : sigbits_(NULL), siglen_(0)
+{
+    if (copy.siglen_ == 0)
+        return;
+
+    siglen_ = copy.siglen_;
+    sigbits_ = new uint8_t[siglen_];
+    memcpy(sigbits_,copy.sigbits_,siglen_);
+}
+
+Signature::Signature(bool hex, const uint8_t *sb, uint16_t len)
+{
+    if (len == 0)
+        return;
+    if (hex)
+    {
+	siglen_ = len/2;
+	sigbits_ = new uint8_t[siglen_];
+
+        int val;
+        for(int i=0; i<siglen_; i++)
+        {
+            if (sscanf((const char *)(sb+i*2), "%2x", &val)!=1)
+            {
+                memset(sigbits_,0,siglen_);
+                return;
+            }
+            sigbits_[i] = val;
+        }
+        assert(this->hex()==std::string((const char *)sb));
+    }
+    else
+    {
+	siglen_ = len;
+	sigbits_ = new uint8_t[siglen_];
+	memcpy(sigbits_,sb,siglen_);
+    }
+}
+
+
+Signature::~Signature()
+{
+    if (sigbits_ != NULL)
+        delete sigbits_;
+    sigbits_ = NULL;
+}
+
+Signature & Signature::operator= (const Signature & source)
+{
+    if (this != &source)
+    {
+        if (source.siglen_ == 0)
+        {
+            siglen_ = 0;
+            if (sigbits_ != NULL)
+                delete sigbits_;
+            sigbits_ = NULL;
+        }
+        else
+        {
+            siglen_ = source.siglen_;
+            sigbits_ = new uint8_t[source.siglen_];
+            memcpy(sigbits_,source.sigbits_,source.siglen_);
+        }
+    }
+    return *this;
+}
+
+
+std::string    Signature::hex() const {
+    char *hex = new char[siglen_*2+1];
+    for(int i=0; i<siglen_; i++)
+        sprintf(hex+i*2, "%02x", (int)(unsigned char)sigbits_[i]);
+    std::string s(hex,siglen_*2);
+    delete hex;
+    return s;
+}
+
+
+/*
+ * KeyPair
+ */
 
 KeyPair *KeyPair::Generate( popt_live_sig_alg_t alg, uint16_t keysize, simple_openssl_callback_t callback)
 {
@@ -31,7 +145,7 @@ KeyPair *KeyPair::Generate( popt_live_sig_alg_t alg, uint16_t keysize, simple_op
 }
 
 
-SwarmLiveID *KeyPair::GetSwarmLiveID()
+SwarmPubKey *KeyPair::GetSwarmPubKey()
 {
     struct evbuffer *evb = evbuffer_new();
 
@@ -41,17 +155,158 @@ SwarmLiveID *KeyPair::GetSwarmLiveID()
 	evb = opensslrsa_todns(evb,evp_);
 
     if (evbuffer_get_length(evb) == 1)
+    {
+	evbuffer_free(evb);
 	return NULL;
+    }
 
     uint8_t *bindata = (uint8_t *)evbuffer_pullup(evb,evbuffer_get_length(evb));
     if (bindata == NULL)
+    {
+	evbuffer_free(evb);
 	return NULL;
+    }
     else
-	return new SwarmLiveID(bindata,evbuffer_get_length(evb));
+    {
+	SwarmPubKey *spubkey = new SwarmPubKey(bindata,evbuffer_get_length(evb));
+	evbuffer_free(evb);
+	return spubkey;
+    }
 }
 
 
-KeyPair *SwarmLiveID::GetPublicKey()
+
+Signature *KeyPair::Sign(uint8_t *data, uint16_t datalength)
+{
+    EVP_MD_CTX *ctx = opensslrsa_createctx();
+    if (ctx == NULL)
+	return NULL;
+
+    int ret = opensslrsa_adddata(ctx,data,datalength);
+    if (ret == 0)
+    {
+	opensslrsa_destroyctx(ctx);
+	return NULL;
+    }
+    struct evbuffer *evb = evbuffer_new();
+    ret = opensslrsa_sign(evp_,ctx, evb);
+    if (ret == 0)
+    {
+	evbuffer_free(evb);
+	opensslrsa_destroyctx(ctx);
+	return NULL;
+    }
+
+    Signature *sig = NULL;
+    uint8_t *sigdata = (uint8_t *)evbuffer_pullup(evb,evbuffer_get_length(evb));
+    if (sigdata != NULL)
+	sig = new Signature(sigdata,evbuffer_get_length(evb));
+    evbuffer_free(evb);
+    opensslrsa_destroyctx(ctx);
+    return sig;
+}
+
+
+bool KeyPair::Verify(Signature &sig)
+{
+    EVP_MD_CTX *ctx = opensslrsa_createctx();
+    if (ctx == NULL)
+	return false;
+
+    int ret = opensslrsa_verify2(evp_,ctx,0,sig.bits(),sig.length());
+    opensslrsa_destroyctx(ctx);
+    return (ret == 1);
+}
+
+
+uint32_t KeyPair::GetSigSizeInBytes()
+{
+    return EVP_PKEY_size(evp_);
+}
+
+
+
+/*
+ * Signature
+ */
+
+
+SwarmPubKey::SwarmPubKey(uint8_t *bits, uint16_t len)
+{
+    if (len == 0)
+	return;
+    len_ = len;
+    bits_ = new uint8_t[len_];
+    memcpy(bits_,bits,len_);
+}
+
+SwarmPubKey::SwarmPubKey(const SwarmPubKey& copy) : bits_(NULL), len_(0)
+{
+    if (copy.len_ == 0)
+	return;
+
+    len_ = copy.len_;
+    bits_ = new uint8_t[len_];
+    memcpy(bits_,copy.bits_,len_);
+}
+
+SwarmPubKey::SwarmPubKey(std::string hexstr)
+{
+    int val;
+    uint16_t    len = hexstr.length()/2;
+    char *hexcstr = new char[hexstr.length()+1];
+    strcpy(hexcstr,hexstr.c_str());
+    uint8_t *bits = new uint8_t[len];
+
+    int i=0;
+    for(i=0; i<len; i++)
+    {
+	if (sscanf(hexcstr+i*2, "%2x", &val)!=1)
+	    break;
+	bits[i] = val;
+    }
+    if (i == len)
+    {
+	bits_ = bits;
+	len_ = len;
+    }
+    else
+    {
+	bits_ = NULL;
+	len_ = 0;
+	delete bits;
+    }
+    delete hexcstr;
+}
+
+SwarmPubKey::~SwarmPubKey()
+{
+    if (bits_ != NULL)
+	delete bits_;
+    bits_ = NULL;
+}
+
+SwarmPubKey & SwarmPubKey::operator= (const SwarmPubKey & source)
+{
+     if (this != &source)
+     {
+	 memcpy(bits_,source.bits_,len_);
+     }
+     return *this;
+ }
+
+
+std::string SwarmPubKey::hex() const
+{
+    char *hex = new char[len_*2+1];
+    for(int i=0; i<len_; i++)
+	sprintf(hex+i*2, "%02x", (int)(unsigned char)bits_[i]);
+    std::string s(hex,len_*2);
+    delete hex;
+    return s;
+}
+
+KeyPair *SwarmPubKey::GetPublicKeyPair() const
 {
     if (len_ < 1)
 	return NULL;
@@ -68,6 +323,12 @@ KeyPair *SwarmLiveID::GetPublicKey()
 }
 
 
+/*
+ * Implementations of crypto
+ */
+
+
+#ifdef OPENSSL
 
 // Adapted from BIND9 opensslrsa_link.c
 /*
@@ -101,6 +362,77 @@ KeyPair *SwarmLiveID::GetPublicKey()
 #endif
 
 
+
+static EVP_MD_CTX *opensslrsa_createctx()
+{
+    EVP_MD_CTX *evp_md_ctx=NULL;
+    const EVP_MD *type = EVP_sha1();	/* SHA1 + RSA */;
+    evp_md_ctx = EVP_MD_CTX_create();
+    if (evp_md_ctx == NULL)
+	return NULL;
+
+    if (!EVP_DigestInit_ex(evp_md_ctx, type, NULL)) {
+	    EVP_MD_CTX_destroy(evp_md_ctx);
+	    return NULL;
+    }
+    return evp_md_ctx;
+}
+
+static void
+opensslrsa_destroyctx(EVP_MD_CTX *evp_md_ctx)
+{
+    if (evp_md_ctx != NULL) {
+	EVP_MD_CTX_destroy(evp_md_ctx);
+    }
+}
+
+static int
+opensslrsa_adddata(EVP_MD_CTX *evp_md_ctx, unsigned char *data, unsigned int datalength)
+{
+    if (!EVP_DigestUpdate(evp_md_ctx, data, datalength)) {
+	    return 0;
+    }
+    return 1;
+}
+
+static int
+opensslrsa_sign(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, struct evbuffer *evb)
+{
+    unsigned int siglen = 0;
+    unsigned char *sig = new unsigned char[EVP_PKEY_size(pkey)];
+    if (sig == NULL)
+	return 0;
+
+    if (!EVP_SignFinal(evp_md_ctx, sig, &siglen, pkey)) {
+	delete sig;
+	return 0;
+    }
+
+    evbuffer_add(evb,sig,siglen);
+    return 1;
+}
+
+
+static int
+opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned char *sig, unsigned int siglen)
+{
+    int status = 0;
+    RSA *rsa;
+    int bits;
+
+    rsa = EVP_PKEY_get1_RSA(pkey);
+    if (rsa == NULL)
+	return 0;
+    bits = BN_num_bits(rsa->e);
+    RSA_free(rsa);
+    if (bits > maxbits && maxbits != 0)
+	return 0;
+
+    return EVP_VerifyFinal(evp_md_ctx, sig, siglen, pkey);
+}
+
+
+
 static int generate_progress_cb(int p, int n, BN_GENCB *cb)
 {
     simple_openssl_callback_t	func;
@@ -112,6 +444,8 @@ static int generate_progress_cb(int p, int n, BN_GENCB *cb)
     }
     return 1;
 }
+
+
 
 static EVP_PKEY *opensslrsa_generate(uint16_t keysize, int exp, simple_openssl_callback_t callback)
 {
@@ -158,12 +492,6 @@ static EVP_PKEY *opensslrsa_generate(uint16_t keysize, int exp, simple_openssl_c
 	    return pkey;
     }
 }
-
-
-
-
-
-
 
 
 static struct evbuffer *opensslrsa_todns(struct evbuffer *evb,EVP_PKEY *pkey)
@@ -299,6 +627,39 @@ static EVP_PKEY *opensslrsa_fromdns(struct evbuffer *evb)
     return pkey;
 }
 
+#else
 
+static EVP_MD_CTX *opensslrsa_createctx()
+{
+    return NULL;
+}
+static void opensslrsa_destroyctx(EVP_MD_CTX *evp_md_ctx)
+{
+}
+static int opensslrsa_adddata(EVP_MD_CTX *evp_md_ctx, unsigned char *data, unsigned int datalength)
+{
+    return 0;
+}
+static int opensslrsa_sign(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, struct evbuffer *evb)
+{
+    return 0;
+}
+}
+static int opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned char *sig, unsigned int siglen)
+{
+    return 0;
+}
+static EVP_PKEY *opensslrsa_generate(uint16_t keysize, int exp, simple_openssl_callback_t callback)
+{
+    return NULL;
+}
+static struct evbuffer *opensslrsa_todns(struct evbuffer *evb,EVP_PKEY *pkey)
+{
+    return NULL;
+}
+static EVP_PKEY *opensslrsa_fromdns(struct evbuffer *evb)
+{
+    return NULL;
+}
 
 #endif

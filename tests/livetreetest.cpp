@@ -16,6 +16,9 @@
 #include <cstdlib>      // std::rand, std::srand
 
 
+#define DUMMY_DEFAULT_SIG_LENGTH	20
+
+
 using namespace swift;
 
 /** List of chunks */

@@ -138,53 +138,87 @@ namespace swift {
 #define SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN   32
 
 
+    typedef enum {
+	FILE_TRANSFER,
+	LIVE_TRANSFER
+    } transfer_t;
+
+
+    struct SwarmID  {
+      public:
+	SwarmID() : empty_(true) {}
+	SwarmID(const Sha1Hash &roothash) { ttype_ = FILE_TRANSFER; roothash_ = roothash; empty_=false;}
+	SwarmID(const SwarmPubKey &spubkey) { ttype_ = LIVE_TRANSFER; spubkey_ = spubkey; empty_=false;}
+	SwarmID(std::string hexstr);
+	SwarmID(uint8_t *data,uint16_t datalength);
+	~SwarmID();
+	bool    operator == (const SwarmID& b) const;
+	SwarmID & operator = (const SwarmID &source);
+	/** Returns the type of transfer, FILE_TRANSFER or LIVE_TRANSFER */
+        transfer_t      ttype() { return ttype_; }
+        const Sha1Hash	&roothash() const { return roothash_; }
+	const SwarmPubKey &spubkey() const { return spubkey_; }
+	std::string     hex() const;
+	void		SetRootHash(const Sha1Hash &roothash) { ttype_ = FILE_TRANSFER; roothash_ = roothash; empty_=false;}
+
+	const static SwarmID NOSWARMID;
+
+      protected:
+	bool		empty_; // if NOSWARMID
+	transfer_t	ttype_;
+	Sha1Hash	roothash_;
+	SwarmPubKey	spubkey_;
+    };
+
+
+
 /** IPv4/6 address, just a nice wrapping around struct sockaddr_storage. */
     struct Address {
-    struct sockaddr_storage  addr;
-    Address();
-    Address(const char* ip, uint16_t port);
-    /**IPv4 address as "ip:port" or IPv6 address as "[ip]:port" following
-     * RFC2732, or just port in which case the address is set to in6addr_any */
-    Address(const char* ip_port);
-    Address(uint32_t ipv4addr, uint16_t port);
-    Address(const struct sockaddr_storage& address) : addr(address) {}
-    Address(struct in6_addr ipv6addr, uint16_t port);
+	struct sockaddr_storage  addr;
+	Address();
+	Address(const char* ip, uint16_t port);
+	/**IPv4 address as "ip:port" or IPv6 address as "[ip]:port" following
+	 * RFC2732, or just port in which case the address is set to in6addr_any */
+	Address(const char* ip_port);
+	Address(uint32_t ipv4addr, uint16_t port);
+	Address(const struct sockaddr_storage& address) : addr(address) {}
+	Address(struct in6_addr ipv6addr, uint16_t port);
 
-    void set_ip   (const char* ip_str, int family);
-    void set_port (uint16_t port);
-    void set_port (const char* port_str);
-    void set_ipv4 (uint32_t ipv4);
-    void set_ipv4 (const char* ipv4_str);
-    void set_ipv6 (const char* ip_str);
-    void set_ipv6 (struct in6_addr &ipv6);
-    void clear ();
-    uint32_t ipv4() const;
-    struct in6_addr ipv6() const;
-    uint16_t port () const;
-    operator sockaddr_storage () const {return addr;}
-    bool operator == (const Address& b) const;
-    std::string str () const;
-    std::string ipstr (bool includeport=false) const;
-    bool operator != (const Address& b) const { return !(*this==b); }
-    bool is_private() const;
-    int get_family() const { return addr.ss_family; }
-    socklen_t get_family_sockaddr_length() const;
+	void set_ip   (const char* ip_str, int family);
+	void set_port (uint16_t port);
+	void set_port (const char* port_str);
+	void set_ipv4 (uint32_t ipv4);
+	void set_ipv4 (const char* ipv4_str);
+	void set_ipv6 (const char* ip_str);
+	void set_ipv6 (struct in6_addr &ipv6);
+	void clear ();
+	uint32_t ipv4() const;
+	struct in6_addr ipv6() const;
+	uint16_t port () const;
+	operator sockaddr_storage () const {return addr;}
+	bool operator == (const Address& b) const;
+	std::string str () const;
+	std::string ipstr (bool includeport=false) const;
+	bool operator != (const Address& b) const { return !(*this==b); }
+	bool is_private() const;
+	int get_family() const { return addr.ss_family; }
+	socklen_t get_family_sockaddr_length() const;
     };
 
 // Arno, 2011-10-03: Use libevent callback functions, no on_error?
 #define sockcb_t        event_callback_fn
     struct sckrwecb_t {
-    sckrwecb_t (evutil_socket_t s=0, sockcb_t mr=NULL, sockcb_t mw=NULL,
-            sockcb_t oe=NULL) :
-        sock(s), may_read(mr), may_write(mw), on_error(oe) {}
-    evutil_socket_t sock;
-    sockcb_t   may_read;
-    sockcb_t   may_write;
-    sockcb_t   on_error;
-    };
+	sckrwecb_t (evutil_socket_t s=0, sockcb_t mr=NULL, sockcb_t mw=NULL,
+		sockcb_t oe=NULL) :
+	    sock(s), may_read(mr), may_write(mw), on_error(oe) {}
+	evutil_socket_t sock;
+	sockcb_t   may_read;
+	sockcb_t   may_write;
+	sockcb_t   on_error;
+	};
 
-    struct now_t  {
-    static tint now;
+	struct now_t  {
+	static tint now;
     };
 
 #define NOW now_t::now
@@ -263,11 +297,6 @@ namespace swift {
     } data_direction_t;
 
 
-    typedef enum {
-        FILE_TRANSFER,
-        LIVE_TRANSFER
-    } transfer_t;
-
     /** Arno: enum to indicate when to send an explicit close to the peer when
      * doing a local close.
      */
@@ -327,9 +356,9 @@ namespace swift {
     {
       public:
 #if ENABLE_IETF_PPSP_VERSION == 1
-	Handshake() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_sig_alg_(POPT_LIVE_SIG_ALG_PRIVATEDNS), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
+	Handshake() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_sig_alg_(POPT_LIVE_SIG_ALG_RSASHA1), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
 #else
-	Handshake() : version_(VER_SWIFT_LEGACY), min_version_(VER_SWIFT_LEGACY), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_sig_alg_(POPT_LIVE_SIG_ALG_PRIVATEDNS), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
+	Handshake() : version_(VER_SWIFT_LEGACY), min_version_(VER_SWIFT_LEGACY), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_sig_alg_(POPT_LIVE_SIG_ALG_RSASHA1), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
 #endif
 	Handshake(Handshake &c)
 	{
@@ -343,12 +372,12 @@ namespace swift {
             if (c.swarm_id_ptr_ == NULL)
                 swarm_id_ptr_ = NULL;
             else
-                swarm_id_ptr_ = new Sha1Hash(*(c.swarm_id_ptr_));
+                swarm_id_ptr_ = new SwarmID(*(c.swarm_id_ptr_));
 
 	}
 	~Handshake() { ReleaseSwarmID(); }
-	void SetSwarmID(Sha1Hash &swarmid) { swarm_id_ptr_ = new Sha1Hash(swarmid); }
-	const Sha1Hash &GetSwarmID() { return (swarm_id_ptr_ == NULL) ? Sha1Hash::ZERO : *swarm_id_ptr_; }
+	void SetSwarmID(SwarmID &swarmid) { swarm_id_ptr_ = new SwarmID(swarmid); }
+	const SwarmID &GetSwarmID() { return (swarm_id_ptr_ == NULL) ? SwarmID::NOSWARMID : *swarm_id_ptr_; }
 	void ReleaseSwarmID() { if (swarm_id_ptr_ != NULL) delete swarm_id_ptr_; swarm_id_ptr_ = NULL; }
 	bool IsSupported()
 	{
@@ -358,7 +387,7 @@ namespace swift {
 		return false; // PPSPTODO
 	    else if (chunk_addr_ == POPT_CHUNK_ADDR_BYTE64 || chunk_addr_ == POPT_CHUNK_ADDR_BIN64 || chunk_addr_ == POPT_CHUNK_ADDR_CHUNK64)
 		return false; // PPSPTODO
-	    else if (live_sig_alg_ != POPT_LIVE_SIG_ALG_PRIVATEDNS)
+	    else if (!(live_sig_alg_ == POPT_LIVE_SIG_ALG_RSASHA1 || live_sig_alg_ == POPT_LIVE_SIG_ALG_ECDSAP256SHA256 || live_sig_alg_ == POPT_LIVE_SIG_ALG_ECDSAP384SHA384))
 		return false; // PPSPTODO
 	    return true;
 	}
@@ -385,8 +414,8 @@ namespace swift {
 	uint64_t		live_disc_wnd_;
       protected:
 	/** Dynamically allocated such that we can deallocate it and
-	 * save Sha1Hash::SIZE bytes per channel */
-	Sha1Hash 		*swarm_id_ptr_;
+	 * save some bytes per channel */
+	SwarmID 		*swarm_id_ptr_;
     };
 
     class PiecePicker;
@@ -411,7 +440,7 @@ namespace swift {
 
         // Overridable methods
         /** Returns the global ID for this transfer */
-        virtual const Sha1Hash&     swarm_id() const = 0;
+        virtual const SwarmID&     swarm_id() = 0;
         /** The binmap pointer for data already retrieved and checked. */
         virtual binmap_t *  ack_out() = 0;
         /** Returns the number of bytes in a chunk for this transfer */
@@ -488,6 +517,7 @@ namespace swift {
 
       protected:
         transfer_t      ttype_;
+        SwarmID 	swarm_id_;
         int             td_;	// transfer descriptor as used by swift API.
         Handshake 	def_hs_out_;
 
@@ -536,7 +566,7 @@ namespace swift {
 
         // ContentTransfer overrides
 
-        const Sha1Hash& swarm_id() const { return hashtree_->root_hash(); }
+        const SwarmID& swarm_id() { swarm_id_.SetRootHash(hashtree_->root_hash()); return swarm_id_; }
         /** The binmap pointer for data already retrieved and checked. */
         binmap_t *      ack_out ()  { return hashtree_->ack_out(); }
         /** Piece picking strategy used by this transfer. */
@@ -569,17 +599,17 @@ namespace swift {
       public:
 
         /** A constructor for a live source. */
-	LiveTransfer(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, std::string checkpoint_filename, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+	LiveTransfer(std::string filename, KeyPair &keypair, std::string checkpoint_filename, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
 	/** A constructor for live client. */
-	LiveTransfer(std::string filename, const pubkey_t &pubkey, bool check_netwvshash=true, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+	LiveTransfer(std::string filename, SwarmID &swarmid, bool check_netwvshash=true, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
         /**  Close everything. */
         ~LiveTransfer();
 
         // ContentTransfer overrides
 
-        const Sha1Hash& swarm_id() const { return pubkey_; }
+        const SwarmID& swarm_id() { return swarm_id_; }
         /** The binmap for data already retrieved and checked. */
         binmap_t *      ack_out ();
         /** Returns the number of bytes in a chunk for this transmission */
@@ -625,7 +655,7 @@ namespace swift {
         /** Find transfer by the transfer descriptor. */
         static LiveTransfer* FindByTD(int td);
         /** Find transfer by the swarm ID. */
-        static LiveTransfer* FindBySwarmID(const Sha1Hash& swarmid);
+        static LiveTransfer* FindBySwarmID(const SwarmID& swarmid);
         /** Return list of transfer descriptors of all LiveTransfers */
         static tdlist_t GetTransferDescriptors();
         /** Add this LiveTransfer to the global list */
@@ -638,11 +668,6 @@ namespace swift {
         BinHashSigTuple ReadCheckpoint();
 
       protected:
-
-        // SIGNPEAKTODO replace swarm ID = root_hash with generic swarm ID
-        /** PPSP-03: Live Swarm Identifier consists of a public key encoded as
-         * in a DNSSEC DNSKEY resource record [RFC4034] without BASE-64 encoding. */
-        Sha1Hash 	swarm_id_;
         /**    Binmap of own chunk availability, when not POPT_CONT_INT_PROT_UNIFIED_MERKLE (so _NONE or _SIGNALL) */
         binmap_t        ack_out_;
         /**    Binmap of own chunk availability restricted to current signed peaks SIGNPEAK */
@@ -665,8 +690,7 @@ namespace swift {
         /** Source: Count of chunks generated since last signed peak epoch */
         uint32_t        chunks_since_sign_;
 
-        privkey_t	privkey_;
-        pubkey_t	pubkey_;
+        KeyPair		keypair_;
 
         // LIVECHECKPOINT
 	/** Filename to store source checkpoint */
@@ -1233,15 +1257,15 @@ namespace swift {
         no longer works on restarts, unless checkpoints are used.
         */
         // TODO: replace check_netwvshash with full set of protocol options
-    int     Open( std::string filename, const Sha1Hash& hash=Sha1Hash::ZERO,Address tracker=Address(), bool force_check_diskvshash=true, bool check_netwvshash=true, bool zerostate=false, bool activate=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     Open( std::string filename, SwarmID& swarmid,Address tracker=Address(), bool force_check_diskvshash=true, bool check_netwvshash=true, bool zerostate=false, bool activate=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** Get the root hash for the transmission. */
-    const Sha1Hash& SwarmID (int file) ;
+    SwarmID GetSwarmID( int file);
     /** Close a file and a transmission, remove state or content if desired. */
-    void    Close( int td, bool removestate = false, bool removecontent = false) ;
+    void    Close( int td, bool removestate = false, bool removecontent = false);
     /** Add a possible peer which participares in a given transmission. In the case
         root hash is zero, the peer might be talked to regarding any transmission
         (likely, a tracker, cache or an archive). */
-    void    AddPeer( Address& address, const Sha1Hash& root=Sha1Hash::ZERO);
+    void    AddPeer( Address& address, SwarmID& swarmid);
 
     /** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes. Autoactivates */
     ssize_t Read( int td, void *buf, size_t nbyte, int64_t offset); // off_t not 64-bit dynamically on Win32
@@ -1253,7 +1277,7 @@ namespace swift {
     int     Seek( int td, int64_t offset, int whence);
     /** Set the default tracker that is used when Open is not passed a tracker
         address. */
-    void    SetTracker( const Address& tracker);
+    void    SetTracker( Address& tracker);
     /** Returns size of the file in bytes, 0 if unknown. Might be rounded up
         to a kilobyte before the transmission is complete. */
     uint64_t Size( int td);
@@ -1269,17 +1293,17 @@ namespace swift {
     uint64_t GetHookinOffset( int td);
 
     /** Arno: See if swarm is known and activate if requested */
-    int     Find( const Sha1Hash& swarmid, bool activate=false);
+    int     Find( SwarmID& swarmid, bool activate=false);
     /** Returns the number of bytes in a chunk for this transmission */
     uint32_t ChunkSize(int td);
 
     // LIVE
     /** To create a live stream as source */
-    LiveTransfer *LiveCreate(std::string filename, const pubkey_t &pubkey, const privkey_t &privkey, std::string checkpoint_filename, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    LiveTransfer *LiveCreate(std::string filename, KeyPair &keypair, std::string checkpoint_filename, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** To add chunks to a live stream as source */
     int     LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte);
     /** To open a live stream as peer */
-    int     LiveOpen(std::string filename, const pubkey_t &pubkey, Address &tracker, bool check_netwvshash=true, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     LiveOpen(std::string filename, SwarmID &swarmid, Address &tracker, bool check_netwvshash=true, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
     /** Register a callback for when the download of another pow(2,agg) chunks
         is finished. So agg = 0 = 2^0 = 1, means every chunk. */
