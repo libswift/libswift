@@ -18,7 +18,7 @@ import sys
 DEBUG = True
 #CODECOVERAGE = (DEBUG and True)
 CODECOVERAGE = False
-WITHOPENSSL = True
+WITHOPENSSL = False
 
 TestDir='tests'
 

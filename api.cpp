@@ -115,7 +115,7 @@ std::string     SwarmID::tofilename() const
 {
     if (ttype_ == LIVE_TRANSFER) {
 	// Arno, 2013-08-22: Full swarmID in hex too large for filesystem, take 40 byte prefix
-	return hex().substr(Sha1Hash::SIZE*2);
+	return hex().substr(0,Sha1Hash::SIZE*2);
     }
     else
 	return hex();
