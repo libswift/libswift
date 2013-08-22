@@ -150,5 +150,5 @@ Export("linkflags")
 Export("DEBUG")
 Export("CODECOVERAGE")
 # Arno: uncomment to build tests
-SConscript('tests/SConscript')
+#SConscript('tests/SConscript')
 

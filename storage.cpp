@@ -435,7 +435,7 @@ int Storage::ParseSpec(StorageFile *sf)
 
 int Storage::OpenSingleFile()
 {
-    //dprintf("%s %s storage: Opening single file %s\n", tintstr(), roothashhex().c_str(), os_pathname_.c_str() );
+    dprintf("%s %s storage: Opening single file %s\n", tintstr(), roothashhex().c_str(), os_pathname_.c_str() );
     single_fd_ = open_utf8(os_pathname_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (single_fd_<0) {
         single_fd_ = -1;

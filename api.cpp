@@ -29,6 +29,7 @@ SwarmID::SwarmID(std::string hexstr)
 {
     int val,len=hexstr.length()/2;
 
+    empty_ = false;
     if (len == Sha1Hash::SIZE) // Assumption: pubkey always bigger
     {
 	ttype_ = FILE_TRANSFER;
@@ -70,14 +71,14 @@ SwarmID::~SwarmID()
 
 SwarmID & SwarmID::operator= (const SwarmID & source)
 {
-     if (this != &source)
-     {
-	 empty_ = source.empty_;
-	 ttype_ = source.ttype_;
-	 roothash_ = source.roothash_;
-	 spubkey_ = source.spubkey_;
-     }
-     return *this;
+    if (this != &source)
+    {
+	empty_ = source.empty_;
+	ttype_ = source.ttype_;
+	roothash_ = source.roothash_;
+	spubkey_ = source.spubkey_;
+    }
+    return *this;
  }
 
 
@@ -96,7 +97,8 @@ bool    SwarmID::operator == (const SwarmID& b) const
 
 
 
-std::string    SwarmID::hex() const {
+std::string    SwarmID::hex() const
+{
     if (empty_)
 	return Sha1Hash::ZERO.hex();
 
@@ -106,6 +108,17 @@ std::string    SwarmID::hex() const {
     {
 	return spubkey_.hex();
     }
+}
+
+
+std::string     SwarmID::tofilename() const
+{
+    if (ttype_ == LIVE_TRANSFER) {
+	// Arno, 2013-08-22: Full swarmID in hex too large for filesystem, take 40 byte prefix
+	return hex().substr(Sha1Hash::SIZE*2);
+    }
+    else
+	return hex();
 }
 
 

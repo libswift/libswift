@@ -84,7 +84,7 @@ struct KeyPair
     SwarmPubKey    *GetSwarmPubKey();
 
     Signature *Sign(uint8_t *data, uint16_t datalength);
-    bool Verify(Signature &sig);
+    bool Verify(uint8_t *data, uint16_t datalength,Signature &sig);
 
     /** Returns the number of bytes a signature takes on the wire */
     uint32_t	    GetSigSizeInBytes();
@@ -106,8 +106,7 @@ struct SwarmPubKey
     SwarmPubKey(std::string hexstr);
     ~SwarmPubKey();
     SwarmPubKey & operator = (const SwarmPubKey &source);
-    bool    operator == (const SwarmPubKey& b) const
-        { return 0==memcmp(bits_,b.bits_,len_); }
+    bool    operator == (const SwarmPubKey& b) const;
     uint8_t  *bits()  { return bits_; }
     uint16_t length() { return len_; }
     std::string hex() const;

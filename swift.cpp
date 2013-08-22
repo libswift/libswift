@@ -399,6 +399,31 @@ int utf8main (int argc, char** argv)
 	    quit( "file does not exist: %s\n", filename.c_str() );
     }
 
+    // TEMP: read hex
+    if (livestream && keypairfilename != "")
+    {
+        fprintf(stderr,"swift: Reading live swarmid from %s\n", keypairfilename.c_str() );
+
+	uint16_t fsize = (uint16_t)file_size_by_path_utf8(keypairfilename);
+	char *data = new char[fsize+1];
+	data[fsize] = '\0';
+	FILE *fp = fopen_utf8(keypairfilename.c_str(),"rb");
+        if (fp == NULL)
+        {
+            fprintf(stderr,"Could not open keypair file\n");
+        }
+        else
+        {
+	    int n = fread(data,sizeof(char),fsize,fp);
+	    fclose(fp);
+	    std::string datahex(data);
+	    swarmid = SwarmID(datahex);
+	    delete data;
+
+            fprintf(stderr,"swift: Read swarmid: %s\n", swarmid.hex().c_str() );
+        }
+    }
+
     if (httpgw_enabled)
         InstallHTTPGateway(Channel::evbase,httpaddr,livesource_disc_wnd,chunk_size,maxspeed,"",-1,-1);
     if (cmdgw_enabled)
@@ -525,7 +550,9 @@ int utf8main (int argc, char** argv)
 int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed)
 {
     if (!(swarmid == SwarmID::NOSWARMID) && filename == "")
-        filename = swarmid.hex();
+    {
+	filename = swarmid.tofilename();
+    }
 
     single_td = OpenSwiftSwarm(filename,swarmid,tracker,false,chunk_size,livestream,true); //activate always
     if (single_td < 0)
@@ -673,7 +700,8 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
     livesource_evb = evbuffer_new();
 
     KeyPair *keypairptr=NULL;
-    if (keypairfilename == "")
+    //if (keypairfilename == "")
+    if (true)
     {
 	keypairptr = KeyPair::Generate(POPT_LIVE_SIG_ALG_RSASHA1, SWIFT_RSA_DEFAULT_KEYSIZE, OpenSSLGenerateCallback );
     }
@@ -715,6 +743,14 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
 
         // Create swarm
         livesource_lt = swift::LiveCreate(filename,*keypairptr,livesource_checkpoint_filename,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,livesource_disc_wnd,chunk_size); // SIGNPEAKTODO
+
+        if (keypairfilename != "")
+        {
+	    std::string swarmidstr = livesource_lt->swarm_id().hex();
+	    FILE *fp = fopen_utf8(keypairfilename.c_str(),"wb");
+	    fwrite(swarmidstr.c_str(),sizeof(char),swarmidstr.length(),fp);
+	    fclose(fp);
+        }
 
         // Periodically create chunks by reading from source
         evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);

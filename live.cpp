@@ -186,11 +186,12 @@ void LiveTransfer::Initialize(bool check_netwvshash,uint64_t disc_wnd,uint32_t n
 
     std::string destdir;
     int ret = file_exists_utf8(filename_);
-    if (ret == 2) {
+    if (ret == 2)  {
         // Filename is a directory, download to swarmid-as-hex file there
         destdir = filename_;
-        filename_ = destdir+FILE_SEP+swarm_id_.hex();
-    } else {
+        filename_ = destdir+FILE_SEP+swarm_id_.tofilename();
+    }
+    else {
         destdir = dirname_utf8(filename_);
         if (destdir == "")
             destdir = ".";

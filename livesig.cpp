@@ -201,19 +201,45 @@ Signature *KeyPair::Sign(uint8_t *data, uint16_t datalength)
     uint8_t *sigdata = (uint8_t *)evbuffer_pullup(evb,evbuffer_get_length(evb));
     if (sigdata != NULL)
 	sig = new Signature(sigdata,evbuffer_get_length(evb));
+
+    fprintf(stderr,"SIGN len %u ", evbuffer_get_length(evb) );
+    for (int i=0; i<evbuffer_get_length(evb); i++)
+    {
+	fprintf(stderr,"%02x ",sigdata[i] );
+    }
+    fprintf(stderr,"\n");
+
     evbuffer_free(evb);
     opensslrsa_destroyctx(ctx);
     return sig;
 }
 
 
-bool KeyPair::Verify(Signature &sig)
+bool KeyPair::Verify(uint8_t *data, uint16_t datalength,Signature &sig)
 {
     EVP_MD_CTX *ctx = opensslrsa_createctx();
     if (ctx == NULL)
 	return false;
 
-    int ret = opensslrsa_verify2(evp_,ctx,0,sig.bits(),sig.length());
+    int ret = opensslrsa_adddata(ctx,data,datalength);
+    if (ret == 0)
+    {
+	opensslrsa_destroyctx(ctx);
+	return false;
+    }
+
+    fprintf(stderr,"VERIFY len %u ", sig.length() );
+    uint8_t *sigdata = sig.bits();
+    for (int i=0; i<sig.length(); i++)
+    {
+	fprintf(stderr,"%02x ",sigdata[i] );
+    }
+    fprintf(stderr,"\n");
+
+    ret = opensslrsa_verify2(evp_,ctx,0,sig.bits(),sig.length());
+
+    fprintf(stderr,"KeyPair::Verify ret %d\n", ret );
+
     opensslrsa_destroyctx(ctx);
     return (ret == 1);
 }
@@ -288,13 +314,33 @@ SwarmPubKey::~SwarmPubKey()
 
 SwarmPubKey & SwarmPubKey::operator= (const SwarmPubKey & source)
 {
-     if (this != &source)
-     {
-	 memcpy(bits_,source.bits_,len_);
-     }
-     return *this;
- }
+    if (this != &source)
+    {
+        if (source.len_ == 0)
+        {
+            len_ = 0;
+            if (bits_ != NULL)
+                delete bits_;
+            bits_ = NULL;
+        }
+        else
+        {
+            len_ = source.len_;
+            bits_ = new uint8_t[source.len_];
+            memcpy(bits_,source.bits_,source.len_);
+        }
+    }
+    return *this;
+}
 
+bool    SwarmPubKey::operator == (const SwarmPubKey& b) const
+{ 
+    if (len_ == 0 && b.len_ == 0)
+        return true;
+    else if (len_ != b.len_)
+        return false;
+    return 0==memcmp(bits_,b.bits_,len_); 
+}
 
 std::string SwarmPubKey::hex() const
 {
@@ -308,6 +354,8 @@ std::string SwarmPubKey::hex() const
 
 KeyPair *SwarmPubKey::GetPublicKeyPair() const
 {
+    fprintf(stderr,"SwarmPubKey::GetPublicKeyPair\n");
+
     if (len_ < 1)
 	return NULL;
 
@@ -414,7 +462,7 @@ opensslrsa_sign(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, struct evbuffer *evb)
 
 
 static int
-opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned char *sig, unsigned int siglen)
+opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned char *sigdata, unsigned int siglen)
 {
     int status = 0;
     RSA *rsa;
@@ -428,7 +476,15 @@ opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned
     if (bits > maxbits && maxbits != 0)
 	return 0;
 
-    return EVP_VerifyFinal(evp_md_ctx, sig, siglen, pkey);
+    fprintf(stderr,"opensslrsa_verify2: evp %p maxbits %d siglen %u\n", pkey, maxbits, siglen );
+    for (int i=0; i<siglen; i++)
+    {
+	fprintf(stderr,"%02X ",sigdata[i] );
+    }
+    fprintf(stderr,"\n");
+
+
+    return EVP_VerifyFinal(evp_md_ctx, sigdata, siglen, pkey);
 }
 
 
@@ -643,7 +699,6 @@ static int opensslrsa_adddata(EVP_MD_CTX *evp_md_ctx, unsigned char *data, unsig
 static int opensslrsa_sign(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, struct evbuffer *evb)
 {
     return 0;
-}
 }
 static int opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned char *sig, unsigned int siglen)
 {

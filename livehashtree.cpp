@@ -337,7 +337,7 @@ BinHashSigTuple LiveHashTree::AddSignedMunro()
 {
     bin_t newmunro = GetClientLastMunro();
 
-    if (tree_debug)
+    //if (tree_debug)
 	fprintf(stderr,"umt: AddSignedMunro: %s\n", newmunro.str().c_str() );
     Node *n = FindNode(newmunro);
     if (n == NULL)
@@ -487,7 +487,7 @@ BinHashSigTuple LiveHashTree::GetSignedMunro(bin_t munro)
 
 bool LiveHashTree::OfferSignedMunroHash(bin_t pos, SigTintTuple &sigtint)
 {
-    if (tree_debug)
+    //if (tree_debug)
         fprintf(stderr,"umt: OfferSignedMunroHash: munro %s\n", pos.str().c_str() );
 
     if (pos != cand_munro_bin_)
@@ -512,10 +512,10 @@ bool LiveHashTree::OfferSignedMunroHash(bin_t pos, SigTintTuple &sigtint)
 
     // MUNROTODO: source RESTART
 
-    bool sigok = keypair_.Verify(sigtint.sig());
+    bool sigok = keypair_.Verify(cand_munro_hash_.bytes(),cand_munro_hash_.SIZE,sigtint.sig());
     if (!sigok)
     {
-        if (tree_debug)
+        //if (tree_debug)
             fprintf(stderr,"umt: OfferSignedMunroHash: signature wrong! %s\n", pos.str().c_str() );
 	return false;
     }

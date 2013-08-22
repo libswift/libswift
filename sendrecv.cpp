@@ -379,6 +379,12 @@ void    Channel::AddHandshake (struct evbuffer *evb)
                 evbuffer_add_8(evb, hs_out_->merkle_func_);
                 cross << "mhf " << hs_out_->merkle_func_ << " ";
             }
+            if (transfer()->ttype() == LIVE_TRANSFER && hs_out_->cont_int_prot_ != POPT_CONT_INT_PROT_NONE)
+            {
+        	evbuffer_add_8(evb, POPT_LIVE_SIG_ALG);
+        	evbuffer_add_8(evb, hs_out_->live_sig_alg_);
+        	cross << "lsa " << hs_out_->live_sig_alg_ << " ";
+            }
             evbuffer_add_8(evb, POPT_CHUNK_ADDR);
             evbuffer_add_8(evb, hs_out_->chunk_addr_);
             cross << "cam " << hs_out_->chunk_addr_ << " ";

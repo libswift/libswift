@@ -159,6 +159,7 @@ namespace swift {
         const Sha1Hash	&roothash() const { return roothash_; }
 	const SwarmPubKey &spubkey() const { return spubkey_; }
 	std::string     hex() const;
+	std::string     tofilename() const;
 	void		SetRootHash(const Sha1Hash &roothash) { ttype_ = FILE_TRANSFER; roothash_ = roothash; empty_=false;}
 
 	const static SwarmID NOSWARMID;
