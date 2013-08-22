@@ -54,29 +54,52 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
     // TODO: adjust DefaultHandshake from which hs_out_ is derived when
     // an authoritative source proves the CIPM is UNIFIED_MERKLE.
     //
-    if (hs_out_->cont_int_prot_ != POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+    if (transfer()->ttype() == FILE_TRANSFER)
     {
-        // Arno, 2013-02-25: Need to send peak bins always (also CIPM None)
-        // to cold clients to communicate tree size
-        if (ack_in_.is_empty() && hashtree() != NULL && hashtree()->peak_count() > 0)
-        {
-            AddUnsignedPeakHashes(evb);
-        }
+	if (hs_out_->cont_int_prot_ != POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+	{
+	    // Arno, 2013-02-25: Need to send peak bins always (also CIPM None)
+	    // to cold clients to communicate tree size
+	    if (ack_in_.is_empty() && hashtree() != NULL && hashtree()->peak_count() > 0)
+	    {
+		AddUnsignedPeakHashes(evb);
+	    }
 
-        if (pos != bin_t::NONE)
-            AddFileUncleHashes(evb,pos);
+	    if (pos != bin_t::NONE)
+		AddFileUncleHashes(evb,pos);
+	}
     }
-    else if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+    else
     {
+	// LIVE
 	if (PeerIsSource())
 	    return;
 
-	// SIGNMUNRO
-	LiveHashTree *umt = (LiveHashTree *)hashtree();
+	bin_t munro = bin_t::NONE;
+	if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
+	{
+	    // No content integrity protection, so just report current pos as source pos
+	    LivePiecePicker *lpp = (LivePiecePicker *)transfer()->picker();
+	    munro = lpp->GetCurrentPos();
+	}
+	else //POPT_CONT_INT_PROT_UNIFIED_MERKLE
+	{
+	    LiveHashTree *umt = (LiveHashTree *)hashtree();
+	    if (pos == bin_t::NONE)
+	    {
+		// Initially send last signed munro
+		munro = umt->GetLastMunro();
+	    }
+	    else
+	    {
+		munro = umt->GetMunro(pos);
+		if (munro == bin_t::NONE)
+		    return;
+	    }
+	}
+
 	if (pos == bin_t::NONE)
 	{
-	    // Initially send last signed munro
-	    bin_t munro = umt->GetLastMunro();
 	    dprintf("%s #%u last munro %s\n",tintstr(),id_,munro.str().c_str() );
 	    bool ahead=false;
 	    if (ack_in_right_basebin_ != bin_t::NONE)
@@ -84,7 +107,7 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
 		if (ack_in_right_basebin_ > munro.base_right())
 		    ahead = true;
 	    }
-            // Don't send when peer has chunks in range, or when it's downloading from us (e.g. chunks earlier than munro)
+	    // Don't send when peer has chunks in range, or when it's downloading from us (e.g. chunks earlier than munro)
 	    if (munro != bin_t::NONE && ack_in_.is_empty(munro) && !munro_ack_rcvd_ && !ahead)
 	    {
 		AddLiveSignedMunroHash(evb,munro);
@@ -93,10 +116,6 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
 	}
 	else
 	{
-	    bin_t munro = umt->GetMunro(pos);
-	    if (munro == bin_t::NONE)
-		return;
-
 	    // Don't repeat if same and not retransmit
 	    bool diff = (munro != last_sent_munro_);
 	    last_sent_munro_ = munro;
@@ -127,9 +146,22 @@ void Channel::AddUnsignedPeakHashes(struct evbuffer *evb)
 // SIGNPEAK
 void    Channel::AddLiveSignedMunroHash(struct evbuffer *evb, bin_t munro)
 {
-    // Send signed munro hash
-    LiveHashTree *umt = (LiveHashTree *)hashtree();
-    BinHashSigTuple bhst = umt->GetSignedMunro(munro);
+    BinHashSigTuple bhst = BinHashSigTuple::NOBULL;
+    if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
+    {
+	// No content integrity protection, create dummy signature tuple to send
+	uint8_t dummysigdata[SWIFT_CIPM_NONE_SIGLEN];
+	memset(dummysigdata,0,SWIFT_CIPM_NONE_SIGLEN);
+	Signature sig(dummysigdata, SWIFT_CIPM_NONE_SIGLEN);
+	SigTintTuple sigtint(sig, NOW);
+	bhst = BinHashSigTuple(munro,Sha1Hash::ZERO,sigtint);
+    }
+    else
+    {
+	// Send signed munro hash
+	LiveHashTree *umt = (LiveHashTree *)hashtree();
+	bhst = umt->GetSignedMunro(munro);
+    }
     if (bhst.bin() == bin_t::NONE)
     {
 	dprintf("%s #%u !mhash %s\n",tintstr(),id_,munro.str().c_str());
@@ -1754,6 +1786,14 @@ void Channel::OnSignedHash(struct evbuffer *evb)
             LiveTransfer *lt = (LiveTransfer *)transfer();
             lt->OnVerifiedMunroHash(pos,this);
         }
+    }
+    else if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
+    {
+	dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
+    }
+    else
+    {
+	dprintf("%s #%u ?sigh %s\n",tintstr(),id_,pos.str().c_str());
     }
 }
 

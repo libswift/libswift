@@ -90,6 +90,8 @@ LiveTransfer::LiveTransfer(std::string filename, KeyPair &keypair, std::string c
 
     picker_ = NULL;
 
+    // Restarting source from checkpoint?
+
     BinHashSigTuple lastmunrotup = ReadCheckpoint();
     if (GetDefaultHandshake().cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
     {
@@ -197,8 +199,6 @@ void LiveTransfer::Initialize(KeyPair &keypair, popt_cont_int_prot_t cipm, uint6
     if (ldwb != POPT_LIVE_DISC_WND_ALL)
 	ldwb *= chunk_size_;
     storage_ = new Storage(filename_,destdir,td_,ldwb);
-
-    fprintf(stderr,"LiveTransfer::Initialize: def cipm %d\n", def_hs_out_.cont_int_prot_ );
 
     if (hs.cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
