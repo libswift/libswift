@@ -202,13 +202,6 @@ Signature *KeyPair::Sign(uint8_t *data, uint16_t datalength)
     if (sigdata != NULL)
 	sig = new Signature(sigdata,evbuffer_get_length(evb));
 
-    fprintf(stderr,"SIGN len %u ", evbuffer_get_length(evb) );
-    for (int i=0; i<evbuffer_get_length(evb); i++)
-    {
-	fprintf(stderr,"%02x ",sigdata[i] );
-    }
-    fprintf(stderr,"\n");
-
     evbuffer_free(evb);
     opensslrsa_destroyctx(ctx);
     return sig;
@@ -228,18 +221,7 @@ bool KeyPair::Verify(uint8_t *data, uint16_t datalength,Signature &sig)
 	return false;
     }
 
-    fprintf(stderr,"VERIFY len %u ", sig.length() );
-    uint8_t *sigdata = sig.bits();
-    for (int i=0; i<sig.length(); i++)
-    {
-	fprintf(stderr,"%02x ",sigdata[i] );
-    }
-    fprintf(stderr,"\n");
-
     ret = opensslrsa_verify2(evp_,ctx,0,sig.bits(),sig.length());
-
-    fprintf(stderr,"KeyPair::Verify ret %d\n", ret );
-
     opensslrsa_destroyctx(ctx);
     return (ret == 1);
 }
@@ -473,14 +455,6 @@ opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned
     RSA_free(rsa);
     if (bits > maxbits && maxbits != 0)
 	return 0;
-
-    fprintf(stderr,"opensslrsa_verify2: evp %p maxbits %d siglen %u\n", pkey, maxbits, siglen );
-    for (int i=0; i<siglen; i++)
-    {
-	fprintf(stderr,"%02X ",sigdata[i] );
-    }
-    fprintf(stderr,"\n");
-
 
     return EVP_VerifyFinal(evp_md_ctx, sigdata, siglen, pkey);
 }

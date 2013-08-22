@@ -1723,8 +1723,6 @@ void Channel::OnSignedHash(struct evbuffer *evb)
     if (umt != NULL)
         siglen = umt->GetSigSizeInBytes();
     
-    fprintf(stderr,"OnSignedHash: siglen %u\n", siglen );
-
     uint8_t *sigdata = new uint8_t[siglen];
     if (sigdata == NULL)
     {
