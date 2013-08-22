@@ -75,15 +75,10 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
 	if (PeerIsSource())
 	    return;
 
-
-	fprintf(stderr,"AddRequiredHashes: LIVE\n");
-
 	// See if there is a first, or new signed munro to send
 	bin_t munro = bin_t::NONE;
 	if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
 	{
-	    fprintf(stderr,"AddRequiredHashes: LIVE: CIPM NONE\n");
-
 	    // No content integrity protection, so just report current pos as
 	    // source pos == munro
 	    LivePiecePicker *lpp = (LivePiecePicker *)transfer()->picker();
@@ -1381,16 +1376,6 @@ void Channel::OnHaveLive(bin_t ackd_pos)
 		}
             }
         }
-
-        /*if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
-        {
-	    // SIGPEAKTODO: affected by live_disc_wnd_, old bins before
-	    // should be invalidated, to avoid hook-in minus NCHUNKS picking
-	    // outside window.
-
-	    LivePiecePicker *lpp = (LivePiecePicker *)lt->picker();
-	    lpp->StartAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_);
-        }*/
 
         // Arno: it can happen that we receive a HAVE and have no hints
         // outstanding. In that case we should not wait till next_send_time_
