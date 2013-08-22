@@ -93,8 +93,6 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
 	}
 	else //POPT_CONT_INT_PROT_UNIFIED_MERKLE
 	{
-	    fprintf(stderr,"AddRequiredHashes: LIVE: CIPM UNIFIED\n");
-
 	    LiveHashTree *umt = (LiveHashTree *)hashtree();
 	    if (pos == bin_t::NONE)
 	    {

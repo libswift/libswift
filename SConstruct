@@ -18,7 +18,7 @@ import sys
 DEBUG = True
 #CODECOVERAGE = (DEBUG and True)
 CODECOVERAGE = False
-WITHOPENSSL = False
+WITHOPENSSL = True
 
 TestDir='tests'
 
@@ -100,6 +100,8 @@ else:
     # Linux or Mac build
     
     libevent2path = '/home/arno/pkgs/libevent-2.0.20-stable-debug'
+    if WITHOPENSSL:
+        opensslpath = '/usr/lib/i386-linux-gnu'
 
     # Enable the user defining external includes
     if 'CPPPATH' in os.environ:
@@ -116,15 +118,22 @@ else:
 
     # Large-file support always
     env.Append(CXXFLAGS="-D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE")
+    if WITHOPENSSL:
+        env.Append(CXXFLAGS="-DOPENSSL")
 
     # Set libs to link to
     libs = ['stdc++','libevent','pthread']
+    if WITHOPENSSL:
+         libs.append('ssl')
+	 libs.append('crypto')
     if 'LIBPATH' in os.environ:
           libpath = os.environ['LIBPATH']
     else:
         libpath = ""
         print "To use external libs, set LIBPATH environment variable to list of colon-separated lib dirs"
     libpath += libevent2path+'/lib:'
+    if WITHOPENSSL:
+        libpath += opensslpath
 
 
     linkflags = '-Wl,-rpath,'+libevent2path+'/lib'
@@ -148,7 +157,7 @@ env.Program(
    target='swift',
    source=APPSOURCE,
    #CPPPATH=cpppath,
-   LIBS=[libs,'libswift'],
+   LIBS=['libswift',libs],
    LIBPATH=libpath+':.')
 
 Export("env")

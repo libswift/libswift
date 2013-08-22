@@ -511,7 +511,7 @@ static EVP_PKEY *opensslrsa_generate(uint16_t keysize, int exp, simple_openssl_c
 	    BN_set_bit(e, 0);
 	    BN_set_bit(e, 32);
     }
-    BN_GENCB_set(&cb, &generate_progress_cb, callback);
+    BN_GENCB_set(&cb, &generate_progress_cb, (void *)callback);
 
     if (RSA_generate_key_ex(rsa, keysize, e, &cb)) {
 	    BN_free(e);
