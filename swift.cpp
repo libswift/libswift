@@ -72,9 +72,11 @@ void usage(void)
     fprintf(stderr,"  -3 zerosdir-in-hex\ta win32 workaround for non UTF-16 popen\n");
     fprintf(stderr,"  -T time-out\tin seconds for slow zero state connections\n");
     fprintf(stderr,"  -G GTest mode\n");
-    fprintf(stderr,"  -W live discard window in chunks\n");
     fprintf(stderr,"  -K live keypair filename\n");
     fprintf(stderr,"  -P live checkpoint filename\n");
+    fprintf(stderr,"  -S content integrity protection method\n");
+    fprintf(stderr,"  -a live signature algorithm\n");
+    fprintf(stderr,"  -W live discard window in chunks\n");
 
     fprintf(stderr, "%s\n", SubversionRevisionString.c_str() );
 
@@ -98,8 +100,8 @@ void LiveSourceHTTPResponseCallback(struct evhttp_request *req, void *arg);
 void LiveSourceHTTPDownloadChunkCallback(struct evhttp_request *req, void *arg);
 
 // Gateway stuff
-bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint64_t disc_wnd, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf );
-bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr,uint64_t disc_wnd);
+bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf);
+bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr,popt_cont_int_prot_t cipm, uint64_t disc_wnd);
 bool HTTPIsSending();
 #ifndef SWIFTGTEST
 bool InstallStatsGateway(struct event_base *evbase,Address addr);
@@ -134,6 +136,8 @@ struct evbuffer *livesource_evb = NULL;
 uint64_t livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
 std::string livesource_checkpoint_filename = "";
 bool livesource_isfile=false;
+popt_cont_int_prot_t swarm_cipm=POPT_CONT_INT_PROT_MERKLE;
+popt_live_sig_alg_t livesource_sigalg=POPT_LIVE_SIG_ALG_RSASHA1;
 
 long long int cmdgw_report_counter=0;
 long long int cmdgw_report_interval=REPORT_INTERVAL; // seconds
@@ -172,9 +176,12 @@ int utf8main (int argc, char** argv)
         {"cmdgwint",required_argument, 0, 'C'}, // SWIFTPROC
         {"zerostimeout",required_argument, 0, 'T'},  // ZEROSTATE
         {"test",no_argument, 0, 'G'},  // Less command line testing for GTest usage
-        {"ldw",required_argument, 0, 'W'}, // PPSP
         {"lcf",required_argument, 0, 'P'}, // LIVECHECKPOINT
         {"kpf",required_argument, 0, 'K'}, // UMT
+        {"cipm",required_argument, 0, 'S'}, // PPSP
+        {"lsa",required_argument, 0, 'a'}, // PPSP
+        {"ldw",required_argument, 0, 'W'}, // PPSP
+
         {0, 0, 0, 0}
     };
 
@@ -194,7 +201,7 @@ int utf8main (int argc, char** argv)
 
     std::string optargstr;
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:ji:kC:1:2:3:T:GW:P:K:", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:ji:kC:1:2:3:T:GW:P:K:S:a:", long_options, 0)) ) {
         switch (c) {
             case 'h':
         	optargstr = optarg;
@@ -312,10 +319,14 @@ int utf8main (int argc, char** argv)
                 break;
             case 'i': // LIVE
                 livesource_input = strdup(optarg);
+                if (swarm_cipm == POPT_CONT_INT_PROT_MERKLE)
+                    swarm_cipm = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
                 wait_time = TINT_NEVER;
                 break;
             case 'k': // LIVE
                 livestream = true;
+                if (swarm_cipm == POPT_CONT_INT_PROT_MERKLE)
+                    swarm_cipm = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
                 break;
             case 'C': // SWIFTPROC
                 if (sscanf(optarg,"%lli",&cmdgw_report_interval)!=1)
@@ -347,6 +358,28 @@ int utf8main (int argc, char** argv)
             case 'K':
                 keypairfilename = strdup(optarg);
                 break;
+            case 'S':
+        	if (!strcmp(optarg,"0"))
+		    swarm_cipm = POPT_CONT_INT_PROT_NONE;
+        	else if (!strcmp(optarg,"1"))
+		    swarm_cipm = POPT_CONT_INT_PROT_MERKLE;
+        	else if (!strcmp(optarg,"2"))
+		    quit("Live content integrity protection via SIGNALL not supported.")
+        	else if (!strcmp(optarg,"3"))
+		    swarm_cipm = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
+        	else
+        	    quit("Live content integrity protection must be 0,1,2,3")
+        	break;
+            case 'a':
+        	if (!strcmp(optarg,"5"))
+		    livesource_sigalg = POPT_LIVE_SIG_ALG_RSASHA1;
+        	else if (!strcmp(optarg,"13"))
+        	    livesource_sigalg = POPT_LIVE_SIG_ALG_ECDSAP256SHA256;
+        	else if (!strcmp(optarg,"14"))
+        	    livesource_sigalg = POPT_LIVE_SIG_ALG_ECDSAP384SHA384;
+        	else
+        	    quit("Live signature algorithm must be 5, 13 or 14")
+        	break;
             case 'T': // ZEROSTATE
                 double t=0.0;
                 n = sscanf(optarg,"%lf",&t);
@@ -425,9 +458,9 @@ int utf8main (int argc, char** argv)
     }
 
     if (httpgw_enabled)
-        InstallHTTPGateway(Channel::evbase,httpaddr,livesource_disc_wnd,chunk_size,maxspeed,"",-1,-1);
+        InstallHTTPGateway(Channel::evbase,httpaddr,swarm_cipm,livesource_disc_wnd,chunk_size,maxspeed,"",-1,-1);
     if (cmdgw_enabled)
-        InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr,livesource_disc_wnd);
+        InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr,swarm_cipm,livesource_disc_wnd);
 
 // Arno, 2013-01-10: Cannot use while GTesting because statsgw is not part of
 // libswift, but considered part of an app on top.
@@ -622,9 +655,9 @@ int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, boo
     // Client mode: regular or live download
     int td = -1;
     if (!livestream)
-	td = swift::Open(filename,swarmid,tracker,force_check_diskvshash,true,false,activate,chunk_size);
+	td = swift::Open(filename,swarmid,tracker,force_check_diskvshash,swarm_cipm,false,activate,chunk_size);
     else
-	td = swift::LiveOpen(filename,swarmid,tracker,true,livesource_disc_wnd,chunk_size);
+	td = swift::LiveOpen(filename,swarmid,tracker,swarm_cipm,livesource_disc_wnd,chunk_size);
     return td;
 }
 
@@ -703,7 +736,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
     //if (keypairfilename == "")
     if (true)
     {
-	keypairptr = KeyPair::Generate(POPT_LIVE_SIG_ALG_RSASHA1, SWIFT_RSA_DEFAULT_KEYSIZE, OpenSSLGenerateCallback );
+	keypairptr = KeyPair::Generate(livesource_sigalg, SWIFT_RSA_DEFAULT_KEYSIZE, OpenSSLGenerateCallback );
     }
     else
     {
@@ -742,7 +775,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
         }
 
         // Create swarm
-        livesource_lt = swift::LiveCreate(filename,*keypairptr,livesource_checkpoint_filename,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,livesource_disc_wnd,chunk_size); // SIGNPEAKTODO
+        livesource_lt = swift::LiveCreate(filename,*keypairptr,livesource_checkpoint_filename,swarm_cipm,livesource_disc_wnd,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,chunk_size); // SIGNPEAKTODO
 
         if (keypairfilename != "")
         {
@@ -782,7 +815,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
         fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str() );
 
         // Create swarm
-        livesource_lt = swift::LiveCreate(filename,*keypairptr,livesource_checkpoint_filename,true,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,livesource_disc_wnd,chunk_size); // SIGNPEAKTODO
+        livesource_lt = swift::LiveCreate(filename,*keypairptr,livesource_checkpoint_filename,swarm_cipm,livesource_disc_wnd,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,chunk_size); // SIGNPEAKTODO
 
         // Create HTTP client
         struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, httpservname.c_str(), httpport);

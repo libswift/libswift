@@ -56,7 +56,7 @@ namespace swift {
         std::string filename_;
         Address tracker_;
         bool forceCheckDiskVSHash_;
-        bool checkNetworkVSHash_;
+        popt_cont_int_prot_t contIntProtMethod_;
         uint32_t chunkSize_;
         bool zerostate_;
         double cachedMaxSpeeds_[2];
@@ -70,7 +70,7 @@ namespace swift {
         uint64_t cachedSeqComplete_; // Only for offset = 0
         bool cached_;
     public:
-        SwarmData( const std::string filename, const Sha1Hash& rootHash, const Address& tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, uint32_t chunk_size );
+        SwarmData( const std::string filename, const Sha1Hash& rootHash, const Address& tracker, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, uint32_t chunk_size );
         SwarmData( const SwarmData& sd );
 
         ~SwarmData();
@@ -152,7 +152,7 @@ namespace swift {
         static SwarmManager& GetManager();
 
         // Add and remove swarms
-        SwarmData* AddSwarm( const std::string filename, const Sha1Hash& rootHash, const Address& tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, bool activate, uint32_t chunk_size );
+        SwarmData* AddSwarm( const std::string filename, const Sha1Hash& rootHash, const Address& tracker, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size );
         SwarmData* AddSwarm( const SwarmData& swarm, bool activate=true );
         void RemoveSwarm( const Sha1Hash& rootHash, bool removeState = false, bool removeContent = false );
 

@@ -70,14 +70,14 @@ std::vector<LiveTransfer*> LiveTransfer::liveswarms;
 #define TRANSFER_DESCR_LIVE_OFFSET	4000000
 
 /** A constructor for a live source. */
-LiveTransfer::LiveTransfer(std::string filename, KeyPair &keypair, std::string checkpoint_filename, bool check_netwvshash, uint32_t nchunks_per_sign, uint64_t disc_wnd, uint32_t chunk_size) :
+LiveTransfer::LiveTransfer(std::string filename, KeyPair &keypair, std::string checkpoint_filename, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t nchunks_per_sign, uint32_t chunk_size) :
 	ContentTransfer(LIVE_TRANSFER), ack_out_right_basebin_(bin_t::NONE),
 	chunk_size_(chunk_size), am_source_(true),
 	filename_(filename), last_chunkid_(0), offset_(0),
 	chunks_since_sign_(0),
 	checkpoint_filename_(checkpoint_filename), checkpoint_bin_(bin_t::NONE)
 {
-    Initialize(keypair,check_netwvshash,disc_wnd,nchunks_per_sign);
+    Initialize(keypair,cipm,disc_wnd,nchunks_per_sign);
 
     // Determine swarmID from keypair
     SwarmPubKey    *spubkey_ptr = keypair.GetSwarmPubKey();
@@ -136,7 +136,7 @@ LiveTransfer::LiveTransfer(std::string filename, KeyPair &keypair, std::string c
 
 
 /** A constructor for live client. */
-LiveTransfer::LiveTransfer(std::string filename, SwarmID &swarmid, bool check_netwvshash, uint64_t disc_wnd, uint32_t chunk_size) :
+LiveTransfer::LiveTransfer(std::string filename, SwarmID &swarmid, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size) :
         ContentTransfer(LIVE_TRANSFER), chunk_size_(chunk_size), am_source_(false),
         filename_(filename), last_chunkid_(0), offset_(0),
         chunks_since_sign_(0),
@@ -151,34 +151,27 @@ LiveTransfer::LiveTransfer(std::string filename, SwarmID &swarmid, bool check_ne
 	return;
     }
 
-    Initialize(*kp,check_netwvshash,disc_wnd,0);
+    Initialize(*kp,cipm,disc_wnd,0);
 
     picker_ = new SharingLivePiecePicker(this);
     picker_->Randomize(rand()&63);
 }
 
 
-void LiveTransfer::Initialize(KeyPair &keypair, bool check_netwvshash,uint64_t disc_wnd,uint32_t nchunks_per_sign)
+void LiveTransfer::Initialize(KeyPair &keypair, popt_cont_int_prot_t cipm, uint64_t disc_wnd,uint32_t nchunks_per_sign)
 {
     GlobalAdd();
 
     Handshake hs;
-    if (check_netwvshash)
-    {
-#if ENABLE_LIVE_AUTH == 1
-    	if (nchunks_per_sign == 1)
-            hs.cont_int_prot_ = POPT_CONT_INT_PROT_SIGNALL;
-        else
-            hs.cont_int_prot_ = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
-#else
-        hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
-#endif
-    }
+    hs.live_sig_alg_ = keypair.GetSigAlg();
+    if (cipm == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+	hs.cont_int_prot_ = cipm;
     else
-	    hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
+	hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
     hs.live_disc_wnd_ = disc_wnd;
 
-    fprintf(stderr,"LiveTransfer::Initialize: cipm %d\n", hs.cont_int_prot_);
+    fprintf(stderr,"LiveTransfer::Initialize: cipm %u\n", hs.cont_int_prot_);
+    fprintf(stderr,"LiveTransfer::Initialize: lsa  %u\n", hs.live_sig_alg_);
     fprintf(stderr,"LiveTransfer::Initialize: ldw  %llu\n", hs.live_disc_wnd_);
 
     SetDefaultHandshake(hs);

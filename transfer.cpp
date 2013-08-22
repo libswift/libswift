@@ -20,16 +20,13 @@ using namespace swift;
 
 // FIXME: separate Bootstrap() and Download(), then Size(), Progress(), SeqProgress()
 
-FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_hash, bool force_check_diskvshash, bool check_netwvshash, uint32_t chunk_size, bool zerostate) :
+FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_hash, bool force_check_diskvshash, popt_cont_int_prot_t cipm, uint32_t chunk_size, bool zerostate) :
     ContentTransfer(FILE_TRANSFER), availability_(NULL), zerostate_(zerostate)
 {
     td_ = td;
 
     Handshake hs;
-    if (check_netwvshash)
-	hs.cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
-    else
-	hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
+    hs.cont_int_prot_ = cipm;
     SetDefaultHandshake(hs);
 
     std::string destdir;

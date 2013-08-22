@@ -95,10 +95,6 @@ namespace swift {
 // Arno, 2011-12-22: Enable Riccardo's VodPiecePicker
 #define ENABLE_VOD_PIECEPICKER        1
 
-// Arno, 2013-05-13: Enable live content integrity protection (for which method see
-// SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN).
-#define ENABLE_LIVE_AUTH		      1
-
 #define SWIFT_URI_SCHEME              "tswift"
 
 #define SWIFT_MAX_UDP_OVER_ETH_PAYLOAD        (1500-20-8)
@@ -561,7 +557,7 @@ namespace swift {
 	 *  @param chunk_size	size of chunk to use
 	 *  @param zerostate	whether to serve the hashes + content directly from disk
 	 */
-        FileTransfer(int td, std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO, bool force_check_diskvshash=true, bool check_netwvshash=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, bool zerostate=false);
+        FileTransfer(int td, std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO, bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, bool zerostate=false);
         /**    Close everything. */
         ~FileTransfer();
 
@@ -600,10 +596,10 @@ namespace swift {
       public:
 
         /** A constructor for a live source. */
-	LiveTransfer(std::string filename, KeyPair &keypair, std::string checkpoint_filename, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+	LiveTransfer(std::string filename, KeyPair &keypair, std::string checkpoint_filename, popt_cont_int_prot_t cipm, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
 	/** A constructor for live client. */
-	LiveTransfer(std::string filename, SwarmID &swarmid, bool check_netwvshash=true, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+	LiveTransfer(std::string filename, SwarmID &swarmid, popt_cont_int_prot_t cipm, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
         /**  Close everything. */
         ~LiveTransfer();
@@ -703,7 +699,7 @@ namespace swift {
         static std::vector<LiveTransfer*> liveswarms;
 
         /** Joint constructor code between source and client */
-        void Initialize(KeyPair &keypair, bool check_netwvshash,uint64_t disc_wnd,uint32_t nchunks_per_sign);
+        void Initialize(KeyPair &keypair, popt_cont_int_prot_t cipm, uint64_t disc_wnd,uint32_t nchunks_per_sign);
     };
 
 
@@ -1256,7 +1252,7 @@ namespace swift {
         no longer works on restarts, unless checkpoints are used.
         */
         // TODO: replace check_netwvshash with full set of protocol options
-    int     Open( std::string filename, SwarmID& swarmid,Address tracker=Address(), bool force_check_diskvshash=true, bool check_netwvshash=true, bool zerostate=false, bool activate=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     Open( std::string filename, SwarmID& swarmid,Address tracker=Address(), bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, bool zerostate=false, bool activate=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** Get the root hash for the transmission. */
     SwarmID GetSwarmID( int file);
     /** Close a file and a transmission, remove state or content if desired. */
@@ -1298,11 +1294,11 @@ namespace swift {
 
     // LIVE
     /** To create a live stream as source */
-    LiveTransfer *LiveCreate(std::string filename, KeyPair &keypair, std::string checkpoint_filename, bool check_netwvshash=true, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    LiveTransfer *LiveCreate(std::string filename, KeyPair &keypair, std::string checkpoint_filename, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_UNIFIED_MERKLE, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** To add chunks to a live stream as source */
     int     LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte);
     /** To open a live stream as peer */
-    int     LiveOpen(std::string filename, SwarmID &swarmid, Address &tracker, bool check_netwvshash=true, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     LiveOpen(std::string filename, SwarmID &swarmid, Address &tracker, popt_cont_int_prot_t cipm, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
     /** Register a callback for when the download of another pow(2,agg) chunks
         is finished. So agg = 0 = 2^0 = 1, means every chunk. */

@@ -85,6 +85,8 @@ evutil_socket_t cmd_tunnel_sock=INVALID_SOCKET;
 // HTTP gateway address for PLAY cmd
 Address cmd_gw_httpaddr;
 uint64_t cmd_gw_livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
+popt_cont_int_prot_t cmd_gw_cipm=POPT_CONT_INT_PROT_MERKLE;
+
 
 #define cmd_gw_debug	false
 
@@ -779,9 +781,9 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
                 filename = swarmidhexstr;
 
             if (duration != -1)
-                td = swift::Open(filename,swarmid,trackaddr,false,true,false,activate,chunksize);
+                td = swift::Open(filename,swarmid,trackaddr,false,cmd_gw_cipm,false,activate,chunksize);
             else
-                td = swift::LiveOpen(filename,swarmid,trackaddr,true,chunksize);
+                td = swift::LiveOpen(filename,swarmid,trackaddr,cmd_gw_cipm,cmd_gw_livesource_disc_wnd,chunksize);
             if (td == -1) {
             	CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarmid);
             	return ERROR_BAD_SWARM;
@@ -1039,7 +1041,7 @@ void CmdGwListenErrorCallback(struct evconnlistener *listener, void *ctx)
 }
 
 
-bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr,uint64_t disc_wnd)
+bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr,popt_cont_int_prot_t cipm, uint64_t disc_wnd)
 {
     // Allocate libevent listener for cmd connections
     // From http://www.wangafu.net/~nickm/libevent-book/Ref8_listener.html
@@ -1058,6 +1060,7 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
     evconnlistener_set_error_cb(cmd_evlistener, CmdGwListenErrorCallback);
 
     cmd_gw_httpaddr = httpaddr;
+    cmd_gw_cipm=cipm;
     cmd_gw_livesource_disc_wnd = disc_wnd;
 
     cmd_evbuffer = evbuffer_new();

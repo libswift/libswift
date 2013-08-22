@@ -76,6 +76,7 @@ int http_gw_reqs_count = 0;
 
 struct evhttp *http_gw_event; 	            // libevent HTTP request received event
 struct evhttp_bound_socket *http_gw_handle; // libevent HTTP server socket handle
+popt_cont_int_prot_t httpgw_cipm=POPT_CONT_INT_PROT_MERKLE;
 uint64_t httpgw_livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL; // Default live discard window. Copy of cmdline param
 uint32_t httpgw_chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;  // Default chunk size. Copy of cmdline param
 double *httpgw_maxspeed = NULL;                         // Default speed limits. Copy of cmdline param
@@ -961,11 +962,11 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     if (td == -1) {
         // LIVE
         if (durstr != "-1") {
-            td = swift::Open(filename,swarm_id,Address(),false,true,false,activate,chunksize);
+            td = swift::Open(filename,swarm_id,Address(),false,httpgw_cipm,false,activate,chunksize);
         }
         else {
             Address tracker;
-            td = swift::LiveOpen(filename,swarm_id,tracker,true,httpgw_livesource_disc_wnd,chunksize);
+            td = swift::LiveOpen(filename,swarm_id,tracker,httpgw_cipm,httpgw_livesource_disc_wnd,chunksize);
         }
 
         // Arno, 2011-12-20: Only on new transfers, otherwise assume that CMD GW
@@ -1021,8 +1022,8 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     }
 }
 
-
-bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint64_t disc_wnd, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf ) {
+bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf)
+{
     // Arno, 2011-10-04: From libevent's http-server.c example
 
     // Arno, 2012-10-16: Made configurable for ANDROID
@@ -1049,6 +1050,7 @@ bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint64_t di
         return false;
     }
 
+    httpgw_cipm=cipm;
     httpgw_livesource_disc_wnd=disc_wnd;
     httpgw_chunk_size = chunk_size;
     // Arno, 2012-11-1: Make copy.
