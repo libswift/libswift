@@ -87,7 +87,7 @@ struct KeyPair
     bool Verify(uint8_t *data, uint16_t datalength,Signature &sig);
 
     /** Returns the number of bytes a signature takes on the wire */
-    uint32_t	    GetSigSizeInBytes();
+    uint16_t	    GetSigSizeInBytes();
 
   protected:
     popt_live_sig_alg_t	alg_;

@@ -1123,3 +1123,7 @@ void LiveHashTree::sane_node(Node *n, Node *parent)
     }
 }
 
+uint16_t LiveHashTree::GetSigSizeInBytes()
+{
+    return keypair_.GetSigSizeInBytes();
+}

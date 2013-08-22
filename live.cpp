@@ -75,12 +75,12 @@ LiveTransfer::LiveTransfer(std::string filename, KeyPair &keypair, std::string c
 	chunk_size_(chunk_size), am_source_(true),
 	filename_(filename), last_chunkid_(0), offset_(0),
 	chunks_since_sign_(0),
-	keypair_(keypair),
 	checkpoint_filename_(checkpoint_filename), checkpoint_bin_(bin_t::NONE)
 {
-    Initialize(check_netwvshash,disc_wnd,nchunks_per_sign);
+    Initialize(keypair,check_netwvshash,disc_wnd,nchunks_per_sign);
 
-    SwarmPubKey    *spubkey_ptr = keypair_.GetSwarmPubKey();
+    // Determine swarmID from keypair
+    SwarmPubKey    *spubkey_ptr = keypair.GetSwarmPubKey();
     if (spubkey_ptr == NULL)
     {
 	SetBroken();
@@ -150,16 +150,15 @@ LiveTransfer::LiveTransfer(std::string filename, SwarmID &swarmid, bool check_ne
 	SetBroken();
 	return;
     }
-    keypair_ = KeyPair(*kp);
 
-    Initialize(check_netwvshash,disc_wnd,0);
+    Initialize(*kp,check_netwvshash,disc_wnd,0);
 
     picker_ = new SharingLivePiecePicker(this);
     picker_->Randomize(rand()&63);
 }
 
 
-void LiveTransfer::Initialize(bool check_netwvshash,uint64_t disc_wnd,uint32_t nchunks_per_sign)
+void LiveTransfer::Initialize(KeyPair &keypair, bool check_netwvshash,uint64_t disc_wnd,uint32_t nchunks_per_sign)
 {
     GlobalAdd();
 
@@ -211,9 +210,9 @@ void LiveTransfer::Initialize(bool check_netwvshash,uint64_t disc_wnd,uint32_t n
     if (hs.cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
 	if (nchunks_per_sign > 1)
-	    hashtree_ = new LiveHashTree(storage_,keypair_,chunk_size_,nchunks_per_sign); // source
+	    hashtree_ = new LiveHashTree(storage_,keypair,chunk_size_,nchunks_per_sign); // source
 	else
-	    hashtree_ = new LiveHashTree(storage_,keypair_,chunk_size_); //client
+	    hashtree_ = new LiveHashTree(storage_,keypair,chunk_size_); //client
     }
     else
 	hashtree_ = NULL;

@@ -51,6 +51,8 @@
 
 namespace swift {
 
+// Length of signature in SIGNED_INTEGRITY when Content Integrity Protection off
+#define SWIFT_CIPM_NONE_SIGLEN  20
 
 /** States for the live hashtree */
 typedef enum {
@@ -172,6 +174,9 @@ class LiveHashTree: public HashTree
 
      // LIVECHECKPOINT
      bool InitFromCheckpoint(BinHashSigTuple lastmunrotup);
+
+     /** Returns size of signature on the wire */
+     uint16_t       GetSigSizeInBytes();
 
 
      // Sanity checks

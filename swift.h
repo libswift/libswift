@@ -691,8 +691,6 @@ namespace swift {
         /** Source: Count of chunks generated since last signed peak epoch */
         uint32_t        chunks_since_sign_;
 
-        KeyPair		keypair_;
-
         // LIVECHECKPOINT
 	/** Filename to store source checkpoint */
         std::string checkpoint_filename_;
@@ -705,7 +703,7 @@ namespace swift {
         static std::vector<LiveTransfer*> liveswarms;
 
         /** Joint constructor code between source and client */
-        void Initialize(bool check_netwvshash,uint64_t disc_wnd,uint32_t nchunks_per_sign);
+        void Initialize(KeyPair &keypair, bool check_netwvshash,uint64_t disc_wnd,uint32_t nchunks_per_sign);
     };
 
 

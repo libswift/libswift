@@ -1718,15 +1718,13 @@ void Channel::OnSignedHash(struct evbuffer *evb)
 
     tint source_tint = evbuffer_remove_64be(evb);
 
-    KeyPair *kp = transfer()->swarm_id().spubkey().GetPublicKeyPair();
-    if (kp == NULL)
-    {
-        dprintf("%s #%u ?sigh bad keypair\n",tintstr(),id_);
-        Close(CLOSE_DO_NOT_SEND);
-        evbuffer_drain(evb, evbuffer_get_length(evb));
-        return;
-    }
-    uint32_t siglen = kp->GetSigSizeInBytes();
+    uint16_t siglen = SWIFT_CIPM_NONE_SIGLEN;
+    LiveHashTree *umt = (LiveHashTree *)hashtree();
+    if (umt != NULL)
+        siglen = umt->GetSigSizeInBytes();
+    
+    fprintf(stderr,"OnSignedHash: siglen %u\n", siglen );
+
     uint8_t *sigdata = new uint8_t[siglen];
     if (sigdata == NULL)
     {
@@ -1744,10 +1742,10 @@ void Channel::OnSignedHash(struct evbuffer *evb)
     if (lt->am_source())
 	return;
 
-    if (hashtree() != NULL)
+    if (umt != NULL)
     {
         dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
-        LiveHashTree *umt = (LiveHashTree *)hashtree();
+        
         SigTintTuple sigtint(sig,source_tint);
 
         bool newverified = umt->OfferSignedMunroHash(pos,sigtint);

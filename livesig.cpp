@@ -245,7 +245,7 @@ bool KeyPair::Verify(uint8_t *data, uint16_t datalength,Signature &sig)
 }
 
 
-uint32_t KeyPair::GetSigSizeInBytes()
+uint16_t KeyPair::GetSigSizeInBytes()
 {
     return EVP_PKEY_size(evp_);
 }
@@ -354,8 +354,6 @@ std::string SwarmPubKey::hex() const
 
 KeyPair *SwarmPubKey::GetPublicKeyPair() const
 {
-    fprintf(stderr,"SwarmPubKey::GetPublicKeyPair\n");
-
     if (len_ < 1)
 	return NULL;
 
