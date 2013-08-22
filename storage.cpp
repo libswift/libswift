@@ -564,7 +564,7 @@ int64_t Storage::GetReservedSize()
             totaldisksize += fsize;
     }
 
-    dprintf("storage: getdisksize: total already sized is %ld\n", totaldisksize );
+    dprintf("storage: getdisksize: total already sized is %lld\n", totaldisksize );
 
     return totaldisksize;
 }

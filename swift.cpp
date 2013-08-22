@@ -1018,7 +1018,7 @@ int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int ar
     char numstr[100];
     sprintf(numstr,"%d",specsize);
     char numstr2[100];
-    sprintf(numstr2,"%lu",specsize+strlen(numstr));
+    sprintf(numstr2,"%u",specsize+strlen(numstr));
     if (strlen(numstr) == strlen(numstr2))
         specsize += strlen(numstr);
     else

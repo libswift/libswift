@@ -81,7 +81,7 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 	else if (zs->connect_timeout_ != TINT_NEVER)
 	{
 	    // Garbage collect really slow connections, essential on Mac.
-	    dprintf("%s zero clean %s has %lu peers\n",tintstr(),ct->swarm_id().hex().c_str(), ct->GetChannels()->size() );
+	    dprintf("%s zero clean %s has %u peers\n",tintstr(),ct->swarm_id().hex().c_str(), ct->GetChannels()->size() );
 	    channels_t::iterator iter2;
 	    for (iter2=copychans.begin(); iter2!=copychans.end(); iter2++) {
 		Channel *c = *iter2;

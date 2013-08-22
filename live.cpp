@@ -296,7 +296,7 @@ uint64_t      LiveTransfer::GetHookinOffset() {
 
 
 
-int LiveTransfer::AddData(const void *buf, size_t nbyte)
+int LiveTransfer::AddData(const void *buf, uint32_t nbyte)
 {
     fprintf(stderr,"%s live: AddData: writing to storage %lu\n", tintstr(), nbyte);
 
@@ -307,9 +307,9 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         return ret;
     }
     else
-        fprintf(stderr,"%s live: AddData: stored " PRISIZET " bytes\n", tintstr(), nbyte);
+        fprintf(stderr,"%s live: AddData: stored %d bytes\n", tintstr(), ret );
 
-    uint64_t till = std::max((size_t)1,nbyte/chunk_size_);
+    uint64_t till = std::max((uint32_t)1,nbyte/chunk_size_);
     bool newepoch=false;
     for (uint64_t c=0; c<till; c++)
     {
@@ -324,9 +324,9 @@ int LiveTransfer::AddData(const void *buf, size_t nbyte)
         if (def_hs_out_.cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
         {
             LiveHashTree *umt = (LiveHashTree *)hashtree();
-            size_t bufidx = c*chunk_size_;
+            uint32_t bufidx = c*chunk_size_;
             char *bufptr = ((char *)buf)+bufidx;
-            size_t s = std::min(chunk_size_,nbyte-bufidx);
+            uint32_t s = std::min(chunk_size_,nbyte-bufidx);
             // Build dynamic hash tree
             umt->AddData(bufptr,s);
 

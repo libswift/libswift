@@ -78,7 +78,7 @@ static void StatsGwNewRequestCallback (struct evhttp_request *evreq, void *arg);
 void StatsExitCallback(struct evhttp_request *evreq)
 {
     char contlenstr[1024];
-    sprintf(contlenstr,"%lu",strlen(exit_page));
+    sprintf(contlenstr,PRISIZET,strlen(exit_page));
     struct evkeyvalq *headers = evhttp_request_get_output_headers(evreq);
     evhttp_add_header(headers, "Connection", "close" );
     evhttp_add_header(headers, "Content-Type", "text/html" );
@@ -144,7 +144,7 @@ void StatsOverviewCallback(struct evhttp_request *evreq)
     strcat(bodystr,bottom_page);
 
     char contlenstr[1024];
-    sprintf(contlenstr,"%lu",strlen(bodystr));
+    sprintf(contlenstr,PRISIZET,strlen(bodystr));
     struct evkeyvalq *headers = evhttp_request_get_output_headers(evreq);
     evhttp_add_header(headers, "Connection", "close" );
     evhttp_add_header(headers, "Content-Type", "text/html" );
@@ -207,7 +207,7 @@ void StatsGetSpeedCallback(struct evhttp_request *evreq)
     sprintf(speedstr,"{\"downspeed\": %d, \"success\": \"true\", \"upspeed\": %d, \"cdownspeed\": %d, \"cupspeed\": %d, \"nleech\": %d, \"nseed\": %d}", dspeed, uspeed, cdownspeed, cupspeed, nleech, nseed );
 
     char contlenstr[1024];
-    sprintf(contlenstr,"%lu",strlen(speedstr));
+    sprintf(contlenstr,PRISIZET,strlen(speedstr));
     struct evkeyvalq *headers = evhttp_request_get_output_headers(evreq);
     evhttp_add_header(headers, "Connection", "close" );
     evhttp_add_header(headers, "Content-Type", "application/json" );

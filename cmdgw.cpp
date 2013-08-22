@@ -286,7 +286,7 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
     double ulspeed = swift::GetCurrentSpeed(req->td,DDIR_UPLOAD);
 
     char cmd[MAX_CMD_MESSAGE];
-    sprintf(cmd,"INFO %s %d %llu/%ld %lf %lf %u %u\r\n",swarmid.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds);
+    sprintf(cmd,"INFO %s %d %llu/%llu %lf %lf %u %u\r\n",swarmid.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds);
 
     send(req->cmdsock,cmd,strlen(cmd),0);
 
@@ -613,7 +613,7 @@ void CmdGwProcessData(evutil_socket_t cmdsock)
         // size bytes, i.e., cmd_tunnel_expect bytes.
 
         if (cmd_gw_debug)
-            fprintf(stderr,"cmdgw: procTCPdata: tunnel state, got %lu, want %d\n", evbuffer_get_length(cmd_evbuffer), cmd_tunnel_expect );
+            fprintf(stderr,"cmdgw: procTCPdata: tunnel state, got " PRISIZET ", want %d\n", evbuffer_get_length(cmd_evbuffer), cmd_tunnel_expect );
 
         if (evbuffer_get_length(cmd_evbuffer) >= cmd_tunnel_expect)
         {
@@ -733,7 +733,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         std::string durationstr = puri["durationstr"];
 
         if (swarmidhexstr.length()!=40) {
-            dprintf("cmd: START: roothash too short %lu\n", swarmidhexstr.length() );
+            dprintf("cmd: START: roothash too short %u\n", swarmidhexstr.length() );
             return ERROR_BAD_ARG;
         }
         uint32_t chunksize=SWIFT_DEFAULT_CHUNK_SIZE;
@@ -1076,7 +1076,7 @@ void swift::CmdGwTunnelUDPDataCameIn(Address srcaddr, uint32_t srcchan, struct e
     // Message received on UDP socket, forward over TCP conn.
 
     if (cmd_gw_debug)
-        fprintf(stderr,"cmdgw: TunnelUDPData:DataCameIn %lu bytes from %s/%08x\n", evbuffer_get_length(evb), srcaddr.str().c_str(), srcchan );
+        fprintf(stderr,"cmdgw: TunnelUDPData:DataCameIn " PRISIZET " bytes from %s/%08x\n", evbuffer_get_length(evb), srcaddr.str().c_str(), srcchan );
 
     /*
      *  Format:

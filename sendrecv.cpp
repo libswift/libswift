@@ -1103,7 +1103,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     // Arno: Assuming DATA last message in datagram
     if (evbuffer_get_length(evb) > transfer()->chunk_size()) {
             dprintf("%s #%u !data chunk size mismatch %s: exp %u got " PRISIZET "\n",tintstr(),id_,pos.str().c_str(), transfer()->chunk_size(), evbuffer_get_length(evb));
-            fprintf(stderr,"WARNING: chunk size mismatch: exp %lu got " PRISIZET "\n",transfer()->chunk_size(), evbuffer_get_length(evb));
+            fprintf(stderr,"WARNING: chunk size mismatch: exp %u got " PRISIZET "\n",transfer()->chunk_size(), evbuffer_get_length(evb));
     }
 
     int length = (evbuffer_get_length(evb) < transfer()->chunk_size()) ? evbuffer_get_length(evb) : transfer()->chunk_size();

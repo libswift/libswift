@@ -109,15 +109,15 @@ void Node::SetSigTint(SigTintTuple *stptr)
 
 LiveHashTree::LiveHashTree(Storage *storage, KeyPair &keypair, uint32_t chunk_size,uint32_t nchunks_per_sig) :
          HashTree(), state_(LHT_STATE_SIGN_EMPTY), root_(NULL), addcursor_(NULL), keypair_(keypair), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
-         chunk_size_(chunk_size), storage_(storage), nchunks_per_sig_(nchunks_per_sig),
-         source_last_munro_(bin_t::NONE)
+         chunk_size_(chunk_size), storage_(storage), 
+         source_last_munro_(bin_t::NONE),nchunks_per_sig_(nchunks_per_sig)
 {
 }
 
 LiveHashTree::LiveHashTree(Storage *storage, KeyPair &pubkeypair, uint32_t chunk_size) :
          HashTree(), state_(LHT_STATE_VER_AWAIT_PEAK), root_(NULL), addcursor_(NULL), keypair_(pubkeypair), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
-         chunk_size_(chunk_size), storage_(storage), nchunks_per_sig_(0),
-         source_last_munro_(bin_t::NONE)
+         chunk_size_(chunk_size), storage_(storage), 
+         source_last_munro_(bin_t::NONE), nchunks_per_sig_(0)
 {
 }
 
