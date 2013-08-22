@@ -51,9 +51,6 @@
 
 namespace swift {
 
-// Length of signature in SIGNED_INTEGRITY when Content Integrity Protection off
-#define SWIFT_CIPM_NONE_SIGLEN  20
-
 /** States for the live hashtree */
 typedef enum {
     LHT_STATE_SIGN_EMPTY,      // live source, no chunks yet

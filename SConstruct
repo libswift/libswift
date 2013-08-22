@@ -18,6 +18,7 @@ import sys
 DEBUG = True
 #CODECOVERAGE = (DEBUG and True)
 CODECOVERAGE = False
+WITHOPENSSL = True
 
 TestDir='tests'
 
@@ -33,7 +34,8 @@ source = [ 'bin.cpp', 'binmap.cpp', 'sha1.cpp','hashtree.cpp',
 env = Environment()
 if sys.platform == "win32":
     libevent2path = '\\build\\libevent-2.0.20-stable-debug'
-    opensslpath = 'c:\\OpenSSL-Win32'
+    if WITHOPENSSL:
+        opensslpath = 'c:\\OpenSSL-Win32'
 
     # "MSVC works out of the box". Sure.
     # Make sure scons finds cl.exe, etc.
@@ -47,7 +49,8 @@ if sys.platform == "win32":
     include = os.environ['INCLUDE']
     include += libevent2path+'\\include;'
     include += libevent2path+'\\WIN32-Code;'
-    include += opensslpath+'\\include;'
+    if WITHOPENSSL:
+        include += opensslpath+'\\include;'
     env.Append ( ENV = { 'INCLUDE' : include } )
     
     if 'CXXPATH' in os.environ:
@@ -60,7 +63,8 @@ if sys.platform == "win32":
         env.Append(LINKFLAGS="/DEBUG")
     else:
         env.Append(CXXFLAGS="/DNDEBUG") # disable asserts
-    env.Append(CXXFLAGS="/DOPENSSL")
+    if WITHOPENSSL:
+        env.Append(CXXFLAGS="/DOPENSSL")
     
     env.Append(CXXPATH=cxxpath)
     env.Append(CPPPATH=cxxpath)
@@ -70,12 +74,15 @@ if sys.platform == "win32":
  
      # Set libs to link to
      # Advapi32.lib for CryptGenRandom in evutil_rand.obj
-    libs = ['ws2_32','libevent','Advapi32', 'libeay32'] 
+    libs = ['ws2_32','libevent','Advapi32'] 
+    if WITHOPENSSL:
+        libs.append('libeay32')
         
     # Update lib search path
     libpath = os.environ['LIBPATH']
     libpath += libevent2path+';'
-    libpath += opensslpath+'\\lib;'
+    if WITHOPENSSL:
+        libpath += opensslpath+'\\lib;'
 
     # Somehow linker can't find uuid.lib
     libpath += 'C:\\Program Files\\Microsoft SDKs\\Windows\\v6.0A\\Lib;'

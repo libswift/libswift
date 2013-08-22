@@ -432,6 +432,10 @@ int utf8main (int argc, char** argv)
 	    quit( "file does not exist: %s\n", filename.c_str() );
     }
 
+#ifndef OPENSSL
+    swarm_cipm = POPT_CONT_INT_PROT_NONE;
+#endif
+
     // TEMP: read hex
     if (livestream && keypairfilename != "")
     {

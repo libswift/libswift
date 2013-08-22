@@ -452,7 +452,8 @@ void LiveTransfer::OnVerifiedMunroHash(bin_t munro, Channel *sendc)
 {
     // Channel sendc received a correctly signed munro.
     LiveHashTree *umt = (LiveHashTree *)hashtree();
-    umt->SetNChunksPerSig(munro.base_length());
+    if (umt != NULL)
+        umt->SetNChunksPerSig(munro.base_length());
 
     // Arno, 2013-05-22: Hook-in using signed peaks in UMT.
     LivePiecePicker *lpp = (LivePiecePicker *)picker_;
@@ -641,6 +642,12 @@ BinHashSigTuple LiveTransfer::ReadCheckpoint()
     //fprintf(stderr,"CHECKPOINT parsed <%s> %d %llu <%s> <%s> %lld <%s>\n", munrobin.str().c_str(), layer, layeroff, munrohash.hex().c_str(), timestr.c_str(), munrotimestamp, munrosig.hex().c_str() );
 
     return BinHashSigTuple(munrobin,munrohash,munrost);
+}
+
+
+bin_t LiveTransfer::GetSourceCurrentPos()
+{
+    return bin_t(0,last_chunkid_);
 }
 
 

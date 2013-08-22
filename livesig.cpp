@@ -28,7 +28,7 @@ static int opensslrsa_adddata(EVP_MD_CTX *evp_md_ctx, unsigned char *data, unsig
 static int opensslrsa_sign(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, struct evbuffer *evb);
 static int opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned char *sig, unsigned int siglen);
 static EVP_PKEY *opensslrsa_generate(uint16_t keysize, int exp, simple_openssl_callback_t callback);
-static struct evbuffer *opensslrsa_todns(struct evbuffer *evb,EVP_PKEY *pkey);
+static int opensslrsa_todns(struct evbuffer *evb,EVP_PKEY *pkey);
 static EVP_PKEY *opensslrsa_fromdns(struct evbuffer *evb);
 
 
@@ -152,7 +152,7 @@ SwarmPubKey *KeyPair::GetSwarmPubKey()
     // Add AlgorithmID
     evbuffer_add_8(evb,alg_);
     if (alg_ == POPT_LIVE_SIG_ALG_RSASHA1)
-	evb = opensslrsa_todns(evb,evp_);
+	opensslrsa_todns(evb,evp_);
 
     if (evbuffer_get_length(evb) == 1)
     {
@@ -522,17 +522,17 @@ static EVP_PKEY *opensslrsa_generate(uint16_t keysize, int exp, simple_openssl_c
 }
 
 
-static struct evbuffer *opensslrsa_todns(struct evbuffer *evb,EVP_PKEY *pkey)
+static int opensslrsa_todns(struct evbuffer *evb,EVP_PKEY *pkey)
 {
     unsigned int e_bytes;
     unsigned int mod_bytes;
     RSA *rsa;
 
     if (pkey == NULL)
-	return evb;
+	return 0;
     rsa = EVP_PKEY_get1_RSA(pkey);
     if (rsa == NULL)
-	return evb;
+	return 0;
 
     e_bytes = BN_num_bytes(rsa->e);
     mod_bytes = BN_num_bytes(rsa->n);
@@ -575,8 +575,6 @@ static struct evbuffer *opensslrsa_todns(struct evbuffer *evb,EVP_PKEY *pkey)
 	RSA_free(rsa);
 
     fprintf(stderr,"added total %u\n", evbuffer_get_length(evb));
-
-    return evb;
 }
 
 
@@ -678,15 +676,24 @@ static int opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbit
 }
 static EVP_PKEY *opensslrsa_generate(uint16_t keysize, int exp, simple_openssl_callback_t callback)
 {
-    return NULL;
+    // Create random 1 char key
+    EVP_PKEY *pkey = new EVP_PKEY[1];
+    pkey[0] = (EVP_PKEY)(rand() % 256);
+    return pkey;
 }
-static struct evbuffer *opensslrsa_todns(struct evbuffer *evb,EVP_PKEY *pkey)
+static int opensslrsa_todns(struct evbuffer *evb,EVP_PKEY *pkey)
 {
-    return NULL;
+    // Repeat random 1 char key N times to get key
+    for (int i=0; i<SWIFT_CIPM_NONE_KEYLEN; i++)
+	evbuffer_add_8(evb,pkey[0]);
+    return 1;
 }
 static EVP_PKEY *opensslrsa_fromdns(struct evbuffer *evb)
 {
-    return NULL;
+    uint8_t val = evbuffer_remove_8(evb);
+    EVP_PKEY *pkey = new EVP_PKEY[1];
+    pkey[0] = val;
+    return pkey;
 }
 
 #endif

@@ -56,18 +56,18 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
     //
     if (transfer()->ttype() == FILE_TRANSFER)
     {
-	if (hs_out_->cont_int_prot_ != POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+	// Arno, 2013-02-25: Need to send peak bins always (also CIPM None)
+	// to cold clients to communicate tree size
+	if (ack_in_.is_empty() && hashtree() != NULL && hashtree()->peak_count() > 0)
 	{
-	    // Arno, 2013-02-25: Need to send peak bins always (also CIPM None)
-	    // to cold clients to communicate tree size
-	    if (ack_in_.is_empty() && hashtree() != NULL && hashtree()->peak_count() > 0)
-	    {
-		AddUnsignedPeakHashes(evb);
-	    }
-
-	    if (pos != bin_t::NONE)
-		AddFileUncleHashes(evb,pos);
+	    AddUnsignedPeakHashes(evb);
 	}
+
+        if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE)
+        {
+	    if (pos != bin_t::NONE)
+	        AddFileUncleHashes(evb,pos);
+        }
     }
     else
     {
@@ -75,15 +75,31 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
 	if (PeerIsSource())
 	    return;
 
+
+	fprintf(stderr,"AddRequiredHashes: LIVE\n");
+
+	// See if there is a first, or new signed munro to send
 	bin_t munro = bin_t::NONE;
 	if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
 	{
-	    // No content integrity protection, so just report current pos as source pos
+	    fprintf(stderr,"AddRequiredHashes: LIVE: CIPM NONE\n");
+
+	    // No content integrity protection, so just report current pos as
+	    // source pos == munro
 	    LivePiecePicker *lpp = (LivePiecePicker *)transfer()->picker();
-	    munro = lpp->GetCurrentPos();
+	    if (lpp == NULL)
+	    {
+		// I am source
+		LiveTransfer *lt = (LiveTransfer *)transfer();
+		munro = lt->GetSourceCurrentPos();
+	    }
+	    else
+		munro = lpp->GetCurrentPos();
 	}
 	else //POPT_CONT_INT_PROT_UNIFIED_MERKLE
 	{
+	    fprintf(stderr,"AddRequiredHashes: LIVE: CIPM UNIFIED\n");
+
 	    LiveHashTree *umt = (LiveHashTree *)hashtree();
 	    if (pos == bin_t::NONE)
 	    {
@@ -92,6 +108,7 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
 	    }
 	    else
 	    {
+		// After, send munro required for pos
 		munro = umt->GetMunro(pos);
 		if (munro == bin_t::NONE)
 		    return;
@@ -100,6 +117,7 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
 
 	if (pos == bin_t::NONE)
 	{
+	    // Initially send last signed munro
 	    dprintf("%s #%u last munro %s\n",tintstr(),id_,munro.str().c_str() );
 	    bool ahead=false;
 	    if (ack_in_right_basebin_ != bin_t::NONE)
@@ -116,6 +134,7 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
 	}
 	else
 	{
+	    // After, send munro required for pos
 	    // Don't repeat if same and not retransmit
 	    bool diff = (munro != last_sent_munro_);
 	    last_sent_munro_ = munro;
@@ -125,7 +144,8 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
 	    if (isretransmit || diff)
 		AddLiveSignedMunroHash(evb,munro);
 
-	    AddLiveUncleHashes(evb,pos,munro,isretransmit);
+            if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
+	        AddLiveUncleHashes(evb,pos,munro,isretransmit);
 	}
     }
 }
@@ -168,9 +188,12 @@ void    Channel::AddLiveSignedMunroHash(struct evbuffer *evb, bin_t munro)
 	return;
     }
 
-    evbuffer_add_8(evb, SWIFT_INTEGRITY);
-    evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
-    evbuffer_add_hash(evb, bhst.hash());
+    if (hs_out_->cont_int_prot_ != POPT_CONT_INT_PROT_NONE)
+    {
+        evbuffer_add_8(evb, SWIFT_INTEGRITY);
+        evbuffer_add_chunkaddr(evb,bhst.bin(),hs_out_->chunk_addr_);
+        evbuffer_add_hash(evb, bhst.hash());
+    }
 
     dprintf("%s #%u +mhash %s\n",tintstr(),id_,bhst.bin().str().c_str());
 
@@ -677,8 +700,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
 
     // Add required hashes. Also for initial peaks and munros
     // Note this is called always, not just when there are requests pending.
-    if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
-        AddRequiredHashes(evb,tosend,isretransmit);
+    AddRequiredHashes(evb,tosend,isretransmit);
 
     if (tosend.is_none())// && (last_data_out_time_>NOW-TINT_SEC || data_out_.empty()))
         return bin_t::NONE; // once in a while, empty data is sent just to check rtt FIXED
@@ -895,6 +917,8 @@ void    Channel::Recv (struct evbuffer *evb) {
         switch (type) {
             case SWIFT_HANDSHAKE: // explicit close
                 hishs = StaticOnHandshake(peer_,id(),true,hs_in_->version_,evb);
+                if (hishs == NULL)
+                    return;
                 OnHandshake(hishs);
                 break;
             case SWIFT_DATA:
@@ -1358,7 +1382,7 @@ void Channel::OnHaveLive(bin_t ackd_pos)
             }
         }
 
-        if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
+        /*if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
         {
 	    // SIGPEAKTODO: affected by live_disc_wnd_, old bins before
 	    // should be invalidated, to avoid hook-in minus NCHUNKS picking
@@ -1366,7 +1390,7 @@ void Channel::OnHaveLive(bin_t ackd_pos)
 
 	    LivePiecePicker *lpp = (LivePiecePicker *)lt->picker();
 	    lpp->StartAddPeerPos(id(), ackd_pos.base_right(), peer_is_source_);
-        }
+        }*/
 
         // Arno: it can happen that we receive a HAVE and have no hints
         // outstanding. In that case we should not wait till next_send_time_
@@ -1790,6 +1814,9 @@ void Channel::OnSignedHash(struct evbuffer *evb)
     else if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
     {
 	dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
+
+        LiveTransfer *lt = (LiveTransfer *)transfer();
+        lt->OnVerifiedMunroHash(pos,this);
     }
     else
     {

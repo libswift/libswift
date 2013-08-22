@@ -7,6 +7,11 @@
 #ifndef SWIFT_LIVESIG_H_
 #define SWIFT_LIVESIG_H_
 
+// Length of signature in SIGNED_INTEGRITY when Content Integrity Protection off
+#define SWIFT_CIPM_NONE_KEYLEN	21	// bytes, must be larger than Sha1Hash::SIZE
+#define SWIFT_CIPM_NONE_SIGLEN  20 	// bytes
+
+
 #ifdef OPENSSL
 
 #include <openssl/evp.h>
@@ -16,10 +21,10 @@
 #else
 
 // Dummy funcs, so swift will compile for VOD and live with no CIPM without OpenSSL
-typedef int	EVP_PKEY;
+typedef uint8_t	EVP_PKEY;
 typedef int	EVP_MD_CTX;
 #define EVP_PKEY_free(x)
-#define EVP_PKEY_size(x)
+#define EVP_PKEY_size(x)	SWIFT_CIPM_NONE_SIGLEN
 #endif
 
 namespace swift {

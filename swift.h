@@ -606,7 +606,7 @@ namespace swift {
 
         // ContentTransfer overrides
 
-        const SwarmID& swarm_id() { return swarm_id_; }
+        const SwarmID&  swarm_id() { return swarm_id_; }
         /** The binmap for data already retrieved and checked. */
         binmap_t *      ack_out ();
         /** Returns the number of bytes in a chunk for this transmission */
@@ -663,6 +663,9 @@ namespace swift {
         // LIVECHECKPOINT
         int WriteCheckpoint(BinHashSigTuple &roottup);
         BinHashSigTuple ReadCheckpoint();
+
+        /** Source: returns current last_chunkid_ as bin */
+        bin_t 		GetSourceCurrentPos();
 
       protected:
         /**    Binmap of own chunk availability, when not POPT_CONT_INT_PROT_UNIFIED_MERKLE (so _NONE or _SIGNALL) */
