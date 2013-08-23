@@ -1,5 +1,8 @@
 /*
- *  crypto.h
+ *  livesig.h
+ *
+ *  Implements sign and verify functions using DNSSEC public keys using OpenSSL
+ *  if available.
  *
  *  Created by Arno Bakker
  *  Copyright 2013-2016 Vrije Universiteit Amsterdam. All rights reserved.
@@ -7,7 +10,7 @@
 #ifndef SWIFT_LIVESIG_H_
 #define SWIFT_LIVESIG_H_
 
-// Length of signature in SIGNED_INTEGRITY when Content Integrity Protection off
+// Length of fake signature in SIGNED_INTEGRITY when Content Integrity Protection off
 #define SWIFT_CIPM_NONE_KEYLEN	21	// bytes, must be larger than Sha1Hash::SIZE
 #define SWIFT_CIPM_NONE_SIGLEN  20 	// bytes
 
@@ -18,11 +21,15 @@
 
 #else
 
-// Dummy funcs, so swift will compile for VOD and live with no CIPM without OpenSSL
+// Dummy funcs, so swift will compile for VOD and live with no CIPM without OpenSSL.
+// When CIPM is NONE the private key is 1 byte and the public key is that byte
+// repeated 21 times.
+//
 typedef uint8_t	EVP_PKEY;
 typedef int	EVP_MD_CTX;
 #define EVP_PKEY_free(x)
 #define EVP_PKEY_size(x)	SWIFT_CIPM_NONE_SIGLEN
+
 #endif
 
 namespace swift {
@@ -54,12 +61,13 @@ struct Signature
     const static Signature NOSIG;
 };
 
-
-#define SWIFT_RSA_DEFAULT_KEYSIZE	1024
+// Default keysize when using RSASHA1
+#define SWIFT_RSA_DEFAULT_KEYSIZE	1024	// bits
 
 
 struct SwarmPubKey;
 
+// Callback used when generating (RSA) keys, see https://www.openssl.org/docs/crypto/BN_generate_prime.html
 typedef void (*simple_openssl_callback_t)(int);
 
 
@@ -87,6 +95,8 @@ struct KeyPair
 
     /** Create a new key pair, calling callback as the key is generated */
     static KeyPair *Generate(popt_live_sig_alg_t alg, uint16_t keysize=SWIFT_RSA_DEFAULT_KEYSIZE, simple_openssl_callback_t callback=NULL);
+
+    /** For testing */
     EVP_PKEY       *GetEVP() { return evp_; }
 
     /** Return PPSPP encoded public key = Algorithm byte + DNSSEC encoded public key */
@@ -127,11 +137,11 @@ struct SwarmPubKey
     SwarmPubKey(std::string hexstr);
     ~SwarmPubKey();
     SwarmPubKey & operator = (const SwarmPubKey &source);
-    bool    operator == (const SwarmPubKey& b) const;
+    bool     operator == (const SwarmPubKey& b) const;
     uint8_t  *bits()  { return bits_; }
     uint16_t length() { return len_; }
     std::string hex() const;
-    KeyPair *GetPublicKeyPair() const;
+    KeyPair  *GetPublicKeyPair() const;
 
     const static SwarmPubKey NOSPUBKEY;
   protected:

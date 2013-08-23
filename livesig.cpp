@@ -1,5 +1,5 @@
 /*
- *  livesig.h
+ *  livesig.cpp
  *
  *  Created by Arno Bakker
  *  Copyright 2013-2016 Vrije Universiteit Amsterdam. All rights reserved.
@@ -42,7 +42,7 @@ const SwarmPubKey SwarmPubKey::NOSPUBKEY = SwarmPubKey();
 
 
 /*
- * Local functions (dummy implementations when compiled without OpenSSL
+ * Local functions (simple implementations when compiled without OpenSSL)
  */
 
 static int fake_openssl_write_private_key(std::string keypairfilename, EVP_PKEY *pkey);
@@ -73,7 +73,6 @@ static EVP_PKEY *opensslecdsa_fromdns(popt_live_sig_alg_t alg,struct evbuffer *e
 /*
  * Signature
  */
-
 
 Signature::Signature(uint8_t *sb, uint16_t len) : sigbits_(NULL), siglen_(0)
 {
@@ -465,8 +464,6 @@ KeyPair *SwarmPubKey::GetPublicKeyPair() const
     else
 	evp = opensslecdsa_fromdns(alg,evb);
 
-    fprintf(stderr,"SwarmPubKey: GetPublicKeyPair: evp %p\n", evp );
-
     if (evp == NULL)
 	return NULL;
 
@@ -577,16 +574,14 @@ static EVP_MD_CTX *opensslrsa_createctx()
     return evp_md_ctx;
 }
 
-static void
-opensslrsa_destroyctx(EVP_MD_CTX *evp_md_ctx)
+static void opensslrsa_destroyctx(EVP_MD_CTX *evp_md_ctx)
 {
     if (evp_md_ctx != NULL) {
 	EVP_MD_CTX_destroy(evp_md_ctx);
     }
 }
 
-static int
-opensslrsa_adddata(EVP_MD_CTX *evp_md_ctx, unsigned char *data, unsigned int datalength)
+static int opensslrsa_adddata(EVP_MD_CTX *evp_md_ctx, unsigned char *data, unsigned int datalength)
 {
     if (!EVP_DigestUpdate(evp_md_ctx, data, datalength)) {
 	    return 0;
@@ -594,8 +589,7 @@ opensslrsa_adddata(EVP_MD_CTX *evp_md_ctx, unsigned char *data, unsigned int dat
     return 1;
 }
 
-static int
-opensslrsa_sign(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, struct evbuffer *evb)
+static int opensslrsa_sign(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, struct evbuffer *evb)
 {
     unsigned int siglen = 0;
     unsigned char *sigdata = new unsigned char[EVP_PKEY_size(pkey)];
@@ -614,8 +608,7 @@ opensslrsa_sign(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, struct evbuffer *evb)
 }
 
 
-static int
-opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned char *sigdata, unsigned int siglen)
+static int opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned char *sigdata, unsigned int siglen)
 {
     int status = 0;
     RSA *rsa;
@@ -676,22 +669,25 @@ static EVP_PKEY *opensslrsa_generate(uint16_t keysize, int exp, simple_openssl_c
 	return NULL;
     }
     if (exp == 0) {
-	    /* RSA_F4 0x10001 */
-	    BN_set_bit(e, 0);
-	    BN_set_bit(e, 16);
+	/* RSA_F4 0x10001 */
+	BN_set_bit(e, 0);
+	BN_set_bit(e, 16);
     } else {
-	    /* (phased-out) F5 0x100000001 */
-	    BN_set_bit(e, 0);
-	    BN_set_bit(e, 32);
+	/* (phased-out) F5 0x100000001 */
+	BN_set_bit(e, 0);
+	BN_set_bit(e, 32);
     }
     BN_GENCB_set(&cb, &generate_progress_cb, (void *)callback);
 
     if (RSA_generate_key_ex(rsa, keysize, e, &cb)) {
-	    BN_free(e);
-	    SET_FLAGS(rsa);
-	    RSA_free(rsa);
-	    return pkey;
+	// Success
+	BN_free(e);
+	SET_FLAGS(rsa);
+	RSA_free(rsa);
+	return pkey;
     }
+    else
+	return NULL;
 }
 
 
@@ -714,40 +710,24 @@ static int opensslrsa_todns(struct evbuffer *evb,EVP_PKEY *pkey)
     if (e_bytes < 256) {	/*%< key exponent is <= 2040 bits */
 	evbuffer_add_8(evb,(uint8_t) e_bytes);
 
-	fprintf(stderr,"adding l 1\n");
-
     } else {
 	evbuffer_add_8(evb,0);
 	evbuffer_add_16be(evb,(uint16_t) e_bytes);
-
-	fprintf(stderr,"adding l 3\n");
     }
 
     unsigned char *space = new unsigned char[BN_num_bytes(rsa->e)];
     BN_bn2bin(rsa->e, space);
     evbuffer_add(evb,space,BN_num_bytes(rsa->e));
-
-    fprintf(stderr,"adding e bytes %x %x %x\n", space[0], space[1], space[2] );
-
     delete space;
-
-    fprintf(stderr,"adding e %u\n", BN_num_bytes(rsa->e));
 
     space = new unsigned char[BN_num_bytes(rsa->n)];
     BN_bn2bin(rsa->n, space);
     evbuffer_add(evb,space,BN_num_bytes(rsa->n));
-
-    fprintf(stderr,"adding n bytes %x %x %x\n", space[0], space[1], space[2] );
-
     delete space;
-
-    fprintf(stderr,"adding n %u\n", BN_num_bytes(rsa->n));
-
 
     if (rsa != NULL)
 	RSA_free(rsa);
 
-    fprintf(stderr,"added total %u\n", evbuffer_get_length(evb));
     return 1;
 }
 
@@ -1048,8 +1028,6 @@ static EVP_PKEY *opensslecdsa_fromdns(popt_live_sig_alg_t alg,struct evbuffer *e
     const unsigned char *cp;
     unsigned char buf[DNS_KEY_ECDSA384SIZE + 1];
 
-    fprintf(stderr,"ecdsa_fromdns: alg %d got %u\n", alg, evbuffer_get_length(evb) );
-
     if (alg == POPT_LIVE_SIG_ALG_ECDSAP256SHA256)
     {
 	len = DNS_KEY_ECDSA256SIZE;
@@ -1059,14 +1037,10 @@ static EVP_PKEY *opensslecdsa_fromdns(popt_live_sig_alg_t alg,struct evbuffer *e
 	group_nid = NID_secp384r1;
     }
 
-    fprintf(stderr,"ecdsa_fromdns: exp len %u\n", len );
-
     if (evbuffer_get_length(evb) == 0)
 	return NULL;
     if (evbuffer_get_length(evb) < len)
 	return NULL;
-
-    fprintf(stderr,"ecdsa_fromdns: before by curve\n" );
 
     eckey = EC_KEY_new_by_curve_name(group_nid);
     if (eckey == NULL)
@@ -1084,8 +1058,6 @@ static EVP_PKEY *opensslecdsa_fromdns(popt_live_sig_alg_t alg,struct evbuffer *e
 			(const unsigned char **) &cp,
 			(long) len + 1) == NULL)
     {
-	fprintf(stderr,"ecdsa_fromdns: GET LEN\n" );
-
 	EC_KEY_free(eckey);
 	return NULL;
     }
@@ -1093,14 +1065,11 @@ static EVP_PKEY *opensslecdsa_fromdns(popt_live_sig_alg_t alg,struct evbuffer *e
     pkey = EVP_PKEY_new();
     if (pkey == NULL)
     {
-	fprintf(stderr,"ecdsa_fromdns: CREATE KEY\n" );
 	EC_KEY_free(eckey);
 	return NULL;
     }
     if (!EVP_PKEY_set1_EC_KEY(pkey, eckey))
     {
-	fprintf(stderr,"ecdsa_fromdns: SET KEY\n" );
-
 	EVP_PKEY_free(pkey);
 	EC_KEY_free(eckey);
 	return NULL;

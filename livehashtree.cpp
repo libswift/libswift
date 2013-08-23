@@ -487,7 +487,7 @@ BinHashSigTuple LiveHashTree::GetSignedMunro(bin_t munro)
 
 bool LiveHashTree::OfferSignedMunroHash(bin_t pos, SigTintTuple &sigtint)
 {
-    //if (tree_debug)
+    if (tree_debug)
         fprintf(stderr,"umt: OfferSignedMunroHash: munro %s\n", pos.str().c_str() );
 
     if (pos != cand_munro_bin_)
@@ -500,10 +500,12 @@ bool LiveHashTree::OfferSignedMunroHash(bin_t pos, SigTintTuple &sigtint)
 
     // Check if new munro
     int i=0;
-    for (i=0; i<peak_count_; i++)
+    for (i=0; i<peak_count_; i++) // SUMMITTODO: not really peak anymore
     {
         if (pos == peak_bins_[i])
         {
+            if (tree_debug)
+        	fprintf(stderr,"umt: OfferSignedMunroHash: peak known\n");
             return false;
         }
     }

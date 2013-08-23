@@ -469,8 +469,8 @@ int utf8main (int argc, char** argv)
     if (cmdgw_enabled)
         InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr,swarm_cipm,livesource_disc_wnd);
 
-// Arno, 2013-01-10: Cannot use while GTesting because statsgw is not part of
-// libswift, but considered part of an app on top.
+    // Arno, 2013-01-10: Cannot use while GTesting because statsgw is not part of
+    // libswift, but considered part of an app on top.
 #ifndef SWIFTGTEST
     // TRIALM36: Allow browser to retrieve stats via AJAX and as HTML page
     if (statsaddr != Address())
@@ -753,6 +753,8 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
     // Server mode: read from http source or pipe or file
     livesource_evb = evbuffer_new();
 
+
+    // Try reading keypair from filename, if not generate one, and save.
     KeyPair *keypairptr=NULL;
     if (keypairfilename != "")
     {
@@ -773,6 +775,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
     }
 
 
+    // Determine input
     std::string httpscheme = "http:";
     std::string pipescheme = "pipe:";
     if (livesource_input.substr(0,httpscheme.length()) != httpscheme)
@@ -809,9 +812,6 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
 
         // Create swarm
         livesource_lt = swift::LiveCreate(filename,*keypairptr,livesource_checkpoint_filename,swarm_cipm,livesource_disc_wnd,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,chunk_size); // SIGNPEAKTODO
-
-        if (urlfilename != "")
-            PrintURL(livesource_lt->td(),"",chunk_size,urlfilename);
 
         // Periodically create chunks by reading from source
         evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
@@ -855,6 +855,9 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
         evhttp_add_header(req->output_headers, "Host", httpservname.c_str());
     }
 
+    // Easy testing: write swarmID to file as URL. Can be read by client using -r
+    if (urlfilename != "")
+        PrintURL(livesource_lt->td(),"",chunk_size,urlfilename);
 
     report_progress = true;
     single_td = livesource_lt->td();

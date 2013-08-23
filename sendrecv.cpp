@@ -1781,8 +1781,6 @@ void Channel::OnSignedHash(struct evbuffer *evb)
 
     if (umt != NULL)
     {
-        dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
-        
         SigTintTuple sigtint(sig,source_tint);
 
         bool newverified = umt->OfferSignedMunroHash(pos,sigtint);
@@ -1790,6 +1788,8 @@ void Channel::OnSignedHash(struct evbuffer *evb)
             dprintf("%s #%u !sigh %s\n",tintstr(),id_,pos.str().c_str());
         else
         {
+            dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
+
             LiveTransfer *lt = (LiveTransfer *)transfer();
             lt->OnVerifiedMunroHash(pos,this);
         }
