@@ -15,9 +15,6 @@
 #ifdef OPENSSL
 
 #include <openssl/evp.h>
-#include <openssl/rsa.h>
-#include <openssl/bn.h>
-#include <openssl/pem.h> // for file I/O
 
 #else
 

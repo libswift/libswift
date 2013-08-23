@@ -437,9 +437,6 @@ int utf8main (int argc, char** argv)
     swarm_cipm = POPT_CONT_INT_PROT_NONE;
 #endif
 
-
-    fprintf(stderr,"livestream %d urlfilename %s\n", (int)livestream, urlfilename.c_str() );
-
     // For easy testing: read swift URL from file
     if (livestream && urlfilename != "")
     {
@@ -599,7 +596,7 @@ int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, s
 
     single_td = OpenSwiftSwarm(filename,swarmid,tracker,false,chunk_size,livestream,true); //activate always
     if (single_td < 0)
-        quit("cannot open file %s",filename.c_str());
+        quit("swift: cannot open swarm with %s",filename.c_str());
     if (printurl)
     {
 	if (swift::Complete(single_td) == 0)
@@ -766,6 +763,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
     if (keypairptr == NULL)
     {
 	keypairptr = KeyPair::Generate(livesource_sigalg, SWIFT_RSA_DEFAULT_KEYSIZE, OpenSSLGenerateCallback );
+	fprintf(stderr,"swift: siglen is %u\n", keypairptr->GetSigSizeInBytes() );
     }
     if (keypairfilename != "")
     {

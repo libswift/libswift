@@ -147,6 +147,9 @@ LiveTransfer::LiveTransfer(std::string filename, SwarmID &swarmid, popt_cont_int
     swarm_id_ = swarmid;
     SwarmPubKey spubkey = swarm_id_.spubkey();
     KeyPair *kp = spubkey.GetPublicKeyPair();
+
+    fprintf(stderr,"LiveTransfer: client: keypair is %p\n", kp );
+
     if (kp == NULL)
     {
 	SetBroken();
