@@ -758,7 +758,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
     {
 	keypairptr = KeyPair::ReadPrivateKey(keypairfilename);
 	if (keypairptr == NULL)
-	    fprintf(stderr,"swift: Could not read keypair from filename, creating new one");
+	    fprintf(stderr,"swift: Could not read keypair from filename, creating new one\n");
     }
     if (keypairptr == NULL)
     {
@@ -769,7 +769,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
     {
 	int ret = keypairptr->WritePrivateKey(keypairfilename);
 	if (ret < 0)
-	    fprintf(stderr,"swift: Could not write keypair to filename, continuing");
+	    fprintf(stderr,"swift: Could not write keypair to filename, continuing\n");
     }
 
 

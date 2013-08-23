@@ -29,6 +29,9 @@ using namespace swift;
 #define DNS_KEY_ECDSA256SIZE	64
 #define DNS_KEY_ECDSA384SIZE	96
 
+// See http://stackoverflow.com/questions/17269238/ecdsa-signature-length
+#define ECDSA_SIG_DER_ENCODED_PREFIX_LEN	8
+
 
 /*
  * Global class variables
@@ -323,12 +326,11 @@ bool KeyPair::Verify(uint8_t *data, uint16_t datalength,Signature &sig)
 
 uint16_t KeyPair::GetSigSizeInBytes()
 {
+    int siglen = EVP_PKEY_size(evp_);
     if (alg_ == POPT_LIVE_SIG_ALG_RSASHA1)
-	return EVP_PKEY_size(evp_);
-    else if (alg_ == POPT_LIVE_SIG_ALG_ECDSAP256SHA256) // EVP_PKEY_size reports +8 ?!
-	return DNS_SIG_ECDSA256SIZE;
+	return siglen;
     else
-	return DNS_SIG_ECDSA384SIZE;
+	return siglen - ECDSA_SIG_DER_ENCODED_PREFIX_LEN;
 }
 
 
@@ -513,10 +515,11 @@ static EVP_PKEY *fake_openssl_read_private_key(std::string keypairfilename, popt
 	*algptr = POPT_LIVE_SIG_ALG_RSASHA1;
     else if (keytype == EVP_PKEY_EC)
     {
+	// returns length of DER-encoded max sig
 	int siglen = EVP_PKEY_size(pkey);
-	if (siglen == DNS_SIG_ECDSA256SIZE + 8 ) // EVP_PKEY_size reports +8 ?!
+	if (siglen == ECDSA_SIG_DER_ENCODED_PREFIX_LEN + DNS_SIG_ECDSA256SIZE)
 	    *algptr = POPT_LIVE_SIG_ALG_ECDSAP256SHA256;
-	else if (siglen == DNS_SIG_ECDSA384SIZE + 8) // EVP_PKEY_size reports +8 ?!
+	else if (siglen == ECDSA_SIG_DER_ENCODED_PREFIX_LEN + DNS_SIG_ECDSA384SIZE)
 	    *algptr = POPT_LIVE_SIG_ALG_ECDSAP384SHA384;
 	else
 	    fprintf(stderr,"fake_openssl_read_private_key: unknown siglen %d\n", siglen );
