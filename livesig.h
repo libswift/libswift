@@ -17,6 +17,7 @@
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
 #include <openssl/bn.h>
+#include <openssl/pem.h> // for file I/O
 
 #else
 
@@ -64,6 +65,8 @@ struct SwarmPubKey;
 
 typedef void (*simple_openssl_callback_t)(int);
 
+
+/** Public/private (source) or just public key (client) for signing, and verification, resp. */
 struct KeyPair
 {
   public:
@@ -84,22 +87,36 @@ struct KeyPair
 	evp_ = NULL;
 
     }
+
+    /** Create a new key pair, calling callback as the key is generated */
     static KeyPair *Generate(popt_live_sig_alg_t alg, uint16_t keysize=SWIFT_RSA_DEFAULT_KEYSIZE, simple_openssl_callback_t callback=NULL);
     EVP_PKEY       *GetEVP() { return evp_; }
+
+    /** Return PPSPP encoded public key = Algorithm byte + DNSSEC encoded public key */
     SwarmPubKey    *GetSwarmPubKey();
 
-    Signature *Sign(uint8_t *data, uint16_t datalength);
-    bool Verify(uint8_t *data, uint16_t datalength,Signature &sig);
+    /** Returns a Signature with the private key over data */
+    Signature 	   *Sign(uint8_t *data, uint16_t datalength);
 
+    /** Returns whether the Signature was made by the public key over data */
+    bool           Verify(uint8_t *data, uint16_t datalength,Signature &sig);
+
+    /** Returns the DNSSEC signature algorithm used */
     popt_live_sig_alg_t	GetSigAlg() { return alg_; }
 
     /** Returns the number of bytes a signature takes on the wire */
-    uint16_t	    GetSigSizeInBytes();
+    uint16_t	   GetSigSizeInBytes();
+
+    /** Returns NULL on error. */
+    static KeyPair *ReadPrivateKey(std::string keypairfilename);
+    /** Returns -1 on error */
+    int            WritePrivateKey(std::string keypairfilename);
 
   protected:
     popt_live_sig_alg_t	alg_;
     EVP_PKEY		*evp_;
 };
+
 
 /** -08: SwarmID for live streams is an Algorithm Byte followed by a public key
  * encoded as in a DNSSEC DNSKEY resource record without BASE-64 encoding.

@@ -86,7 +86,8 @@ int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, s
 int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate);
 int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool activate);
 // SIGNPEAKTODO replace swarmid with generic swarm ID
-void HandleLiveSource(std::string livesource_input, std::string filename, std::string keypairfilename, uint32_t chunk_size);
+int PrintURL(int td,std::string trackerargstr,uint32_t chunk_size,std::string urlfilename);
+void HandleLiveSource(std::string livesource_input, std::string filename, std::string keypairfilename, uint32_t chunk_size, std::string urlfilename);
 
 void ReportCallback(int fd, short event, void *arg);
 void EndCallback(int fd, short event, void *arg);
@@ -436,26 +437,31 @@ int utf8main (int argc, char** argv)
     swarm_cipm = POPT_CONT_INT_PROT_NONE;
 #endif
 
-    // TEMP: read hex
-    if (livestream && keypairfilename != "")
-    {
-        fprintf(stderr,"swift: Reading live swarmid from %s\n", keypairfilename.c_str() );
 
-	uint16_t fsize = (uint16_t)file_size_by_path_utf8(keypairfilename);
-	char *data = new char[fsize+1];
-	data[fsize] = '\0';
-	FILE *fp = fopen_utf8(keypairfilename.c_str(),"rb");
+    fprintf(stderr,"livestream %d urlfilename %s\n", (int)livestream, urlfilename.c_str() );
+
+    // For easy testing: read swift URL from file
+    if (livestream && urlfilename != "")
+    {
+	char urldata[POPT_MAX_SWARMID_SIZE*2];
+	FILE *fp = fopen_utf8(urlfilename.c_str(),"rb");
         if (fp == NULL)
         {
-            fprintf(stderr,"Could not open keypair file\n");
+            quit("Could not open URL file\n");
         }
         else
         {
-	    int n = fread(data,sizeof(char),fsize,fp);
+            char *ptr = fgets(urldata,POPT_MAX_SWARMID_SIZE*2,fp);
+            if (ptr == NULL)
+        	quit("Error reading URL from file");
 	    fclose(fp);
-	    std::string datahex(data);
-	    swarmid = SwarmID(datahex);
-	    delete data;
+	    std::string urlstr(urldata);
+
+	    parseduri_t puri;
+	    if (!swift::ParseURI(urlstr,puri))
+		quit("Error reading URL from file: parse error");
+	    std::string swarmidhexstr = puri["swarmidhex"];
+	    swarmid = SwarmID(swarmidhexstr);
 
             fprintf(stderr,"swift: Read swarmid: %s\n", swarmid.hex().c_str() );
         }
@@ -532,7 +538,7 @@ int utf8main (int argc, char** argv)
     {
         // LIVE
         // Act as live source
-        HandleLiveSource(livesource_input,filename,keypairfilename,chunk_size);
+        HandleLiveSource(livesource_input,filename,keypairfilename,chunk_size,urlfilename);
     }
     else if (!cmdgw_enabled && !httpgw_enabled && zerostatedir == "")
         quit("Not client, not live server, not a gateway, not zero state seeder?");
@@ -596,39 +602,12 @@ int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, s
         quit("cannot open file %s",filename.c_str());
     if (printurl)
     {
-        FILE *fp = stdout;
-        if (urlfilename != "")
-        {
-            fp = fopen_utf8(urlfilename.c_str(),"wb");
-            if (!fp)
-            {
-                print_error("cannot open file to write tswift URL to");
-                quit("cannot open URL file %s",urlfilename.c_str());
-            }
-        }
+	if (swift::Complete(single_td) == 0)
+	    quit("cannot open empty file %s",filename.c_str());
 
-        if (swift::Complete(single_td) == 0)
-            quit("cannot open empty file %s",filename.c_str());
-  
-        std::ostringstream oss;
-        oss << "tswift:";
-        if (trackerargstr != "")
-           oss << "//" << trackerargstr; // use unresolved tracker hostname here as specified on cmd line
-        oss << "/" << swift::GetSwarmID(single_td).hex();
-        if (chunk_size != SWIFT_DEFAULT_CHUNK_SIZE)
-           oss << "$" << chunk_size;
-        oss << "\n";
-                   
-        std::stringbuf *pbuf=oss.rdbuf();
-        if (pbuf == NULL)
-        {
-            print_error("cannot create URL");
-            return -1;
-        }
-        int ret = 0;
-        ret = fprintf(fp,"%s", pbuf->str().c_str());
-        if (ret <0)
-            print_error("cannot write URL");
+	int ret = PrintURL(single_td,trackerargstr,chunk_size,urlfilename);
+	if (ret < 0)
+	    return -1;
 
         // Arno, 2012-01-04: LivingLab: Create checkpoint such that content
         // can be copied to scanned dir and quickly loaded
@@ -724,28 +703,77 @@ int CleanSwiftDirectory(std::string dirname)
 }
 
 
+int PrintURL(int td,std::string trackerargstr,uint32_t chunk_size,std::string urlfilename)
+{
+    FILE *fp = stdout;
+    if (urlfilename != "")
+    {
+        fp = fopen_utf8(urlfilename.c_str(),"wb");
+        if (!fp)
+        {
+            print_error("cannot open file to write tswift URL to");
+            quit("cannot open URL file %s",urlfilename.c_str());
+        }
+    }
+
+    std::ostringstream oss;
+    oss << "tswift:";
+    if (trackerargstr != "")
+       oss << "//" << trackerargstr; // use unresolved tracker hostname here as specified on cmd line
+    oss << "/" << swift::GetSwarmID(td).hex();
+    if (chunk_size != SWIFT_DEFAULT_CHUNK_SIZE)
+       oss << "$" << chunk_size;
+    oss << "\n";
+
+    std::stringbuf *pbuf=oss.rdbuf();
+    if (pbuf == NULL)
+    {
+        print_error("cannot create URL");
+        return -1;
+    }
+    int ret = 0;
+    ret = fprintf(fp,"%s", pbuf->str().c_str());
+    if (ret <0)
+        print_error("cannot write URL");
+
+    if (fp != stdout)
+        fclose(fp);
+
+    return ret;
+}
+
+
+
 void OpenSSLGenerateCallback(int p)
 {
     fprintf(stderr,"GenKey %d ", p);
 }
 
 
-void HandleLiveSource(std::string livesource_input, std::string filename, std::string keypairfilename, uint32_t chunk_size)
+void HandleLiveSource(std::string livesource_input, std::string filename, std::string keypairfilename, uint32_t chunk_size, std::string urlfilename)
 {
     // LIVE
     // Server mode: read from http source or pipe or file
     livesource_evb = evbuffer_new();
 
     KeyPair *keypairptr=NULL;
-    //if (keypairfilename == "")
-    if (true)
+    if (keypairfilename != "")
+    {
+	keypairptr = KeyPair::ReadPrivateKey(keypairfilename);
+	if (keypairptr == NULL)
+	    fprintf(stderr,"swift: Could not read keypair from filename, creating new one");
+    }
+    if (keypairptr == NULL)
     {
 	keypairptr = KeyPair::Generate(livesource_sigalg, SWIFT_RSA_DEFAULT_KEYSIZE, OpenSSLGenerateCallback );
     }
-    else
+    if (keypairfilename != "")
     {
-	// OPENSSLTODO
+	int ret = keypairptr->WritePrivateKey(keypairfilename);
+	if (ret < 0)
+	    fprintf(stderr,"swift: Could not write keypair to filename, continuing");
     }
+
 
     std::string httpscheme = "http:";
     std::string pipescheme = "pipe:";
@@ -778,16 +806,14 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
             livesource_isfile = true;
         }
 
+        if (filename == "")
+            filename = "storage.dat";
+
         // Create swarm
         livesource_lt = swift::LiveCreate(filename,*keypairptr,livesource_checkpoint_filename,swarm_cipm,livesource_disc_wnd,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,chunk_size); // SIGNPEAKTODO
 
-        if (keypairfilename != "")
-        {
-	    std::string swarmidstr = livesource_lt->swarm_id().hex();
-	    FILE *fp = fopen_utf8(keypairfilename.c_str(),"wb");
-	    fwrite(swarmidstr.c_str(),sizeof(char),swarmidstr.length(),fp);
-	    fclose(fp);
-        }
+        if (urlfilename != "")
+            PrintURL(livesource_lt->td(),"",chunk_size,urlfilename);
 
         // Periodically create chunks by reading from source
         evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);

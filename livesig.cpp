@@ -8,6 +8,11 @@
 
 #include <event2/buffer.h>
 
+// To prevent runtime error OPENSSL_Uplink(10111000,08): no OPENSSL_Applink
+#ifdef OPENSSL
+#include <openssl/applink.c>
+#endif
+
 using namespace swift;
 
 /*
@@ -21,6 +26,9 @@ const SwarmPubKey SwarmPubKey::NOSPUBKEY = SwarmPubKey();
 /*
  * Local functions (dummy implementations when compiled without OpenSSL
  */
+
+static int fake_openssl_write_private_key(std::string keypairfilename, EVP_PKEY *pkey);
+static EVP_PKEY *fake_openssl_read_private_key(std::string keypairfilename, popt_live_sig_alg_t *algptr);
 
 static EVP_MD_CTX *opensslrsa_createctx();
 static void opensslrsa_destroyctx(EVP_MD_CTX *evp_md_ctx);
@@ -234,8 +242,24 @@ uint16_t KeyPair::GetSigSizeInBytes()
 
 
 
+KeyPair *KeyPair::ReadPrivateKey(std::string keypairfilename)
+{
+    popt_live_sig_alg_t alg=POPT_LIVE_SIG_ALG_PRIVATEDNS;
+    EVP_PKEY *pkey = fake_openssl_read_private_key(keypairfilename,&alg);
+    if (pkey == NULL)
+	return NULL;
+    else
+	return new KeyPair(alg,pkey);
+}
+
+int KeyPair::WritePrivateKey(std::string keypairfilename)
+{
+    return fake_openssl_write_private_key(keypairfilename,evp_);
+}
+
+
 /*
- * Signature
+ * SwarmPubKey
  */
 
 
@@ -353,10 +377,52 @@ KeyPair *SwarmPubKey::GetPublicKeyPair() const
 
 /*
  * Implementations of crypto
+ *
+ * ECDSATODO: Convert opensslecdsa_link.c
  */
 
-
 #ifdef OPENSSL
+
+
+static int fake_openssl_write_private_key(std::string keypairfilename, EVP_PKEY *pkey)
+{
+    FILE *fp = fopen_utf8(keypairfilename.c_str(),"wb");
+    if (fp == NULL)
+	return -1;
+
+    int ret = PEM_write_PrivateKey(fp, pkey, NULL, NULL, 0, 0, NULL);
+    fclose(fp);
+    if (ret == 0)
+	return -1;
+    else
+	return 0;
+}
+
+
+static EVP_PKEY *fake_openssl_read_private_key(std::string keypairfilename, popt_live_sig_alg_t *algptr)
+{
+    FILE *fp = fopen_utf8(keypairfilename.c_str(),"rb");
+    if (fp == NULL)
+	return NULL;
+
+    EVP_PKEY *pkey=NULL;
+    pkey = PEM_read_PrivateKey(fp, &pkey, NULL, NULL );
+    fclose(fp);
+
+    if (pkey == NULL)
+	return NULL;
+
+    int keytype = EVP_PKEY_type(pkey->type);
+    if (keytype == EVP_PKEY_RSA)
+	*algptr = POPT_LIVE_SIG_ALG_RSASHA1;
+    else if (keytype == EVP_PKEY_EC)
+    {
+	// ECDSATODO: get key size to determine POPT_LIVE_SIG_ALG_ECDSAP256SHA256 or POPT_LIVE_SIG_ALG_ECDSAP384SHA384
+    }
+
+    return pkey;
+}
+
 
 // Adapted from BIND9 opensslrsa_link.c
 /*
@@ -654,6 +720,46 @@ static EVP_PKEY *opensslrsa_fromdns(struct evbuffer *evb)
 }
 
 #else
+
+static int fake_openssl_write_private_key(std::string keypairfilename, EVP_PKEY *pkey)
+{
+    FILE *fp = fopen_utf8(keypairfilename.c_str(),"wb");
+    if (fp == NULL)
+	return -1;
+
+    // Write dummy single byte private key
+    int ret = fputc(pkey[0],fp);
+    fclose(fp);
+
+    if (ret == EOF)
+	return -1;
+    else
+	return 0;
+}
+
+
+static EVP_PKEY *fake_openssl_read_private_key(std::string keypairfilename, popt_live_sig_alg_t *algptr)
+{
+    *algptr = POPT_LIVE_SIG_ALG_RSASHA1; // Not
+
+    FILE *fp = fopen_utf8(keypairfilename.c_str(),"rb");
+    if (fp == NULL)
+	return NULL;
+
+    EVP_PKEY *pkey = opensslrsa_generate(0,0,NULL);
+    // Read dummy single byte private key
+    int ret = fgetc(fp);
+    if (ret == EOF)
+    {
+	delete pkey;
+	return NULL;
+    }
+    else
+	pkey[0] = ret;
+
+    fclose(fp);
+    return pkey;
+}
 
 static EVP_MD_CTX *opensslrsa_createctx()
 {
