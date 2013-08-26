@@ -16,7 +16,9 @@
 #include <openssl/pem.h> // for file I/O
 
 // To prevent runtime error OPENSSL_Uplink(10111000,08): no OPENSSL_Applink
+#ifdef _WIN32
 #include <openssl/applink.c>
+#endif
 #endif
 
 using namespace swift;
