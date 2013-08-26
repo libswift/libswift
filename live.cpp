@@ -9,44 +9,45 @@
  *  This modulo is equivalent to the live discard window (see IETF PPSPP spec).
  *  This overwriting can be done both at the source and in a client.
  *
- * TODO:
- *  - temp check if not diverging too much from source via CalculateHookinPos() authoritative.
- *
  *  Created by Arno Bakker.
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
- *  TODO:
- *  - picker that handles total chunk loss
- *       DONE
- *  - picker than optimizes sharing (cf. small swarms sharing)
- *      * don't have piece_due
- *      * need rarest or latest bla-bla (UTorino guy)
- *  - aux live seeders?
- *  - restartable live source (idea for UMT: just start new subtree,
- *    remembering transient root hash of previous to be used when tree grows
- *    in level above current size.)
- *
- *  - avg upload buggy? Check problem found by Riccardo.
+ * Note:
  *
  *  - Windows needs live discard window < max as it doesn't have sparse files,
  *    so tuning in at chunk 197992 without a smaller window causes a
- *    file-allocation stall in client.sh
+ *    file-allocation stall in clients.
  *
- *  - (related) Pass live discard window via CMDGW interface.
+ *  TODO:
+ *  - picker than optimizes sharing (cf. small swarms sharing)
+ *      * don't have piece_due
+ *          + Could build now based on SIGNED_INTEGRITY timestamp
+ *      * need rarest or latest bla-bla (UTorino guy)
+ *      DONE: probabilistic one
  *
- *  - Test if CIPM None still works.
+ *  - aux live seeders?
+ *
+ *  - restartable live source (idea for UMT: just start new subtree,
+ *    remembering transient root hash of previous to be used when tree grows
+ *    in level above current size.)
+ *        DONE.
+ *
+ *  - avg upload buggy? Check problem found by Riccardo.
+ *
+ *  - (related) Pass live discard window via CMDGW interface. Needed by Windows, see above.
  *
  *  - sendrecv.cpp Don't add DATA+bin+etc if read of data fails.
  *
- *  - Idea: client skips when signed peaks arrives that is way past hook-in point.
- *
- *  - Don't send SIGNED INTEGRITY to source.
- *
  *  - avoid infinitely growing vector of channels.
  *
- *  - Policy for how far peer and source may be apart before rehook-in
- *
  *  - Crash on end-of-HTTP request for live.
+ *
+ *  - Replace divergence with time based approached using timestamp from SIGNED_INTEGRITY
+ *     + OLD: temp check if not diverging too much from source via CalculateHookinPos() authoritative.
+ *     + OLD: Policy for how far peer and source may be apart before rehook-in
+ *     + OLD: Idea: client skips when signed peaks arrives that is way past hook-in point.
+ *
+ *  - Write/Read tracker from -r urlfilename too.
  */
 //LIVE
 #include "swift.h"

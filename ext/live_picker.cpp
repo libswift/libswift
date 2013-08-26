@@ -390,8 +390,46 @@ class SimpleLivePiecePicker : public LivePiecePicker {
 
 };
 
+
+/*
+ * SharingLivePiecePicker: A piece picker with optimizations for small swarms.
+ * Below is a description of the idea. TODO is to look at the due time better
+ * and to reactivate the bonus for uploaders.
+ *
+ * From P2P-Next deliverable D4.0.5:
+ *
+ * "[Users] observed a peculiar problem with live streaming with a small number
+ * of peers (e.g. 16). In many cases most bandwidth would be delivered by the
+ * live-content injector instead of by the peers. For larger swarms the desired
+ * behaviour where peers supply most bandwidth would naturally evolve. [..]
+ *
+ * Hence, we implemented a new download policy for live streams to improve
+ * sharing in small swarms. When offered the opportunity to download a piece
+ * from the injector [..], the policy calculates a download probability between
+ * 0..1 to see if it actually should. If the piece is due for playback soon,
+ * the probability is 1. Otherwise, the download probability is based on the
+ * size of the swarm.
+ *
+ * For small swarms up to size Z, the probability is inversely proportional to
+ * the number of peers connected to (a measure of the swarm size). So the more
+ * peers the lower the chance of downloading a piece from the injector. This
+ * policy therefore takes the optimistic approach that some other peer will
+ * download that piece and you can get it from him a bit later. For swarms
+ * larger than Z, the download probability linearly increases again, reaching
+ * 1 for >= 2Z peers. This preserves the previous download behaviour of a peer
+ * in large swarms. The rationale is that for larger swarms the peers that have
+ * the chance to download from the injector should do so, such that the pieces
+ * can be distributed by more peers sooner.
+ *
+ * Extra feature of the policy is that the download chance is increased if the
+ * peer was forwarding to others in the last N seconds. This ensures that
+ * sharers will remain sharers. This new policy results in much improved
+ * sharing behaviour in small swarms in lab tests for Z=10, with up to 80% of
+ * the bandwidth being supplied by peers."
+ */
+
 /* the number of peers at which the chance of downloading from the source
- * is lowest.  */
+ * is lowest (aka Z in the above text).  */
 #define SHAR_LIVE_PP_BIAS_LOW_NPEERS 		10
 
 /* if a peer has not uploaded a chunk in this amount of seconds it is no longer
