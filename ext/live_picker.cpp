@@ -152,7 +152,10 @@ class SimpleLivePiecePicker : public LivePiecePicker {
     }
 
 
-    /** Arno: Because multiple HAVE messages may be encoded in single datagram,
+    /** 
+     * Arno, 2013-08-26: Hook-in now based on SIGNED_INTEGRITY. Code needs refactoring.
+     * 
+     * Arno, 2012-01-01: Because multiple HAVE messages may be encoded in single datagram,
      * make this a transaction like thing.
      *
      * LIVETODO: if latest source pos is not in first datagram, you may hook-in too late.
@@ -388,7 +391,7 @@ class SimpleLivePiecePicker : public LivePiecePicker {
 };
 
 /* the number of peers at which the chance of downloading from the source
- * is lowest. See PiecePickerStreaming. */
+ * is lowest.  */
 #define SHAR_LIVE_PP_BIAS_LOW_NPEERS 		10
 
 /* if a peer has not uploaded a chunk in this amount of seconds it is no longer
