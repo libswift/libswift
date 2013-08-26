@@ -299,7 +299,7 @@ uint64_t      LiveTransfer::GetHookinOffset() {
 
 int LiveTransfer::AddData(const void *buf, uint32_t nbyte)
 {
-    fprintf(stderr,"%s live: AddData: writing to storage %lu\n", tintstr(), nbyte);
+    // fprintf(stderr,"%s live: AddData: writing to storage %lu\n", tintstr(), nbyte);
 
     // Save chunk on disk
     int ret = storage_->Write(buf,nbyte,offset_);
@@ -307,8 +307,8 @@ int LiveTransfer::AddData(const void *buf, uint32_t nbyte)
         print_error("live: create: error writing to storage");
         return ret;
     }
-    else
-        fprintf(stderr,"%s live: AddData: stored %d bytes\n", tintstr(), ret );
+    //else
+    //    fprintf(stderr,"%s live: AddData: stored %d bytes\n", tintstr(), ret );
 
     uint64_t till = std::max((uint32_t)1,nbyte/chunk_size_);
     bool newepoch=false;
@@ -371,7 +371,7 @@ int LiveTransfer::AddData(const void *buf, uint32_t nbyte)
 	return 0;
 
     // Announce chunks to peers via HAVEs
-    fprintf(stderr,"live: AddData: announcing to %d channel\n", mychannels_.size() );
+    fprintf(stderr,"live: AddData: announcing to %d channels\n", mychannels_.size() );
     channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {

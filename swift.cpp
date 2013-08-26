@@ -1077,7 +1077,7 @@ void LiveSourceFileTimerCallback(int fd, short event, void *arg) {
     char buf[LIVESOURCE_BUFSIZE];
 
     Channel::Time();
-    fprintf(stderr,"%s live: file: timer\n", tintstr() );
+    //fprintf(stderr,"%s live: file: timer\n", tintstr() );
 
     if (livesource_isfile)
     {
@@ -1098,7 +1098,7 @@ void LiveSourceFileTimerCallback(int fd, short event, void *arg) {
         nread = fread(buf,sizeof(char),sizeof(buf),livesource_filep);
     else
         nread = read(livesource_fd,buf,sizeof(buf));
-    fprintf(stderr,"%s live: file: read returned %d\n", tintstr(), nread );
+    //fprintf(stderr,"%s live: file: read returned %d\n", tintstr(), nread );
     if (nread <= -1)
         print_error("error reading from live source");
     else if (nread > 0)

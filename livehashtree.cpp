@@ -337,7 +337,7 @@ BinHashSigTuple LiveHashTree::AddSignedMunro()
 {
     bin_t newmunro = GetClientLastMunro();
 
-    //if (tree_debug)
+    if (tree_debug)
 	fprintf(stderr,"umt: AddSignedMunro: %s\n", newmunro.str().c_str() );
     Node *n = FindNode(newmunro);
     if (n == NULL)

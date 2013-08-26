@@ -3,6 +3,14 @@
  *
  *  Implements sign and verify functions using DNSSEC public keys using OpenSSL
  *  if available.
+ * 
+ *  Supports RSASHA1, and if OpenSSL is compiled with --enable-ec, ECDSAP256* 
+ *  and ECDSAP384*
+ * 
+ *  Also supports an OpenSSL less mode, which uses no crypto 
+ *  (POPT_CONT_INT_PROT_NONE). To use it, compile without -DOPENSSL. In that 
+ *  case the private key is a 1 random byte and the public key is that byte 
+ *  repeated SWIFT_CIPM_NONE_KEYLEN times.
  *
  *  Created by Arno Bakker
  *  Copyright 2013-2016 Vrije Universiteit Amsterdam. All rights reserved.
