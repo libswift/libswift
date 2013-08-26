@@ -297,7 +297,7 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
     // Arno, 2012-01-23: Extra protection against channel loss, don't send DATA
     if (last_recv_time_ < NOW-(3*TINT_SEC))
     {
-            dprintf("%s #%u dequeued bad time %lld\n",tintstr(),id_, last_recv_time_ );
+            dprintf("%s #%u dequeue hint aborted, long time no recv %s\n",tintstr(),id_, tintstr(last_recv_time_) );
             return bin_t::NONE;
     }
 
