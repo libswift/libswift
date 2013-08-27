@@ -64,7 +64,9 @@ static EVP_PKEY *opensslrsa_fromdns(struct evbuffer *evb);
 static EVP_MD_CTX *opensslecdsa_createctx(popt_live_sig_alg_t alg);
 static void opensslecdsa_destroyctx(EVP_MD_CTX *evp_md_ctx);
 static int opensslecdsa_adddata(EVP_MD_CTX *evp_md_ctx, unsigned char *data, unsigned int datalength);
+#ifdef OPENSSL
 static int BN_bn2bin_fixed(BIGNUM *bn, unsigned char *buf, int size);
+#endif
 static int opensslecdsa_sign(popt_live_sig_alg_t alg,EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, struct evbuffer *evb);
 static int opensslecdsa_verify(popt_live_sig_alg_t alg,EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, unsigned char *sigdata, unsigned int gotsiglen);
 static EVP_PKEY *opensslecdsa_generate(popt_live_sig_alg_t alg,simple_openssl_callback_t callback);
@@ -1176,10 +1178,6 @@ static void opensslecdsa_destroyctx(EVP_MD_CTX *evp_md_ctx)
 {
 }
 static int opensslecdsa_adddata(EVP_MD_CTX *evp_md_ctx, unsigned char *data, unsigned int datalength)
-{
-    return 0;
-}
-static int BN_bn2bin_fixed(BIGNUM *bn, unsigned char *buf, int size)
 {
     return 0;
 }
