@@ -68,8 +68,6 @@ class SimpleLivePiecePicker : public LivePiecePicker {
     	if (search4hookin_)
     	    return bin_t::NONE;
 
-    	CheckIfLagging();
-
         while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*3/2) { // FIXME sec
             binmap_t::copy(ack_hint_out_, *(transfer_->ack_out()), hint_out_.front().bin);
             hint_out_.pop_front();
@@ -151,7 +149,7 @@ class SimpleLivePiecePicker : public LivePiecePicker {
 	if (!search4hookin_)
 	{
 	    // Already hooked in, check for too much divergence from source
-	    if (!CheckIfLagging())
+	    if (!CheckIfLaggingWithSourceInfo())
 		return;
 	    fprintf(stderr,"live: pp: AddPeerMunro: We are lagging behind\n");
 	}
@@ -168,8 +166,35 @@ class SimpleLivePiecePicker : public LivePiecePicker {
 	}
     }
 
-    bool CheckIfLagging()
+
+    bool CheckIfLaggingWithSourceInfo()
     {
+	// Case: we are getting SIGNED_INTEGITY messages from peers, but
+	// we are not making download progress. Solution: re-hook-in on
+	// new source position.
+
+	tint candtint = CalculateCurrentPosInTime(current_bin_);
+	if (candtint == TINT_NEVER)
+	    return false; // could not calc
+
+	tint sourcedifft = last_munro_tint_ - candtint;
+	double sourcedifftinsecs = (double)sourcedifft/(double)TINT_SEC;
+	fprintf(stderr,"live: pp: Current source lag %lf\n", sourcedifftinsecs );
+
+	if (sourcedifft < (SWIFT_LIVE_MAX_SOURCE_DIVERGENCE_TIME*TINT_SEC))
+	    // Not lagging
+	    return false;
+	else
+	    return true;
+    }
+
+
+    // TODO: use
+    bool CheckIfLaggingWithoutSourceInfo()
+    {
+	// Case: we are not getting SIGNED_INTEGRITY messages and we
+	// are not downloading. Solution: reconnect to tracker
+
 	tint candtint = CalculateCurrentPosInTime(current_bin_);
 	if (candtint == TINT_NEVER)
 	    return false; // could not calc
@@ -179,17 +204,12 @@ class SimpleLivePiecePicker : public LivePiecePicker {
 	fprintf(stderr,"live: pp: Current now lag %lf\n", nowdifftinsecs );
 
 	if (nowdifft < (SWIFT_LIVE_MAX_SOURCE_DIVERGENCE_TIME*TINT_SEC))
-	{
-	    tint sourcedifft = last_munro_tint_ - candtint;
-	    double sourcedifftinsecs = (double)sourcedifft/(double)TINT_SEC;
-	    fprintf(stderr,"live: pp: Current source lag %lf\n", sourcedifftinsecs );
-
 	    // Not lagging
 	    return false;
-	}
 	else
 	    return true;
     }
+
 
     bin_t CalculateHookinPos()
     {
@@ -211,24 +231,12 @@ class SimpleLivePiecePicker : public LivePiecePicker {
     {
 	if (hookin_tint_ == last_munro_tint_ || (hookin_tint_+(LIVE_PP_MIN_BITRATE_MEASUREMENT_INTERVAL*TINT_SEC)) > last_munro_tint_)
 	{
-	    fprintf(stderr,"CalculateBitrate: hook %lld last %lld\n", hookin_tint_, last_munro_tint_);
-
 	    // No info to calc bitrate on, or too short interval
-	    fprintf(stderr,"CalculateBitrate: time too short\n" );
 	    return 0.0;
 	}
 	tint bdifft = last_munro_tint_ - hookin_tint_;
-
-	fprintf(stderr,"CalculateBitrate: time  between munro and hookin %lld\n", bdifft );
-
 	bin_t::uint_t bdiffc = last_munro_bin_.base_right().layer_offset() - hookin_bin_.layer_offset();
-
-	fprintf(stderr,"CalculateBitrate: chunks between munro and hookin %lld\n", bdiffc );
-
 	double bitrate = ((double)bdiffc*transfer_->chunk_size()) / (double)(bdifft/TINT_SEC);
-
-	fprintf(stderr,"CalculateBitrate: bitrate %lf\n", bitrate );
-
 	return bitrate;
     }
 
@@ -241,18 +249,7 @@ class SimpleLivePiecePicker : public LivePiecePicker {
 	    return TINT_NEVER;
 
 	bin_t::uint_t cdiffc = pos.base_right().layer_offset() - hookin_bin_.layer_offset();
-
-	fprintf(stderr,"CalculateCurrentPosInTime: chunks between current and hookin %lld\n", cdiffc );
-
-	fprintf(stderr,"CalculateCurrentPosInTime: cdifft %lld bitrate %lf\n", cdiffc, bitrate );
 	tint cdifft = TINT_SEC * (tint)((double)(cdiffc*transfer_->chunk_size())/bitrate);
-
-	fprintf(stderr,"CalculateCurrentPosInTime: time  between current and hookin %lld\n", cdifft );
-
-	fprintf(stderr,"CalculateCurrentPosInTime: hookin  time %s\n", tintstr(hookin_tint_) );
-	fprintf(stderr,"CalculateCurrentPosInTime: munro   time %s\n", tintstr(last_munro_tint_) );
-	fprintf(stderr,"CalculateCurrentPosInTime: current time %s\n", tintstr(hookin_tint_ + cdifft) );
-
 	return hookin_tint_ + cdifft;
     }
 
@@ -366,6 +363,9 @@ public:
     virtual bin_t Pick (binmap_t& offer, uint64_t max_width, tint expires, uint32_t channelid) {
 	if (search4hookin_)
 	    return bin_t::NONE;
+
+    	CheckIfLaggingWithSourceInfo();
+    	CheckIfLaggingWithoutSourceInfo();
 
 	while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*3/2) { // FIXME sec
 	    binmap_t::copy(ack_hint_out_, *(transfer_->ack_out()), hint_out_.front().bin);
