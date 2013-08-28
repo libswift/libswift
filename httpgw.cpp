@@ -11,7 +11,8 @@
 #include <event2/bufferevent.h>
 #include <sstream>
 
-
+// Set to true for limited debug output instead of dprintf() full blast.
+#define  http_debug	false
 
 using namespace swift;
 
@@ -324,6 +325,8 @@ void HttpGwWrite(int td) {
 
         int wn = rd;
         dprintf("%s @%i http write: sent %db\n",tintstr(),req->id,wn);
+        if (http_debug)
+            fprintf(stderr,"httpgw: %s @%i http write: sent %db\n",tintstr(),req->id,wn);
 
         req->offset += wn;
         req->tosend -= wn;
@@ -403,6 +406,9 @@ void HttpGwSwiftPlayingProgressCallback (int td, bin_t bin) {
     // to write it out.
 
     dprintf("%s T%i http play progress\n",tintstr(),td);
+    if (http_debug)
+	fprintf(stderr,"httpgw: %s T%i http play progress %s\n",tintstr(),td, bin.str().c_str() );
+
     http_gw_t* req = HttpGwFindRequestByTD(td);
     if (req == NULL)
         return;
@@ -438,6 +444,8 @@ void HttpGwSwiftPrebufferProgressCallback (int td, bin_t bin) {
     // writing out the reply and body.
     //
     dprintf("%s T%i http prebuf progress\n",tintstr(),td);
+    if (http_debug)
+	fprintf(stderr,"httpgw: %s T%i http prebuf progress %s\n",tintstr(),td, bin.str().c_str() );
 
     http_gw_t* req = HttpGwFindRequestByTD(td);
     if (req == NULL)
@@ -453,6 +461,8 @@ void HttpGwSwiftPrebufferProgressCallback (int td, bin_t bin) {
     int64_t wantsize = std::min(req->endoff+1-req->startoff,(uint64_t)HTTPGW_MIN_PREBUF_BYTES);
 
     dprintf("%s T%i http prebuf progress: want %lld got %lld\n",tintstr(),td, wantsize, swift::SeqComplete(req->td,req->startoff) );
+    if (http_debug)
+	fprintf(stderr,"httpgw: %s T%i http prebuf progress: want %lld got %lld\n",tintstr(),td, wantsize, swift::SeqComplete(req->td,req->startoff) );
 
     if (swift::SeqComplete(req->td,req->startoff) < wantsize)
     {
@@ -610,6 +620,8 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     // If valid, next step is to subscribe a new callback for prebuffering.
     //
     dprintf("%s T%i http first progress\n",tintstr(),td);
+    if (http_debug)
+	fprintf(stderr,"httpgw: %s T%i http first progress\n",tintstr(),td);
 
     // Need the first chunk
     if (swift::SeqComplete(td) == 0)
