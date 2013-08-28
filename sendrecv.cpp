@@ -984,16 +984,8 @@ void    Channel::Recv (struct evbuffer *evb) {
         fprintf(stderr,"\n");
     }
 
-    // Arno, 2012-01-09: Provide PP with info needed for hook-in.
-    if (transfer()->ttype() == LIVE_TRANSFER) {
-        LiveTransfer *lt = (LiveTransfer *)transfer();
-        if (!lt->am_source())
-            ((LivePiecePicker *)lt->picker())->EndAddPeerPos(id() );
-    }
-
     last_recv_time_ = NOW;
     sent_since_recv_ = 0;
-
 
     // Arno: see if transfer still in working order
     transfer()->UpdateOperational();
@@ -1788,10 +1780,15 @@ void Channel::OnSignedHash(struct evbuffer *evb)
             dprintf("%s #%u !sigh %s\n",tintstr(),id_,pos.str().c_str());
         else
         {
-            dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
+            if (source_tint+(SWIFT_LIVE_MAX_SOURCE_DIVERGENCE_TIME*TINT_SEC) < NOW)
+        	dprintf("%s #%u *sigh %s\n",tintstr(),id_,pos.str().c_str()); // outdated Sig
+            else
+            {
+        	dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
 
-            LiveTransfer *lt = (LiveTransfer *)transfer();
-            lt->OnVerifiedMunroHash(pos,this);
+        	LiveTransfer *lt = (LiveTransfer *)transfer();
+        	lt->OnVerifiedMunroHash(pos,source_tint);
+            }
         }
     }
     else if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
@@ -1799,7 +1796,7 @@ void Channel::OnSignedHash(struct evbuffer *evb)
 	dprintf("%s #%u -sigh %s\n",tintstr(),id_,pos.str().c_str());
 
         LiveTransfer *lt = (LiveTransfer *)transfer();
-        lt->OnVerifiedMunroHash(pos,this);
+        lt->OnVerifiedMunroHash(pos,source_tint);
     }
     else
     {

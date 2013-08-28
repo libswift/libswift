@@ -133,6 +133,9 @@ namespace swift {
 // Set to 1 for Sign All, set to a power of 2 > 1 for UMT. This MUST be a power of 2.
 #define SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN   32
 
+// How much time a SIGNED_INTEGRITY timestamp may diverge from current time
+#define SWIFT_LIVE_MAX_SOURCE_DIVERGENCE_TIME	30 // seconds
+
 
     typedef enum {
 	FILE_TRANSFER,
@@ -535,7 +538,7 @@ namespace swift {
         // MULTIFILE
         Storage         *storage_;
 
-        /** HashTree for transfer (either MmapHashTree, ZeroHashTree or LiveHashTree) */
+        /** HashTree for transfer (either MmapHashTree, ZeroHashTree, LiveHashTree or NULL) */
         HashTree*       hashtree_;
 
         Address         tracker_; // Tracker for this transfer
@@ -640,8 +643,8 @@ namespace swift {
         /** Source: Return all chunks in ack_out_ covered by peaks */
         binmap_t *      ack_out_signed();
 
-        /** Channel sendc received a correctly signed munro hash. */
-        void 		OnVerifiedMunroHash(bin_t munro, Channel *sendc);
+        /** Received a correctly signed munro hash with timestamp sourcet */
+        void 		OnVerifiedMunroHash(bin_t munro, tint sourcet);
 
         /** If live discard window is used, purge unused parts of tree.
          * pos is last received chunk. */
@@ -729,13 +732,9 @@ namespace swift {
 
     class LivePiecePicker : public PiecePicker {
       public:
-	/** Arno: Register which bins a peer has, to be able to choose a hook-in
-	 * point. Because multiple SIGNED_INTEGRITY/HAVE messages may be encoded
-	 * in single datagram make this a transaction like (Start/End) */
-        virtual void    StartAddPeerPos(uint32_t channelid, bin_t peerpos, bool peerissource) = 0;
-        virtual void    EndAddPeerPos(uint32_t channelid) = 0;
-        virtual void    ClearPeerPos(uint32_t channelid) = 0;
-
+	/** Arno: Register the last munro sent by a peer, to be able to choose
+	 * a hook-in point. */
+        virtual void    AddPeerMunro(bin_t munro, tint sourcet) = 0;
         /** Returns the bin at which we hooked into the live stream. */
         virtual bin_t   GetHookinPos() = 0;
         /** Returns the bin in the live stream we currently want to download. */

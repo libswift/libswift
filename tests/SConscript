@@ -151,21 +151,19 @@ env.Program(
     LIBPATH=libpath )
 
 env.Program( 
-    target='livehookintest',
-    source=['livehookintest.cpp'],
+    target='livesigtest',
+    source=['livesigtest.cpp'],
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )
 """
 
 env.Program( 
-    target='livesigtest',
-    source=['livesigtest.cpp'],
+    target='livepptest',
+    source=['livepptest.cpp'],
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )
-
-
 
 
 if DEBUG and sys.platform == "linux2":

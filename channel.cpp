@@ -118,14 +118,6 @@ Channel::~Channel () {
                break;
         }
         channels->erase(iter);
-
-        // Arno, 2013-05-22: Forget hook-in info
-        if (transfer_->ttype() == LIVE_TRANSFER)
-        {
-            LivePiecePicker *lpp = (LivePiecePicker *)transfer_->picker();
-            if (lpp != NULL)
-        	lpp->ClearPeerPos(id_);
-        }
     }
 
     if (hs_in_ != NULL)
@@ -464,7 +456,7 @@ const char* swift::tintstr (tint time) {
     if (time==TINT_NEVER)
         return "NEVER";
     time -= Channel::epoch;
-    assert(time>=0);
+    assert(time>0);
     int hours = time/TINT_HOUR;
     time %= TINT_HOUR;
     int mins = time/TINT_MIN;

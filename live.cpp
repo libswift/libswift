@@ -450,7 +450,7 @@ binmap_t *LiveTransfer::ack_out()
 }
 
 
-void LiveTransfer::OnVerifiedMunroHash(bin_t munro, Channel *sendc)
+void LiveTransfer::OnVerifiedMunroHash(bin_t munro, tint sourcet)
 {
     // Channel sendc received a correctly signed munro.
     LiveHashTree *umt = (LiveHashTree *)hashtree();
@@ -459,7 +459,7 @@ void LiveTransfer::OnVerifiedMunroHash(bin_t munro, Channel *sendc)
 
     // Arno, 2013-05-22: Hook-in using signed peaks in UMT.
     LivePiecePicker *lpp = (LivePiecePicker *)picker_;
-    lpp->StartAddPeerPos(sendc->id(), munro, sendc->PeerIsSource());
+    lpp->AddPeerMunro(munro, sourcet);
 }
 
 
