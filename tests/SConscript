@@ -156,11 +156,18 @@ env.Program(
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )
-"""
 
 env.Program( 
     target='livepptest',
     source=['livepptest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+"""
+
+env.Program( 
+    target='bttracktest',
+    source=['bttracktest.cpp'],
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )

@@ -205,6 +205,8 @@ namespace swift {
 	socklen_t get_family_sockaddr_length() const;
     };
 
+typedef std::vector<Address>	peeraddrs_t;
+
 // Arno, 2011-10-03: Use libevent callback functions, no on_error?
 #define sockcb_t        event_callback_fn
     struct sckrwecb_t {
@@ -416,6 +418,26 @@ namespace swift {
 	/** Dynamically allocated such that we can deallocate it and
 	 * save some bytes per channel */
 	SwarmID 		*swarm_id_ptr_;
+    };
+
+    typedef void (*bttrack_peerlist_callback_t)(std::string result, uint32_t interval, peeraddrs_t peerlist);
+
+    class ContentTransfer;
+
+    class BTTrackerClient
+    {
+       public:
+	BTTrackerClient(std::string url);
+	~BTTrackerClient();
+	/** (Re)Registers at tracker and adds returned peer addresses to peerlist */
+	int Contact(ContentTransfer &transfer, std::string event, bttrack_peerlist_callback_t callback);
+       protected:
+	std::string 		url_;
+	uint8_t 		*peerid_;
+
+	/** IP in myaddr currently unused */
+	std::string CreateQuery(ContentTransfer &transfer, Address myaddr, std::string event);
+	int HTTPConnect(std::string query,bttrack_peerlist_callback_t callback);
     };
 
     class PiecePicker;

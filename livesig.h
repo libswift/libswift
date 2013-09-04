@@ -26,6 +26,7 @@
 #ifdef OPENSSL
 
 #include <openssl/evp.h>
+#include <openssl/rand.h>
 
 #else
 
