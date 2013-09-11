@@ -16,6 +16,8 @@
 #include <event2/http_struct.h>
 #include <sstream>
 
+#define bttrack_debug	true
+
 
 using namespace swift;
 
@@ -91,8 +93,6 @@ int BTTrackerClient::Contact(ContentTransfer *transfer, std::string event, bttra
 	    reported_complete_ = true;
 
 	report_last_time_ = NOW;
-
-	fprintf(stderr,"bttrack::Contact: td %d\n", transfer->td() );
 
 	BTTrackCallbackRecord *callbackrec = new BTTrackCallbackRecord(transfer->td(),callback);
 	return HTTPConnect(q,callbackrec);
@@ -185,7 +185,8 @@ std::string BTTrackerClient::CreateQuery(ContentTransfer *transfer, Address myad
 
 static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void *callbackrecvoid)
 {
-    fprintf(stderr,"bttrack: Callback: ENTER %p\n", callbackrecvoid );
+    if (bttrack_debug)
+	fprintf(stderr,"bttrack: Callback: ENTER %p\n", callbackrecvoid );
 
     BTTrackCallbackRecord *callbackrec = (BTTrackCallbackRecord *)callbackrecvoid;
     if (callbackrec == NULL)
@@ -215,7 +216,7 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 	return;
     }
 
-    fprintf(stderr,"bttrack: Raw response <%s>\n", copybuf );
+    //fprintf(stderr,"bttrack: Raw response <%s>\n", copybuf );
 
 
     evb = evbuffer_new();
@@ -281,7 +282,8 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 	    }
 
 	    free(valuebytes);
-	    fprintf(stderr,"btrack: Got interval %u\n", interval);
+	    if (bttrack_debug)
+		fprintf(stderr,"bttrack: Got interval %u\n", interval);
 	}
     }
     evbuffer_free(evb);
@@ -305,7 +307,8 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
     }
     evbuffer_free(evb);
 
-    fprintf(stderr,"btrack: Got %u IPv4 peers\n", peerlist.size() );
+    if (bttrack_debug)
+	fprintf(stderr,"btrack: Got %u IPv4 peers\n", peerlist.size() );
 
     // If not failure, find peers key whose value is compact IPv6 addresses
     // http://www.bittorrent.org/beps/bep_0007.html
@@ -323,7 +326,8 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
     }
     evbuffer_free(evb);
 
-    fprintf(stderr,"btrack: Got %u peers total\n", peerlist.size() );
+    if (bttrack_debug)
+	fprintf(stderr,"btrack: Got %u peers total\n", peerlist.size() );
 
     // Report success
     callbackrec->callback_(callbackrec->td_,"",interval,peerlist);
@@ -337,7 +341,8 @@ int BTTrackerClient::HTTPConnect(std::string query,BTTrackCallbackRecord *callba
 {
     std::string fullurl = url_+"?"+query;
 
-    fprintf(stderr,"bttrack: HTTPConnect: %s\n", fullurl.c_str() );
+    if (bttrack_debug)
+	fprintf(stderr,"bttrack: HTTPConnect: %s\n", fullurl.c_str() );
 
     struct evhttp_uri *evu = evhttp_uri_parse(fullurl.c_str());
     if (evu == NULL)
@@ -356,15 +361,11 @@ int BTTrackerClient::HTTPConnect(std::string query,BTTrackCallbackRecord *callba
     struct evhttp_request *req = evhttp_request_new(BTTrackerClientHTTPResponseCallback, (void *)callbackrec);
 
     // Make request to server
-    fprintf(stderr,"bttrack: HTTPConnect: Making request\n" );
-
     evhttp_make_request(cn, req, EVHTTP_REQ_GET, fullpath);
     evhttp_add_header(req->output_headers, "Host", evhttp_uri_get_host(evu));
 
     delete fullpath;
     evhttp_uri_free(evu);
-
-    fprintf(stderr,"bttrack: HTTPConnect: Exit\n" );
 
     return 0;
 }
@@ -382,7 +383,7 @@ static int ParseBencodedPeers(struct evbuffer *evb, std::string key, peeraddrs_t
 	    return -1;
 
 	int peerlistenclen = ret;
-	fprintf(stderr,"bttrack: Peerlist encoded len %d\n", peerlistenclen );
+	//fprintf(stderr,"bttrack: Peerlist encoded len %d\n", peerlistenclen );
 
 	// Decompact addresses
 	struct evbuffer *evb2 = evbuffer_new();
@@ -403,7 +404,8 @@ static int ParseBencodedPeers(struct evbuffer *evb, std::string key, peeraddrs_t
 	    Address addr = evbuffer_remove_pexaddr(evb2,family);
 	    peerlist->push_back(addr);
 
-	    fprintf(stderr,"bttrack: Peerlist parsed %d %s\n", i, addr.str().c_str() );
+	    if (bttrack_debug)
+		fprintf(stderr,"bttrack: Peerlist parsed %d %s\n", i, addr.str().c_str() );
 	}
 	evbuffer_free(evb2);
 
