@@ -9,6 +9,8 @@
  *
  *  DEALLOC RETURN VALUES OF ParseBencoded
  *
+ *  DEALLOC uriencode return values.
+ *
  *  Created by Arno Bakker
  *  Copyright 2013-2016 Vrije Universiteit Amsterdam. All rights reserved.
  */
@@ -167,8 +169,6 @@ std::string BTTrackerClient::CreateQuery(ContentTransfer &transfer, Address myad
 	oss << event;
     }
 
-
-
     return oss.str();
 }
 
@@ -252,7 +252,6 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 	{
 	    fprintf(stderr,"btrack: Interval string parsed %s\n", valuebytes );
 
-
 	    ret = sscanf(valuebytes,"%u",&interval);
 	    if (ret != 1)
 	    {
@@ -332,107 +331,6 @@ int BTTrackerClient::HTTPConnect(std::string query,bttrack_peerlist_callback_t c
 
     return 0;
 }
-
-/** Failure reported, extract string from bencoded dictionary */
-/* static void ParseBencodedFailureReason(struct evbuffer *evb, struct evbuffer_ptr &startevbp, bttrack_peerlist_callback_t callback)
-{
-    fprintf(stderr,"bttrack: Callback: key starts at " PRISIZET "\n", startevbp.pos );
-
-    // Find colon to determine string len
-    struct evbuffer_ptr endevbp = evbuffer_search(evb,BT_BENCODE_STRING_SEP,strlen(BT_BENCODE_STRING_SEP),&startevbp);
-    if (endevbp.pos == -1)
-    {
-	if (callback != NULL)
-	    callback("Error parsing HTTP Response",peeraddrs_t());
-	return;
-    }
-
-    fprintf(stderr,"bttrack: Callback: colon at " PRISIZET "\n", endevbp.pos );
-
-    size_t intcstrlen = endevbp.pos - startevbp.pos - key.length();
-
-    fprintf(stderr,"bttrack: Callback: failure reason length " PRISIZET "\n", intcstrlen );
-
-    size_t strpos = endevbp.pos+1;
-
-    fprintf(stderr,"bttrack: Callback: Reason starts at " PRISIZET "\n", strpos );
-
-    int ret = evbuffer_ptr_set(evb, &startevbp, strpos, EVBUFFER_PTR_SET);
-    if (ret < 0)
-    {
-	if (callback != NULL)
-	    callback("Error parsing HTTP Response",peeraddrs_t());
-	return;
-    }
-
-    // Remove all before
-    ret = evbuffer_drain(evb,strpos-1-intcstrlen);
-    if (ret < 0)
-    {
-	if (callback != NULL)
-	    callback("Error parsing HTTP Response",peeraddrs_t());
-	return;
-    }
-
-    char *intcstr = new char[intcstrlen+1];
-    intcstr[intcstrlen] = '\0';
-    ret = evbuffer_remove(evb,intcstr,intcstrlen);
-    if (ret < 0)
-    {
-	delete intcstr;
-
-	if (callback != NULL)
-	    callback("Error parsing HTTP Response",peeraddrs_t());
-	return;
-    }
-
-
-    fprintf(stderr,"bttrack: Callback: Length failure reason string %s\n", intcstr );
-
-    int slen=0;
-    ret = sscanf(intcstr,"%d", &slen);
-    delete intcstr;
-    if (ret != 1)
-    {
-	if (callback != NULL)
-	    callback("Error parsing HTTP Response",peeraddrs_t());
-	return;
-    }
-
-    fprintf(stderr,"bttrack: Callback: Length failure reason int %d\n", slen );
-
-    // Drain colon
-    ret = evbuffer_drain(evb,1);
-    if (ret < 0)
-    {
-	if (callback != NULL)
-	    callback("Error parsing HTTP Response",peeraddrs_t());
-	return;
-    }
-
-    char *reasoncstr = new char[slen+1];
-    reasoncstr[slen] = '\0';
-    ret = evbuffer_remove(evb,reasoncstr,slen);
-    if (ret < 0)
-    {
-	delete reasoncstr;
-
-	if (callback != NULL)
-	    callback("Error parsing HTTP Response",peeraddrs_t());
-	return;
-    }
-    else
-    {
-	fprintf(stderr,"bttrack: Callback: Reason string <%s>\n", reasoncstr );
-
-	std::string errorstr = "Tracker responded: "+std::string(reasoncstr);
-	if (callback != NULL)
-	    callback(errorstr,peeraddrs_t());
-
-	delete reasoncstr;
-    }
-}*/
-
 
 
 static int ParseBencodedPeers(struct evbuffer *evb, std::string key, peeraddrs_t *peerlist)
@@ -558,7 +456,8 @@ static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startev
 	return -1;
 
     // NOTE: actual bytes may also contain '\0', C string is for convenience when it isn't pure binary.
-    char *valuecstr = new char[slen];
+    char *valuecstr = new char[slen+1];
+    valuecstr[slen] = '\0';
     ret = evbuffer_remove(evb,valuecstr,slen);
     if (ret < 0)
     {
