@@ -111,6 +111,11 @@ std::string BTTrackerClient::CreateQuery(ContentTransfer *transfer, Address myad
 	    left = 0;
 	else
 	    left = swift::Size(transfer->td()) - downloaded;
+
+	// "No completed is sent if the file was complete when started. "
+	// http://www.bittorrent.org/beps/bep_0003.html
+	if (event == BT_EVENT_STARTED && left == 0)
+	    reported_complete_ = true;
     }
     else
     {

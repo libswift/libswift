@@ -50,6 +50,12 @@ ContentTransfer::~ContentTransfer()
     CloseChannels(mychannels_,true);
     if (storage_ != NULL)
         delete storage_;
+
+    if (bttrackclient_ != NULL)
+    {
+	delete bttrackclient_;
+	bttrackclient_ = NULL;
+    }
 }
 
 
@@ -97,8 +103,16 @@ void ContentTransfer::GarbageCollectChannels()
     //dprintf("%s F%d content gc chans\n",tintstr(),td_);
     CloseChannels(delset,false);
 
+    /*
+     * If we have no peers left, see if we can get some more (if not seed)
+     */
     if (numestablishedpeers == 0)
 	movingforward = false;
+
+    // Arno, 2013-09-11: Don't pull for peers when seeder and BT tracker
+    bool complete = (swift::Complete(td_) > 0 && (swift::Complete(td_) == swift::Size(td_)) );
+    if (complete && bttrackclient_ != NULL)  // seed, periodic rereg helps find leechers
+	movingforward = true;
 
     // Arno, 2012-02-24: Check for liveliness.
     ReConnectToTrackerIfAllowed(movingforward);
@@ -154,6 +168,7 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
     }
 
     ContentTransfer::cleancounter++;
+
 
     // Arno, 2012-10-01: Reschedule cleanup, started in swift::Open
     evtimer_add(&ContentTransfer::evclean,tint2tv(TINT_SEC));
@@ -222,7 +237,7 @@ static void global_bttracker_callback(int td, std::string status, uint32_t inter
 }
 
 
-void ContentTransfer::ConnectToTracker()
+void ContentTransfer::ConnectToTracker(bool stop)
 {
     // dprintf("%s F%d content contact tracker\n",tintstr(),td_);
 
@@ -266,6 +281,10 @@ void ContentTransfer::ConnectToTracker()
 		bttrackclient_ = new BTTrackerClient(trackerurl_);
 	    else
 		bttrackclient_ = new BTTrackerClient(Channel::trackerurl);
+	}
+	else if (stop)
+	{
+	    event = BT_EVENT_STOPPED;
 	}
 	else if (!bttrackclient_->GetReportedComplete())
 	{

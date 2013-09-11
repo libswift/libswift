@@ -500,6 +500,12 @@ void SwarmManager::RemoveSwarm( const Sha1Hash& rootHash, bool removeState, bool
         }
     }
 
+    if (swarm->ft_)
+    {
+        // Arno, 2013-09-11: If external BT tracker, sign off
+	swarm->ft_->ConnectToTracker(true);
+    }
+
     delete swarm; // Arno, 2012-10-01: calls delete ft_ which causes storage layer to close files
 
     std::set<std::string>::iterator iter;

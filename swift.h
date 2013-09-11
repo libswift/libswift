@@ -543,7 +543,7 @@ typedef std::vector<Address>	peeraddrs_t;
          * any existing connections. */
         void            SetTracker(std::string trackerurl) { trackerurl_ = trackerurl; }
         /** Arno: (Re)Connect to tracker for this transfer, or global Channel::trackerurl if not set */
-        void            ConnectToTracker();
+        void            ConnectToTracker(bool stop=false);
         /** Arno: Reconnect to the tracker if no established peers or is connected
          * to a live source that went silent and exp backoff allows it. */
         void            ReConnectToTrackerIfAllowed(bool movingforward);

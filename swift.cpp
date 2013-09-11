@@ -43,7 +43,7 @@ using namespace swift;
 void usage(void)
 {
     fprintf(stderr,"Usage:\n");
-    fprintf(stderr,"  -h, --hash\troot Merkle hash for the transmission\n");
+    fprintf(stderr,"  -h, --hash\tswarm ID of the content (root hash or public key)\n");
     fprintf(stderr,"  -f, --file\tname of file to use (root hash by default)\n");
     fprintf(stderr,"  -d, --dir\tname of directory to scan and seed\n");
     fprintf(stderr,"  -l, --listen\t[ip:|host:]port to listen to (default: random). MUST set for IPv6\n");
@@ -204,7 +204,7 @@ int utf8main (int argc, char** argv)
 
     std::string optargstr;
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:wBNHmM:e:r:ji:kC:1:2:3:T:GW:P:K:S:a:", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:w:BNHmM:e:r:ji:kC:1:2:3:T:GW:P:K:S:a:", long_options, 0)) ) {
         switch (c) {
             case 'h':
         	optargstr = optarg;
@@ -558,8 +558,13 @@ int utf8main (int argc, char** argv)
         exitoncomplete = true;
     }
 
+    fprintf(stderr,"swift: wait: END AT %lld\n", wait_time );
+
     // End after wait_time
     if ((long)wait_time > 0) {
+
+	fprintf(stderr,"swift: wait: REAL END AT %lld\n", wait_time );
+
         evtimer_assign(&evend, Channel::evbase, EndCallback, NULL);
         evtimer_add(&evend, tint2tv(wait_time));
     }
@@ -574,7 +579,6 @@ int utf8main (int argc, char** argv)
             evtimer_assign(&evrescan, Channel::evbase, RescanDirCallback, NULL);
             evtimer_add(&evrescan, tint2tv(RESCAN_DIR_INTERVAL*TINT_SEC));
         }
-
 
         fprintf(stderr,"swift: Mainloop\n");
         // Enter libevent mainloop

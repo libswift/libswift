@@ -194,13 +194,20 @@ void swift::Close( int td, bool removestate, bool removecontent ) {
 	fprintf(stderr,"swift::Close td %d rems %d remc%d\n", td, (int)removestate, (int)removecontent );
 
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm( td );
-    if (swarm)
+    if (swarm != NULL)
+    {
 	SwarmManager::GetManager().RemoveSwarm( swarm->RootHash(), removestate, removecontent );
+        return;
+    }
 
     //LIVE
     LiveTransfer *lt = LiveTransfer::FindByTD(td);
     if (lt != NULL)
+    {
+        // Arno, 2013-09-11: If external BT tracker, sign off
+	lt->ConnectToTracker(true);
 	delete lt;
+    }
 }
 
 int swift::Find(SwarmID& swarmid, bool activate)
