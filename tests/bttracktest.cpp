@@ -69,6 +69,8 @@ void BTTrackerServerRequestCallback (struct evhttp_request *evreq, void *arg) {
     ASSERT_EQ(0,ret);
     free(decoded_infohashcstr);
 
+    // TODO: check other query params
+
     // Return either failure or set of IPv4 peers
     char *body = (char *)bencoded_peers;
     size_t bodylen = sizeof(bencoded_peers);
@@ -93,7 +95,7 @@ void BTTrackerServerRequestCallback (struct evhttp_request *evreq, void *arg) {
     evhttp_send_reply(evreq, 200, "OK", evb);
     evbuffer_free(evb);
 
-
+    // Break event loop entered in test.
     event_base_loopbreak(Channel::evbase);
 }
 
@@ -120,7 +122,7 @@ bool InstallBTTrackerTestServer( struct event_base *evbase, Address bindaddr)
 
 
 
-
+/** Called by BTTrackerClient when results come in from the server */
 void tracker_callback(std::string status, uint32_t interval, peeraddrs_t peerlist)
 {
     if (status == "")
@@ -130,7 +132,7 @@ void tracker_callback(std::string status, uint32_t interval, peeraddrs_t peerlis
 }
 
 
-TEST(TBTTrack,EncodeRequestResponseOK) {
+TEST(TBTTrack,FileTransferEncodeRequestResponseOK) {
 
     bttrack_serv_infohash_ok = true;
 
@@ -152,7 +154,7 @@ TEST(TBTTrack,EncodeRequestResponseOK) {
 }
 
 
-TEST(TBTTrack,EncodeRequestResponseFailure) {
+TEST(TBTTrack,FileTransferEncodeRequestResponseFailure) {
 
     bttrack_serv_infohash_ok = false;
 
