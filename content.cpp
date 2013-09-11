@@ -159,6 +159,10 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
 	if (ct->bttrackclient_ != NULL)
 	{
 	    tint report_time = ct->bttrackclient_->GetReportLastTime() + (TINT_SEC*ct->bttrackclient_->GetReportInterval());
+
+	    fprintf(stderr,"ContentTransfer::GlobalCleanCallback: NOW %s report %s\n", tintstr(NOW), tintstr(report_time) );
+
+
 	    if (NOW > report_time)
 	    {
 		fprintf(stderr,"content: periodic ConnectToTracker\n");
@@ -207,6 +211,8 @@ void ContentTransfer::ReConnectToTrackerIfAllowed(bool movingforward)
 /** Called by BTTrackerClient when results come in from the server */
 static void global_bttracker_callback(int td, std::string status, uint32_t interval, peeraddrs_t peerlist)
 {
+    fprintf(stderr,"content global_bttracker_callback: td %d status %s int %u npeers %u\n", td, status.c_str(), interval, peerlist.size() );
+
     ContentTransfer *ct = swift::GetActivatedTransfer(td);
     if (ct == NULL)
 	return; // not activated, don't bother

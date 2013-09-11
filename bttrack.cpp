@@ -32,6 +32,8 @@ using namespace swift;
 #define BT_INTERVAL_DICT_KEY	"interval"
 #define BT_PEERS_IPv6_DICT_KEY	"6:peers6"
 
+#define BT_INITIAL_REPORT_INTERVAL	30 // seconds
+
 
 typedef enum
 {
@@ -43,7 +45,7 @@ typedef enum
 static int ParseBencodedPeers(struct evbuffer *evb, std::string key, peeraddrs_t *peerlist);
 static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startevbp, std::string key, bencoded_type_t valuetype, char **valueptr);
 
-BTTrackerClient::BTTrackerClient(std::string url) : url_(url), report_last_time_(0), report_interval_(1800), reported_complete_(false)
+BTTrackerClient::BTTrackerClient(std::string url) : url_(url), report_last_time_(0), report_interval_(BT_INITIAL_REPORT_INTERVAL), reported_complete_(false)
 {
     // Create PeerID
     peerid_ = new uint8_t[BT_PEER_ID_LENGTH];
@@ -89,6 +91,8 @@ int BTTrackerClient::Contact(ContentTransfer *transfer, std::string event, bttra
 	    reported_complete_ = true;
 
 	report_last_time_ = NOW;
+
+	fprintf(stderr,"bttrack::Contact: td %d\n", transfer->td() );
 
 	BTTrackCallbackRecord *callbackrec = new BTTrackCallbackRecord(transfer->td(),callback);
 	return HTTPConnect(q,callbackrec);

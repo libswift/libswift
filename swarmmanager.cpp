@@ -353,7 +353,13 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
 
     // Arno: transfer id as assigned by SwarmManager not known at constructor time :-(
     if (newSwarm->ft_)
+    {
 	newSwarm->ft_->SetTD(newSwarm->id_);
+
+	// Arno, 2013-09-11: BuildSwarm could not use BTTrackClient while td was -1
+	fprintf(stderr,"swarmmgr: AddSwarm: ConnectToTracker\n");
+	newSwarm->ft_->ConnectToTracker();
+    }
 
     // Arno
     if (activate)
@@ -400,11 +406,11 @@ void SwarmManager::BuildSwarm( SwarmData* swarm ) {
     }
     // Hashes have been checked, don't check again
     swarm->forceCheckDiskVSHash_ = false;
-    if( swarm->trackerurl_ != "" ) {
+    if( swarm->trackerurl_ != "" && swarm->id_ != -1) {
         // initiate tracker connections
         // SWIFTPROC
         swarm->ft_->SetTracker( swarm->trackerurl_ );
-        fprintf(stderr,"swarmmgr: ConnectToTracker\n");
+        fprintf(stderr,"swarmmgr: BuildSwarm: ConnectToTracker\n");
         swarm->ft_->ConnectToTracker();
     }
 
