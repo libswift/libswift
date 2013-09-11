@@ -9,8 +9,6 @@
  *
  *  DEALLOC RETURN VALUES OF ParseBencoded
  *
- *  DEALLOC uriencode return values.
- *
  *  Created by Arno Bakker
  *  Copyright 2013-2016 Vrije Universiteit Amsterdam. All rights reserved.
  */
@@ -223,6 +221,7 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 
 	evbuffer_free(evb);
 	delete copybuf;
+	free(valuebytes);
 	return; // failure case done
     }
     evbuffer_free(evb);
@@ -255,6 +254,7 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 	    ret = sscanf(valuebytes,"%u",&interval);
 	    if (ret != 1)
 	    {
+		free(valuebytes);
 		delete copybuf;
 		evbuffer_free(evb);
 
@@ -264,6 +264,7 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 		return;
 	    }
 
+	    free(valuebytes);
 	    fprintf(stderr,"btrack: Got interval %u\n", interval);
 	}
     }
