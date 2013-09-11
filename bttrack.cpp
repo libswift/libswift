@@ -292,10 +292,22 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 
     // If not failure, find peers key whose value is compact IPv6 addresses
     // http://www.bittorrent.org/beps/bep_0007.html
+    evb = evbuffer_new();
+    evbuffer_add(evb,copybuf,copybuflen);
+    ret = ParseBencodedPeers(evb, BT_PEERS_IPv6_DICT_KEY,&peerlist);
+    if (ret < 0)
+    {
+	delete copybuf;
+	evbuffer_free(evb);
+
+	if (callback != NULL)
+	    callback("Error parsing tracker response: peerlist",interval,peeraddrs_t());
+	return;
+    }
+    evbuffer_free(evb);
 
     delete copybuf;
 }
-
 
 
 int BTTrackerClient::HTTPConnect(std::string query,bttrack_peerlist_callback_t callback)
