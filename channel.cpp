@@ -34,7 +34,7 @@ int Channel::MAX_REORDERING = 4;
 bool Channel::SELF_CONN_OK = false;
 swift::tint Channel::TIMEOUT = TINT_SEC*60;
 channels_t Channel::channels(1);
-Address Channel::tracker;
+std::string Channel::trackerurl;
 FILE* Channel::debug_file = NULL;
 tint Channel::MIN_PEX_REQUEST_INTERVAL = TINT_SEC;
 
@@ -74,9 +74,6 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     last_sent_munro_(bin_t::NONE),
     munro_ack_rcvd_(false)
 {
-    if (peer_==Address())
-        peer_ = tracker;
-  
     // ARNOTODO: avoid infinitely growing vector
     this->id_ = channels.size();
     channels.push_back(this);

@@ -745,14 +745,15 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
         dprintf("cmd: START: %s with tracker %s chunksize %i duration %d\n",swarmidhexstr.c_str(),trackerstr.c_str(),chunksize,duration);
 
-        Address trackaddr;
-        trackaddr = Address(trackerstr.c_str());
-        if (trackerstr != "" && trackaddr==Address())
+        if (trackerstr == "")
         {
             dprintf("cmd: START: tracker address must be hostname:port, ip:port or just port\n");
             return ERROR_BAD_ARG;
         }
-        // SetTracker(trackaddr); == set default tracker
+        // BTTRACKTODO
+        std::string trackerurl = SWIFT_URI_SCHEME;
+        trackerurl += "://";
+        trackerurl += trackerstr;
 
         // initiate transmission
         SwarmID swarmid = SwarmID(swarmidhexstr);
@@ -781,9 +782,9 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
                 filename = swarmidhexstr;
 
             if (duration != -1)
-                td = swift::Open(filename,swarmid,trackaddr,false,cmd_gw_cipm,false,activate,chunksize);
+                td = swift::Open(filename,swarmid,trackerurl,false,cmd_gw_cipm,false,activate,chunksize);
             else
-                td = swift::LiveOpen(filename,swarmid,trackaddr,cmd_gw_cipm,cmd_gw_livesource_disc_wnd,chunksize);
+                td = swift::LiveOpen(filename,swarmid,trackerurl,cmd_gw_cipm,cmd_gw_livesource_disc_wnd,chunksize);
             if (td == -1) {
             	CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarmid);
             	return ERROR_BAD_SWARM;

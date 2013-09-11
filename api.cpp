@@ -173,15 +173,15 @@ void    swift::Shutdown()
  */
 
 
-int swift::Open( std::string filename, SwarmID& swarmid, Address tracker, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size)
+int swift::Open( std::string filename, SwarmID& swarmid, std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size)
 {
     if (api_debug)
-	fprintf(stderr,"swift::Open %s id %s track %s cdisk %d cipm %u zs %d act %d cs %u\n", filename.c_str(), swarmid.hex().c_str(), tracker.str().c_str(), force_check_diskvshash, cipm, zerostate, activate, chunk_size );
+	fprintf(stderr,"swift::Open %s id %s track %s cdisk %d cipm %u zs %d act %d cs %u\n", filename.c_str(), swarmid.hex().c_str(), trackerurl.c_str(), force_check_diskvshash, cipm, zerostate, activate, chunk_size );
 
     if (swarmid.ttype() != FILE_TRANSFER)
 	return -1;
 
-    SwarmData* swarm = SwarmManager::GetManager().AddSwarm( filename, swarmid.roothash(), tracker, force_check_diskvshash, cipm, zerostate, activate, chunk_size );
+    SwarmData* swarm = SwarmManager::GetManager().AddSwarm( filename, swarmid.roothash(), trackerurl, force_check_diskvshash, cipm, zerostate, activate, chunk_size );
     if (swarm == NULL)
 	return -1;
     else
@@ -297,8 +297,8 @@ ssize_t swift::Write( int td, const void *buf, size_t nbyte, int64_t offset )
 
 
 
-void     swift::SetTracker(Address& tracker) {
-    Channel::tracker = tracker;
+void     swift::SetTracker(std::string trackerurl) {
+    Channel::trackerurl = trackerurl;
 }
 
 
@@ -850,10 +850,10 @@ int swift::LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte)
 }
 
 
-int swift::LiveOpen(std::string filename, SwarmID &swarmid, Address &tracker, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size)
+int swift::LiveOpen(std::string filename, SwarmID &swarmid, std::string trackerurl, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size)
 {
     if (api_debug)
-	fprintf(stderr,"swift::LiveOpen %s hash %s addr %s cipm %u ldw %llu cs %u\n", filename.c_str(), swarmid.hex().c_str(), tracker.str().c_str(), cipm, disc_wnd, chunk_size );
+	fprintf(stderr,"swift::LiveOpen %s hash %s addr %s cipm %u ldw %llu cs %u\n", filename.c_str(), swarmid.hex().c_str(), trackerurl.c_str(), cipm, disc_wnd, chunk_size );
 
     // Help user
     if (cipm == POPT_CONT_INT_PROT_MERKLE)
@@ -863,7 +863,7 @@ int swift::LiveOpen(std::string filename, SwarmID &swarmid, Address &tracker, po
 
     // initiate tracker connections
     // SWIFTPROC
-    lt->SetTracker(tracker);
+    lt->SetTracker(trackerurl);
     lt->ConnectToTracker();
     return lt->td();
 }

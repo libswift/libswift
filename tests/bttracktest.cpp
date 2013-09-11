@@ -1,6 +1,10 @@
 /*
  *  bttracktest.cpp
  *
+ *  TODO:
+ *  * LiveTransfer
+ *
+ *
  *  Created by Arno Bakker
  *  Copyright 2009-2016 Vrije Universiteit Amsterdam. All rights reserved.
  *
@@ -94,9 +98,6 @@ void BTTrackerServerRequestCallback (struct evhttp_request *evreq, void *arg) {
 
     evhttp_send_reply(evreq, 200, "OK", evb);
     evbuffer_free(evb);
-
-    // Break event loop entered in test.
-    event_base_loopbreak(Channel::evbase);
 }
 
 
@@ -122,18 +123,38 @@ bool InstallBTTrackerTestServer( struct event_base *evbase, Address bindaddr)
 
 
 
+bool tracker_called=false;
+bool tracker_response_valid=false;
+
 /** Called by BTTrackerClient when results come in from the server */
-void tracker_callback(std::string status, uint32_t interval, peeraddrs_t peerlist)
+void tracker_callback(int td, std::string status, uint32_t interval, peeraddrs_t peerlist)
 {
+    tracker_called = true;
+
     if (status == "")
-	fprintf(stderr,"test: Status OK");
+    {
+	fprintf(stderr,"test: Status OK int %u npeers %u\n", interval, peerlist.size() );
+	if (interval == 1800 && peerlist.size() == 16)
+	    tracker_response_valid=true;
+    }
     else
+    {
 	fprintf(stderr,"test: Status failed: %s\n", status.c_str() );
+
+        int sidx = status.find("Requested download is not authorized for use with this tracker.");
+        if (sidx != std::string::npos)
+	    tracker_response_valid=true;
+    }
+
+    // Break event loop entered in test.
+    event_base_loopbreak(Channel::evbase);
 }
 
 
 TEST(TBTTrack,FileTransferEncodeRequestResponseOK) {
 
+    tracker_called = false;
+    tracker_response_valid=false;
     bttrack_serv_infohash_ok = true;
 
     Sha1Hash roothash(ROOTHASH_PLAINTEXT,strlen(ROOTHASH_PLAINTEXT));
@@ -143,19 +164,23 @@ TEST(TBTTrack,FileTransferEncodeRequestResponseOK) {
     FileTransfer ft( 481, "storage.dat", roothash, true, POPT_CONT_INT_PROT_NONE, 1024, false );
 
     BTTrackerClient bt("http://127.0.0.1:8921/announce");
-    bt.Contact(ft,"started",tracker_callback);
+    bt.Contact(&ft,"started",tracker_callback);
 
     fprintf(stderr,"swift: Mainloop\n");
 
     // Enter libevent mainloop
     event_base_dispatch(Channel::evbase);
-
     // Broken by HTTP reply
+
+    ASSERT_TRUE(tracker_called);
+    ASSERT_TRUE(tracker_response_valid);
 }
 
 
 TEST(TBTTrack,FileTransferEncodeRequestResponseFailure) {
 
+    tracker_called = false;
+    tracker_response_valid=false;
     bttrack_serv_infohash_ok = false;
 
     Sha1Hash roothash(ROOTHASH_PLAINTEXT,strlen(ROOTHASH_PLAINTEXT));
@@ -165,14 +190,16 @@ TEST(TBTTrack,FileTransferEncodeRequestResponseFailure) {
     FileTransfer ft( 481, "storage.dat", roothash, true, POPT_CONT_INT_PROT_NONE, 1024, false );
 
     BTTrackerClient bt("http://127.0.0.1:8921/announce");
-    bt.Contact(ft,"started",tracker_callback);
+    bt.Contact(&ft,"started",tracker_callback);
 
     fprintf(stderr,"swift: Mainloop\n");
 
     // Enter libevent mainloop
     event_base_dispatch(Channel::evbase);
-
     // Broken by HTTP reply
+
+    ASSERT_TRUE(tracker_called);
+    ASSERT_TRUE(tracker_response_valid);
 }
 
 

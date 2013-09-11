@@ -6,8 +6,7 @@
  *
  *  Only HTTP trackers supported at the moment.
  *
- *
- *  DEALLOC RETURN VALUES OF ParseBencoded
+ *  - SwarmManager reregistrations
  *
  *  Created by Arno Bakker
  *  Copyright 2013-2016 Vrije Universiteit Amsterdam. All rights reserved.
@@ -25,11 +24,6 @@ using namespace swift;
 #define BT_PEER_ID_LENGTH	20 // bytes
 #define BT_PEER_ID_PREFIX	"-SW1000-"
 
-#define BT_EVENT_STARTED	"started"
-#define BT_EVENT_COMPLETED	"completed"
-#define BT_EVENT_STOPPED	"stopped"
-#define BT_EVENT_WORKING	""
-
 #define BT_BENCODE_STRING_SEP		":"
 #define BT_BENCODE_INT_SEP		"e"
 
@@ -37,6 +31,7 @@ using namespace swift;
 #define BT_PEERS_IPv4_DICT_KEY	"peers"
 #define BT_INTERVAL_DICT_KEY	"interval"
 #define BT_PEERS_IPv6_DICT_KEY	"peers6"
+
 
 typedef enum
 {
@@ -48,7 +43,7 @@ typedef enum
 static int ParseBencodedPeers(struct evbuffer *evb, std::string key, peeraddrs_t *peerlist);
 static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startevbp, std::string key, bencoded_type_t valuetype, char **valueptr);
 
-BTTrackerClient::BTTrackerClient(std::string url) : url_(url)
+BTTrackerClient::BTTrackerClient(std::string url) : url_(url), report_last_time_(0), report_interval_(1800), reported_complete_(false)
 {
     // Create PeerID
     peerid_ = new uint8_t[BT_PEER_ID_LENGTH];
@@ -82,36 +77,44 @@ BTTrackerClient::~BTTrackerClient()
 }
 
 
-int BTTrackerClient::Contact(ContentTransfer &transfer, std::string event, bttrack_peerlist_callback_t callback)
+int BTTrackerClient::Contact(ContentTransfer *transfer, std::string event, bttrack_peerlist_callback_t callback)
 {
     Address myaddr = Channel::BoundAddress(Channel::default_socket());
     std::string q = CreateQuery(transfer,myaddr,event);
     if (q.length() == 0)
 	return -1;
     else
-	return HTTPConnect(q,callback);
+    {
+	if (event == BT_EVENT_COMPLETED)
+	    reported_complete_ = true;
+
+	report_last_time_ = NOW;
+
+	BTTrackCallbackRecord *callbackrec = new BTTrackCallbackRecord(transfer->td(),callback);
+	return HTTPConnect(q,callbackrec);
+    }
 }
 
 /** IP in myaddr currently unused */
-std::string BTTrackerClient::CreateQuery(ContentTransfer &transfer, Address myaddr, std::string event)
+std::string BTTrackerClient::CreateQuery(ContentTransfer *transfer, Address myaddr, std::string event)
 {
     Sha1Hash infohash;
 
     // Should be per swarm, now using global upload, just to monitor sharing activity
     uint64_t uploaded = Channel::global_bytes_up;
-    uint64_t downloaded = swift::SeqComplete(transfer.td());
+    uint64_t downloaded = swift::SeqComplete(transfer->td());
     uint64_t left = 0;
-    if (transfer.ttype() == FILE_TRANSFER)
+    if (transfer->ttype() == FILE_TRANSFER)
     {
-	infohash = transfer.swarm_id().roothash();
-	if (downloaded > swift::Size(transfer.td()))
+	infohash = transfer->swarm_id().roothash();
+	if (downloaded > swift::Size(transfer->td()))
 	    left = 0;
 	else
-	    left = swift::Size(transfer.td()) - downloaded;
+	    left = swift::Size(transfer->td()) - downloaded;
     }
     else
     {
-	SwarmPubKey spubkey = transfer.swarm_id().spubkey();
+	SwarmPubKey spubkey = transfer->swarm_id().spubkey();
 	infohash = Sha1Hash(spubkey.bits(),spubkey.length());
 	left = 0x7fffffffffffffff;
     }
@@ -171,16 +174,22 @@ std::string BTTrackerClient::CreateQuery(ContentTransfer &transfer, Address myad
 }
 
 
-static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void *callbackvoid)
+static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void *callbackrecvoid)
 {
-    bttrack_peerlist_callback_t callback = (bttrack_peerlist_callback_t)callbackvoid;
+    fprintf(stderr,"bttrack: Callback: ENTER %p\n", callbackrecvoid );
 
-    fprintf(stderr,"bttrack: Callback: ENTER\n" );
+    BTTrackCallbackRecord *callbackrec = (BTTrackCallbackRecord *)callbackrecvoid;
+    if (callbackrec == NULL)
+	return;
+    if (callbackrec->callback_ == NULL)
+	return;
+
+
 
     if (req->response_code != HTTP_OK)
     {
-	if (callback != NULL)
-	    callback("Invalid HTTP Response Code",0,peeraddrs_t());
+	callbackrec->callback_(callbackrec->td_,"Invalid HTTP Response Code",0,peeraddrs_t());
+	delete callbackrec;
 	return;
     }
 
@@ -193,8 +202,8 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
     {
 	delete copybuf;
 
-	if (callback != NULL)
-	    callback("Invalid HTTP Response Code",0,peeraddrs_t());
+	callbackrec->callback_(callbackrec->td_,"Invalid HTTP Response Code",0,peeraddrs_t());
+	delete callbackrec;
 	return;
     }
 
@@ -216,8 +225,8 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 	{
 	    errorstr = "Tracker responded: "+std::string(valuebytes);
 	}
-	if (callback != NULL)
-	    callback(errorstr,0,peeraddrs_t());
+	callbackrec->callback_(callbackrec->td_,errorstr,0,peeraddrs_t());
+	delete callbackrec;
 
 	evbuffer_free(evb);
 	delete copybuf;
@@ -242,9 +251,8 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 	    delete copybuf;
 	    evbuffer_free(evb);
 
-	    if (callback != NULL)
-		callback("Error parsing tracker response: interval",0,peeraddrs_t());
-
+	    callbackrec->callback_(callbackrec->td_,"Error parsing tracker response: interval",0,peeraddrs_t());
+	    delete callbackrec;
 	    return;
 	}
 	else
@@ -258,9 +266,8 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 		delete copybuf;
 		evbuffer_free(evb);
 
-		if (callback != NULL)
-		    callback("Error parsing tracker response: interval",0,peeraddrs_t());
-
+		callbackrec->callback_(callbackrec->td_,"Error parsing tracker response: interval",0,peeraddrs_t());
+		delete callbackrec;
 		return;
 	    }
 
@@ -269,7 +276,6 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 	}
     }
     evbuffer_free(evb);
-
 
 
     // If not failure, find peers key whose value is compact IPv4 addresses
@@ -284,11 +290,13 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 	delete copybuf;
 	evbuffer_free(evb);
 
-	if (callback != NULL)
-	    callback("Error parsing tracker response: peerlist",interval,peeraddrs_t());
+	callbackrec->callback_(callbackrec->td_,"Error parsing tracker response: peerlist",interval,peeraddrs_t());
+	delete callbackrec;
 	return;
     }
     evbuffer_free(evb);
+
+    fprintf(stderr,"btrack: Got %u IPv4 peers\n", peerlist.size() );
 
     // If not failure, find peers key whose value is compact IPv6 addresses
     // http://www.bittorrent.org/beps/bep_0007.html
@@ -300,17 +308,23 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 	delete copybuf;
 	evbuffer_free(evb);
 
-	if (callback != NULL)
-	    callback("Error parsing tracker response: peerlist",interval,peeraddrs_t());
+	callbackrec->callback_(callbackrec->td_,"Error parsing tracker response: peerlist",interval,peeraddrs_t());
+	delete callbackrec;
 	return;
     }
     evbuffer_free(evb);
 
+    fprintf(stderr,"btrack: Got %u peers total\n", peerlist.size() );
+
+    // Report success
+    callbackrec->callback_(callbackrec->td_,"",interval,peerlist);
+
     delete copybuf;
+    delete callbackrec;
 }
 
 
-int BTTrackerClient::HTTPConnect(std::string query,bttrack_peerlist_callback_t callback)
+int BTTrackerClient::HTTPConnect(std::string query,BTTrackCallbackRecord *callbackrec)
 {
     std::string fullurl = url_+"?"+query;
 
@@ -330,7 +344,7 @@ int BTTrackerClient::HTTPConnect(std::string query,bttrack_peerlist_callback_t c
 
     // Create HTTP client
     struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, evhttp_uri_get_host(evu), evhttp_uri_get_port(evu) );
-    struct evhttp_request *req = evhttp_request_new(BTTrackerClientHTTPResponseCallback, (void *)callback);
+    struct evhttp_request *req = evhttp_request_new(BTTrackerClientHTTPResponseCallback, (void *)callbackrec);
 
     // Make request to server
     fprintf(stderr,"bttrack: HTTPConnect: Making request\n" );
@@ -339,6 +353,7 @@ int BTTrackerClient::HTTPConnect(std::string query,bttrack_peerlist_callback_t c
     evhttp_add_header(req->output_headers, "Host", evhttp_uri_get_host(evu));
 
     delete fullpath;
+    evhttp_uri_free(evu);
 
     fprintf(stderr,"bttrack: HTTPConnect: Exit\n" );
 
@@ -386,7 +401,7 @@ static int ParseBencodedPeers(struct evbuffer *evb, std::string key, peeraddrs_t
 	return 0;
     }
     else
-	return -1;
+	return 0; // Could be attempt to look for IPv6 peers in IPv4 only dict.
 }
 
 

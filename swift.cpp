@@ -82,11 +82,11 @@ void usage(void)
 
 }
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
-int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
-int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate);
-int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool activate);
+int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
+int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate);
+int OpenSwiftDirectory(std::string dirname, std::string trackerurl, bool force_check_diskvshash, uint32_t chunk_size, bool activate);
 // SIGNPEAKTODO replace swarmid with generic swarm ID
-int PrintURL(int td,std::string trackerargstr,uint32_t chunk_size,std::string urlfilename);
+int PrintURL(int td,std::string trackerurl,uint32_t chunk_size,std::string urlfilename);
 void HandleLiveSource(std::string livesource_input, std::string filename, std::string keypairfilename, uint32_t chunk_size, std::string urlfilename);
 
 void ReportCallback(int fd, short event, void *arg);
@@ -125,7 +125,7 @@ bool generate_multifile=false;
 
 std::string scan_dirname="";
 uint32_t chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;
-Address tracker;
+std::string trackerurl;
 
 // LIVE
 std::string livesource_input = "";
@@ -187,15 +187,17 @@ int utf8main (int argc, char** argv)
     };
 
     SwarmID swarmid=SwarmID::NOSWARMID;
-    std::string filename = "",destdir = "", trackerargstr= "", zerostatedir="", urlfilename="", keypairfilename="";
+    std::string filename = "",destdir = "", zerostatedir="", urlfilename="", keypairfilename="";
     bool printurl=false, livestream=false, gtesting=false;
     Address bindaddr;
     Address httpaddr;
     Address statsaddr;
     Address cmdaddr;
+    Address optaddr;
     tint wait_time = 0;
     double maxspeed[2] = {DBL_MAX,DBL_MAX};
     tint zerostimeout = TINT_NEVER;
+
 
     LibraryInit();
     Channel::evbase = event_base_new();
@@ -223,10 +225,19 @@ int utf8main (int argc, char** argv)
                 wait_time = TINT_NEVER;
                 break;
             case 't':
-                tracker = Address(optarg);
-                trackerargstr = strdup(optarg);
-                if (tracker==Address())
-                    quit("address must be hostname:port, ip:port or just port\n");
+                if (strncmp(optarg,"http:",strlen("http:")) && strncmp(optarg,"https:",strlen("https:")))
+                {
+                    // swift tracker
+                    optaddr = Address(optarg);
+                    if (optaddr==Address())
+                        quit("address must be hostname:port, ip:port or just port\n");
+
+                    trackerurl = std::string(SWIFT_URI_SCHEME);
+                    trackerurl += "://";
+                    trackerurl += strdup(optarg);
+                }
+                else // BT tracker. No UDP support
+                    trackerurl = strdup(optarg);
                 break;
             case 'D':
                 Channel::debug_file = optarg ? fopen_utf8(optarg,"a") : stderr;
@@ -409,7 +420,7 @@ int utf8main (int argc, char** argv)
     if (bindaddr!=Address()) { // seeding
         if (Listen(bindaddr)<=0)
             quit("cant listen to %s\n",bindaddr.str().c_str())
-    } else if (tracker!=Address() || httpgw_enabled || cmdgw_enabled) { // leeching
+    } else if (trackerurl != "" || httpgw_enabled || cmdgw_enabled) { // leeching
         evutil_socket_t sock = INVALID_SOCKET;
         for (int i=0; i<=10; i++) {
             bindaddr = Address((uint32_t)INADDR_ANY,0);
@@ -423,8 +434,8 @@ int utf8main (int argc, char** argv)
             fprintf(stderr,"swift: My listen port is %d\n", BoundAddress(sock).port() );
     }
 
-    if (tracker!=Address() && !printurl)
-        SetTracker(tracker);
+    if (trackerurl != "" && !printurl)
+        SetTracker(trackerurl);
 
     if (livesource_input == "" && filename != "")
     {
@@ -491,7 +502,7 @@ int utf8main (int argc, char** argv)
             if (filename != "" || !(swarmid == SwarmID::NOSWARMID)) {
 
                 // Single file
-                ret = HandleSwiftSwarm(filename,swarmid,tracker,trackerargstr,printurl,livestream,urlfilename,maxspeed);
+                ret = HandleSwiftSwarm(filename,swarmid,trackerurl,printurl,livestream,urlfilename,maxspeed);
             }
             else if (scan_dirname != "")
             {
@@ -504,7 +515,7 @@ int utf8main (int argc, char** argv)
         	// arrive). When started deactivated but no checkpoint or
         	// incomplete, then the swarm will be activated and hashchecked.
         	//
-                ret = OpenSwiftDirectory(scan_dirname,Address(),false,chunk_size,false); // activate = false
+                ret = OpenSwiftDirectory(scan_dirname,"",false,chunk_size,false); // activate = false
             }
             else
                 ret = -1;
@@ -518,7 +529,7 @@ int utf8main (int argc, char** argv)
                 quit("Cannot generate multi-file spec")
             else
                 // Calc roothash
-                ret = HandleSwiftSwarm(filename,swarmid,tracker,trackerargstr,printurl,false,urlfilename,maxspeed);
+                ret = HandleSwiftSwarm(filename,swarmid,trackerurl,printurl,false,urlfilename,maxspeed);
         }
 
         // For testing
@@ -587,14 +598,14 @@ int utf8main (int argc, char** argv)
 }
 
 
-int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, std::string trackerargstr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed)
+int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, bool printurl, bool livestream, std::string urlfilename, double *maxspeed)
 {
     if (!(swarmid == SwarmID::NOSWARMID) && filename == "")
     {
 	filename = swarmid.tofilename();
     }
 
-    single_td = OpenSwiftSwarm(filename,swarmid,tracker,false,chunk_size,livestream,true); //activate always
+    single_td = OpenSwiftSwarm(filename,swarmid,trackerurl,false,chunk_size,livestream,true); //activate always
     if (single_td < 0)
         quit("swift: cannot open swarm with %s",filename.c_str());
     if (printurl)
@@ -602,7 +613,7 @@ int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, s
 	if (swift::Complete(single_td) == 0)
 	    quit("cannot open empty file %s",filename.c_str());
 
-	int ret = PrintURL(single_td,trackerargstr,chunk_size,urlfilename);
+	int ret = PrintURL(single_td,trackerurl,chunk_size,urlfilename);
 	if (ret < 0)
 	    return -1;
 
@@ -624,7 +635,7 @@ int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, s
 }
 
 
-int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate)
+int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate)
 {
     if (!quiet)
 	fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
@@ -635,14 +646,14 @@ int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, Address &tracker, boo
     // Client mode: regular or live download
     int td = -1;
     if (!livestream)
-	td = swift::Open(filename,swarmid,tracker,force_check_diskvshash,swarm_cipm,false,activate,chunk_size);
+	td = swift::Open(filename,swarmid,trackerurl,force_check_diskvshash,swarm_cipm,false,activate,chunk_size);
     else
-	td = swift::LiveOpen(filename,swarmid,tracker,swarm_cipm,livesource_disc_wnd,chunk_size);
+	td = swift::LiveOpen(filename,swarmid,trackerurl,swarm_cipm,livesource_disc_wnd,chunk_size);
     return td;
 }
 
 
-int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_diskvshash, uint32_t chunk_size, bool activate)
+int OpenSwiftDirectory(std::string dirname, std::string trackerurl, bool force_check_diskvshash, uint32_t chunk_size, bool activate)
 {
     DirEntry *de = opendir_utf8(dirname);
     if (de == NULL)
@@ -657,7 +668,7 @@ int OpenSwiftDirectory(std::string dirname, Address tracker, bool force_check_di
             path.append(FILE_SEP);
             path.append(de->filename_);
             SwarmID swarmid = SwarmID::NOSWARMID;
-            int td = OpenSwiftSwarm(path,swarmid,tracker,force_check_diskvshash,chunk_size,false,activate);
+            int td = OpenSwiftSwarm(path,swarmid,trackerurl,force_check_diskvshash,chunk_size,false,activate);
             if (td >= 0) // Support case where dir of content has not been pre-hashchecked and checkpointed
                 Checkpoint(td);
         }
@@ -700,7 +711,7 @@ int CleanSwiftDirectory(std::string dirname)
 }
 
 
-int PrintURL(int td,std::string trackerargstr,uint32_t chunk_size,std::string urlfilename)
+int PrintURL(int td,std::string trackerurl,uint32_t chunk_size,std::string urlfilename)
 {
     FILE *fp = stdout;
     if (urlfilename != "")
@@ -714,9 +725,13 @@ int PrintURL(int td,std::string trackerargstr,uint32_t chunk_size,std::string ur
     }
 
     std::ostringstream oss;
-    oss << "tswift:";
-    if (trackerargstr != "")
-       oss << "//" << trackerargstr; // use unresolved tracker hostname here as specified on cmd line
+    if (trackerurl == "")
+    {
+	oss << SWIFT_URI_SCHEME;
+	oss << ":";
+    }
+    else
+	oss << trackerurl;
     oss << "/" << swift::GetSwarmID(td).hex();
     if (chunk_size != SWIFT_DEFAULT_CHUNK_SIZE)
        oss << "$" << chunk_size;
@@ -987,7 +1002,7 @@ void RescanDirCallback(int fd, short event, void *arg) {
     // by running swift separately and then copy content + *.m* to scanned dir,
     // such that a fast restore from checkpoint is done.
     //
-    OpenSwiftDirectory(scan_dirname,tracker,false,chunk_size,false); // activate = false
+    OpenSwiftDirectory(scan_dirname,trackerurl,false,chunk_size,false); // activate = false
 
     CleanSwiftDirectory(scan_dirname);
 

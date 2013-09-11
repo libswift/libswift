@@ -974,11 +974,10 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     if (td == -1) {
         // LIVE
         if (durstr != "-1") {
-            td = swift::Open(filename,swarm_id,Address(),false,httpgw_cipm,false,activate,chunksize);
+            td = swift::Open(filename,swarm_id,"",false,httpgw_cipm,false,activate,chunksize);
         }
         else {
-            Address tracker;
-            td = swift::LiveOpen(filename,swarm_id,tracker,httpgw_cipm,httpgw_livesource_disc_wnd,chunksize);
+            td = swift::LiveOpen(filename,swarm_id,"",httpgw_cipm,httpgw_livesource_disc_wnd,chunksize);
         }
 
         // Arno, 2011-12-20: Only on new transfers, otherwise assume that CMD GW

@@ -136,6 +136,13 @@ namespace swift {
 // How much time a SIGNED_INTEGRITY timestamp may diverge from current time
 #define SWIFT_LIVE_MAX_SOURCE_DIVERGENCE_TIME	30 // seconds
 
+// For BT tracker
+#define BT_EVENT_STARTED	"started"
+#define BT_EVENT_COMPLETED	"completed"
+#define BT_EVENT_STOPPED	"stopped"
+#define BT_EVENT_WORKING	""
+
+
 
     typedef enum {
 	FILE_TRANSFER,
@@ -420,9 +427,16 @@ typedef std::vector<Address>	peeraddrs_t;
 	SwarmID 		*swarm_id_ptr_;
     };
 
-    typedef void (*bttrack_peerlist_callback_t)(std::string result, uint32_t interval, peeraddrs_t peerlist);
+    typedef void (*bttrack_peerlist_callback_t)(int td, std::string result, uint32_t interval, peeraddrs_t peerlist);
 
     class ContentTransfer;
+
+    struct BTTrackCallbackRecord
+    {
+	BTTrackCallbackRecord(int td, bttrack_peerlist_callback_t callback) : td_(td), callback_(callback) {}
+        int td_;
+        bttrack_peerlist_callback_t	callback_;
+    };
 
     class BTTrackerClient
     {
@@ -430,14 +444,21 @@ typedef std::vector<Address>	peeraddrs_t;
 	BTTrackerClient(std::string url);
 	~BTTrackerClient();
 	/** (Re)Registers at tracker and adds returned peer addresses to peerlist */
-	int Contact(ContentTransfer &transfer, std::string event, bttrack_peerlist_callback_t callback);
+	int Contact(ContentTransfer *transfer, std::string event, bttrack_peerlist_callback_t callback);
+	bool GetReportedComplete() { return reported_complete_; }
+	tint GetReportLastTime() { return report_last_time_; }
+	void SetReportInterval(uint32_t interval) { report_interval_ = interval; }
+	uint32_t GetReportInterval() { return report_interval_; }
        protected:
 	std::string 		url_;
 	uint8_t 		*peerid_;
+	tint			report_last_time_; // tint
+	uint32_t 		report_interval_; // seconds
+	bool			reported_complete_;
 
 	/** IP in myaddr currently unused */
-	std::string CreateQuery(ContentTransfer &transfer, Address myaddr, std::string event);
-	int HTTPConnect(std::string query,bttrack_peerlist_callback_t callback);
+	std::string CreateQuery(ContentTransfer *transfer, Address myaddr, std::string event);
+	int HTTPConnect(std::string query,BTTrackCallbackRecord *callbackrec);
     };
 
     class PiecePicker;
@@ -518,14 +539,15 @@ typedef std::vector<Address>	peeraddrs_t;
         void		SetDefaultHandshake(Handshake &default_hs_out) { def_hs_out_ = default_hs_out; }
         Handshake &	GetDefaultHandshake(){ return def_hs_out_; }
 
-        /** Arno: set the tracker for this transfer. Reseting it won't kill
+        /** Arno: set the tracker URL for this transfer. Reseting it won't kill
          * any existing connections. */
-        void            SetTracker(Address tracker) { tracker_ = tracker; }
-        /** Arno: (Re)Connect to tracker for this transfer, or global Channel::tracker if not set */
+        void            SetTracker(std::string trackerurl) { trackerurl_ = trackerurl; }
+        /** Arno: (Re)Connect to tracker for this transfer, or global Channel::trackerurl if not set */
         void            ConnectToTracker();
         /** Arno: Reconnect to the tracker if no established peers or is connected
          * to a live source that went silent and exp backoff allows it. */
         void            ReConnectToTrackerIfAllowed(bool movingforward);
+        BTTrackerClient *GetBTTrackerClient() { return bttrackclient_; }
 
         /** Progress callback management **/
         void 		AddProgressCallback(ProgressCallback cb, uint8_t agg);
@@ -563,9 +585,10 @@ typedef std::vector<Address>	peeraddrs_t;
         /** HashTree for transfer (either MmapHashTree, ZeroHashTree, LiveHashTree or NULL) */
         HashTree*       hashtree_;
 
-        Address         tracker_; // Tracker for this transfer
+        std::string     trackerurl_; // Tracker URL for this transfer
         tint            tracker_retry_interval_;
         tint            tracker_retry_time_;
+        BTTrackerClient *bttrackclient_; // if BT tracker
     };
 
 
@@ -787,7 +810,7 @@ typedef std::vector<Address>	peeraddrs_t;
 #define DGRAM_MAX_SOCK_OPEN 128
         static int sock_count;
         static sckrwecb_t sock_open[DGRAM_MAX_SOCK_OPEN];
-        static Address  tracker; // Global tracker for all transfers
+        static std::string  trackerurl; // Global tracker for all transfers
         static struct event_base *evbase;
         static struct event evrecv;
         static const char* SEND_CONTROL_MODES[];
@@ -1276,7 +1299,7 @@ typedef std::vector<Address>	peeraddrs_t;
         no longer works on restarts, unless checkpoints are used.
         */
         // TODO: replace check_netwvshash with full set of protocol options
-    int     Open( std::string filename, SwarmID& swarmid,Address tracker=Address(), bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, bool zerostate=false, bool activate=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     Open( std::string filename, SwarmID& swarmid,std::string trackerurl="", bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, bool zerostate=false, bool activate=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** Get the root hash for the transmission. */
     SwarmID GetSwarmID( int file);
     /** Close a file and a transmission, remove state or content if desired. */
@@ -1296,7 +1319,7 @@ typedef std::vector<Address>	peeraddrs_t;
     int     Seek( int td, int64_t offset, int whence);
     /** Set the default tracker that is used when Open is not passed a tracker
         address. */
-    void    SetTracker( Address& tracker);
+    void    SetTracker(std::string trackerurl);
     /** Returns size of the file in bytes, 0 if unknown. Might be rounded up
         to a kilobyte before the transmission is complete. */
     uint64_t Size( int td);
@@ -1322,7 +1345,7 @@ typedef std::vector<Address>	peeraddrs_t;
     /** To add chunks to a live stream as source */
     int     LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte);
     /** To open a live stream as peer */
-    int     LiveOpen(std::string filename, SwarmID &swarmid, Address &tracker, popt_cont_int_prot_t cipm, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     LiveOpen(std::string filename, SwarmID &swarmid, std::string trackerurl, popt_cont_int_prot_t cipm, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
     /** Register a callback for when the download of another pow(2,agg) chunks
         is finished. So agg = 0 = 2^0 = 1, means every chunk. */

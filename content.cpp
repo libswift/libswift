@@ -8,6 +8,7 @@
 #include "swift.h"
 #include <cfloat>
 #include "swarmmanager.h"
+#include <event2/http.h>
 
 
 using namespace swift;
@@ -31,9 +32,10 @@ uint64_t ContentTransfer::cleancounter = 0;
 #define TRACKER_RETRY_INTERVAL_MAX	(1800*TINT_SEC) // 30 minutes
 
 ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), swarm_id_(), mychannels_(), callbacks_(), picker_(NULL),
-    speedzerocount_(0), tracker_(),
+    speedzerocount_(0), trackerurl_(),
     tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START),
-    tracker_retry_time_(NOW)
+    tracker_retry_time_(NOW),
+    bttrackclient_(NULL)
 {
     cur_speed_[DDIR_UPLOAD] = MovingAverageSpeed();
     cur_speed_[DDIR_DOWNLOAD] = MovingAverageSpeed();
@@ -138,10 +140,19 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
 	// Arno: Call garage collect only once every CHANNEL_GARBAGECOLLECT_INTERVAL
 	if ((ContentTransfer::cleancounter % CHANNEL_GARBAGECOLLECT_INTERVAL) == 0)
 	    ct->GarbageCollectChannels();
+
+	// BT tracker needs periodic reports
+	if (ct->bttrackclient_ != NULL)
+	{
+	    tint report_time = ct->bttrackclient_->GetReportLastTime() + (TINT_SEC*ct->bttrackclient_->GetReportInterval());
+	    if (NOW > report_time)
+	    {
+		ct->ConnectToTracker();
+	    }
+	}
     }
 
     ContentTransfer::cleancounter++;
-
 
     // Arno, 2012-10-01: Reschedule cleanup, started in swift::Open
     evtimer_add(&ContentTransfer::evclean,tint2tv(TINT_SEC));
@@ -161,6 +172,7 @@ void ContentTransfer::ReConnectToTrackerIfAllowed(bool movingforward)
         {
             ConnectToTracker();
 
+            // Should be: if fail then exp backoff
             tracker_retry_interval_ *= TRACKER_RETRY_INTERVAL_EXP;
             if (tracker_retry_interval_ > TRACKER_RETRY_INTERVAL_MAX)
                 tracker_retry_interval_ = TRACKER_RETRY_INTERVAL_MAX;
@@ -175,6 +187,39 @@ void ContentTransfer::ReConnectToTrackerIfAllowed(bool movingforward)
 }
 
 
+/** Called by BTTrackerClient when results come in from the server */
+static void global_bttracker_callback(int td, std::string status, uint32_t interval, peeraddrs_t peerlist)
+{
+    ContentTransfer *ct = swift::GetActivatedTransfer(td);
+    if (ct == NULL)
+	return; // not activated, don't bother
+
+    if (status == "")
+    {
+	// Success
+	dprintf("%s F%d content contact tracker: BT OK int %u npeers %u\n",tintstr(),td,interval,peerlist.size() );
+
+	// Record reporting interval
+	BTTrackerClient *bttrackclient = ct->GetBTTrackerClient();
+
+	if (bttrackclient != NULL) // unlikely
+	    bttrackclient->SetReportInterval(interval);
+
+	// Attempt to create channels to peers
+	peeraddrs_t::iterator iter;
+	for (iter=peerlist.begin(); iter!=peerlist.end(); iter++)
+	{
+	    Address addr = *iter;
+	    ct->OnPexIn(addr);
+	}
+    }
+    else
+    {
+	dprintf("%s F%d content contact tracker: BT failure reason %s\n",tintstr(),td,status.c_str());
+    }
+}
+
+
 void ContentTransfer::ConnectToTracker()
 {
     // dprintf("%s F%d content contact tracker\n",tintstr(),td_);
@@ -182,11 +227,55 @@ void ContentTransfer::ConnectToTracker()
     if (!IsOperational())
  	return;
 
-    Channel *c = NULL;
-    if (tracker_ != Address())
-        c = new Channel(this,INVALID_SOCKET,tracker_,true);
-    else if (Channel::tracker!=Address())
-        c = new Channel(this,INVALID_SOCKET,Channel::tracker,true);
+    struct evhttp_uri *evu = NULL;
+
+    if (trackerurl_ != "")
+	evu = evhttp_uri_parse(trackerurl_.c_str());
+    else
+	evu = evhttp_uri_parse(Channel::trackerurl.c_str());
+    if (evu == NULL)
+    {
+	dprintf("%s F%d content contact tracker: failure parsing URL\n",tintstr(),td_);
+	return;
+    }
+    if (evhttp_uri_get_scheme(evu) == SWIFT_URI_SCHEME)
+    {
+	// swift tracker
+	const char *host = evhttp_uri_get_host(evu);
+	if (host == NULL)
+	{
+	    dprintf("%s F%d content contact tracker: failure parsing URL host\n",tintstr(),td_);
+	    return;
+	}
+	int port = evhttp_uri_get_port(evu);
+
+	Address trackaddr(host,port);
+	Channel *c = new Channel(this,INVALID_SOCKET,trackaddr,true);
+    }
+    else
+    {
+	// BT tracker
+	std::string event = BT_EVENT_WORKING;
+	if (bttrackclient_ == NULL)
+	{
+	    // First call, create client
+	    event = BT_EVENT_STARTED;
+	    if (trackerurl_ != "")
+		bttrackclient_ = new BTTrackerClient(trackerurl_);
+	    else
+		bttrackclient_ = new BTTrackerClient(Channel::trackerurl);
+	}
+	else if (!bttrackclient_->GetReportedComplete())
+	{
+	    // Vulnerable to Automatic Size detection not being finished
+	    if (swift::Complete(td()) > 0 && swift::Complete(td()) == swift::Size(td()))
+		event = BT_EVENT_COMPLETED;
+	}
+
+	bttrackclient_->Contact(this,event,global_bttracker_callback);
+    }
+
+    evhttp_uri_free(evu);
 }
 
 

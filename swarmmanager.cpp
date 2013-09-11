@@ -50,15 +50,15 @@ namespace swift {
 
 SwarmManager SwarmManager::instance_;
 
-SwarmData::SwarmData( const std::string filename, const Sha1Hash& rootHash, const Address& tracker, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, uint32_t chunk_size ) :
+SwarmData::SwarmData( const std::string filename, const Sha1Hash& rootHash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, uint32_t chunk_size ) :
     id_(-1), rootHash_( rootHash ), active_( false ), latestUse_(0), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
-    filename_( filename ), tracker_( tracker ), forceCheckDiskVSHash_(force_check_diskvshash), contIntProtMethod_(cipm),  chunkSize_( chunk_size ), zerostate_( zerostate ), cached_(false)
+    filename_( filename ), trackerurl_( trackerurl ), forceCheckDiskVSHash_(force_check_diskvshash), contIntProtMethod_(cipm),  chunkSize_( chunk_size ), zerostate_( zerostate ), cached_(false)
 {
 }
 
 SwarmData::SwarmData( const SwarmData& sd ) : // Arno, 2012-12-05: Note: latestUse not copied
     id_(-1), rootHash_( sd.rootHash_ ), active_( false ), latestUse_(0), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
-    filename_( sd.filename_ ), tracker_( sd.tracker_ ), forceCheckDiskVSHash_( sd.forceCheckDiskVSHash_ ), contIntProtMethod_(sd.contIntProtMethod_), chunkSize_( sd.chunkSize_ ), zerostate_( sd.zerostate_ ), cached_(false)
+    filename_( sd.filename_ ), trackerurl_( sd.trackerurl_ ), forceCheckDiskVSHash_( sd.forceCheckDiskVSHash_ ), contIntProtMethod_(sd.contIntProtMethod_), chunkSize_( sd.chunkSize_ ), zerostate_( sd.zerostate_ ), cached_(false)
 {
 }
 
@@ -105,8 +105,8 @@ std::string& SwarmData::Filename() {
     return filename_;
 }
 
-Address& SwarmData::Tracker() {
-    return tracker_;
+std::string SwarmData::Tracker() {
+    return trackerurl_;
 }
 
 uint32_t SwarmData::ChunkSize() {
@@ -244,12 +244,12 @@ SwarmManager::~SwarmManager() {
 
 #define rootHashToList( rootHash ) (knownSwarms_[rootHash.bits[0]&63])
 
-SwarmData* SwarmManager::AddSwarm( const std::string filename, const Sha1Hash& hash, const Address& tracker, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size)
+SwarmData* SwarmManager::AddSwarm( const std::string filename, const Sha1Hash& hash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size)
 {
-    //fprintf(stderr,"sm: AddSwarm %s hash %s track %s cdisk %d cipm %u zs %d act %d cs %u\n", filename.c_str(), hash.hex().c_str(), tracker.str().c_str(), force_check_diskvshash, cipm, zerostate, activate, chunk_size );
+    //fprintf(stderr,"sm: AddSwarm %s hash %s track %s cdisk %d cipm %u zs %d act %d cs %u\n", filename.c_str(), hash.hex().c_str(), trackerurl.c_str(), force_check_diskvshash, cipm, zerostate, activate, chunk_size );
     enter( "addswarm( many )" );
     invariant();
-    SwarmData sd( filename, hash, tracker, force_check_diskvshash, cipm, zerostate, chunk_size );
+    SwarmData sd( filename, hash, trackerurl, force_check_diskvshash, cipm, zerostate, chunk_size );
 #if SWARMMANAGER_ASSERT_INVARIANTS
     SwarmData* res = AddSwarm( sd, activate );
     assert( hash == Sha1Hash::ZERO || res == FindSwarm( hash ) );
@@ -400,10 +400,10 @@ void SwarmManager::BuildSwarm( SwarmData* swarm ) {
     }
     // Hashes have been checked, don't check again
     swarm->forceCheckDiskVSHash_ = false;
-    if( swarm->tracker_ != Address() ) {
+    if( swarm->trackerurl_ != "" ) {
         // initiate tracker connections
         // SWIFTPROC
-        swarm->ft_->SetTracker( swarm->tracker_ );
+        swarm->ft_->SetTracker( swarm->trackerurl_ );
         swarm->ft_->ConnectToTracker();
     }
 
