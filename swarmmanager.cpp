@@ -404,6 +404,7 @@ void SwarmManager::BuildSwarm( SwarmData* swarm ) {
         // initiate tracker connections
         // SWIFTPROC
         swarm->ft_->SetTracker( swarm->trackerurl_ );
+        fprintf(stderr,"swarmmgr: ConnectToTracker\n");
         swarm->ft_->ConnectToTracker();
     }
 

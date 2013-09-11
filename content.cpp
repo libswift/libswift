@@ -147,6 +147,7 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
 	    tint report_time = ct->bttrackclient_->GetReportLastTime() + (TINT_SEC*ct->bttrackclient_->GetReportInterval());
 	    if (NOW > report_time)
 	    {
+		fprintf(stderr,"content: periodic ConnectToTracker\n");
 		ct->ConnectToTracker();
 	    }
 	}
@@ -170,6 +171,7 @@ void ContentTransfer::ReConnectToTrackerIfAllowed(bool movingforward)
     {
         if (NOW > tracker_retry_time_)
         {
+            fprintf(stderr,"content: -movingforward ConnectToTracker\n");
             ConnectToTracker();
 
             // Should be: if fail then exp backoff
@@ -286,6 +288,10 @@ bool ContentTransfer::OnPexIn (const Address& addr)
     // TODO: detect public internet.
     //if (addr.is_private())
     //   return false;
+
+    Address myaddr = Channel::BoundAddress(Channel::default_socket());
+    if (addr == myaddr)
+	return false; // Connect to self
 
     channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)

@@ -28,9 +28,9 @@ using namespace swift;
 #define BT_BENCODE_INT_SEP		"e"
 
 #define BT_FAILURE_REASON_DICT_KEY	"failure reason"
-#define BT_PEERS_IPv4_DICT_KEY	"peers"
+#define BT_PEERS_IPv4_DICT_KEY	"5:peers"	// 5: to avoid confusion with a 'peers' list with one 6-byte entry
 #define BT_INTERVAL_DICT_KEY	"interval"
-#define BT_PEERS_IPv6_DICT_KEY	"peers6"
+#define BT_PEERS_IPv6_DICT_KEY	"6:peers6"
 
 
 typedef enum
@@ -185,10 +185,9 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 	return;
 
 
-
     if (req->response_code != HTTP_OK)
     {
-	callbackrec->callback_(callbackrec->td_,"Invalid HTTP Response Code",0,peeraddrs_t());
+	callbackrec->callback_(callbackrec->td_,"Unexpected HTTP Response Code",0,peeraddrs_t());
 	delete callbackrec;
 	return;
     }
@@ -202,10 +201,13 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
     {
 	delete copybuf;
 
-	callbackrec->callback_(callbackrec->td_,"Invalid HTTP Response Code",0,peeraddrs_t());
+	callbackrec->callback_(callbackrec->td_,"Could not read HTTP body",0,peeraddrs_t());
 	delete callbackrec;
 	return;
     }
+
+    fprintf(stderr,"bttrack: Raw response <%s>\n", copybuf );
+
 
     evb = evbuffer_new();
     evbuffer_add(evb,copybuf,copybuflen);
@@ -257,8 +259,6 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 	}
 	else
 	{
-	    fprintf(stderr,"btrack: Interval string parsed %s\n", valuebytes );
-
 	    ret = sscanf(valuebytes,"%u",&interval);
 	    if (ret != 1)
 	    {
@@ -340,7 +340,7 @@ int BTTrackerClient::HTTPConnect(std::string query,BTTrackCallbackRecord *callba
     strcat(fullpath,"?");
     strcat(fullpath,evhttp_uri_get_query(evu));
 
-    fprintf(stderr,"bttrack: HTTPConnect: Composed fullpath %s\n", fullpath );
+    //fprintf(stderr,"bttrack: HTTPConnect: Composed fullpath %s\n", fullpath );
 
     // Create HTTP client
     struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, evhttp_uri_get_host(evu), evhttp_uri_get_port(evu) );
@@ -408,13 +408,13 @@ static int ParseBencodedPeers(struct evbuffer *evb, std::string key, peeraddrs_t
 /** Failure reported, extract string from bencoded dictionary */
 static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startevbp, std::string key, bencoded_type_t valuetype, char **valueptr)
 {
-    fprintf(stderr,"bttrack: Callback: key %s starts at " PRISIZET "\n", key.c_str(), startevbp.pos );
+    //fprintf(stderr,"bttrack: Callback: key %s starts at " PRISIZET "\n", key.c_str(), startevbp.pos );
 
     size_t pastkeypos = startevbp.pos+key.length();
     if (valuetype == BENCODED_INT)
 	pastkeypos++; // skip 'i'
 
-    fprintf(stderr,"bttrack: Callback: key ends at " PRISIZET "\n", pastkeypos );
+    //fprintf(stderr,"bttrack: Callback: key ends at " PRISIZET "\n", pastkeypos );
 
     int ret = evbuffer_ptr_set(evb, &startevbp, pastkeypos, EVBUFFER_PTR_SET);
     if (ret < 0)
@@ -429,15 +429,15 @@ static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startev
     if (endevbp.pos == -1)
 	return -1;
 
-    fprintf(stderr,"bttrack: Callback: separator at " PRISIZET " key len %d\n", endevbp.pos, key.length() );
+    //fprintf(stderr,"bttrack: Callback: separator at " PRISIZET " key len %d\n", endevbp.pos, key.length() );
 
     size_t intcstrlen = endevbp.pos - startevbp.pos;
 
-    fprintf(stderr,"bttrack: Callback: value length " PRISIZET "\n", intcstrlen );
+    //fprintf(stderr,"bttrack: Callback: value length " PRISIZET "\n", intcstrlen );
 
     size_t strpos = endevbp.pos+1;
 
-    fprintf(stderr,"bttrack: Callback: value starts at " PRISIZET "\n", strpos );
+    //fprintf(stderr,"bttrack: Callback: value starts at " PRISIZET "\n", strpos );
 
     ret = evbuffer_ptr_set(evb, &startevbp, strpos, EVBUFFER_PTR_SET);
     if (ret < 0)
@@ -458,7 +458,7 @@ static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startev
     }
 
 
-    fprintf(stderr,"bttrack: Callback: Length value string %s\n", intcstr );
+    //fprintf(stderr,"bttrack: Callback: Length value string %s\n", intcstr );
 
     if (valuetype == BENCODED_INT)
     {
@@ -473,10 +473,7 @@ static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startev
     if (ret != 1)
 	return -1;
 
-    fprintf(stderr,"bttrack: Callback: Length value int %d\n", slen );
-
-
-
+    //fprintf(stderr,"bttrack: Callback: Length value int %d\n", slen );
 
     // Drain colon
     ret = evbuffer_drain(evb,1);
@@ -494,7 +491,7 @@ static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startev
     }
     else
     {
-	fprintf(stderr,"bttrack: Callback: Value string <%s>\n", valuecstr );
+	//fprintf(stderr,"bttrack: Callback: Value string <%s>\n", valuecstr );
 
 	*valueptr = valuecstr;
 	// do not delete valuecstr;

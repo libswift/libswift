@@ -831,7 +831,12 @@ LiveTransfer *swift::LiveCreate(std::string filename, KeyPair &keypair, std::str
     fprintf(stderr,"swift::LiveCreate: swarmid: %s\n",lt->swarm_id().hex().c_str() );
 
     if (lt->IsOperational())
+    {
+	// External BT tracker
+	fprintf(stderr,"swift::LiveCreate: ConnectToTracker\n");
+	lt->ConnectToTracker();
 	return lt;
+    }
     else
     {
 	fprintf(stderr,"swift::LiveCreate: %s swarm created, but not operational\n", lt->swarm_id().hex().c_str() );
@@ -864,6 +869,7 @@ int swift::LiveOpen(std::string filename, SwarmID &swarmid, std::string trackeru
     // initiate tracker connections
     // SWIFTPROC
     lt->SetTracker(trackerurl);
+    fprintf(stderr,"swift::LiveOpen: ConnectToTracker\n");
     lt->ConnectToTracker();
     return lt->td();
 }
