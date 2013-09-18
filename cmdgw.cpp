@@ -731,6 +731,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         std::string mfstr = puri["filename"];
         std::string chunksizestr = puri["cs"];
         std::string durationstr = puri["cd"];
+        std::string iastr = puri["ia"];
 
         if (swarmidhexstr.length()!=40) {
             dprintf("cmd: START: roothash too short %u\n", swarmidhexstr.length() );
@@ -750,10 +751,21 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             dprintf("cmd: START: tracker address must be hostname:port, ip:port or just port\n");
             return ERROR_BAD_ARG;
         }
+
         // BTTRACKTODO
         std::string trackerurl = SWIFT_URI_SCHEME;
         trackerurl += "://";
         trackerurl += trackerstr;
+
+        Address srcaddr(iastr.c_str());
+        if (iastr != "")
+        {
+            if (srcaddr == Address())
+            {
+                dprintf("cmd: START: injector address must be hostname:port, ip:port or just port\n");
+                return ERROR_BAD_ARG;
+            }
+        }
 
         // initiate transmission
         SwarmID swarmid = SwarmID(swarmidhexstr);
@@ -784,7 +796,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             if (duration != -1)
                 td = swift::Open(filename,swarmid,trackerurl,false,cmd_gw_cipm,false,activate,chunksize);
             else
-                td = swift::LiveOpen(filename,swarmid,trackerurl,cmd_gw_cipm,cmd_gw_livesource_disc_wnd,chunksize);
+                td = swift::LiveOpen(filename,swarmid,trackerurl,srcaddr,cmd_gw_cipm,cmd_gw_livesource_disc_wnd,chunksize);
             if (td == -1) {
             	CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarmid);
             	return ERROR_BAD_SWARM;

@@ -42,7 +42,7 @@ tint Channel::MIN_PEX_REQUEST_INTERVAL = TINT_SEC;
  * Instance methods
  */
 
-Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool peerissource) :
+Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr) :
     // Arno, 2011-10-03: Reordered to avoid g++ Wall warning
     peer_(peer_addr), socket_(socket==INVALID_SOCKET?default_socket():socket), // FIXME
     transfer_(transfer), own_id_mentioned_(false),
@@ -69,7 +69,6 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     old_movingfwd_bytes_(0),
     scheduled4del_(false),
     direct_sending_(false),
-    peer_is_source_(peerissource),
     hs_out_(NULL), hs_in_(NULL),
     last_sent_munro_(bin_t::NONE),
     munro_ack_rcvd_(false)
@@ -155,7 +154,7 @@ HashTree * Channel::hashtree()
 bool Channel::IsComplete() {
 
     if (transfer()->ttype() == LIVE_TRANSFER)
-	return peer_is_source_;
+	return PeerIsSource();
 
     // Check if peak hash bins are filled.
     if (hashtree()->peak_count() == 0)
@@ -436,6 +435,13 @@ bool Channel::is_established()
         return false;
     else
         return (hs_in_->peer_channel_id_ && own_id_mentioned_); 
+}
+
+
+bool Channel::PeerIsSource()
+{
+    LiveTransfer *lt = (LiveTransfer *)transfer_;
+    return (lt->GetSourceAddress() != Address() && (peer_ == lt->GetSourceAddress() || recv_peer_ == lt->GetSourceAddress()));
 }
 
 

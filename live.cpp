@@ -139,11 +139,12 @@ LiveTransfer::LiveTransfer(std::string filename, KeyPair &keypair, std::string c
 
 
 /** A constructor for live client. */
-LiveTransfer::LiveTransfer(std::string filename, SwarmID &swarmid, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size) :
+LiveTransfer::LiveTransfer(std::string filename, SwarmID &swarmid, Address &srcaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size) :
         ContentTransfer(LIVE_TRANSFER), chunk_size_(chunk_size), am_source_(false),
         filename_(filename), last_chunkid_(0), offset_(0),
         chunks_since_sign_(0),
-        checkpoint_filename_(""), checkpoint_bin_(bin_t::NONE)
+        checkpoint_filename_(""), checkpoint_bin_(bin_t::NONE),
+        srcaddr_(srcaddr)
 {
     swarm_id_ = swarmid;
     SwarmPubKey spubkey = swarm_id_.spubkey();

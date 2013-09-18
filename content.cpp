@@ -269,7 +269,7 @@ void ContentTransfer::ConnectToTracker(bool stop)
 	int port = evhttp_uri_get_port(evu);
 
 	Address trackaddr(host,port);
-	Channel *c = new Channel(this,INVALID_SOCKET,trackaddr,true);
+	Channel *c = new Channel(this,INVALID_SOCKET,trackaddr);
     }
     else
     {

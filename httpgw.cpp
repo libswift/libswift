@@ -906,7 +906,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     evhttp_remove_header(reqheaders,"Connection"); // Remove Connection: keep-alive
 
     // 2. Parse swift URI
-    std::string swarmidhexstr = "", mfstr="", durstr="", chunksizestr = "";
+    std::string swarmidhexstr = "", mfstr="", durstr="", chunksizestr = "", iastr="";
     if (uri.length() <= 1)     {
         evhttp_send_error(evreq,400,"Path must be root hash in hex, 40 bytes.");
         dprintf("%s @%i http get: ERROR 400 Path must be root hash in hex\n",tintstr(),0 );
@@ -923,6 +923,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     mfstr = puri["filename"];
     durstr = puri["cd"];
     chunksizestr = puri["cs"];
+    iastr = puri["ia"];
 
     // Handle LIVE
     std::string mimetype = "video/mp2t";
@@ -951,6 +952,17 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     uint32_t chunksize=httpgw_chunk_size; // default externally configured
     if (chunksizestr.length() > 0)
         std::istringstream(chunksizestr) >> chunksize;
+
+    Address srcaddr(iastr.c_str());
+    if (iastr != "")
+    {
+	if (srcaddr == Address())
+	{
+	    evhttp_send_error(evreq,400,"Bad injector address in query.");
+	    dprintf("%s @%i http get: ERROR 400 Bad injector address in query\n",tintstr(),0 );
+	    return;
+	}
+    }
 
 
     // 3. Check for concurrent requests, currently not supported.
@@ -982,7 +994,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
             td = swift::Open(filename,swarm_id,"",false,httpgw_cipm,false,activate,chunksize);
         }
         else {
-            td = swift::LiveOpen(filename,swarm_id,"",httpgw_cipm,httpgw_livesource_disc_wnd,chunksize);
+            td = swift::LiveOpen(filename,swarm_id,"",srcaddr,httpgw_cipm,httpgw_livesource_disc_wnd,chunksize);
         }
 
         // Arno, 2011-12-20: Only on new transfers, otherwise assume that CMD GW

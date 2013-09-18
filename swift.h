@@ -647,7 +647,7 @@ typedef std::vector<Address>	peeraddrs_t;
 	LiveTransfer(std::string filename, KeyPair &keypair, std::string checkpoint_filename, popt_cont_int_prot_t cipm, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
 	/** A constructor for live client. */
-	LiveTransfer(std::string filename, SwarmID &swarmid, popt_cont_int_prot_t cipm, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+	LiveTransfer(std::string filename, SwarmID &swarmid, Address &srcaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
         /**  Close everything. */
         ~LiveTransfer();
@@ -715,6 +715,9 @@ typedef std::vector<Address>	peeraddrs_t;
         /** Source: returns current last_chunkid_ as bin */
         bin_t 		GetSourceCurrentPos();
 
+        /** Client: return source address */
+        Address		GetSourceAddress() { return srcaddr_; }
+
       protected:
         /**    Binmap of own chunk availability, when not POPT_CONT_INT_PROT_UNIFIED_MERKLE (so _NONE or _SIGNALL) */
         binmap_t        ack_out_;
@@ -745,6 +748,8 @@ typedef std::vector<Address>	peeraddrs_t;
          * being in possession to others */
         bin_t	    checkpoint_bin_;
 
+        /** Client: Source address for chunk picker and protocol optimization */
+        Address		srcaddr_;
 
         /** Arno: global list of LiveTransfers, which are not managed via SwarmManager */
         static std::vector<LiveTransfer*> liveswarms;
@@ -795,7 +800,7 @@ typedef std::vector<Address>	peeraddrs_t;
     class Channel {
 
       public:
-        Channel( ContentTransfer* transfer, int socket=INVALID_SOCKET, Address peer=Address(), bool peerissource=false);
+        Channel( ContentTransfer* transfer, int socket=INVALID_SOCKET, Address peer=Address());
         ~Channel();
 
         typedef enum {
@@ -953,7 +958,7 @@ typedef std::vector<Address>	peeraddrs_t;
         // LIVE
         /** Arno: Called when source generates chunk. */
         void        LiveSend();
-        bool        PeerIsSource() { return peer_is_source_; }
+        bool        PeerIsSource();
         tint	    GetLastRecvTime() { return last_recv_time_; }
 
         void 	    CloseOnError();
@@ -1060,9 +1065,6 @@ typedef std::vector<Address>	peeraddrs_t;
         Address     recv_peer_;
 
         bool        direct_sending_;
-
-        //LIVE
-        bool        peer_is_source_;
 
         // PPSP
         /** Handshake I sent to peer. swarmid not set. */
@@ -1345,7 +1347,7 @@ typedef std::vector<Address>	peeraddrs_t;
     /** To add chunks to a live stream as source */
     int     LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte);
     /** To open a live stream as peer */
-    int     LiveOpen(std::string filename, SwarmID &swarmid, std::string trackerurl, popt_cont_int_prot_t cipm, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     LiveOpen(std::string filename, SwarmID &swarmid, std::string trackerurl, Address &srcaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
     /** Register a callback for when the download of another pow(2,agg) chunks
         is finished. So agg = 0 = 2^0 = 1, means every chunk. */

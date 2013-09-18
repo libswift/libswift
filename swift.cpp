@@ -82,8 +82,8 @@ void usage(void)
 
 }
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
-int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
-int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate);
+int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
+int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate);
 int OpenSwiftDirectory(std::string dirname, std::string trackerurl, bool force_check_diskvshash, uint32_t chunk_size, bool activate);
 // SIGNPEAKTODO replace swarmid with generic swarm ID
 int PrintURL(int td,std::string trackerurl,uint32_t chunk_size,std::string urlfilename);
@@ -182,7 +182,7 @@ int utf8main (int argc, char** argv)
         {"cipm",required_argument, 0, 'S'}, // PPSP
         {"lsa",required_argument, 0, 'a'}, // PPSP
         {"ldw",required_argument, 0, 'W'}, // PPSP
-
+        {"ia",required_argument, 0, 'I'}, // BTTRACK
         {0, 0, 0, 0}
     };
 
@@ -194,6 +194,7 @@ int utf8main (int argc, char** argv)
     Address statsaddr;
     Address cmdaddr;
     Address optaddr;
+    Address srcaddr;
     tint wait_time = 0;
     double maxspeed[2] = {DBL_MAX,DBL_MAX};
     tint zerostimeout = TINT_NEVER;
@@ -204,7 +205,7 @@ int utf8main (int argc, char** argv)
 
     std::string optargstr;
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:w:BNHmM:e:r:ji:kC:1:2:3:T:GW:P:K:S:a:", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:w:BNHmM:e:r:ji:kC:1:2:3:T:GW:P:K:S:a:I:", long_options, 0)) ) {
         switch (c) {
             case 'h':
         	optargstr = optarg;
@@ -392,6 +393,11 @@ int utf8main (int argc, char** argv)
         	else
         	    quit("Live signature algorithm must be 5, 13 or 14")
         	break;
+            case 'I':
+                srcaddr = Address(optarg);
+                if (srcaddr==Address())
+                    quit("address must be hostname:port, ip:port or just port\n");
+                break;
             case 'T': // ZEROSTATE
                 double t=0.0;
                 n = sscanf(optarg,"%lf",&t);
@@ -502,7 +508,7 @@ int utf8main (int argc, char** argv)
             if (filename != "" || !(swarmid == SwarmID::NOSWARMID)) {
 
                 // Single file
-                ret = HandleSwiftSwarm(filename,swarmid,trackerurl,printurl,livestream,urlfilename,maxspeed);
+                ret = HandleSwiftSwarm(filename,swarmid,trackerurl,srcaddr,printurl,livestream,urlfilename,maxspeed);
             }
             else if (scan_dirname != "")
             {
@@ -529,7 +535,7 @@ int utf8main (int argc, char** argv)
                 quit("Cannot generate multi-file spec")
             else
                 // Calc roothash
-                ret = HandleSwiftSwarm(filename,swarmid,trackerurl,printurl,false,urlfilename,maxspeed);
+                ret = HandleSwiftSwarm(filename,swarmid,trackerurl,srcaddr,printurl,false,urlfilename,maxspeed);
         }
 
         // For testing
@@ -602,14 +608,14 @@ int utf8main (int argc, char** argv)
 }
 
 
-int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, bool printurl, bool livestream, std::string urlfilename, double *maxspeed)
+int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed)
 {
     if (!(swarmid == SwarmID::NOSWARMID) && filename == "")
     {
 	filename = swarmid.tofilename();
     }
 
-    single_td = OpenSwiftSwarm(filename,swarmid,trackerurl,false,chunk_size,livestream,true); //activate always
+    single_td = OpenSwiftSwarm(filename,swarmid,trackerurl,srcaddr,false,chunk_size,livestream,true); //activate always
     if (single_td < 0)
         quit("swift: cannot open swarm with %s",filename.c_str());
     if (printurl)
@@ -639,7 +645,7 @@ int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string tracker
 }
 
 
-int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate)
+int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate)
 {
     if (!quiet)
 	fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
@@ -652,7 +658,7 @@ int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerur
     if (!livestream)
 	td = swift::Open(filename,swarmid,trackerurl,force_check_diskvshash,swarm_cipm,false,activate,chunk_size);
     else
-	td = swift::LiveOpen(filename,swarmid,trackerurl,swarm_cipm,livesource_disc_wnd,chunk_size);
+	td = swift::LiveOpen(filename,swarmid,trackerurl,srcaddr,swarm_cipm,livesource_disc_wnd,chunk_size);
     return td;
 }
 
@@ -672,7 +678,7 @@ int OpenSwiftDirectory(std::string dirname, std::string trackerurl, bool force_c
             path.append(FILE_SEP);
             path.append(de->filename_);
             SwarmID swarmid = SwarmID::NOSWARMID;
-            int td = OpenSwiftSwarm(path,swarmid,trackerurl,force_check_diskvshash,chunk_size,false,activate);
+            int td = OpenSwiftSwarm(path,swarmid,trackerurl,Address(),force_check_diskvshash,chunk_size,false,activate);
             if (td >= 0) // Support case where dir of content has not been pre-hashchecked and checkpointed
                 Checkpoint(td);
         }

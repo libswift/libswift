@@ -862,16 +862,16 @@ int swift::LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte)
 }
 
 
-int swift::LiveOpen(std::string filename, SwarmID &swarmid, std::string trackerurl, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size)
+int swift::LiveOpen(std::string filename, SwarmID &swarmid, std::string trackerurl, Address &srcaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size)
 {
     if (api_debug)
-	fprintf(stderr,"swift::LiveOpen %s hash %s addr %s cipm %u ldw %llu cs %u\n", filename.c_str(), swarmid.hex().c_str(), trackerurl.c_str(), cipm, disc_wnd, chunk_size );
+	fprintf(stderr,"swift::LiveOpen %s hash %s track %s src %s cipm %u ldw %llu cs %u\n", filename.c_str(), swarmid.hex().c_str(), trackerurl.c_str(), srcaddr.str().c_str(), cipm, disc_wnd, chunk_size );
 
     // Help user
     if (cipm == POPT_CONT_INT_PROT_MERKLE)
 	cipm = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
 
-    LiveTransfer *lt = new LiveTransfer(filename,swarmid,cipm,disc_wnd,chunk_size);
+    LiveTransfer *lt = new LiveTransfer(filename,swarmid,srcaddr,cipm,disc_wnd,chunk_size);
 
     // initiate tracker connections
     // SWIFTPROC
