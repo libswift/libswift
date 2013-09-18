@@ -13,6 +13,7 @@
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
 #include <event2/listener.h>
+#include <event2/http.h>
 
 
 using namespace swift;
@@ -730,33 +731,43 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         std::string swarmidhexstr = puri["swarmidhex"];
         std::string mfstr = puri["filename"];
         std::string chunksizestr = puri["cs"];
-        std::string durationstr = puri["cd"];
+        std::string durstr = puri["cd"];
         std::string iastr = puri["ia"];
+        std::string bttrackerurl = puri["bt"];
 
-        if (swarmidhexstr.length()!=40) {
-            dprintf("cmd: START: roothash too short %u\n", swarmidhexstr.length() );
-            return ERROR_BAD_ARG;
-        }
+        // Handle LIVE
+        if (swarmidhexstr.length() > Sha1Hash::SIZE*2)
+            durstr = "-1";
+
         uint32_t chunksize=SWIFT_DEFAULT_CHUNK_SIZE;
         if (chunksizestr.length() > 0)
             std::istringstream(chunksizestr) >> chunksize;
-        int duration=0;
-        if (durationstr.length() > 0)
-            std::istringstream(durationstr) >> duration;
 
-        dprintf("cmd: START: %s with tracker %s chunksize %i duration %d\n",swarmidhexstr.c_str(),trackerstr.c_str(),chunksize,duration);
+        dprintf("cmd: START: %s with tracker %s chunksize %i duration %s\n",swarmidhexstr.c_str(),trackerstr.c_str(),chunksize,durstr.c_str());
 
-        if (trackerstr == "")
+        // Handle tracker
+        // BT tracker via URL param
+        std::string trackerurl = "";
+        if (trackerstr == "" && bttrackerurl == "")
         {
-            dprintf("cmd: START: tracker address must be hostname:port, ip:port or just port\n");
+            dprintf("cmd: START: tracker address must be URL server as hostname:port or ip:port, or set via ?bt=\n");
             return ERROR_BAD_ARG;
         }
+        else if (bttrackerurl == "")
+        {
+            trackerurl = SWIFT_URI_SCHEME;
+            trackerurl += "://";
+            trackerurl += trackerstr;
+        }
+        else
+        {
+            // BT track. Handle possibly escaped "http:..."
+            char *decoded = evhttp_uridecode(bttrackerurl.c_str(),false,NULL);
+            trackerurl = decoded;
+            free(decoded);
+        }
 
-        // BTTRACKTODO
-        std::string trackerurl = SWIFT_URI_SCHEME;
-        trackerurl += "://";
-        trackerurl += trackerstr;
-
+        // Handle LIVE injector address
         Address srcaddr(iastr.c_str());
         if (iastr != "")
         {
@@ -768,7 +779,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         }
 
         // initiate transmission
-        SwarmID swarmid = SwarmID(swarmidhexstr);
+        SwarmID swarmid(swarmidhexstr);
 
         // Arno, 2012-06-12: Check for duplicate requests
         cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
@@ -793,7 +804,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             else
                 filename = swarmidhexstr;
 
-            if (duration != -1)
+            if (durstr != "-1")
                 td = swift::Open(filename,swarmid,trackerurl,false,cmd_gw_cipm,false,activate,chunksize);
             else
                 td = swift::LiveOpen(filename,swarmid,trackerurl,srcaddr,cmd_gw_cipm,cmd_gw_livesource_disc_wnd,chunksize);
@@ -814,7 +825,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         req->startt = usec_time();
         req->mfspecname = mfstr;
         req->playsent = false;
-        req->xcontentdur = durationstr;
+        req->xcontentdur = durstr;
 
         dprintf("%s @%i start transfer %d\n",tintstr(),req->id,req->td);
 

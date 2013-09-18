@@ -266,7 +266,13 @@ void ContentTransfer::ConnectToTracker(bool stop)
 	dprintf("%s F%d content contact tracker: failure parsing URL\n",tintstr(),td_);
 	return;
     }
-    if (evhttp_uri_get_scheme(evu) == SWIFT_URI_SCHEME)
+
+    char buf[1024+1];
+    char *uricstr = evhttp_uri_join(evu,buf,1024);
+    dprintf("%s F%d content contact tracker: Tracker is %s scheme %s\n",tintstr(),td_,uricstr, evhttp_uri_get_scheme(evu));
+
+    std::string scheme = evhttp_uri_get_scheme(evu);
+    if (scheme == SWIFT_URI_SCHEME)
     {
 	// swift tracker
 	const char *host = evhttp_uri_get_host(evu);

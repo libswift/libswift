@@ -43,8 +43,8 @@ static uint32_t HTTPGW_VOD_PROGRESS_STEP_BYTES = (256*1024); // configurable
 // Arno: Minimum amout of content to download before replying to HTTP
 static uint32_t HTTPGW_MIN_PREBUF_BYTES  = (256*1024); // configurable
 
-const char *url_query_keys[] = { "v", "cp", "hf", "ca", "ld", "ia", "cs", "cl", "cd" };
-#define NUM_URL_QUERY_KEYS 	9
+const char *url_query_keys[] = { "v", "cp", "hf", "ca", "ld", "ia", "cs", "cl", "cd", "bt", "mt" };
+#define NUM_URL_QUERY_KEYS 	11
 
 
 
@@ -808,6 +808,7 @@ bool swift::ParseURI(std::string uri,parseduri_t &map)
     //    cl = Content Length
     //    cd = Content Duration (in seconds)
     //    bt = BT tracker URL
+    //	  mt = MIME type
     //
     // Note that Live Signature Algorithm is part of the Swarm ID.
     //
@@ -844,37 +845,62 @@ bool swift::ParseURI(std::string uri,parseduri_t &map)
 	filename = path.substr(sidx+1,path.length()-sidx);
     }
 
+    // Put in map
+    map.insert(stringpair("scheme", scheme ));
+    map.insert(stringpair("server",oss.str() ));
+    map.insert(stringpair("path", path ));
+    // Derivatives
+    map.insert(stringpair("swarmidhex",swarmidhexstr));
+    map.insert(stringpair("filename",filename));
+
+    // Query, if present
     struct evkeyvalq qheaders;
     const char *querycstr = evhttp_uri_get_query(evu);
-    if (querycstr != NULL)
+    if (querycstr == NULL)
     {   
+        for (int i=0; i<NUM_URL_QUERY_KEYS; i++)
+        {
+	    const char *valcstr = "";
+	    map.insert(stringpair(std::string(url_query_keys[i]),std::string(valcstr) ));
+        }
+    }
+    else
+    {
         int ret = evhttp_parse_query_str(querycstr,&qheaders);
         if (ret < 0)
         {
 	    evhttp_uri_free(evu);
 	    return false;
         }
-    }
 
-    // Put in map
-    map.insert(stringpair("scheme", scheme ));
-    map.insert(stringpair("server",oss.str() ));
-    map.insert(stringpair("path", path ));
+        // Query: TODO multiple occurrences of same key
+        for (int i=0; i<NUM_URL_QUERY_KEYS; i++)
+        {
+	    const char *valcstr = evhttp_find_header(&qheaders,url_query_keys[i]);
+	    if (valcstr == NULL)
+	        valcstr = "";
 
-    // Derivatives
-    map.insert(stringpair("swarmidhex",swarmidhexstr));
-    map.insert(stringpair("filename",filename));
+            fprintf(stderr,"httpgw: ParseURI key %s val %s\n", url_query_keys[i], valcstr );
 
-    // Query: TODO multiple occurrences of same key
-    for (int i=0; i<NUM_URL_QUERY_KEYS; i++)
-    {
-	const char *valcstr = evhttp_find_header(&qheaders,url_query_keys[i]);
-	if (valcstr == NULL)
-	    valcstr = "";
+	    map.insert(stringpair(std::string(url_query_keys[i]),std::string(valcstr) ));
+        }
 
-        fprintf(stderr,"httpgw: ParseURI key %s val %s\n", url_query_keys[i], valcstr );
+        // Syntax check bt URL, if any
+        std::string bttrackerurl = map["bt"];
+        if (bttrackerurl != "")
+        {
+            // Handle possibly escaped "http:..."
+            char *decoded = evhttp_uridecode(bttrackerurl.c_str(),false,NULL);
+            std::string unesctrackerurl = decoded;
+            free(decoded);
 
-	map.insert(stringpair(std::string(url_query_keys[i]),std::string(valcstr) ));
+            struct evhttp_uri *evu2 = evhttp_uri_parse(unesctrackerurl.c_str());
+            if (evu == NULL)
+            {
+        	evhttp_uri_free(evu);
+        	return false;
+            }
+        }
     }
 
     evhttp_uri_free(evu);
@@ -906,7 +932,6 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     evhttp_remove_header(reqheaders,"Connection"); // Remove Connection: keep-alive
 
     // 2. Parse swift URI
-    std::string swarmidhexstr = "", mfstr="", durstr="", chunksizestr = "", iastr="";
     if (uri.length() <= 1)     {
         evhttp_send_error(evreq,400,"Path must be root hash in hex, 40 bytes.");
         dprintf("%s @%i http get: ERROR 400 Path must be root hash in hex\n",tintstr(),0 );
@@ -919,39 +944,41 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
         dprintf("%s @%i http get: ERROR 400 Path format violation\n",tintstr(),0 );
         return;
     }
+    std::string swarmidhexstr = "", mfstr="", durstr="", chunksizestr = "", iastr="", bttrackerurl="", urlmimetype="";
     swarmidhexstr = puri["swarmidhex"];
     mfstr = puri["filename"];
     durstr = puri["cd"];
     chunksizestr = puri["cs"];
     iastr = puri["ia"];
+    bttrackerurl = puri["bt"];
+    urlmimetype = puri["mt"];
 
-    // Handle LIVE
+    // Handle MIME
     std::string mimetype = "video/mp2t";
-    if (swarmidhexstr.substr(swarmidhexstr.length()-5) == ".h264")
+    if (urlmimetype != "")
     {
-	// LIVESOURCE=ANDROID
-	swarmidhexstr = swarmidhexstr.substr(0,swarmidhexstr.length()-5); // strip .h264
-	durstr = "-1";
-	mimetype = "video/h264";
+	mimetype = urlmimetype;
     }
-    else if (swarmidhexstr.length() > 40 && swarmidhexstr.substr(swarmidhexstr.length()-2) == "-1")
-    {
-	// Arno, 2012-06-15: LIVE: VLC can't take @-1 as in URL, so workaround
-        swarmidhexstr = swarmidhexstr.substr(0,swarmidhexstr.length()-3);
-        durstr = "-1";
-        mimetype = "video/mp2t";
-    }
-    else if (durstr.length() > 0 && durstr != "-1")
-    {
-	// Used in SwarmPlayer 3000
-	mimetype = "video/ogg";
-    }
-
-    dprintf("%s @%i http get: demands %s mf %s dur %s mime %s\n",tintstr(),http_gw_reqs_open+1,swarmidhexstr.c_str(),mfstr.c_str(),durstr.c_str(), mimetype.c_str() );
 
     uint32_t chunksize=httpgw_chunk_size; // default externally configured
     if (chunksizestr.length() > 0)
         std::istringstream(chunksizestr) >> chunksize;
+
+    // BT tracker via URL query param
+    std::string trackerurl = "";
+    if (bttrackerurl != "")
+    {
+        // Handle possibly escaped "http:..."
+        char *decoded = evhttp_uridecode(bttrackerurl.c_str(),false,NULL);
+        trackerurl = decoded;
+        free(decoded);
+    }
+
+    dprintf("%s @%i http get: demands %s mf %s dur %s track %s mime %s\n",tintstr(),http_gw_reqs_open+1,swarmidhexstr.c_str(),mfstr.c_str(),durstr.c_str(), trackerurl.c_str(), mimetype.c_str() );
+
+    // Handle LIVE
+    if (swarmidhexstr.length() > Sha1Hash::SIZE*2)
+	durstr = "-1";
 
     Address srcaddr(iastr.c_str());
     if (iastr != "")
@@ -963,7 +990,6 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 	    return;
 	}
     }
-
 
     // 3. Check for concurrent requests, currently not supported.
     SwarmID swarm_id = SwarmID(swarmidhexstr);
@@ -991,10 +1017,10 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     if (td == -1) {
         // LIVE
         if (durstr != "-1") {
-            td = swift::Open(filename,swarm_id,"",false,httpgw_cipm,false,activate,chunksize);
+            td = swift::Open(filename,swarm_id,trackerurl,false,httpgw_cipm,false,activate,chunksize);
         }
         else {
-            td = swift::LiveOpen(filename,swarm_id,"",srcaddr,httpgw_cipm,httpgw_livesource_disc_wnd,chunksize);
+            td = swift::LiveOpen(filename,swarm_id,trackerurl,srcaddr,httpgw_cipm,httpgw_livesource_disc_wnd,chunksize);
         }
 
         // Arno, 2011-12-20: Only on new transfers, otherwise assume that CMD GW

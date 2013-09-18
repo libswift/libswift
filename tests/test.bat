@@ -7,7 +7,7 @@ binstest3.exe
 binstest4.exe
 bttracktest.exe
 chunkaddrtest.exe
-connecttest.exe
+REM connecttest.exe
 dgramtest.exe
 freemap.exe
 hashtest.exe
@@ -15,3 +15,18 @@ livepptest.exe
 livesigtest.exe
 livetreetest.exe
 transfertest.exe
+
+activatetest.py
+cmdgwtest.py
+havetest.py
+httpmftest.py
+livetest-umt1.py
+livetest.py
+livetest2.py
+pexreqtest.py
+pexrestest.py
+requesttest.py
+statsgwtest.py
+test_tunnel.py
+vodmftest.py
+vodtest.py

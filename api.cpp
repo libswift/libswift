@@ -15,7 +15,7 @@ using namespace std;
 using namespace swift;
 
 
-#define api_debug	false
+#define api_debug	true
 
 
 /*
