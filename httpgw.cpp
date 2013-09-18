@@ -43,6 +43,10 @@ static uint32_t HTTPGW_VOD_PROGRESS_STEP_BYTES = (256*1024); // configurable
 // Arno: Minimum amout of content to download before replying to HTTP
 static uint32_t HTTPGW_MIN_PREBUF_BYTES  = (256*1024); // configurable
 
+const char *url_query_keys[] = { "v", "cp", "hf", "ca", "ld", "ia", "cs", "cl", "cd" };
+#define NUM_URL_QUERY_KEYS 	9
+
+
 
 #define HTTPGW_MAX_REQUEST 128
 
@@ -789,90 +793,91 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
 bool swift::ParseURI(std::string uri,parseduri_t &map)
 {
     //
-    // Format: tswift://tracker:port/roothash-in-hex/filename$chunksize@duration
-    // where the server part, filename, chunksize and duration may be optional
+    // Arno, 2013-09-11: New Format:
+    //   tswift://tracker:port/swarmid-in-hex/filename?k=v&k=v
+    // where the server part, filename may be optional. Defined keys
+    // (see PPSP protocol options)
+    //    v = Version
+    //    cp = Content Integrity Protection Method
+    //    hf = Merkle Tree Hash Function
+    //	  ca = Chunk Addressing Method
+    //    ld = Live Discard Window (hint, normally per peer)
     //
+    // Additional:
+    //    cs = Chunk Size
+    //    cl = Content Length
+    //    cd = Content Duration (in seconds)
+    //    bt = BT tracker URL
+    //
+    // Note that Live Signature Algorithm is part of the Swarm ID.
+    //
+    // Returns map with "scheme", "server", "path", "swarmidhex",
+    // "filename", and an entry for each key,value pair in the query part.
+
+    struct evhttp_uri *evu = evhttp_uri_parse(uri.c_str());
+    if (evu == NULL)
+	return false;
+
     std::string scheme="";
-    std::string server="";
-    std::string path="";
-    if (uri.substr(0,((std::string)SWIFT_URI_SCHEME).length()) == SWIFT_URI_SCHEME)
+    const char *schemecstr = evhttp_uri_get_scheme(evu);
+    if (schemecstr != NULL)
+        scheme = schemecstr;
+
+    std::ostringstream oss;
+    const char *hostcstr = evhttp_uri_get_host(evu);
+    if (hostcstr != NULL)
     {
-        // scheme present
-        scheme = SWIFT_URI_SCHEME;
-        int sidx = uri.find("//");
-        if (sidx != std::string::npos)
-        {
-            // server part present
-            int eidx = uri.find("/",sidx+2);
-            server = uri.substr(sidx+2,eidx-(sidx+2));
-            path = uri.substr(eidx);
-        }
-        else
-            path = uri.substr(((std::string)SWIFT_URI_SCHEME).length()+1);
+        oss << hostcstr;
+        oss << ":" << evhttp_uri_get_port(evu);
     }
-    else
-        path = uri;
 
-
+    std::string path = evhttp_uri_get_path(evu);
     std::string swarmidhexstr="";
     std::string filename="";
-    std::string modstr="";
-
     int sidx = path.find("/",1);
-    int midx = path.find("$",1);
-    if (midx == std::string::npos)
-        midx = path.find("@",1);
-    if (sidx == std::string::npos && midx == std::string::npos) {
-        // No multi-file, no modifiers
-        swarmidhexstr = path.substr(1,path.length());
-    } else if (sidx != std::string::npos && midx == std::string::npos) {
-        // multi-file, no modifiers
-        swarmidhexstr = path.substr(1,sidx-1);
-        filename = path.substr(sidx+1,path.length()-sidx);
-    } else if (sidx == std::string::npos && midx != std::string::npos) {
-        // No multi-file, modifiers
-        swarmidhexstr = path.substr(1,midx-1);
-        modstr = path.substr(midx,path.length()-midx);
-    } else {
-        // multi-file, modifiers
-        swarmidhexstr = path.substr(1,sidx-1);
-        filename = path.substr(sidx+1,midx-(sidx+1));
-        modstr = path.substr(midx,path.length()-midx);
-    }
-
-
-    std::string durstr="";
-    std::string chunkstr="";
-    sidx = modstr.find("@");
     if (sidx == std::string::npos)
-    {
-        durstr = "";
-        if (modstr.length() > 1)
-            chunkstr = modstr.substr(1);
-    }
+	swarmidhexstr = path.substr(1,path.length());
     else
     {
-        if (sidx == 0)
+	// multi-file
+	swarmidhexstr = path.substr(1,sidx-1);
+	filename = path.substr(sidx+1,path.length()-sidx);
+    }
+
+    struct evkeyvalq qheaders;
+    const char *querycstr = evhttp_uri_get_query(evu);
+    if (querycstr != NULL)
+    {   
+        int ret = evhttp_parse_query_str(querycstr,&qheaders);
+        if (ret < 0)
         {
-            // Only durstr
-            chunkstr = "";
-            durstr = modstr.substr(sidx+1);
-        }
-        else
-        {
-            chunkstr = modstr.substr(1,sidx-1);
-            durstr = modstr.substr(sidx+1);
+	    evhttp_uri_free(evu);
+	    return false;
         }
     }
 
-    map.insert(stringpair("scheme",scheme));
-    map.insert(stringpair("server",server));
-    map.insert(stringpair("path",path));
+    // Put in map
+    map.insert(stringpair("scheme", scheme ));
+    map.insert(stringpair("server",oss.str() ));
+    map.insert(stringpair("path", path ));
+
     // Derivatives
     map.insert(stringpair("swarmidhex",swarmidhexstr));
     map.insert(stringpair("filename",filename));
-    map.insert(stringpair("chunksizestr",chunkstr));
-    map.insert(stringpair("durationstr",durstr));
+
+    // Query: TODO multiple occurrences of same key
+    for (int i=0; i<NUM_URL_QUERY_KEYS; i++)
+    {
+	const char *valcstr = evhttp_find_header(&qheaders,url_query_keys[i]);
+	if (valcstr == NULL)
+	    valcstr = "";
+
+        fprintf(stderr,"httpgw: ParseURI key %s val %s\n", url_query_keys[i], valcstr );
+
+	map.insert(stringpair(std::string(url_query_keys[i]),std::string(valcstr) ));
+    }
+
+    evhttp_uri_free(evu);
 
     return true;
 }
@@ -910,14 +915,14 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     parseduri_t puri;
     if (!swift::ParseURI(uri,puri))
     {
-        evhttp_send_error(evreq,400,"Path format is /roothash-in-hex/filename$chunksize@duration");
+        evhttp_send_error(evreq,400,"Path format is /swarmid-in-hex/filename?k1=v1&k2=v2");
         dprintf("%s @%i http get: ERROR 400 Path format violation\n",tintstr(),0 );
         return;
     }
     swarmidhexstr = puri["swarmidhex"];
     mfstr = puri["filename"];
-    durstr = puri["durationstr"];
-    chunksizestr = puri["chunksizestr"];
+    durstr = puri["cd"];
+    chunksizestr = puri["cs"];
 
     // Handle LIVE
     std::string mimetype = "video/mp2t";

@@ -729,8 +729,8 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         std::string trackerstr = puri["server"];
         std::string swarmidhexstr = puri["swarmidhex"];
         std::string mfstr = puri["filename"];
-        std::string chunksizestr = puri["chunksizestr"];
-        std::string durationstr = puri["durationstr"];
+        std::string chunksizestr = puri["cs"];
+        std::string durationstr = puri["cd"];
 
         if (swarmidhexstr.length()!=40) {
             dprintf("cmd: START: roothash too short %u\n", swarmidhexstr.length() );
