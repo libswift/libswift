@@ -1,7 +1,17 @@
+addrtest.exe
+apitest.exe
 bin64test.exe
+binfragtest.exe
 binstest2.exe
+binstest3.exe
+binstest4.exe
+bttracktest.exe
+chunkaddrtest.exe
 connecttest.exe
 dgramtest.exe
 freemap.exe
 hashtest.exe
+livepptest.exe
+livesigtest.exe
+livetreetest.exe
 transfertest.exe

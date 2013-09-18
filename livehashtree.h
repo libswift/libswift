@@ -175,6 +175,8 @@ class LiveHashTree: public HashTree
      /** Returns size of signature on the wire */
      uint16_t       GetSigSizeInBytes();
 
+     /** For Testing */
+     KeyPair *	    GetKeyPair() { return &keypair_; }
 
      // Sanity checks
      void sane_tree();

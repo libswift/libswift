@@ -386,7 +386,7 @@ typedef std::vector<Address>	peeraddrs_t;
 	}
 	~Handshake() { ReleaseSwarmID(); }
 	void SetSwarmID(SwarmID &swarmid) { swarm_id_ptr_ = new SwarmID(swarmid); }
-	const SwarmID &GetSwarmID() { return (swarm_id_ptr_ == NULL) ? SwarmID::NOSWARMID : *swarm_id_ptr_; }
+	SwarmID GetSwarmID() { return (swarm_id_ptr_ == NULL) ? SwarmID::NOSWARMID : *swarm_id_ptr_; }
 	void ReleaseSwarmID() { if (swarm_id_ptr_ != NULL) delete swarm_id_ptr_; swarm_id_ptr_ = NULL; }
 	bool IsSupported()
 	{
@@ -483,7 +483,7 @@ typedef std::vector<Address>	peeraddrs_t;
 
         // Overridable methods
         /** Returns the global ID for this transfer */
-        virtual const SwarmID&     swarm_id() = 0;
+        virtual SwarmID&     swarm_id() = 0;
         /** The binmap pointer for data already retrieved and checked. */
         virtual binmap_t *  ack_out() = 0;
         /** Returns the number of bytes in a chunk for this transfer */
@@ -611,7 +611,7 @@ typedef std::vector<Address>	peeraddrs_t;
 
         // ContentTransfer overrides
 
-        const SwarmID& swarm_id() { swarm_id_.SetRootHash(hashtree_->root_hash()); return swarm_id_; }
+        SwarmID& swarm_id() { swarm_id_.SetRootHash(hashtree_->root_hash()); return swarm_id_; }
         /** The binmap pointer for data already retrieved and checked. */
         binmap_t *      ack_out ()  { return hashtree_->ack_out(); }
         /** Piece picking strategy used by this transfer. */
@@ -654,7 +654,7 @@ typedef std::vector<Address>	peeraddrs_t;
 
         // ContentTransfer overrides
 
-        const SwarmID&  swarm_id() { return swarm_id_; }
+        SwarmID&  swarm_id() { return swarm_id_; }
         /** The binmap for data already retrieved and checked. */
         binmap_t *      ack_out ();
         /** Returns the number of bytes in a chunk for this transmission */
@@ -1301,7 +1301,7 @@ typedef std::vector<Address>	peeraddrs_t;
         no longer works on restarts, unless checkpoints are used.
         */
         // TODO: replace check_netwvshash with full set of protocol options
-    int     Open( std::string filename, SwarmID& swarmid,std::string trackerurl="", bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, bool zerostate=false, bool activate=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     Open( std::string filename, SwarmID& swarmid, std::string trackerurl="", bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, bool zerostate=false, bool activate=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** Get the root hash for the transmission. */
     SwarmID GetSwarmID( int file);
     /** Close a file and a transmission, remove state or content if desired. */

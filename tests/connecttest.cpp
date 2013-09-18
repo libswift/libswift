@@ -41,11 +41,12 @@ TEST(Connection,CwndTest) {
     int sock1 = swift::Listen(Address("0.0.0.0",7001));
     ASSERT_TRUE(sock1>=0);
 
-    int file = swift::Open("test_file0.dat");
+    SwarmID noswarmid = SwarmID::NOSWARMID;
+    int file = swift::Open("test_file0.dat",noswarmid);
     FileTransfer fileobj = FileTransfer(file, "test_file0.dat");
     //FileTransfer::instance++;
 
-    swift::SetTracker(Address("127.0.0.1",7001));
+    swift::SetTracker("tswift://127.0.0.1:7001");
 
     copy = swift::Open("test_file0-copy.dat",fileobj.swarm_id());
 

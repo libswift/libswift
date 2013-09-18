@@ -7,7 +7,9 @@
  */
 #include <gtest/gtest.h>
 #include "swift.h"
+#include "livesig.h"
 
+#include <openssl/rsa.h>
 
 using namespace swift;
 
@@ -105,11 +107,11 @@ TEST(TLiveSig,RSASHA1_SwarmLiveID) {
     KeyPair *kp = KeyPair::Generate(POPT_LIVE_SIG_ALG_RSASHA1,keysize);
     ASSERT_FALSE(kp == NULL);
 
-    SwarmLiveID *id = kp->GetSwarmLiveID();
+    SwarmPubKey *spubkey = kp->GetSwarmPubKey();
     int rsa_f4_exp_size_in_bytes = 3;
-    ASSERT_EQ(1+1+rsa_f4_exp_size_in_bytes+keysize/8,id->length());
+    ASSERT_EQ(1+1+rsa_f4_exp_size_in_bytes+keysize/8,spubkey->length());
 
-    KeyPair *gotkp = id->GetPublicKey();
+    KeyPair *gotkp = spubkey->GetPublicKeyPair();
 
     // Compares public key components, gotkp only has pub.
     int ret = EVP_PKEY_cmp(kp->GetEVP(),gotkp->GetEVP());

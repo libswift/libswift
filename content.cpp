@@ -251,7 +251,16 @@ void ContentTransfer::ConnectToTracker(bool stop)
     if (trackerurl_ != "")
 	evu = evhttp_uri_parse(trackerurl_.c_str());
     else
+    {
+	if (Channel::trackerurl == "")
+	{
+	    // Testing
+	    dprintf("%s F%d content contact tracker: No tracker defined\n",tintstr(),td_);
+	    return;
+	}
 	evu = evhttp_uri_parse(Channel::trackerurl.c_str());
+    }
+
     if (evu == NULL)
     {
 	dprintf("%s F%d content contact tracker: failure parsing URL\n",tintstr(),td_);

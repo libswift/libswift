@@ -49,9 +49,10 @@ TEST(TransferTest,TransferFile) {
     
     // now, submit a new file
 
-    int file = swift::Open(BTF);
+    SwarmID noswarmid = SwarmID::NOSWARMID;
+    int td = swift::Open(BTF,noswarmid);
     //Arno, 2013-01-07: Don't know how much longer using API this way will work
-    FileTransfer* seed_transfer = new FileTransfer(file, BTF);
+    FileTransfer* seed_transfer = new FileTransfer(td, BTF);
     HashTree* seed = seed_transfer->hashtree();
     EXPECT_TRUE(A==seed->hash(bin_t(0,0)));
     EXPECT_TRUE(E==seed->hash(bin_t(0,4)));
