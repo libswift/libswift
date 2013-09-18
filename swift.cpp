@@ -62,6 +62,7 @@ void usage(void)
     fprintf(stderr,"  -H, --checkpoint\tcreate checkpoint of file when complete for fast restart\n");
     fprintf(stderr,"  -z, --chunksize\tchunk size in bytes (default: %d)\n", SWIFT_DEFAULT_CHUNK_SIZE);
     fprintf(stderr,"  -m, --printurl\tcompose URL from tracker, file and chunksize\n");
+    fprintf(stderr,"  -r, --urlfile\tfile to write URL to for --printurl\n");
     fprintf(stderr,"  -M, --multifile\tcreate multi-file spec with given files\n");
     fprintf(stderr,"  -e, --zerosdir\tdirectory with checkpointed content to serve from with zero state\n");
     fprintf(stderr,"  -i, --source\tlive source input (URL or filename or - for stdin)\n");
@@ -564,13 +565,8 @@ int utf8main (int argc, char** argv)
         exitoncomplete = true;
     }
 
-    fprintf(stderr,"swift: wait: END AT %lld\n", wait_time );
-
     // End after wait_time
     if ((long)wait_time > 0) {
-
-	fprintf(stderr,"swift: wait: REAL END AT %lld\n", wait_time );
-
         evtimer_assign(&evend, Channel::evbase, EndCallback, NULL);
         evtimer_add(&evend, tint2tv(wait_time));
     }

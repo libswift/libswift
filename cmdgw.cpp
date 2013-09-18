@@ -89,7 +89,7 @@ uint64_t cmd_gw_livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
 popt_cont_int_prot_t cmd_gw_cipm=POPT_CONT_INT_PROT_MERKLE;
 
 
-#define cmd_gw_debug	false
+#define cmd_gw_debug	true
 
 tint cmd_gw_last_open=0;
 
@@ -750,10 +750,15 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         std::string trackerurl = "";
         if (trackerstr == "" && bttrackerurl == "")
         {
-            dprintf("cmd: START: tracker address must be URL server as hostname:port or ip:port, or set via ?bt=\n");
-            return ERROR_BAD_ARG;
+            trackerstr = Channel::trackerurl;
+            if (trackerstr == "")
+            {
+                dprintf("cmd: START: tracker address must be URL server as hostname:port or ip:port, or set via ?bt=\n");
+                return ERROR_BAD_ARG;
+            }
         }
-        else if (bttrackerurl == "")
+        // not else
+        if (bttrackerurl == "")
         {
             trackerurl = SWIFT_URI_SCHEME;
             trackerurl += "://";
@@ -766,6 +771,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             trackerurl = decoded;
             free(decoded);
         }
+
 
         // Handle LIVE injector address
         Address srcaddr(iastr.c_str());

@@ -8,6 +8,7 @@
 import sys
 import socket
 import struct
+import os
 
 import binascii
 
@@ -251,6 +252,8 @@ POPT_LSA_ECDSAP256SHA256 = '\x0d'
 POPT_LSA_ECDSAP384SHA384 = '\x0e'
 POPT_LSA_PRIVATEDNS = '\xfd'     
 
+POPT_LDW_ALL_CHUNK32 = '\xff\xff\xff\xff'
+
 # SIGNPEAKTODO
 DUMMY_DEFAULT_SIG_LENGTH  = 20
 
@@ -332,6 +335,8 @@ class HandshakeMessage(Encodable):
                 chain.append(self.msgdata)
             chain.append(POPT_END_TYPE)
         return "".join(chain)
+        #print >>sys.stderr,"HS ON THE WIRE",binascii.hexlify(ret)
+        #return ret
     
     def from_bytes(t,bytes,off):
         off += 1
@@ -559,21 +564,30 @@ class PexReqMessage(Encodable):
 
 
 class SignedIntegrityMessage(Encodable):
-    def __init__(self,t,chunkspec,intbytes):
+    def __init__(self,t,chunkspec,timestamp,intbytes):
         self.chunkspec = chunkspec
+        self.timestamp = timestamp
         self.intbytes  = intbytes
     def to_bytes(self):
-        chain = [SignedIntegrity.get_id(),self.chunkspec.to_bytes(),self.intbytes]
+        chain = [SignedIntegrity.get_id(),self.chunkspec.to_bytes(),self.timestamp,self.intbytes]
         return "".join(chain)
     def from_bytes(t,bytes,off):
         off += 1
         cabytes = bytes[off:off+t.get_chunkspec().get_bytes_length()]
         off += len(cabytes)
         chunkspec = t.chunkspec.from_bytes(cabytes)
-        # if t.lsa: siglen =  SIGNPEAKTODO 
-        intbytes = bytes[off:off+DUMMY_DEFAULT_SIG_LENGTH]
+        timestamp = bytes[off:off+8]
+        off += 8
+        if t.lsa == POPT_LSA_ECDSAP256SHA256: 
+            siglen = 64  
+        elif t.lsa == POPT_LSA_ECDSAP384SHA384: 
+            siglen = 96  
+        else:
+            print >>sys.stderr,"swiftconn: SignedIntegrityMessage: LSA not implemented",ord(t.lsa)
+            os._exit(-1)
+        intbytes = bytes[off:off+siglen]
         off += len(intbytes)
-        return [SignedIntegrityMessage(t,chunkspec,intbytes),off]
+        return [SignedIntegrityMessage(t,chunkspec,timestamp,intbytes),off]
     from_bytes = staticmethod(from_bytes)
     def get_bytes_length():
         return None # variable
@@ -825,7 +839,7 @@ class Datagram(Encodable):
             return None
             
         msgid = self.data[self.off:self.off+len(MSG_ID_HANDSHAKE)]
-        #print >>sys.stderr,"dgram: get_message: GOT msgid",`msgid`
+        print >>sys.stderr,"dgram: get_message: GOT msgid",`msgid`,"off",self.off
         
         if msgid == MSG_ID_HANDSHAKE:
             [msg,self.off] = HandshakeMessage.from_bytes(self.t,self.data,self.off)
@@ -856,7 +870,7 @@ class Datagram(Encodable):
         elif msgid == MSG_ID_PEX_REScert:
             [msg,self.off] = PexRescertMessage.from_bytes(self.t,self.data,self.off)
         else:
-            print >>sys.stderr,"dgram: get_message: unknown msgid",`msgid`
+            print >>sys.stderr,"dgram: get_message: unknown msgid",`msgid`,"off",self.off,"bytes left",len(self.data)-self.off
             msg = None
         return msg
     

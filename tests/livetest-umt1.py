@@ -34,7 +34,7 @@ def chunkspeccontain(big,small):
 
 class TestLiveSourceUMTFramework(TestAsServer):
     """
-    Framework for testing if live source's output is sane: peaks and HAVEs 
+    Framework for testing if live source's output is sane: munros and HAVEs 
     span a consecutive range (assuming no losses)
     """
 
@@ -53,14 +53,28 @@ class TestLiveSourceUMTFramework(TestAsServer):
         self.livesourceinput = "liveinput.dat"
         self.filename = "storage.dat"
 
-        liveswarmidhex = "e5a12c7ad2d8fab33c699d1e198d66f79fa610c3"
-        self.liveswarmid = binascii.unhexlify(liveswarmidhex)
-        
+        self.urlfilename = "swarm.url"
+        self.livesigalg = ord(POPT_LSA_ECDSAP256SHA256)
+
         self.debug = True
         
         
     def setUpPostSession(self):
         TestAsServer.setUpPostSession(self)
+
+        f = open(self.urlfilename,"rb")
+        swarmurl = f.read()
+        f.close()
+        swarmurl = swarmurl.strip()
+        idx = swarmurl.find("/")
+        if idx == -1:
+            self.assertFalse(True)
+        else:
+            liveswarmidhex = swarmurl[idx+1:]
+            print >>sys.stderr,"test: SwarmID <"+liveswarmidhex+">"
+            self.liveswarmid = binascii.unhexlify(liveswarmidhex)
+        
+
 
     def tearDown(self):
         TestAsServer.tearDown(self)
@@ -89,10 +103,10 @@ class TestLiveSourceUMTTests: # subclassed below
         time.sleep(.5)
         
         print >>sys.stdout,"test: Connect as peer"
-        s = SwiftConnection(myaddr,hisaddr,self.liveswarmid,cipm=POPT_CIPM_UNIFIED_MERKLE,lsa=POPT_LSA_PRIVATEDNS)
+        s = SwiftConnection(myaddr,hisaddr,self.liveswarmid,cipm=POPT_CIPM_UNIFIED_MERKLE,lsa=chr(self.livesigalg),cam=CHUNK_SPEC_ID_CHUNK32,ldw=POPT_LDW_ALL_CHUNK32)
 
         hashlist = []
-        peaklist = []
+        munrolist = []
         havelist = []
         recvflag=True        
         kacount = 0
@@ -112,41 +126,41 @@ class TestLiveSourceUMTTests: # subclassed below
                     
                 elif msg.get_id() == MSG_ID_INTEGRITY:
                     newhash = (msg.chunkspec.s,msg.chunkspec.e)
-                    hashlist = self.update_chunklist(newhash, hashlist)
+                    hashlist = self.update_chunklist(newhash, hashlist,consec=False)
                     print >>sys.stdout,"test: hashlist",hashlist
                         
                 elif msg.get_id() == MSG_ID_SIGNED_INTEGRITY:
-                    newpeak = (msg.chunkspec.s,msg.chunkspec.e)
-                    peaklist = self.update_chunklist(newpeak, peaklist)
-                    print >>sys.stdout,"test: peaklist",peaklist
+                    newmunro = (msg.chunkspec.s,msg.chunkspec.e)
+                    munrolist = self.update_chunklist(newmunro, munrolist,consec=False)
+                    print >>sys.stdout,"test: munrolist",munrolist
                     
                     # Each SIGNED_INTEGRITY must be preceded by its INTEGRITY message
-                    self.assertEquals(hashlist,peaklist)
+                    self.assertEquals(hashlist,munrolist)
+
+                    # All munros must be covered by HAVE                    
+                    for munro in munrolist:
+                        found = False
+                        for have in havelist:
+                            if chunkspeccontain(have,munro) or (munro == have):
+                                found = True
+                                break
+                        if not found:
+                            x = `havelist`
+                            print >>sys.stderr,"test: UNCOVERED MUNRO"+str(have)+" in havelist "+x
+                            print >>sys.stdout,"test: UNCOVERED MUNRO",have,"in havelist",munrolist
+                        self.assertTrue(found)
+
 
                 elif msg.get_id() == MSG_ID_HAVE:
                     newhave = (msg.chunkspec.s,msg.chunkspec.e)
                     havelist = self.update_chunklist(newhave, havelist)
                     print >>sys.stdout,"test: havelist",havelist
 
-                    # Must not have HAVEs that are not covered by a signed peak                    
-                    for have in havelist:
-                        found = False
-                        for peak in peaklist:
-                            if chunkspeccontain(peak, have) or (peak == have):
-                                found = True
-                                break
-                        if not found:
-                            x = `peaklist`
-                            print >>sys.stderr,"test: UNCOVERED HAVE"+str(have)+" in peaklist "+x
-                            print >>sys.stdout,"test: UNCOVERED HAVE",have,"in peaklist",peaklist
-                        self.assertTrue(found)
-
-                        
                 kacount += 1
                 if (kacount % 100) == 0:
                     self.send_keepalive(s)
 
-        self.assertTrue(len(peaklist) > 0)
+        self.assertTrue(len(munrolist) > 0)
         self.assertTrue(len(havelist) > 0)
 
         # Send explicit close
@@ -154,25 +168,28 @@ class TestLiveSourceUMTTests: # subclassed below
         d.add( HandshakeMessage(CHAN_ID_ZERO,POPT_VER_PPSP) )
         s.c.send(d)
 
-    def update_chunklist(self,newpeak,peaklist):
+    def update_chunklist(self,newchunk,chunklist,consec=True):
         templist = []
         added=False
-        for peak in peaklist:
-            if not chunkspeccontain(newpeak,peak):
-                templist.append(peak)
+        for chunk in chunklist:
+            if newchunk == chunk:
+                templist.append(chunk)
+                added = True
+            elif not chunkspeccontain(newchunk,chunk): # new doesn't subsume old
+                templist.append(chunk)
             elif not added:
-                templist.append(newpeak)
+                templist.append(newchunk)
                 added = True
         if not added:
-            templist.append(newpeak)
+            templist.append(newchunk)
         olde = -1
-        for peak in templist:
-            (start,end) = peak
-            if olde == -1:
-                self.assertEquals(0,start)
-            if olde != -1:
-                self.assertEquals(olde+1,start)
-            olde = end
+        
+        if consec:
+            for chunk in templist:
+                (start,end) = chunk
+                if olde != -1:
+                    self.assertEquals(olde+1,start)
+                olde = end
         return templist
 
         
@@ -211,7 +228,7 @@ class TestLiveSourceUMTLiveDiscardWrap(TestLiveSourceUMTFramework,TestLiveSource
 def test_suite():
     suite = unittest.TestSuite()
     suite.addTest(unittest.makeSuite(TestLiveSourceUMTLiveDiscardNone))
-    suite.addTest(unittest.makeSuite(TestLiveSourceUMTLiveDiscardWrap))
+    #suite.addTest(unittest.makeSuite(TestLiveSourceUMTLiveDiscardWrap))
     return suite
 
 

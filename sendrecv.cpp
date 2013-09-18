@@ -1465,7 +1465,7 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
     else if (ver == VER_PPSPP_v1)
     {
         // IETF PPSP compliant
-        //dprintf("%s #%u -hs ietf ppsp\n", tintstr(),cid );
+        dprintf("%s #%u -hs ietf ppsp\n", tintstr(),cid );
         hs->peer_channel_id_ = evbuffer_remove_32be(evb);
         bool end=false;
         uint8_t size8 = 0, i8=0;
@@ -1477,7 +1477,7 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
         while (!end && evbuffer_get_length(evb) > 0)
         {
             popt_t poid = (popt_t)evbuffer_remove_8(evb);
-            //dprintf("%s #%u -hs popt %d\n", tintstr(),cid, (int)poid );
+            dprintf("%s #%u -hs popt %d\n", tintstr(),cid, (int)poid );
             switch (poid) {
                 case POPT_VERSION:
                     hs->version_ = (popt_version_t)evbuffer_remove_8(evb);

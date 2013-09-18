@@ -53,6 +53,8 @@ class TestServerFramework:
         self.livesourceinput = None
         self.livediscardwindow = None
         self.chunksize = None
+        self.urlfilename = None
+        self.livesigalg = None
         
         self.debug = True
         
@@ -122,6 +124,13 @@ class TestServerFramework:
         if self.chunksize is not None:
             args.append("-z") 
             args.append(str(self.chunksize))
+        if self.urlfilename is not None:
+            args.append("-r") 
+            args.append(self.urlfilename)
+        if self.livesigalg is not None:
+            args.append("-a") 
+            args.append(str(self.livesigalg))
+            
             
           
         if self.debug:  
