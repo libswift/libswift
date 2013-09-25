@@ -1477,7 +1477,7 @@ Handshake *Channel::StaticOnHandshake( Address &addr, uint32_t cid, bool ver_kno
         while (!end && evbuffer_get_length(evb) > 0)
         {
             popt_t poid = (popt_t)evbuffer_remove_8(evb);
-            dprintf("%s #%u -hs popt %d\n", tintstr(),cid, (int)poid );
+            //dprintf("%s #%u -hs popt %d\n", tintstr(),cid, (int)poid );
             switch (poid) {
                 case POPT_VERSION:
                     hs->version_ = (popt_version_t)evbuffer_remove_8(evb);

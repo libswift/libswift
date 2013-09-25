@@ -57,15 +57,24 @@ class TestLiveDownloadFramework(TestAsNPeers):
         self.buffer = ''
         self.stop = False
 
-        self.liveswarmidhex = "e5a12c7ad2d8fab33c699d1e198d66f79fa610c3"
-        try:
-            os.remove(self.liveswarmidhex)
-        except:
-            pass
-
+        self.peers[0].urlfilename = "swarm.url"
+        self.peers[0].livesigalg = ord(POPT_LSA_ECDSAP256SHA256)
         
     def setUpPostSession(self):
         TestAsNPeers.setUpPostSession(self)
+
+        f = open(self.peers[0].urlfilename,"rb")
+        swarmurl = f.read()
+        f.close()
+        swarmurl = swarmurl.strip()
+        idx = swarmurl.find("/")
+        if idx == -1:
+            self.assertFalse(True)
+        else:
+            liveswarmidhex = swarmurl[idx+1:]
+            print >>sys.stderr,"test: SwarmID <"+liveswarmidhex+">"
+            self.peers[1].liveswarmid = binascii.unhexlify(liveswarmidhex)
+
 
     def tearDown(self):
         
@@ -87,7 +96,7 @@ class TestLiveDownloadTests: # subclassed below
 
     def tst_live_download(self):
         # Start peer1 as live downloader
-        CMD = "START tswift://127.0.0.1:"+str(self.peers[0].listenport)+"/"+self.liveswarmidhex+"@-1 "+self.peers[1].destdir+"\r\n"
+        CMD = "START tswift://127.0.0.1:"+str(self.peers[0].listenport)+"/"+binascii.hexlify(self.peers[1].liveswarmid)+"?cd=-1 "+self.peers[1].destdir+"\r\n"
         self.peers[1].cmdsock.send(CMD)
 
         # Let peers interact
