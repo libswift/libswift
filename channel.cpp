@@ -698,5 +698,3 @@ binvector swift::bin_fragment(bin_t &origbin, bin_t &cancelbin)
 
     return bv;
 }
-
-

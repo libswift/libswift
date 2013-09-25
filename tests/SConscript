@@ -142,7 +142,6 @@ env.Program(
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )
-"""
 
 env.Program( 
     target='livetreetest',
@@ -151,7 +150,6 @@ env.Program(
     LIBS=libs,
     LIBPATH=libpath )
 
-"""
 env.Program( 
     target='livesigtest',
     source=['livesigtest.cpp'],
@@ -173,6 +171,14 @@ env.Program(
     LIBS=libs,
     LIBPATH=libpath )
 """
+
+env.Program( 
+    target='uritest',
+    source=['uritest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
 
 if DEBUG and sys.platform == "linux2":
 	scxxflags = "" 

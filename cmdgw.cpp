@@ -54,6 +54,8 @@ struct cmd_gw_t {
     uint64_t    endoff;     // MULTIFILE: ending offset (careful, for an e.g. 100 byte interval this is 99)
     bool        playsent;
     std::string xcontentdur;
+    std::string contentlenstr;
+    std::string mimetype;
 
 } cmd_requests[CMDGW_MAX_CLIENT];
 
@@ -113,6 +115,7 @@ void CmdGwFreeRequest(cmd_gw_t* req)
     req->endoff = -1;
     req->playsent = false;
     req->xcontentdur = "";
+    req->mimetype = "";
 }
 
 
@@ -360,10 +363,35 @@ void CmdGwSendPLAY(cmd_gw_t *req)
     oss << cmd_gw_httpaddr.str();
     oss << "/";
     oss << swarmid.hex();
-    if (swift::ChunkSize(req->td) != SWIFT_DEFAULT_CHUNK_SIZE)
-	oss << "$" <<  swift::ChunkSize(req->td);
+    // Arno, 2013-09-25: Only append params that need to be echoed back
+    // by the HTTPGW, because the Transfer already exists.
+    bool added=false;
     if (req->xcontentdur != "")
-	oss << "@" << req->xcontentdur;
+    {
+	if (!added)
+	    oss << "?";
+	oss << "cd=" << req->xcontentdur;
+	added = true;
+    }
+    if (req->mimetype != "")
+    {
+	if (!added)
+	    oss << "?";
+	else
+	    oss << "&";
+	oss << "mt=" << req->mimetype;
+	added = true;
+    }
+    // Arno FIXME: Should be replaced with swift::SetSize() method that stores value from URL.
+    if (req->contentlenstr != "")
+    {
+	if (!added)
+	    oss << "?";
+	else
+	    oss << "&";
+	oss << "cl=" << req->contentlenstr;
+	added = true;
+    }
     oss << "\r\n";
 
     std::stringbuf *pbuf=oss.rdbuf();
@@ -727,23 +755,25 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             return ERROR_BAD_ARG;
         }
 
+        SwarmMeta sm;
+        // Set configured defaults for CMDGW
+        sm.cont_int_prot_ = cmd_gw_cipm;
+        sm.live_disc_wnd_ = cmd_gw_livesource_disc_wnd;
+        // Convert parsed URI to config values
+        std::string errorstr = URIToSwarmMeta(puri,&sm);
+        if (errorstr != "")
+        {
+            dprintf("cmd: START: Error parsing URI: %s\n", errorstr.c_str() );
+            return ERROR_BAD_ARG;
+        }
+
         std::string trackerstr = puri["server"];
         std::string swarmidhexstr = puri["swarmidhex"];
         std::string mfstr = puri["filename"];
-        std::string chunksizestr = puri["cs"];
-        std::string durstr = puri["cd"];
-        std::string iastr = puri["ia"];
         std::string bttrackerurl = puri["bt"];
+        std::string durstr = puri["cd"];
 
-        // Handle LIVE
-        if (swarmidhexstr.length() > Sha1Hash::SIZE*2)
-            durstr = "-1";
-
-        uint32_t chunksize=SWIFT_DEFAULT_CHUNK_SIZE;
-        if (chunksizestr.length() > 0)
-            std::istringstream(chunksizestr) >> chunksize;
-
-        dprintf("cmd: START: %s with tracker %s chunksize %i duration %s\n",swarmidhexstr.c_str(),trackerstr.c_str(),chunksize,durstr.c_str());
+        dprintf("cmd: START: %s with tracker %s chunksize %i duration %d\n",swarmidhexstr.c_str(),trackerstr.c_str(),sm.chunk_size_,sm.cont_dur_);
 
         // Handle tracker
         // BT tracker via URL param
@@ -764,25 +794,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             trackerurl += "://";
             trackerurl += trackerstr;
         }
-        else
-        {
-            // BT track. Handle possibly escaped "http:..."
-            char *decoded = evhttp_uridecode(bttrackerurl.c_str(),false,NULL);
-            trackerurl = decoded;
-            free(decoded);
-        }
 
-
-        // Handle LIVE injector address
-        Address srcaddr(iastr.c_str());
-        if (iastr != "")
-        {
-            if (srcaddr == Address())
-            {
-                dprintf("cmd: START: injector address must be hostname:port, ip:port or just port\n");
-                return ERROR_BAD_ARG;
-            }
-        }
 
         // initiate transmission
         SwarmID swarmid(swarmidhexstr);
@@ -811,9 +823,9 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
                 filename = swarmidhexstr;
 
             if (durstr != "-1")
-                td = swift::Open(filename,swarmid,trackerurl,false,cmd_gw_cipm,false,activate,chunksize);
+                td = swift::Open(filename,swarmid,trackerurl,false,sm.cont_int_prot_,false,activate,sm.chunk_size_);
             else
-                td = swift::LiveOpen(filename,swarmid,trackerurl,srcaddr,cmd_gw_cipm,cmd_gw_livesource_disc_wnd,chunksize);
+                td = swift::LiveOpen(filename,swarmid,trackerurl,sm.injector_addr_,sm.cont_int_prot_,sm.live_disc_wnd_,sm.chunk_size_);
             if (td == -1) {
             	CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarmid);
             	return ERROR_BAD_SWARM;
@@ -831,7 +843,9 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         req->startt = usec_time();
         req->mfspecname = mfstr;
         req->playsent = false;
-        req->xcontentdur = durstr;
+        req->xcontentdur = puri["cd"];
+        req->contentlenstr = puri["cl"];
+        req->mimetype = puri["mt"];
 
         dprintf("%s @%i start transfer %d\n",tintstr(),req->id,req->td);
 

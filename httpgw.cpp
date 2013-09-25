@@ -43,8 +43,8 @@ static uint32_t HTTPGW_VOD_PROGRESS_STEP_BYTES = (256*1024); // configurable
 // Arno: Minimum amout of content to download before replying to HTTP
 static uint32_t HTTPGW_MIN_PREBUF_BYTES  = (256*1024); // configurable
 
-const char *url_query_keys[] = { "v", "cp", "hf", "ca", "ld", "ia", "cs", "cl", "cd", "bt", "mt" };
-#define NUM_URL_QUERY_KEYS 	11
+const char *url_query_keys[] = { "v", "cp", "hf", "ca", "ld", "ia", "cs", "cl", "cd", "bt", "mt", "dr" };
+#define NUM_URL_QUERY_KEYS 	12
 
 
 
@@ -64,6 +64,7 @@ struct http_gw_t {
     int      replycode;  // HTTP status code to return
     std::string xcontentdur;   // (optional) duration of content in seconds, -1 for live (for Firefox HTML5)
     std::string mimetype;      // MIME type to return
+    uint64_t contentlen;  // (optional) Content-Length string to return
     bool     replied;    // Whether or not a reply has been sent on the HTTP request
     // reply progress
     uint64_t offset;	 // current offset of request into content address space (bytes)
@@ -757,7 +758,11 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
 
         // Convert size to string
         std::ostringstream closs;
-        closs << req->tosend;
+        // Arno, 2013-09-25: Echo URL encoded content length, needed for .mp4
+        if (req->contentlen > 0)
+            closs << req->contentlen;
+        else
+            closs << req->tosend;
         evhttp_add_header(reqheaders, "Content-Length", closs.str().c_str() );
     }
     else
@@ -809,6 +814,8 @@ bool swift::ParseURI(std::string uri,parseduri_t &map)
     //    cd = Content Duration (in seconds)
     //    bt = BT tracker URL
     //	  mt = MIME type
+    //    ia = injector address
+    //    dr = range for DASH
     //
     // Note that Live Signature Algorithm is part of the Swarm ID.
     //
@@ -908,6 +915,82 @@ bool swift::ParseURI(std::string uri,parseduri_t &map)
     return true;
 }
 
+std::string swift::URIToSwarmMeta(parseduri_t &map, SwarmMeta *sm)
+{
+    // Defaults handled in SwarmMeta constructor
+
+    if (map["v"].length() > 0)
+    {
+	uint32_t val;
+	std::istringstream(map["v"]) >> val;
+	sm->version_ = (popt_version_t)val;
+    }
+    if (map["cp"].length() > 0)
+    {
+	uint32_t val;
+	std::istringstream(map["cp"]) >> val;
+	sm->cont_int_prot_ = (popt_cont_int_prot_t)val;
+    }
+    if (map["hf"].length() > 0)
+    {
+	uint32_t val;
+	std::istringstream(map["hf"]) >> val;
+	sm->merkle_func_ = (popt_merkle_func_t)val;
+    }
+    if (map["ca"].length() > 0)
+    {
+	uint32_t val;
+	std::istringstream(map["ca"]) >> val;
+	sm->chunk_addr_ = (popt_chunk_addr_t)val;
+    }
+    if (map["ld"].length() > 0)
+    {
+	uint64_t val;
+	std::istringstream(map["ld"]) >> val;
+	sm->live_disc_wnd_ = val;
+    }
+    if (map["cs"].length() > 0)
+    {
+	uint32_t val;
+    	std::istringstream(map["cs"]) >> val;
+    	sm->chunk_size_ = val;
+    }
+    if (map["cd"].length() > 0)
+    {
+	uint32_t val;
+    	std::istringstream(map["cd"]) >> val;
+    	sm->cont_dur_ = val;
+    }
+    if (map["cl"].length() > 0)
+    {
+	uint64_t val;
+	std::istringstream(map["cl"]) >> val;
+	sm->cont_len_ = val;
+    }
+
+    // Handle LIVE injector address
+    sm->injector_addr_ = Address(map["ia"].c_str());
+    if (map["ia"] != "")
+    {
+        if (sm->injector_addr_ == Address())
+            return "injector address must be hostname:port, ip:port or just port";
+    }
+
+    if (map["bt"].length() > 0)
+    {
+        // BT track. Handle possibly escaped "http:..."
+        char *decoded = evhttp_uridecode(map["bt"].c_str(),false,NULL);
+        sm->bttracker_url_ = decoded;
+        free(decoded);
+    }
+    else
+	sm->bttracker_url_ = "";
+    sm->mime_type_ = map["mt"];
+
+    return "";
+}
+
+
 
 
 void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
@@ -944,14 +1027,52 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
         dprintf("%s @%i http get: ERROR 400 Path format violation\n",tintstr(),0 );
         return;
     }
-    std::string swarmidhexstr = "", mfstr="", durstr="", chunksizestr = "", iastr="", bttrackerurl="", urlmimetype="";
-    swarmidhexstr = puri["swarmidhex"];
-    mfstr = puri["filename"];
-    durstr = puri["cd"];
-    chunksizestr = puri["cs"];
-    iastr = puri["ia"];
-    bttrackerurl = puri["bt"];
-    urlmimetype = puri["mt"];
+
+
+    SwarmMeta sm;
+    // Set configured defaults for CMDGW
+    sm.cont_int_prot_ = httpgw_cipm;
+    sm.live_disc_wnd_ = httpgw_livesource_disc_wnd;
+    sm.chunk_size_ = httpgw_chunk_size;
+
+    // Convert parsed URI to config values
+    std::string errorstr = URIToSwarmMeta(puri,&sm);
+    if (errorstr != "")
+    {
+        evhttp_send_error(evreq,400,"Semantic Error: Path format is /swarmid-in-hex/filename?k1=v1&k2=v2");
+        dprintf("%s @%i http get: ERROR 400 Semantic Error: Path format violation\n",tintstr(),0 );
+        return;
+    }
+
+    std::string trackerstr = puri["server"];
+    std::string swarmidhexstr = puri["swarmidhex"];
+    std::string mfstr = puri["filename"];
+    std::string bttrackerurl = puri["bt"];
+    std::string urlmimetype = puri["mt"];
+    std::string durstr = puri["cd"];
+
+    dprintf("cmd: START: %s with tracker %s chunksize %i duration %d\n",swarmidhexstr.c_str(),trackerstr.c_str(),sm.chunk_size_,sm.cont_dur_);
+
+    // Handle tracker
+    // BT tracker via URL param
+    std::string trackerurl = "";
+    if (trackerstr == "" && bttrackerurl == "")
+    {
+        trackerstr = Channel::trackerurl;
+        if (trackerstr == "")
+        {
+            evhttp_send_error(evreq,400,"Semantic Error: No tracker defined");
+            dprintf("%s @%i http get: ERROR 400 Semantic Error: No tracker defined\n",tintstr(),0 );
+            return;
+        }
+    }
+    // not else
+    if (bttrackerurl == "")
+    {
+        trackerurl = SWIFT_URI_SCHEME;
+        trackerurl += "://";
+        trackerurl += trackerstr;
+    }
 
     // Handle MIME
     std::string mimetype = "video/mp2t";
@@ -960,36 +1081,11 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
 	mimetype = urlmimetype;
     }
 
-    uint32_t chunksize=httpgw_chunk_size; // default externally configured
-    if (chunksizestr.length() > 0)
-        std::istringstream(chunksizestr) >> chunksize;
-
-    // BT tracker via URL query param
-    std::string trackerurl = "";
-    if (bttrackerurl != "")
-    {
-        // Handle possibly escaped "http:..."
-        char *decoded = evhttp_uridecode(bttrackerurl.c_str(),false,NULL);
-        trackerurl = decoded;
-        free(decoded);
-    }
-
     dprintf("%s @%i http get: demands %s mf %s dur %s track %s mime %s\n",tintstr(),http_gw_reqs_open+1,swarmidhexstr.c_str(),mfstr.c_str(),durstr.c_str(), trackerurl.c_str(), mimetype.c_str() );
 
     // Handle LIVE
     if (swarmidhexstr.length() > Sha1Hash::SIZE*2)
 	durstr = "-1";
-
-    Address srcaddr(iastr.c_str());
-    if (iastr != "")
-    {
-	if (srcaddr == Address())
-	{
-	    evhttp_send_error(evreq,400,"Bad injector address in query.");
-	    dprintf("%s @%i http get: ERROR 400 Bad injector address in query\n",tintstr(),0 );
-	    return;
-	}
-    }
 
     // 3. Check for concurrent requests, currently not supported.
     SwarmID swarm_id = SwarmID(swarmidhexstr);
@@ -1017,10 +1113,10 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     if (td == -1) {
         // LIVE
         if (durstr != "-1") {
-            td = swift::Open(filename,swarm_id,trackerurl,false,httpgw_cipm,false,activate,chunksize);
+            td = swift::Open(filename,swarm_id,trackerurl,false,sm.cont_int_prot_,false,activate,sm.chunk_size_);
         }
         else {
-            td = swift::LiveOpen(filename,swarm_id,trackerurl,srcaddr,httpgw_cipm,httpgw_livesource_disc_wnd,chunksize);
+            td = swift::LiveOpen(filename,swarm_id,trackerurl,sm.injector_addr_,sm.cont_int_prot_,sm.live_disc_wnd_,sm.chunk_size_);
         }
 
         // Arno, 2011-12-20: Only on new transfers, otherwise assume that CMD GW
@@ -1040,6 +1136,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     free(decodedmf);
     req->xcontentdur = durstr;
     req->mimetype = mimetype;
+    req->contentlen = sm.cont_len_;
     req->offset = 0;
     req->tosend = 0;
     req->td = td;

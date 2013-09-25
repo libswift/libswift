@@ -276,9 +276,6 @@ typedef std::vector<Address>	peeraddrs_t;
         }
     };
 
-    typedef std::pair<std::string,std::string> stringpair;
-    typedef std::map<std::string,std::string>  parseduri_t;
-    bool ParseURI(std::string uri,parseduri_t &map);
 
     /** swift protocol message types; these are used on the wire. */
     typedef enum {
@@ -418,7 +415,7 @@ typedef std::vector<Address>	peeraddrs_t;
 	popt_version_t   	min_version_;
 	popt_cont_int_prot_t  	cont_int_prot_;
 	popt_merkle_func_t	merkle_func_;
-	popt_live_sig_alg_t	live_sig_alg_; // PPSPTODO
+	popt_live_sig_alg_t	live_sig_alg_;
 	popt_chunk_addr_t	chunk_addr_;
 	uint64_t		live_disc_wnd_;
       protected:
@@ -427,6 +424,36 @@ typedef std::vector<Address>	peeraddrs_t;
 	SwarmID 		*swarm_id_ptr_;
     };
 
+    /** Arno, 2013-09-25: Currently just used for URI processing.
+     * Could be used as args to Open and LiveOpen in future.
+     */
+    class SwarmMeta
+    {
+      public:
+	SwarmMeta() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), cont_int_prot_(POPT_CONT_INT_PROT_MERKLE), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1),  live_sig_alg_(POPT_LIVE_SIG_ALG_RSASHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), injector_addr_(), chunk_size_(SWIFT_DEFAULT_CHUNK_SIZE), cont_dur_(0), cont_len_(0), bttracker_url_(""), mime_type_("")
+	{
+	}
+	popt_version_t   	version_;
+	popt_version_t   	min_version_;
+	popt_cont_int_prot_t  	cont_int_prot_;
+	popt_merkle_func_t	merkle_func_;
+	popt_live_sig_alg_t	live_sig_alg_; // UNUSED
+	popt_chunk_addr_t	chunk_addr_;
+	uint64_t		live_disc_wnd_;
+	Address			injector_addr_;
+	uint32_t		chunk_size_;
+	int32_t			cont_dur_;
+	uint64_t		cont_len_;
+	std::string		bttracker_url_;
+	std::string		mime_type_;
+    };
+
+    typedef std::pair<std::string,std::string> stringpair;
+    typedef std::map<std::string,std::string>  parseduri_t;
+    bool ParseURI(std::string uri,parseduri_t &map);
+    std::string URIToSwarmMeta(parseduri_t &map, SwarmMeta *sm);
+
+    /** External tracker */
     typedef void (*bttrack_peerlist_callback_t)(int td, std::string result, uint32_t interval, peeraddrs_t peerlist);
 
     class ContentTransfer;
@@ -471,7 +498,9 @@ typedef std::vector<Address>	peeraddrs_t;
     typedef std::vector<int>		tdlist_t;
     class Storage;
 
-    /** Superclass for live and vod */
+    /*
+     * Superclass for live and video-on-demand
+     */
     class ContentTransfer : public Operational {
 
       public:
