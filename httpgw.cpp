@@ -825,7 +825,7 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     req->offset = req->startoff;
 
     // SEEKTODO: concurrent requests to same resource
-    if (!req->dash && req->startoff != 0)
+    if (!req->live && req->startoff != 0)
     {
         // Seek to multifile/range start
         int ret = swift::Seek(req->td,req->startoff,SEEK_SET);
@@ -1148,22 +1148,22 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     // Handle tracker
     // BT tracker via URL param
     std::string trackerurl = "";
-    if (trackerstr == "" && bttrackerurl == "")
+    if (trackerstr == "" && bttrackerurl == "" && Channel::trackerurl == "")
     {
-        trackerstr = Channel::trackerurl;
-        if (trackerstr == "")
-        {
-            evhttp_send_error(evreq,400,"Semantic Error: No tracker defined");
-            dprintf("%s @%i http get: ERROR 400 Semantic Error: No tracker defined\n",tintstr(),0 );
-            return;
-        }
+	evhttp_send_error(evreq,400,"Semantic Error: No tracker defined");
+	dprintf("%s @%i http get: ERROR 400 Semantic Error: No tracker defined\n",tintstr(),0 );
+	return;
     }
-    // not else
     if (bttrackerurl == "")
     {
-        trackerurl = SWIFT_URI_SCHEME;
-        trackerurl += "://";
-        trackerurl += trackerstr;
+	if (trackerstr == "")
+	    trackerurl = Channel::trackerurl;
+	else
+	{
+	    trackerurl = SWIFT_URI_SCHEME;
+	    trackerurl += "://";
+	    trackerurl += trackerstr;
+	}
     }
 
     // Handle MIME

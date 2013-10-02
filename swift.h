@@ -96,8 +96,6 @@ namespace swift {
 // Arno, 2011-12-22: Enable Riccardo's VodPiecePicker
 #define ENABLE_VOD_PIECEPICKER        1
 
-#define SWIFT_URI_SCHEME              "tswift"
-
 #define SWIFT_MAX_UDP_OVER_ETH_PAYLOAD        (1500-20-8)
 // Arno: Maximum size of non-DATA messages in a UDP packet we send.
 #define SWIFT_MAX_NONDATA_DGRAM_SIZE         (SWIFT_MAX_UDP_OVER_ETH_PAYLOAD-SWIFT_DEFAULT_CHUNK_SIZE-1-4)
