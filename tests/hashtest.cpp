@@ -38,7 +38,7 @@ TEST(Sha1HashTest,OfferDataTest) {
     fprintf(stderr,"BEFORE swift::Open\n");
     int file = swift::Open("123", roothash123);
     fprintf(stderr,"BEFORE Storage\n");
-    Storage storage("123", ".", file);
+    Storage storage("123", ".", file, 0);
     fprintf(stderr,"BEFORE MmapHashTree\n");
     MmapHashTree tree(&storage,roothash123,1024,"123.mhash",false,true,"123.mbinmap");
 
@@ -59,7 +59,7 @@ TEST(Sha1HashTest,SubmitTest) {
     fprintf(f123, "123\n");
     fclose(f123);
     int file = swift::Open("123");
-    Storage storage("123", ".", file);
+    Storage storage("123", ".", file, 0);
     //MmapHashTree ht123(&storage);
     MmapHashTree ht123(&storage,Sha1Hash::ZERO,1024,"123.mhash",false,true,"123.mbinmap");
     EXPECT_STREQ(hash123,ht123.hash(bin_t(0,0)).hex().c_str());
@@ -85,7 +85,7 @@ TEST(Sha1HashTest,OfferDataTest2) {
     unlink("456");
     EXPECT_STREQ(rooth456,roothash456.hex().c_str());
     int file = swift::Open("456", roothash456);
-    Storage storage("456", ".", file);
+    Storage storage("456", ".", file, 0);
     // MmapHashTree tree(&storage,roothash456);
     MmapHashTree tree(&storage,roothash456,1024,"456.mhash",false,true,"456.mbinmap");
     tree.OfferHash(bin_t(1,0),roothash456);
