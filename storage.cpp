@@ -124,8 +124,6 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 
 	dprintf("%s %d ?data writing disk %lld window %llu\n",tintstr(), 0, newoff, live_disc_wnd_bytes_ );
 
-	fprintf(stderr,"Write at %lld\n", newoff );
-
 	if (newoff+nbyte > live_disc_wnd_bytes_)
 	{
 	    // Writing more than window
