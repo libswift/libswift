@@ -309,7 +309,7 @@ void Address::set_ip(const char* ip_str, int family)
     hint.ai_addr = NULL;
     hint.ai_next = NULL;
 
-    struct addrinfo *results;
+    struct addrinfo *results=NULL;
     int ret = getaddrinfo(ip_str, NULL,  &hint, &results);
     if (ret == 0)
     {

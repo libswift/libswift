@@ -17,7 +17,6 @@ using namespace swift;
 
 #define api_debug	false
 
-
 /*
  * SwarmID
  */
@@ -136,6 +135,7 @@ void StartLibraryCleanup()
 	ContentTransfer::cleancounter = 481;
     }
 }
+
 
 /*
  * Global Operations

@@ -6,14 +6,14 @@
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
-
-#include "swift.h"
+// Arno, 2013-06-11: Must come first to ensure SIZE_MAX etc are defined
+#include "compat.h"
 #include "bin_utils.h"
+#include "swift.h"
 #include <algorithm>  // kill it
 #include <cassert>
 #include <cfloat>
 #include <sstream>
-#include "compat.h"
 
 using namespace swift;
 using namespace std;
@@ -30,13 +30,19 @@ struct event Channel::evrecv;
 #define ENABLE_SENDERSIZE_PUSH 0
 
 
+#define ENABLE_CANCEL 		0
+
+
 /** Arno, 2011-11-24: When rate limit is on and the download is in progress
  * we send HINTs for 2 chunks at the moment. This constant can be used to
  * get greater granularity. Set to 0 for original behavior.
  * Ric: set to 2, it should be smaller than 4 or we need to change the hint
  * strategy first
+ * Ric: 2013-05: We need to always send out at least one req. for each channel.
+ * Otherwise, if the link between two peers is heavily congested or has a high
+ * pkt loss rate, ledbat will close the connection. (short explanation)
  */
-#define HINT_GRANULARITY    2 // chunks
+#define HINT_GRANULARITY    1 // chunks
 
 /** Arno, 2012-03-16: Swift can now tunnel data from CMDGW over UDP to
  * CMDGW at another swift instance. This is the default channel ID on UDP
@@ -484,7 +490,8 @@ void    Channel::Send () {
                 "Only call Reschedule for 'reverse PEX' if the channel is in keep-alive mode"
                  */
                 AddPexReq(evb);
-                AddCancel(evb);
+                if (ENABLE_CANCEL)
+                    AddCancel(evb);
             }
             AddPex(evb);
             TimeoutDataOut();
@@ -532,7 +539,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
     }
 
     // 1. Calc max of what we are allowed to request, uncongested bandwidth wise
-    tint plan_for = max(TINT_SEC*2,rtt_avg_*8);
+    tint plan_for = max(TINT_SEC*HINT_TIME,rtt_avg_*4);
     tint timed_out = NOW - plan_for*2;
 
     std::deque<bin_t> tbc;
@@ -556,6 +563,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
     // 2. Calc max of what is allowed by the rate limiter
     int rate_allowed_hints = LONG_MAX;
     uint64_t rough_global_hint_out_size = 0; // rough estimate, as hint_out_ clean up is not done for all channels
+    bool count_hints = false;
     if (transfer()->GetMaxSpeed(DDIR_DOWNLOAD) < DBL_MAX)
     {
         channels_t::iterator iter;
@@ -568,9 +576,24 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
         // Policy: this channel is allowed to hint at the limit - global_hinted_at
         // Handle MaxSpeed = unlimited
-        double rate_hints_limit_float = transfer()->GetMaxSpeed(DDIR_DOWNLOAD)/((double)transfer()->chunk_size());
+        double rate_hints_limit_float = HINT_TIME*transfer()->GetMaxSpeed(DDIR_DOWNLOAD)/((double)transfer()->chunk_size());
 
-        int rate_hints_limit = (int)min((double)LONG_MAX,rate_hints_limit_float);
+	// Ric: slow down if we just started the connection
+	double slowStart = (double)LONG_MAX;
+	tint running = now_t::now-start;
+	// It takes ~3 sec to get a stable DL speed estimation
+	if (running<TINT_SEC*3 && hint_out_size_>1) {
+		count_hints = true;
+		slowStart = rate_hints_limit_float*running/TINT_SEC;
+		if (slowStart>transfer()->GetSlowStartHints())
+			slowStart = slowStart-transfer()->GetSlowStartHints();
+		else
+			slowStart = 0;
+		if (DEBUGTRAFFIC)
+			fprintf(stderr, "slowStart: %lf [%u]\n", slowStart, transfer()->GetSlowStartHints());
+	}
+		
+        int rate_hints_limit = (int)min(slowStart,rate_hints_limit_float);
 
         // Actually allowed is max minus what we already asked for, globally (=all channels)
         rate_allowed_hints = max(0,rate_hints_limit-(int)rough_global_hint_out_size);
@@ -583,7 +606,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
     // 4. Ask allowance in blocks of chunks to get pipelining going from serving peer.
     // Arno, 2012-10-30: not HINT_GRANULARITY for LIVE
-    if (hint_out_size_ == 0 || plan_pck > HINT_GRANULARITY || transfer()->ttype() == LIVE_TRANSFER)
+    if (hint_out_size_ == 0 || plan_pck >= HINT_GRANULARITY || transfer()->ttype() == LIVE_TRANSFER)
     {
         bin_t hint = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2,id_);
         if (!hint.is_none()) {
@@ -598,6 +621,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
             //fprintf(stderr,"send c%d: HINTLEN %i\n", id(), hint.base_length());
             //fprintf(stderr,"HL %i ", hint.base_length());
 
+#if ENABLE_CANCEL == 1
             // Ric: final cancel the hints that have been removed
             while (!tbc.empty()) {
                 bin_t c = tbc.front();
@@ -615,17 +639,33 @@ void    Channel::AddHint (struct evbuffer *evb) {
 	                break;
                 tbc.pop_front();
             }
+#endif
             hint_out_.push_back(hint);
             hint_out_size_ += hint.base_length();
+
+            // Ric: keep track of the outstanding hints
+            if (count_hints)
+            	transfer()->SetSlowStartHints(hint.base_length());
+
+            // RTTFIX
+            if (rtt_hint_tintbin_.bin == bin_t::NONE)
+            {
+        	rtt_hint_tintbin_.bin = hint.base_left();
+        	rtt_hint_tintbin_.time = NOW;
+            }
+
+            return;
         }
         else
             dprintf("%s #%u Xhint\n",tintstr(),id_);
     }
+#if ENABLE_CANCEL == 1
     // add the temporary cancel bin to the actual cancel queue
-	while (!tbc.empty()) {
-		cancel_out_.push_back(tbc.front());
-		tbc.pop_front();
+    while (!tbc.empty()) {
+	cancel_out_.push_back(tbc.front());
+	tbc.pop_front();
     }
+#endif
 }
 
 static int ChunkAddrSize(popt_chunk_addr_t ca)
@@ -695,8 +735,10 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     // Note this is called always, not just when there are requests pending.
     AddRequiredHashes(evb,tosend,isretransmit);
 
-    if (tosend.is_none())// && (last_data_out_time_>NOW-TINT_SEC || data_out_.empty()))
+    if (tosend.is_none()) {// && (last_data_out_time_>NOW-TINT_SEC || data_out_.empty()))
+        transfer()->OnSendNoData();
         return bin_t::NONE; // once in a while, empty data is sent just to check rtt FIXED
+    }
 
     if (!ack_in_.is_empty()) // TODO: cwnd_>1
         data_out_cap_ = tosend;
@@ -800,9 +842,33 @@ void    Channel::AddAck (struct evbuffer *evb) {
     if (data_in_.bin.layer()>2)
         data_in_dbl_ = data_in_.bin;
 
-    //fprintf(stderr,"data_in_ c%d\n", id() );
-    // Ric: TODO should not be a single element
-    //      keep single ack for the moment
+#if ENABLE_CANCEL == 1
+    // Ric: check that we are not sending a cancel msg for data_in_
+    std::deque<bin_t>::iterator it;
+    bin_t b = data_in_.bin;
+    for (it=cancel_out_.begin(); it!=cancel_out_.end(); it++) {
+        bin_t c = *it;
+        if (c == b) {
+            cancel_out_.erase(it);
+            break;
+        }
+        // b is always a single chunk :-)
+        else if (c.contains(b)) {
+            while (c.contains(b) && c!=b) {
+                if (c>b) {
+                    cancel_out_.insert(it+1,c.right());
+                    c.to_left();
+                }
+                else {
+                    cancel_out_.insert(it+1,c.left());
+                    c.to_right();
+                }
+            }
+            assert (c==b);
+            cancel_out_.erase(it);
+        }
+    }
+#endif
     data_in_ = tintbin();
     //data_in_ = tintbin(NOW,bin64_t::NONE);
 }
@@ -883,6 +949,7 @@ void    Channel::Recv (struct evbuffer *evb) {
         dev_avg_ = rtt_avg_;
         dip_avg_ = rtt_avg_;
         dprintf("%s #%u sendctrl rtt init %lld\n",tintstr(),id_,rtt_avg_);
+        fprintf(stderr,"%s #%u sendctrl rtt init %lld\n",tintstr(),id_,rtt_avg_);
     }
 
     bin_t data = evbuffer_get_length(evb) ? bin_t::NONE : bin_t::ALL;
@@ -1055,6 +1122,10 @@ void    Channel::CleanHintOut (bin_t pos) {
             bin_t hint = hint_out_.front().bin;
         hint_out_size_ -= hint.base_length();
         hint_out_.pop_front();
+#if ENABLE_CANCEL == 1
+        // Ric: add to the cancel queue
+        cancel_out_.push_back(hint);
+#endif
     }
     while (hint_out_.front().bin!=pos) {
         tintbin f = hint_out_.front();
@@ -1070,8 +1141,12 @@ void    Channel::CleanHintOut (bin_t pos) {
         hint_out_.front().bin = f.bin.sibling();
         hint_out_.push_front(f);
     }
+#if ENABLE_CANCEL == 1
+    // Ric: add to the cancel queue
+    cancel_out_.push_back(hint_out_.front().bin);
+#endif
+    hint_out_size_ -= hint_out_.front().bin.base_length();
     hint_out_.pop_front();
-    hint_out_size_--;
 }
 
 
@@ -1145,14 +1220,15 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     // Do swift API callbacks
     bin_t cover = transfer()->ack_out()->cover(pos);
     transfer()->Progress(cover);
-    if (cover.layer() >= 5) // Arno: update DL speed. Tested with 32K, presently = 2 ** 5 * chunk_size CHUNKSIZE
-        transfer()->OnRecvData( pow((double)2,(double)5)*((double)transfer()->chunk_size()) );
+    //if (cover.layer() >= 5) // Arno: update DL speed. Tested with 32K, presently = 2 ** 5 * chunk_size CHUNKSIZE
+    //    transfer()->OnRecvData( pow((double)2,(double)5)*((double)transfer()->chunk_size()) );
+    transfer()->OnRecvData( transfer()->chunk_size() );
 
     data_in_ = tintbin(NOW,bin_t::NONE);
     data_in_.bin = pos;
     // Ric: the time of the ack is the owd.
-        if (peer_time!=TINT_NEVER)
-                data_in_.time = NOW - peer_time;
+    if (peer_time!=TINT_NEVER)
+	data_in_.time = NOW - peer_time;
 
     UpdateDIP(pos);
     CleanHintOut(pos);
@@ -1181,6 +1257,22 @@ void Channel::UpdateDIP(bin_t pos)
             dip_avg_ = ( dip_avg_*3 + dip ) >> 2;
         }
         last_data_in_time_ = NOW;
+    }
+
+    // RTTFIX
+    /* Arno: in a true client/server scenario the initial RTT is used to set
+     * rtt_avg_ and it is never updated. If that gets a bad sample this can
+     * kill performance. Simple workaround against too high values.
+     */
+    if (rtt_hint_tintbin_.bin == pos) {
+	tint diff = NOW - rtt_hint_tintbin_.time;
+	// Conservative: only adjust rtt_avg_ if 2x smaller
+	if (diff < rtt_avg_/2 && IsComplete())
+	{
+	    fprintf(stderr,"%s #%u rtt adjust %lld -> %lld\n",tintstr(),id_,rtt_avg_,diff);
+	    rtt_avg_ = diff;
+	}
+	rtt_hint_tintbin_.bin = bin_t::NONE;
     }
 }
 
@@ -1985,10 +2077,21 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
                 // attempt is to new channel or to existing. Currently read
                 // in OnHandshake()
                 //
-                return_log("%s #0 have a channel already to %s\n",tintstr(),addr.str().c_str());
+        	// Arno, 2012-12-17: in Android app peers have hardwired port
+        	// so this happens often. Assuming that sender has reasons
+        	// to rehandshake, now just close old.
+                dprintf("%s #0 have a channel already to %s, closing old\n",tintstr(),addr.str().c_str() );
+
+                // Arno, 2012-12-17: On Android closing the channel causes swift
+                // to crash. On Win32 I don't see this behaviour. For now, let
+                // the channel die out by itself. The sender will not accept
+                // the datagrams sent by this peer on the old channel because
+                // it doesn't know the old channel ID.
+                // existchannel->Close(CLOSE_DO_NOT_SEND);
+                channel = NULL;
             } else {
                 channel = existchannel;
-                //fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: reuse channel %s\n", channel->peer_.str().c_str() );
+                //fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: reuse channel %s\n", channel->peer_.str() );
             }
         }
         if (channel == NULL) {

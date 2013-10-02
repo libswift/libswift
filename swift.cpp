@@ -89,6 +89,7 @@ int OpenSwiftDirectory(std::string dirname, std::string trackerurl, bool force_c
 // SIGNPEAKTODO replace swarmid with generic swarm ID
 int PrintURL(int td,std::string trackerurl,uint32_t chunk_size,std::string urlfilename);
 void HandleLiveSource(std::string livesource_input, std::string filename, std::string keypairfilename, uint32_t chunk_size, std::string urlfilename);
+void AttemptCheckpoint();
 
 void ReportCallback(int fd, short event, void *arg);
 void EndCallback(int fd, short event, void *arg);
@@ -589,6 +590,8 @@ int utf8main (int argc, char** argv)
         // event_base_loopexit() was called, shutting down
     }
 
+    AttemptCheckpoint();
+
     // Arno, 2012-01-03: Close all transfers
     tdlist_t tds = GetTransferDescriptors();
     tdlist_t::iterator iter;
@@ -886,6 +889,20 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
 
 
 
+void AttemptCheckpoint()
+{
+    if (swift::ttype(single_td) == FILE_TRANSFER && file_enable_checkpoint && !file_checkpointed && swift::IsComplete(single_td))
+    {
+	std::string binmap_filename = swift::GetOSPathName(single_td);
+	binmap_filename.append(".mbinmap");
+	fprintf(stderr,"swift: Complete, checkpointing %s\n", binmap_filename.c_str() );
+
+	if (swift::Checkpoint(single_td) >= 0)
+	    file_checkpointed = true;
+    }
+}
+
+
 void ReportCallback(int fd, short event, void *arg) {
     // Called every second to print/calc some stats
     // Arno, 2012-05-24: Why-oh-why, update NOW
@@ -902,8 +919,17 @@ void ReportCallback(int fd, short event, void *arg) {
                 Channel::global_dgrams_up, Channel::global_raw_bytes_up,
                 Channel::global_dgrams_down, Channel::global_raw_bytes_down );
 
-		fprintf(stderr,"upload %lf\n",swift::GetCurrentSpeed(single_td,DDIR_UPLOAD));
-		fprintf(stderr,"dwload %lf\n",swift::GetCurrentSpeed(single_td,DDIR_DOWNLOAD));
+        double up = swift::GetCurrentSpeed(single_td,DDIR_UPLOAD);
+        double dw = swift::GetCurrentSpeed(single_td,DDIR_DOWNLOAD);
+        if (up/1048576 > 1)
+            fprintf(stderr,"upload %.2f MB/s (%lf B/s)\n", up/(1<<20), up);
+        else
+            fprintf(stderr,"upload %.2f KB/s (%lf B/s)\n", up/(1<<10), up);
+        if (dw/1048576 > 1)
+            fprintf(stderr,"dwload %.2f MB/s (%lf B/s)\n", dw/(1<<20), dw);
+        else
+            fprintf(stderr,"dwload %.2f KB/s (%lf B/s)\n", dw/(1<<10), dw);
+
 		// Ric: remove. LEDBAT tests
 		Channel* c = swift::Channel::channel(1);
 		/*if (c!=NULL) {
@@ -913,16 +939,8 @@ void ReportCallback(int fd, short event, void *arg) {
 		//fprintf(stderr,"npeers %d\n",ft->GetNumLeechers()+ft->GetNumSeeders() );
 	}
 
-	if (swift::ttype(single_td) == FILE_TRANSFER && file_enable_checkpoint && !file_checkpointed && swift::IsComplete(single_td))
-	{
-	    std::string binmap_filename = swift::GetOSPathName(single_td);
-	    binmap_filename.append(".mbinmap");
-	    fprintf(stderr,"swift: Complete, checkpointing %s\n", binmap_filename.c_str() );
 
-	    if (swift::Checkpoint(single_td) >= 0)
-		file_checkpointed = true;
-        }
-
+        AttemptCheckpoint();
 
         if (exitoncomplete && swift::IsComplete(single_td))
             // Download and stop mode
@@ -950,6 +968,11 @@ void ReportCallback(int fd, short event, void *arg) {
             ContentTransfer *ct = swift::GetActivatedTransfer(td);
             if (ct != NULL)
         	nactive++;
+            double up = swift::GetCurrentSpeed(td,DDIR_UPLOAD);
+            if (up/1048576 > 1)
+                fprintf(stderr,"%d: upload %.2f MB/s\t", td, up/(1<<20));
+            else
+                fprintf(stderr,"%d: upload %.2f KB/s\t", td, up/(1<<10));
         }
         /*
         fprintf(stderr,

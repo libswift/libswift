@@ -158,7 +158,12 @@ LiveTransfer::LiveTransfer(std::string filename, SwarmID &swarmid, Address &srca
 
     Initialize(*kp,cipm,disc_wnd,0);
 
+#if ENABLE_LIVE_SMALLSWARMOPT_PIECEPICKER == 1
+    fprintf(stderr,"live: Enabling small swarm optimization\n");
     picker_ = new SharingLivePiecePicker(this);
+#else
+    picker_ = new SimpleLivePiecePicker(this);
+#endif
     picker_->Randomize(rand()&63);
 }
 

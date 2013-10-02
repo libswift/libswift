@@ -18,7 +18,7 @@
  *  loaded into memory. In particular, content and hashes are read directly
  *  from disk.
  *
- *  Created by Victor Grishchenko, Arno Bakker
+ *  Created by Victor Grishchenko, Arno Bakker, Riccardo Petrocco
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
@@ -64,6 +64,8 @@
 #ifndef SWIFT_H
 #define SWIFT_H
 
+// Arno, 2013-06-11: Must come first to ensure SIZE_MAX etc are defined
+#include "compat.h"
 #include <deque>
 #include <vector>
 #include <set>
@@ -72,7 +74,6 @@
 #include <algorithm>
 #include <string>
 
-#include "compat.h"
 #include <event2/event.h>
 #include <event2/event_struct.h>
 #include <event2/buffer.h>
@@ -118,6 +119,10 @@ namespace swift {
 // Arno, 2011-12-22: Enable Riccardo's VodPiecePicker
 #define ENABLE_VOD_PIECEPICKER        1
 
+// Arno, 2013-10-02: Configure which live piecepicker: default or with small-swarms optimization
+#define ENABLE_LIVE_SMALLSWARMOPT_PIECEPICKER      1
+
+// scheme for swift URLs
 #define SWIFT_URI_SCHEME              "tswift"
 
 
@@ -132,6 +137,9 @@ namespace swift {
 // Live streaming via Unified Merkle Tree or Sign All: The number of chunks per signature
 // Set to 1 for Sign All, set to a power of 2 > 1 for UMT. This MUST be a power of 2.
 #define SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN   32
+
+	// Ric: allowed hints in the future (e.g., 2 x TINT_SEC)
+#define HINT_TIME                       2	// seconds
 
 // How much time a SIGNED_INTEGRITY timestamp may diverge from current time
 #define SWIFT_LIVE_MAX_SOURCE_DIVERGENCE_TIME	30 // seconds
@@ -544,6 +552,8 @@ typedef std::vector<Address>	peeraddrs_t;
         void            OnSendData(int n);
         /** Arno: Call when no bytes are sent due to rate limiting. */
         void            OnSendNoData();
+        /** Ric:  Call when no bytes are received. */
+        void            OnRecvNoData();
         /** Arno: Return current speed for the given direction in bytes/s */
         double          GetCurrentSpeed(data_direction_t ddir);
         /** Arno: Return maximum speed for the given direction in bytes/s */
@@ -568,7 +578,12 @@ typedef std::vector<Address>	peeraddrs_t;
         void		SetDefaultHandshake(Handshake &default_hs_out) { def_hs_out_ = default_hs_out; }
         Handshake &	GetDefaultHandshake(){ return def_hs_out_; }
 
-        /** Arno: set the tracker URL for this transfer. Reseting it won't kill
+        /** Ric: add number of hints for slow start scenario */
+        void            SetSlowStartHints(uint32_t hints) { slow_start_hints_ += hints; }
+        /** Ric: get the # of slow start hints */
+        uint32_t        GetSlowStartHints() { return slow_start_hints_; }
+
+        /** Arno: set the tracker for this transfer. Reseting it won't kill
          * any existing connections. */
         void            SetTracker(std::string trackerurl) { trackerurl_ = trackerurl; }
         /** Arno: (Re)Connect to tracker for this transfer, or global Channel::trackerurl if not set */
@@ -606,8 +621,8 @@ typedef std::vector<Address>	peeraddrs_t;
         // RATELIMIT
         MovingAverageSpeed    cur_speed_[2];
         double          max_speed_[2];
-        int             speedzerocount_;
-
+        uint32_t        speedupcount_;
+        uint32_t        speeddwcount_;
         // MULTIFILE
         Storage         *storage_;
 
@@ -618,6 +633,9 @@ typedef std::vector<Address>	peeraddrs_t;
         tint            tracker_retry_interval_;
         tint            tracker_retry_time_;
         BTTrackerClient *bttrackclient_; // if BT tracker
+        // Ric: slow start 4 requesting hints
+        uint32_t        slow_start_hints_;
+
     };
 
 
@@ -1105,6 +1123,8 @@ typedef std::vector<Address>	peeraddrs_t;
         bin_t	    last_sent_munro_;
         bool 	    munro_ack_rcvd_;
 
+        // RTTCS
+        tintbin	    rtt_hint_tintbin_;
 
         int         PeerBPS() const { return TINT_SEC / dip_avg_ * 1024; }
         /** Get a request for one packet from the queue of peer's requests. */

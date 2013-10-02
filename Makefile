@@ -1,4 +1,4 @@
-LIBEVENT_HOME=/prod/pkgs/libevent-2.0.17-stable
+LIBEVENT_HOME=/arno/pkgs/libevent-2.0.21-stable
 
 # Remove NDEBUG define to trigger asserts
 CPPFLAGS+=-O2 -I. -DNDEBUG -Wall -Wno-sign-compare -Wno-unused -g -I${LIBEVENT_HOME}/include -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -DOPENSSL

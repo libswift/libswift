@@ -6,15 +6,14 @@
  *  Copyright 2010-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
-#include <iostream>
-#include <sstream>
-
 #include "swift.h"
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
 #include <event2/listener.h>
 #include <event2/http.h>
 
+#include <iostream>
+#include <sstream>
 
 using namespace swift;
 

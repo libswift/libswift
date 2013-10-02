@@ -6,10 +6,10 @@
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
+#include "swift.h"
 #include <errno.h>
 #include <string>
 #include <sstream>
-#include "swift.h"
 
 #include "ext/seq_picker.cpp" // FIXME FIXME FIXME FIXME
 #include "ext/vod_picker.cpp"

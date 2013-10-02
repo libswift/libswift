@@ -19,6 +19,8 @@ typedef int int32_t;
 typedef __int64 int64_t;
 typedef unsigned __int64 uint64_t;
 #else
+// Arno, 2013-06-11: Must be defined to get SIZE_MAX in C++
+#define  __STDC_LIMIT_MACROS
 #include <stdint.h>
 #endif
 
@@ -31,6 +33,7 @@ typedef unsigned __int64 uint64_t;
 #include <direct.h>
 #include <In6addr.h>
 #include <Ws2tcpip.h>
+#include <signal.h>
 #else
 #include <sys/mman.h>
 #include <arpa/inet.h>
@@ -42,6 +45,7 @@ typedef unsigned __int64 uint64_t;
 #include <sys/stat.h>
 #endif
 
+#include <limits.h>
 #include <fcntl.h>
 #include <cstdio>
 #include <cstdlib>
@@ -92,7 +96,6 @@ typedef void* setsockoptptr_t;
 #endif
 
 #ifndef LONG_MAX
-#include <limits>
 #define LONG_MAX	numeric_limits<int>::max()
 #endif
 
@@ -103,6 +106,10 @@ typedef void* setsockoptptr_t;
 
 
 // Arno, 2012-01-05: Handle 64-bit size_t & printf+scanf
+#ifndef SIZE_MAX
+#error SIZE_MAX undefined, check stdint.h and __STDC_LIMIT_MACROS
+#endif
+
 #if SIZE_MAX > UINT_MAX
 #define PRISIZET	"%llu"
 #else
