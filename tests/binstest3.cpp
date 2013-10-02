@@ -73,7 +73,7 @@ TEST(BinsTest,FindFiltered1c) {
     fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
 
     bin_t x = binmap_t::find_complement(data, filter, s, 0);
-    EXPECT_EQ(bin_t(0,12),x);
+    EXPECT_EQ(bin_t(1,6),x);
 
 }
 
@@ -409,11 +409,8 @@ TEST(BinsTest,FindFiltered17) {
 	bin_t hint = bin_t::NONE;
 	while (hint.is_none() && layer <10)
 	{
-		bin_t curr = bin_t(layer++,0);
-		binmap.fill(offer);
-		binmap_t::copy(binmap, ack_hint_out, curr);
-		hint = binmap_t::find_complement(binmap, offer, twist);
-		binmap.clear();
+        bin_t curr = bin_t(layer++,0);
+		hint = binmap_t::find_complement(ack_hint_out, offer, curr, twist);
 	}
 
 	EXPECT_EQ(bin_t(292),hint);
@@ -435,8 +432,6 @@ TEST(BinsTest,FindFiltered19) {
     		ack_hint_out.set(bin_t(0,i+x));
     }
 
-	binmap_t binmap;
-
 	int layer = 0;
 	bin_t::uint_t twist = 0;
 	bin_t hint = bin_t::NONE;
@@ -448,13 +443,10 @@ TEST(BinsTest,FindFiltered19) {
 		if (layer < 10)
 			layer++;
 
-		binmap.fill(offer);
-		binmap_t::copy(binmap, ack_hint_out, curr);
-		hint = binmap_t::find_complement(binmap, offer, twist);
+		hint = binmap_t::find_complement(ack_hint_out, offer, curr, twist);
 
 		if (!hint.is_none())
 			fprintf(stderr,"Found alt ");
-		binmap.clear();
 
 		//patch hole
 		ack_hint_out.set(hint);
@@ -488,7 +480,6 @@ TEST(BinsTest,FindFiltered20) {
 
     create_ack_hint_out(ack_hint_out);
 
-	binmap_t binmap;
 
 	int layer = 0;
 	bin_t::uint_t twist = 0;
@@ -505,13 +496,10 @@ TEST(BinsTest,FindFiltered20) {
 			for (int p=0; p<layer; p++)
 				curr = curr.parent();
 
-			binmap.fill(offer);
-			binmap_t::copy(binmap, ack_hint_out, curr);
-			hint = binmap_t::find_complement(binmap, offer, twist);
+			hint = binmap_t::find_complement(ack_hint_out, offer, curr, twist);
 
 			if (!hint.is_none())
 				fprintf(stderr,"Found alt %s ", hint.str().c_str() );
-			binmap.clear();
 
 			//patch hole
 			ack_hint_out.set(hint);
