@@ -110,6 +110,8 @@ namespace swift {
 // Arno, 2013-10-02: Configure which live piecepicker: default or with small-swarms optimization
 #define ENABLE_LIVE_SMALLSWARMOPT_PIECEPICKER      1
 
+// Arno, 2013-10-02: Simple wrap around for storage. Set to 0 to disable.
+#define DEFAULT_LIVE_DISC_WND_BYTES		   (1*1024*1024*1024) // 1 GB
 
 
 #define SWIFT_URI_SCHEME              "tswift"
@@ -1014,7 +1016,8 @@ namespace swift {
             STOR_STATE_INIT,
             STOR_STATE_MFSPEC_SIZE_KNOWN,
             STOR_STATE_MFSPEC_COMPLETE,
-            STOR_STATE_SINGLE_FILE
+            STOR_STATE_SINGLE_FILE,
+            STOR_STATE_SINGLE_LIVE_WRAP  // single file containing just live discard window
         } storage_state_t;
 
         /** StorageFile for every file in this transfer */
@@ -1025,7 +1028,7 @@ namespace swift {
         static std::string os2specpn(std::string ospn);
 
         /** Create Storage from specified path and destination dir if content turns about to be a multi-file */
-        Storage(std::string ospathname, std::string destdir, int td);
+        Storage(std::string ospathname, std::string destdir, int td, uint64_t live_disc_wnd_bytes);
         ~Storage();
 
         /** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
@@ -1059,7 +1062,7 @@ namespace swift {
         std::string GetDestDir() { return destdir_; }
 
         /** Whether Storage is ready to be used */
-        bool        IsReady() { return state_ == STOR_STATE_SINGLE_FILE || state_ == STOR_STATE_MFSPEC_COMPLETE; }
+        bool        IsReady() { return state_ == STOR_STATE_SINGLE_FILE || STOR_STATE_SINGLE_LIVE_WRAP || state_ == STOR_STATE_MFSPEC_COMPLETE; }
 
         /** Return the list of StorageFiles for this Storage, empty if not multi-file */
         storage_files_t    GetStorageFiles() { return sfs_; }
@@ -1090,6 +1093,7 @@ namespace swift {
 
         int         td_; // transfer ID of the *Transfer we're part of.
         ProgressCallback alloc_cb_;
+        uint64_t    live_disc_wnd_bytes_;
 
         int         WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
         std::pair<int64_t,int64_t> WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);

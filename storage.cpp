@@ -22,15 +22,20 @@ using namespace swift;
 const std::string Storage::MULTIFILE_PATHNAME = "META-INF-multifilespec.txt";
 const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 
-Storage::Storage(std::string ospathname, std::string destdir, int td) :
+Storage::Storage(std::string ospathname, std::string destdir, int td, uint64_t live_disc_wnd_bytes) :
 	Operational(),
 	state_(STOR_STATE_INIT),
         os_pathname_(ospathname), destdir_(destdir), ht_(NULL), spec_size_(0),
         single_fd_(-1), reserved_size_(-1), total_size_from_spec_(-1), last_sf_(NULL),
-        td_(td), alloc_cb_(NULL)
+        td_(td), alloc_cb_(NULL), live_disc_wnd_bytes_(live_disc_wnd_bytes)
 {
-
-    //fprintf(stderr,"Storage: ospathname %s destdir %s\n", ospathname.c_str(), destdir.c_str() );
+    // SIGNPEAK
+    if (live_disc_wnd_bytes > 0 && live_disc_wnd_bytes != POPT_LIVE_DISC_WND_ALL)
+    {
+	state_ = STOR_STATE_SINGLE_LIVE_WRAP;
+        (void)OpenSingleFile();
+        return;
+    }
 
     int64_t fsize = file_size_by_path_utf8(ospathname.c_str());
     if (fsize < 0 && errno == ENOENT)
@@ -62,6 +67,10 @@ Storage::Storage(std::string ospathname, std::string destdir, int td) :
     if (!strncmp(readbuf,MULTIFILE_PATHNAME.c_str(),MULTIFILE_PATHNAME.length()))
     {
         // Pathname points to a multi-file spec, assume we're seeding
+	// Arno, 2013-03-06: Not correct for a spec that doesn't fit in chunk 0,
+	// should attempt to parse spec, if good then _COMPLETE otherwise wait
+	// for chunks 1,2... and reparse.
+	//
         state_ = STOR_STATE_MFSPEC_COMPLETE;
 
         dprintf("%s %s storage: Found multifile-spec, will seed it.\n", tintstr(), roothashhex().c_str() );
@@ -79,7 +88,8 @@ Storage::Storage(std::string ospathname, std::string destdir, int td) :
         // Normal swarm
         dprintf("%s %s storage: Found single file, will check it.\n", tintstr(), roothashhex().c_str() );
 
-        (void)OpenSingleFile(); // sets state to STOR_STATE_SINGLE_FILE
+        state_ = STOR_STATE_SINGLE_FILE;
+        (void)OpenSingleFile();
     }
 }
 
@@ -101,18 +111,42 @@ Storage::~Storage()
 
 ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 {
-    //dprintf("%s %s storage: Write: fd %d nbyte %d off %lld state %d\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
+    dprintf("%s %s storage: Write: fd %d nbyte %d off %lld state %d\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
+    //fprintf(stderr,"%s %s storage: Write: fd %d nbyte %d off %lld state %d\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
 
     if (state_ == STOR_STATE_SINGLE_FILE)
     {
         return pwrite(single_fd_, buf, nbyte, offset);
     }
+    else if (state_ == STOR_STATE_SINGLE_LIVE_WRAP) // SIGNPEAK
+    {
+	int64_t newoff = offset % live_disc_wnd_bytes_;
+
+	dprintf("%s %d ?data writing disk %lld window %llu\n",tintstr(), 0, newoff, live_disc_wnd_bytes_ );
+
+	fprintf(stderr,"Write at %lld\n", newoff );
+
+	if (newoff+nbyte > live_disc_wnd_bytes_)
+	{
+	    // Writing more than window
+	    size_t firstbyte = live_disc_wnd_bytes_ - newoff;
+	    dprintf("%s %d ?data writing disk %lld firstbyte " PRISIZET "\n",tintstr(), 0, newoff, firstbyte );
+	    int ret = pwrite(single_fd_, buf, firstbyte, newoff);
+	    if (ret < 0)
+		return ret;
+	    else
+		return Write(((char *)buf)+firstbyte,nbyte-firstbyte,offset+firstbyte);
+	}
+	else
+	    return pwrite(single_fd_, buf, nbyte, newoff);
+    }
+
     // MULTIFILE
     if (state_ == STOR_STATE_INIT)
     {
         if (offset != 0)
         {
-                        dprintf("%s %s storage: Write: First write to offset >0, assume live\n", tintstr(), roothashhex().c_str() );
+	    dprintf("%s %s storage: Write: First write to offset >0, assume live\n", tintstr(), roothashhex().c_str() );
             //errno = EINVAL;
             //return -1;
         }
@@ -145,7 +179,9 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
         else
         {
             // Is a single file swarm.
-            int ret = OpenSingleFile(); // sets state to STOR_STATE_SINGLE_FILE
+            state_ = STOR_STATE_SINGLE_FILE;
+
+            int ret = OpenSingleFile();
             if (ret < 0)
                 return -1;
 
@@ -401,9 +437,7 @@ int Storage::ParseSpec(StorageFile *sf)
 
 int Storage::OpenSingleFile()
 {
-    state_ = STOR_STATE_SINGLE_FILE;
-
-    //dprintf("%s %s storage: Opening single file %s\n", tintstr(), roothashhex().c_str(), os_pathname_.c_str() );
+    dprintf("%s %s storage: Opening single file %s\n", tintstr(), roothashhex().c_str(), os_pathname_.c_str() );
     single_fd_ = open_utf8(os_pathname_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (single_fd_<0) {
         single_fd_ = -1;
@@ -438,6 +472,14 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
     {
         return pread(single_fd_, buf, nbyte, offset);
     }
+    else if (state_ == STOR_STATE_SINGLE_LIVE_WRAP)
+    {
+	int64_t newoff = offset % live_disc_wnd_bytes_;
+	dprintf("%s %d ?data reading disk %lld window %llu\n",tintstr(), 0, newoff, live_disc_wnd_bytes_ );
+
+        return pread(single_fd_, buf, nbyte, newoff);
+    }
+
 
     // MULTIFILE
     if (state_ == STOR_STATE_INIT)
@@ -524,7 +566,7 @@ int64_t Storage::GetReservedSize()
             totaldisksize += fsize;
     }
 
-    dprintf("storage: getdisksize: total already sized is %ld\n", totaldisksize );
+    dprintf("storage: getdisksize: total already sized is %lld\n", totaldisksize );
 
     return totaldisksize;
 }

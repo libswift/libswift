@@ -60,7 +60,7 @@ LiveTransfer::LiveTransfer(std::string filename, const Sha1Hash& swarm_id,bool a
     }
 
     // MULTIFILE
-    storage_ = new Storage(filename,destdir,td_);
+    storage_ = new Storage(filename,destdir,td_,DEFAULT_LIVE_DISC_WND_BYTES);
 }
 
 
