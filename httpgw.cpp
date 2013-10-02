@@ -157,7 +157,13 @@ void HttpGwCloseConnection (http_gw_t* req) {
     //
     swift::Seek(req->td,swift::Size(req->td)-1,SEEK_CUR);
 
-    //swift::Close(req->td);
+    // Arno, 2013-05-24: Leave swarm for LIVE.
+    if (req->xcontentdur == "-1")
+    {
+	// Arno, 2013-10-01: Also when queueing multiple requests, GET
+	// should start from current point not old hook-in.
+	swift::Close(req->td);
+    }
 
     int oldtd = req->td;
 
