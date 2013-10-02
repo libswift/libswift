@@ -107,6 +107,11 @@ namespace swift {
 // Arno, 2011-12-22: Enable Riccardo's VodPiecePicker
 #define ENABLE_VOD_PIECEPICKER        1
 
+// Arno, 2013-10-02: Configure which live piecepicker: default or with small-swarms optimization
+#define ENABLE_LIVE_SMALLSWARMOPT_PIECEPICKER      1
+
+
+
 #define SWIFT_URI_SCHEME              "tswift"
 
 // Value for protocol option: Live Discard Window
@@ -637,7 +642,7 @@ namespace swift {
          *  @param  max_width   maximum number of packets to ask for
          *  @param  expires     (not used currently) when to consider request expired
          *  @return             the bin number to request */
-        virtual bin_t   Pick (binmap_t& offered, uint64_t max_width, tint expires) = 0;
+        virtual bin_t   Pick (binmap_t& offered, uint64_t max_width, tint expires, uint32_t channelid) = 0;
         virtual void    LimitRange (bin_t range) = 0;
         /** updates the playback position for streaming piece picking.
          *  @param  offbin        bin number of new playback pos
@@ -821,6 +826,7 @@ namespace swift {
         // LIVE
         /** Arno: Called when source generates chunk. */
         void        LiveSend();
+        bool	    PeerIsSource() { return peer_is_source_; }
 
         void 	    CloseOnError();
 

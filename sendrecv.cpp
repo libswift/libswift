@@ -316,6 +316,12 @@ void    Channel::Send () {
 
 void    Channel::AddHint (struct evbuffer *evb) {
 
+    if (transfer()->ttype() == LIVE_TRANSFER) {
+	LiveTransfer *lt = (LiveTransfer *)transfer();
+	if (lt->am_source())
+	    return;
+    }
+
     // RATELIMIT
     // Policy is to not send hints when we are above speed limit
     if (transfer()->GetCurrentSpeed(DDIR_DOWNLOAD) > transfer()->GetMaxSpeed(DDIR_DOWNLOAD)) {
@@ -394,7 +400,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
     // Arno, 2012-10-30: not HINT_GRANULARITY for LIVE
     if (hint_out_size_ == 0 || plan_pck >= HINT_GRANULARITY || transfer()->ttype() == LIVE_TRANSFER)
     {
-        bin_t hint = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2);
+        bin_t hint = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2,id_);
         if (!hint.is_none()) {
             if (DEBUGTRAFFIC)
             {

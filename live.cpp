@@ -39,7 +39,13 @@ LiveTransfer::LiveTransfer(std::string filename, const Sha1Hash& swarm_id,bool a
 {
     GlobalAdd();
 
+#if ENABLE_LIVE_SMALLSWARMOPT_PIECEPICKER == 1
+    fprintf(stderr,"SMALL SWARM OPT\n");
+    picker_ = new SharingLivePiecePicker(this);
+#else
+    fprintf(stderr,"OLD SKOOL PICKER\n");
     picker_ = new SimpleLivePiecePicker(this);
+#endif
     picker_->Randomize(rand()&63);
 
     std::string destdir;
