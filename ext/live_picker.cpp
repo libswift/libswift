@@ -442,14 +442,14 @@ public:
 	    double r = (double)rand()/(double)RAND_MAX;
 	    if (r >= dlprob)  // Trust you will get it from peers, don't dl from source
 	    {
-		fprintf(stderr,"live: pp: Not from source r %.02lf dlprob %.02lf npeers %u\n", r, dlprob, npeers);
+		//fprintf(stderr,"live: pp: Not from source r %.02lf dlprob %.02lf npeers %u\n", r, dlprob, npeers);
 		return bin_t::NONE;
 	    }
 	}
 
 
 	//dprintf("live: pp: Picked %c %s\n", priority, hint.str().c_str() );
-	fprintf(stderr,"live: pp: Picked %c %s\n", priority, hint.str().c_str() );
+	//fprintf(stderr,"live: pp: Picked %c %s\n", priority, hint.str().c_str() );
 
 	assert(ack_hint_out_.is_empty(hint));
 	ack_hint_out_.set(hint);
