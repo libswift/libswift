@@ -38,7 +38,7 @@ TEST(Sha1HashTest,OfferDataTest) {
     fprintf(stderr,"BEFORE swift::Open\n");
     int td = swift::Open("123", SwarmID(roothash123));
     fprintf(stderr,"BEFORE Storage\n");
-    Storage storage("123", ".", td, POPT_LIVE_DISC_WND_ALL);
+    Storage storage("123", ".", td, 0);
     fprintf(stderr,"BEFORE MmapHashTree\n");
     MmapHashTree tree(&storage,roothash123,1024,"123.mhash",false,"123.mbinmap");
 

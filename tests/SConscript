@@ -128,12 +128,6 @@ env.Program(
     LIBS=libs,
     LIBPATH=libpath )
 
-env.Program( 
-    target='connecttest',
-    source=['connecttest.cpp'],
-    CPPPATH=cpppath,
-    LIBS=libs,
-    LIBPATH=libpath )
 
 env.Program( 
     target='apitest',
