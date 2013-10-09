@@ -179,7 +179,7 @@ class SimpleLivePiecePicker : public LivePiecePicker {
 
 	tint sourcedifft = last_munro_tint_ - candtint;
 	double sourcedifftinsecs = (double)sourcedifft/(double)TINT_SEC;
-	fprintf(stderr,"live: pp: Current source lag %lf\n", sourcedifftinsecs );
+	//fprintf(stderr,"live: pp: Current source lag %lf\n", sourcedifftinsecs );
 
 	if (sourcedifft < (SWIFT_LIVE_MAX_SOURCE_DIVERGENCE_TIME*TINT_SEC))
 	    // Not lagging
