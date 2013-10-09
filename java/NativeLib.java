@@ -10,7 +10,8 @@ public class NativeLib {
 
   static {
     //System.loadLibrary("swift");
-	  System.loadLibrary("event");
+	//  System.loadLibrary("event");
+	  System.loadLibrary("cryptossl");
   }
   
   /** 
