@@ -125,10 +125,6 @@ class TstMultiFileSeekFramework(TestAsServer):
         shutil.copyfile(self.specfn+".mhash",self.mfdestfn+".mhash")
         shutil.copyfile(self.specfn+".mbinmap",self.mfdestfn+".mbinmap")
         
-        # Arno, 2013-10-09: Seeder with explicit tracker a bit weird, but
-        # seeder with HTTPGW is already weird
-        #self.trackerurl = "127.0.0.1:"+str(self.listenport)
-        
 
     def setUpFileList(self):
         self.filelist = []
