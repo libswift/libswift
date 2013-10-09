@@ -75,21 +75,17 @@ public:
     	bin_t curr = bin_t((playback_pos_+1)<<1); // the base bin will be indexed by the double of the value (bin(4) == bin(0,2))
     	bin_t hint = bin_t::NONE;
     	uint64_t examined = 0;
-	binmap_t binmap;
+    	binmap_t binmap;
 
     	// report the first bin we find
     	while (hint.is_none() && examined < size)
     	{
-	    curr = getTopBin(curr, (playback_pos_+1)<<1, size-examined);
-	    if (!ack_hint_out_.is_filled(curr))
-	    {
-		binmap.fill(offer);
-		binmap_t::copy(binmap, ack_hint_out_, curr);
-		hint = binmap_t::find_complement(binmap, offer, twist_);
-		binmap.clear();
-	    }
-	    examined += curr.base_length();
-	    curr = bin_t(0, curr.base_right().layer_offset()+1 );
+            curr = getTopBin(curr, (playback_pos_+1)<<1, size-examined);
+            if (!ack_hint_out_.is_filled(curr))
+                hint = binmap_t::find_complement(ack_hint_out_, offer, curr, twist_);
+
+            examined += curr.base_length();
+            curr = bin_t(0, curr.base_right().layer_offset()+1 );
     	}
 
     	if (!hint.is_none())
@@ -102,61 +98,64 @@ public:
 
     bin_t pickRarest (binmap_t& offer, uint64_t max_width, uint64_t start, uint64_t size) {
 
-    	//fprintf(stderr,"%s #1 Picker -> choosing from mid/low priority \n",tintstr());
     	bin_t curr = bin_t(start<<1);
-	bin_t hint = bin_t::NONE;
-	uint64_t examined = 0;
-	//uint64_t size = end-start;
-	bin_t rarest_hint = bin_t::NONE;
-	// TODO remove..
-	binmap_t binmap;
+        bin_t hint = bin_t::NONE;
+        uint64_t examined = 0;
 
-	// TODO.. this is the dummy version... put some logic in deciding what to DL
-	while (examined < size)
-	{
-	    curr = getTopBin(curr, start<<1, size-examined);
+        int rarity_idx = 0;
+        do
+        {
+            bool retry = false;
+            binmap_t *rare = avail_->get(rarity_idx);
 
-	    if (!ack_hint_out_.is_filled(curr))
-	    {
-		// remove
-		//binmap_t::copy(binmap, offer);
-		//binmap.reset(curr);
+            if (rare==NULL)
+                break;
 
-		binmap.fill(offer);
-		binmap_t::copy(binmap, ack_hint_out_, curr);
-		//hint = binmap_t::find_complement(ack_hint_out_, offer, curr, twist_);
-		hint = binmap_t::find_complement(binmap, offer, twist_);
-		binmap.clear();
+            if (!rare->is_empty())
+            {
+                bin_t range = getTopBin(bin_t(start<<1), start<<1, size-examined);
 
-		if (!hint.is_none())
-		{
-		    if (avail_->size())
-		    {
-			rarest_hint = avail_->get(rarest_hint) < avail_->get(hint) ? rarest_hint : hint;
-		    }
-		    else
-		    {
-			examined = size;
-			rarest_hint = hint;
-		    }
-		}
-	    }
+                while (examined < size && !retry)
+                {
+                    binmap_t curr;
+                    binmap_t::copy(curr, *rare, range);
 
-	    examined += curr.base_length();
-	    curr = bin_t(0, curr.base_right().layer_offset()+1 );
+                    bool checked_all = false;
+                    while (hint.is_none() && !checked_all) {
 
-	}
+                        hint = binmap_t::find_match(curr, offer, range, twist_);
 
-	if (!rarest_hint.is_none())
-	{
-	    if (avail_->size())
-		rarest_hint = avail_->getRarest(rarest_hint, max_width);
-	    else
-		while (rarest_hint.base_length()>max_width && !rarest_hint.is_base()) // Arno,2012-01-17: stop!
-		    rarest_hint.to_left();
-	}
+                        // Move to the next range
+                        if (hint.is_none()) {
+                            checked_all = true;
+                        }
+                        else if (!ack_hint_out_.is_filled(hint)) {
+                            hint = binmap_t::find_complement(ack_hint_out_, offer, hint, twist_);
 
-	return rarest_hint;
+                            // unhinted/late data
+                            if (!hashtree()->ack_out()->is_empty(hint)) {
+                                binmap_t::copy(ack_hint_out_, *(hashtree()->ack_out()), hint);
+                                // recheck same range
+                                retry = true;
+                                hint = bin_t::NONE;
+                                break;
+                            }
+                        } else {
+                            curr.reset(hint);
+                            hint = bin_t::NONE;
+                        }
+                    }
+                    examined += range.base_length();
+                    range = getTopBin(bin_t(0, range.base_right().layer_offset()+1 ), start<<1, size-examined);
+                }
+            }
+            if (!retry)
+                rarity_idx++;
+
+        } while (rarity_idx<SWIFT_MAX_CONNECTIONS && hint.is_none());
+
+
+        return hint;
     }
 
 

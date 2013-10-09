@@ -13,6 +13,7 @@
 
 #include "ext/seq_picker.cpp" // FIXME FIXME FIXME FIXME
 #include "ext/vod_picker.cpp"
+#include "ext/rf_picker.cpp"
 
 using namespace swift;
 
@@ -51,15 +52,13 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
     if (!zerostate_)
     {
         hashtree_ = (HashTree *)new MmapHashTree(storage_,root_hash,chunk_size,hash_filename,force_check_diskvshash,check_netwvshash,binmap_filename);
-        if (ENABLE_VOD_PIECEPICKER) {
-            // Ric: init availability
-            availability_ = new Availability();
-            // Ric: TODO assign picker based on input params...
+        availability_ = new Availability(SWIFT_MAX_CONNECTIONS);
+
+        if (ENABLE_VOD_PIECEPICKER) 
             picker_ = new VodPiecePicker(this);
-	}
-	else
-	    picker_ = new SeqPiecePicker(this);
-	picker_->Randomize(rand()&63);
+        else 
+			picker_ = new RFPiecePicker(this);
+        picker_->Randomize(rand()&63);
     }
     else
     {

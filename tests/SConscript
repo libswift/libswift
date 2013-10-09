@@ -147,6 +147,12 @@ env.Program(
     LIBS=libs,
     LIBPATH=libpath )
 
+env.Program( 
+    target='connecttest',
+    source=['connecttest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
 
 env.Program( 
     target='apitest',
@@ -155,6 +161,33 @@ env.Program(
     LIBS=libs,
     LIBPATH=libpath )
 
+env.Program( 
+    target='test_bug',
+    source=['test_bug.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+env.Program( 
+    target='binstest5',
+    source=['binstest5.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+env.Program( 
+    target='pickertest',
+    source=['pickertest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+env.Program( 
+    target='availtest',
+    source=['availtest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
 
 if DEBUG and sys.platform == "linux2":
 	scxxflags = "" 

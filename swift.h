@@ -93,6 +93,8 @@ namespace swift {
 #define SWIFT_MAX_SEND_DGRAM_SIZE            (SWIFT_MAX_NONDATA_DGRAM_SIZE+1+4+8192)
 // Arno: Maximum size of a UDP packet we are willing to accept. Note: depends on CHUNKSIZE 8192
 #define SWIFT_MAX_RECV_DGRAM_SIZE            (SWIFT_MAX_SEND_DGRAM_SIZE*2)
+// Ric: Victor's magic # :-)
+#define SWIFT_MAX_CONNECTIONS 30
 
 #define layer2bytes(ln,cs)    (uint64_t)( ((double)cs)*pow(2.0,(double)ln))
 #define bytes2layer(bn,cs)  (int)log2(  ((double)bn)/((double)cs) )
@@ -125,7 +127,7 @@ namespace swift {
 #define PEX_RES_MAX_CERT_SIZE		     1024
 
 // Ric: allowed hints in the future (e.g., 2 x TINT_SEC)
-#define HINT_TIME                       2	// seconds
+#define HINT_TIME                       1	// seconds
 
 
 
@@ -723,7 +725,7 @@ namespace swift {
 
         // Ric: used for testing LEDBAT's behaviour
         float		GetCwnd() { return cwnd_; }
-        uint64_t 	GetHintSize() { return hint_in_size_; }
+        uint64_t 	GetHintSize(data_direction_t ddir) { return ddir ? hint_out_size_ : hint_in_size_; }
         bool 		Totest;
         bool 		Tocancel;
 
@@ -864,6 +866,9 @@ namespace swift {
         /** Hints sent (to detect and reschedule ignored hints). */
         tbqueue     hint_out_;
         uint64_t    hint_out_size_;
+        /** Hints queued to be sent. */
+		tbqueue     hint_queue_out_;
+		uint64_t    hint_queue_out_size_;
         /** Ric: hints that are removed from the hint_out_ queue and need to be canceled */
 		std::deque<bin_t> cancel_out_;
         /** Types of messages the peer accepts. */
@@ -948,6 +953,8 @@ namespace swift {
         void        CleanHintOut(bin_t pos);
         void        Reschedule();
         void        UpdateDIP(bin_t pos); // RETRANSMIT
+
+        bin_t       DequeueHintOut(uint64_t size);
 
         // Arno, 2012-06-14: Replace with hashtable (unsorted_map). This
         // currently grows for ever, filling with NULLs for old channels

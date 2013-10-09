@@ -7,170 +7,300 @@
  *
  */
 #include "swift.h"
+#include <cassert>
+
+#define DEBUG
 
 using namespace swift;
 
 #define DEBUGAVAILABILITY 	0
 
 
-uint8_t Availability::get(const bin_t bin)
+void Availability::setParams(int connections)
 {
-	if (bin.is_none())
-		return 255;
-	else if (size_)
-		return avail_[bin.toUInt()];
-
-	return 0;
+	if (DEBUGAVAILABILITY)
+		fprintf(stderr, "Availability: setting parameters => connections:%d\n", connections);
+	connections_=connections;
+	initRarity();
 }
 
 
-void Availability::setBin(bin_t bin)
+void Availability::setBin(bin_t bin, int idx)
 {
-	if (bin != bin_t::NONE)
-	{
-		bin_t beg = bin.base_left();
-		bin_t end = bin.base_right();
+	assert(idx>=0 && idx < connections_);
+	assert (!bin.is_none());
 
-		for (int i = beg.toUInt(); i<=end.toUInt(); i++)
-		{
-			// for the moment keep a counter
-			// TODO make it percentage
-			avail_[i]++;
+	if (DEBUGAVAILABILITY) {
+		fprintf(stderr, "Availability: search bin %s [%llu] on rarity %d [", bin.str().c_str(), bin.toUInt(), idx);
+		if(rarity_[idx]->is_empty())
+			fprintf(stderr, "empty] ");
+		else if (rarity_[idx]->is_filled())
+			fprintf(stderr, "full] ");
+		else
+			fprintf(stderr, "partial] ");
+	}
+
+	// if the bin is full at this rarity level, set it to empty
+	// and propagate the info to higher idx of the array
+	// (idx = availability of content)
+	if (rarity_[idx]->is_empty(bin)) {
+		// if we reached index 0 and the bin is empty
+		// it means it's out of our binmap => extend the root bin
+		if (idx==0) {
+			if (DEBUGAVAILABILITY)
+				fprintf(stderr, "empty => set the bin in the binmap with rarity 1.\n");
+			rarity_[1]->set(bin);
+			assert(rarity_[1]->is_filled(bin));
+			return;
+		}
+		else {
+			if (DEBUGAVAILABILITY)
+				fprintf(stderr, "empty => search further..\n");
+			setBin(bin, idx-1);
+		}
+	}
+	else if (rarity_[idx]->is_filled(bin))
+	{
+		if (DEBUGAVAILABILITY)
+			fprintf(stderr, "full => set bin in the binmap with rarity %d\n", idx+1);
+		if (idx==connections_-1)
+			return;
+
+		assert(rarity_[idx+1]->is_empty(bin));
+
+		rarity_[idx]->reset(bin);
+		rarity_[idx+1]->set(bin);
+	}
+	else
+	{
+		assert (!rarity_[idx]->is_empty());
+		if (DEBUGAVAILABILITY)
+			fprintf(stderr, "partially full!\n");
+		setBin(bin.left(), idx);
+		setBin(bin.right(), idx);
+	}
+
+
+	return;
+}
+
+
+void Availability::addBinmap(binmap_t * binmap)
+{
+	if (DEBUGAVAILABILITY)
+		dprintf("%s Availability adding binmap ",tintstr());
+
+	if (binmap->is_filled()) {
+		bool complete = true;
+		for (int idx=0; idx<connections_; idx++) {
+			bin_t b = binmap_t::find_complement(*binmap, *rarity_[idx], 0);
+			if (!b.is_none()) {
+				complete = false;
+				break;
+			}
+		}
+		if (complete) {
+			if (DEBUGAVAILABILITY)
+				dprintf("of a seeder.\n");
+			// merge binmaps of max availability
+			bin_t b;
+			b = binmap_t::find_complement(*rarity_[connections_-1],*rarity_[connections_-2],0);
+			while (b!=bin_t::NONE)
+			{
+				rarity_[connections_-1]->set(b);
+				b = binmap_t::find_complement(*rarity_[connections_-1],*rarity_[connections_-2],0);
+			}
+
+			for (int i=connections_-2;i>0;i--)
+			{
+				rarity_[i] = rarity_[i-1];
+			}
+			return;
 		}
 	}
 
-}
 
-
-void Availability::removeBin(bin_t bin)
-{
-	bin_t beg = bin.base_left();
-	bin_t end = bin.base_right();
-
-	for (int i = beg.toUInt(); i<=end.toUInt(); i++)
+	if (!binmap->is_empty())
 	{
-		avail_[i]--;
-	}
-}
+		if (DEBUGAVAILABILITY)
+			dprintf("of a leecher.\n");
 
+		bin_t tmp_b;
+		binmap_t tmp_bm;
+		tmp_b = binmap_t::find_complement(tmp_bm, *binmap, 0);
 
-void Availability::setBinmap(binmap_t * binmap)
-{
-
-	if (binmap->is_filled())
-		for (int i=0; i<size_; i++)
-			avail_[i]++;
-	else
-		if (!binmap->is_empty())
+		while (tmp_b != bin_t::NONE)
 		{
-			//status();
-			bin_t tmp_b;
-			binmap_t tmp_bm;
+			setBin(tmp_b,connections_-1);
+			//binmap_t::copy(tmp_bm, *binmap, tmp_b);
+			tmp_bm.set(tmp_b);
 			tmp_b = binmap_t::find_complement(tmp_bm, *binmap, 0);
-
-			while (tmp_b != bin_t::NONE)
-			{
-				setBin(tmp_b);
-				//binmap_t::copy(tmp_bm, *binmap, tmp_b);
-				tmp_bm.set(tmp_b);
-				tmp_b = binmap_t::find_complement(tmp_bm, *binmap, 0);
-			}
-			//status();
-
 		}
+		//status();
+	}
 
 	return;
 }
 
-void Availability::removeBinmap(binmap_t &binmap)
-{
-	if (binmap.is_filled())
-		for (int i=0; i<size_; i++)
-			avail_[i]--;
-	else
-		if (!binmap.is_empty())
-		{
-			bin_t tmp_b;
-			binmap_t tmp_bm;
-			tmp_b = binmap_t::find_complement(tmp_bm, binmap, 0);
-			while (tmp_b != bin_t::NONE)
-			{
-				removeBin(tmp_b);
-				tmp_bm.set(tmp_b);
-				tmp_b = binmap_t::find_complement(tmp_bm, binmap, 0);
-			}
-		}
-
-	return;
-}
 
 void Availability::set(uint32_t channel_id, binmap_t& binmap, bin_t target)
 {
 	if (DEBUGAVAILABILITY)
-	{
-		dprintf("%s #%u Availability -> setting %s (%llu)\n",tintstr(),channel_id,target.str().c_str(),target.toUInt());
+		fprintf(stderr, "%s #%u Availability -> setting %s (%llu)\n",tintstr(),channel_id,target.str().c_str(),target.toUInt());
+
+	if (false)
+		for (int i=0; i<connections_; i++)
+			fprintf(stderr, "%d\t%p\t%s\n", i, rarity_[i], rarity_[i]->is_empty()?"empty":"something there");
+
+	// this functin is called BEFORE the target bin is set in the channel's binmap
+	if (!binmap.is_filled(target)) {
+
+	    binmap_t tmp;
+	    bin_t bin;
+	    //binmap_t::copy(tmp, binmap, target);
+	    tmp.set(target);
+
+	    // find newly acked bins
+	    do {
+	        bin = binmap_t::find_complement(binmap, tmp, target, 0);
+	        if (!bin.is_none()) {
+	            if (DEBUGAVAILABILITY)
+	                fprintf(stderr, "Availability: new bin = %s [%llu]\n", bin.str().c_str(), bin.toUInt());
+	            setBin(bin, connections_-1);
+	            tmp.reset(bin);
+	        }
+	    } while (!bin.is_none());
+
 	}
+	return;
+}
 
-	if (size_>0 && !binmap.is_filled(target))
-	{
-		bin_t beg = target.base_left();
-		bin_t end = target.base_right();
+void Availability::find_empty(binmap_t& binmap, bin_t range)
+{
+	if (binmap.is_empty(range)) {
+		setBin(range, connections_-1);
+	}
+	else {
+		if (range.is_base())
+			return;
 
-		for (int i = beg.toUInt(); i<=end.toUInt(); i++)
-		{
-			// for the moment keep a counter
-			// TODO make it percentage
-			if (!binmap.is_filled(bin_t(i)))
-				avail_[i]++;
-			//TODO avoid running into sub-trees that r filled
+		if (!binmap.is_filled(range.left())) {
+			find_empty(binmap, range.to_left());
 		}
-	}
-	// keep track of the incoming have msgs
-	else
-	{
-
-   		for (WaitingPeers::iterator vpci = waiting_peers_.begin(); vpci != waiting_peers_.end(); ++vpci)
-   		{
-   		    if (vpci->first == channel_id)
-   		    {
-   		        waiting_peers_.erase(vpci);
-   		        break;
-	            }
-   		}
-
-    		waiting_peers_.push_back(std::make_pair(channel_id, &binmap));
+		if (!binmap.is_filled(range.right()))
+			find_empty(binmap, range.to_right());
 	}
 }
 
-
-void Availability::remove(uint32_t channel_id, binmap_t& binmap)
+// remove the binmap from the rarity array
+void Availability::removeBinmap(uint32_t channel_id, binmap_t& binmap)
 {
 	if (DEBUGAVAILABILITY)
-	{
-		dprintf("%s #%u Availability -> removing peer\n",tintstr(),channel_id);
-	}
-	if (size_<=0)
-	{
-		WaitingPeers::iterator vpci = waiting_peers_.begin();
-		for(; vpci != waiting_peers_.end(); ++vpci)
-		{
-			if (vpci->first == channel_id)
-			{
-			    waiting_peers_.erase(vpci);
+		fprintf(stderr, "%s #%u Availability -> removing peer ",tintstr(),channel_id);
+
+	// if it's a complete binmap of the file (or of our current knowledge)
+	// just move the binmaps down 1 idx in the rarity array
+	if (binmap.is_filled()) {
+		bool complete = true;
+		for (int idx=0; idx<connections_; idx++) {
+			bin_t b = binmap_t::find_complement(binmap, *rarity_[idx], 0);
+			if (!b.is_none()) {
+				complete = false;
 				break;
 			}
 		}
+		// basically change index of the array with precautions for first and last element
+		if (complete) {
+			if (DEBUGAVAILABILITY)
+			    fprintf(stderr, "(seeder).\n");
+			// merge binmaps of availability 1 and 0
+			bin_t b;
+			b = binmap_t::find_complement(*rarity_[0],*rarity_[1],0);
+			while (b!=bin_t::NONE)
+			{
+				rarity_[0]->set(b);
+				b = binmap_t::find_complement(*rarity_[0],*rarity_[1],0);
+			}
+
+			for (int i=1;i<connections_-1;i++)
+			{
+				rarity_[i] = rarity_[i+1];
+			}
+			return;
+		}
 	}
 
-	else
-		removeBinmap(binmap);
-	// remove the binmap from the availability
+	if (!binmap.is_empty())
+	{
+		if (DEBUGAVAILABILITY)
+			fprintf(stderr, "(leecher).\n");
+		bin_t tmp_b;
+		binmap_t tmp_bm;
+		tmp_b = binmap_t::find_complement(tmp_bm, binmap, 0);
+		while (!tmp_b.is_none())
+		{
+			removeBin(tmp_b, connections_-1);
+			tmp_bm.set(tmp_b);
+			tmp_b = binmap_t::find_complement(tmp_bm, binmap, 0);
+		}
+	}
 
 	return;
 }
 
+void Availability::removeBin(bin_t bin, int idx)
+{
+	if (idx==0) {
+		if (DEBUGAVAILABILITY)
+			fprintf(stderr, "Availability: already at idx 0\n");
+		return;
+	}
 
-void Availability::setSize(uint64_t size)
+	if (DEBUGAVAILABILITY)
+		fprintf(stderr, "Availability: search bin %s [%llu] on rarity %d [%s] ", bin.str().c_str(), bin.toUInt(), idx,  rarity_[idx]->is_empty()?"empty":"full");
+	// if the bin is full at this rarity level, set it to empty
+	// and propagate the info to higher idx of the array
+	// (idx = availability of content)
+	if (rarity_[idx]->is_empty(bin)) {
+		// if we reached index 0 and the bin is empty
+		// it means it's out of our binmap => extend the root bin
+		if (idx==0) {
+			if (DEBUGAVAILABILITY)
+				fprintf(stderr, "empty => extend root of binmap with rarity 1.\n");
+			//rarity_[0]->extend_if_needed(bin);
+			rarity_[1]->set(bin);
+			return;
+		}
+		else {
+			if (DEBUGAVAILABILITY)
+				fprintf(stderr, "empty => search further..\n");
+			removeBin(bin, idx-1);
+		}
+	}
+	else if (rarity_[idx]->is_filled(bin))
+	{
+		if (DEBUGAVAILABILITY)
+			fprintf(stderr, "full!!\n");
+		if (idx==connections_-1)
+			return;
+
+		assert(rarity_[idx-1]->is_empty(bin));
+
+		rarity_[idx]->reset(bin);
+		rarity_[idx-1]->set(bin);
+	}
+	else
+	{
+		assert (!rarity_[idx]->is_empty());
+		if (DEBUGAVAILABILITY)
+			fprintf(stderr, "partially full!\n");
+		removeBin(bin.left(), idx);
+		removeBin(bin.right(), idx);
+	}
+	return;
+}
+
+/*void Availability::setSize(uint64_t size)
 {
 	if (size && !size_)
 	{
@@ -190,50 +320,51 @@ void Availability::setSize(uint64_t size)
 		// consider higher layers
 		s += s-1;
 		size_ = s;
-		avail_ = new uint8_t[s]();
 
 		// Initialize with the binmaps we already received
 		for(WaitingPeers::iterator vpci = waiting_peers_.begin(); vpci != waiting_peers_.end(); ++vpci)
 		{
-		    setBinmap(vpci->second);
+		    setWaitingBinmap(vpci->second);
 		}
 
 		if (DEBUGAVAILABILITY)
 		{
-		    dprintf("%s #1 Availability -> setting size in chunk %llu \t avail size %lu\n",tintstr(), size, s);
+		    dprintf("%s #1 Availability -> setting size in chunk %lu \t avail size %lu\n",tintstr(), size, s);
 		}
 	}
-}
+}*/
 
 bin_t Availability::getRarest(const bin_t range, int width)
 {
-	assert(range.toUInt()<size_);
-	bin_t curr = range;
-	bin_t::uint_t idx = range.toUInt();
-
-	while (curr.base_length()>width)
-	{
-		idx = curr.toUInt();
-		if ( avail_[curr.left().toUInt()] <= avail_[curr.right().toUInt()] )
-			curr.to_left();
-		else
-			curr.to_right();
-	}
-	return curr;
+	// TODO
+	return bin_t::NONE;
 }
 
 void Availability::status() const
 {
-    printf("availability:\n");
-
-    if (size_ > 0)
-    {
-		for (int i = 0; i < size_; i++)
-			printf("%d", avail_[i]);
-    }
-
-    printf("\n");
+	for (int i=0; i<connections_; i++)
+		fprintf(stderr, "%d\t%p\t%s\n", i, rarity_[i], rarity_[i]->is_empty()?"empty":"full");
+	return;
 }
+
+
+void Availability::initRarity() {
+
+	assert (connections_>0);
+
+	rarity_ = new binmap_t*[connections_];
+
+	for (int i=0; i<connections_; i++) {
+		rarity_[i]=new binmap_t();
+	}
+
+	if (DEBUGAVAILABILITY)
+		status();
+
+	return;
+}
+
+
 
 
 

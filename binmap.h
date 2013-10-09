@@ -54,6 +54,10 @@ public:
      */
     void fill(const binmap_t& source);
 
+    /**
+     * Ric: Empty all bins, size is given by the length of the content
+     */
+    void empty(const int size);
 
     /**
      * Whether binmap is empty
@@ -129,6 +133,12 @@ public:
      * Find first additional bin of the source inside specified range
      */
     static bin_t find_complement(const binmap_t& destination, const binmap_t& source, bin_t range, const bin_t::uint_t twist);
+
+
+    /**
+	 * Find matching bin of the source inside specified range
+	 */
+	static bin_t find_match(const binmap_t& destination, const binmap_t& source, bin_t range, const bin_t::uint_t twist);
 
 
     /**
@@ -233,10 +243,10 @@ private:
 
 
     /** Find first additional bin in source */
-    static bin_t _find_complement(const bin_t& bin, const ref_t dref, const binmap_t& destination, const ref_t sref, const binmap_t& source, const bin_t::uint_t twist);
-    static bin_t _find_complement(const bin_t& bin, const bitmap_t dbitmap, const ref_t sref, const binmap_t& source, const bin_t::uint_t twist);
-    static bin_t _find_complement(const bin_t& bin, const ref_t dref, const binmap_t& destination, const bitmap_t sbitmap, const bin_t::uint_t twist);
-    static bin_t _find_complement(const bin_t& bin, const bitmap_t dbitmap, const bitmap_t sbitmap, const bin_t::uint_t twist);
+    static bin_t _find_complement(const bin_t& bin, const ref_t dref, const binmap_t& destination, const ref_t sref, const binmap_t& source, const bin_t::uint_t twist, bool match=false);
+    static bin_t _find_complement(const bin_t& bin, const bitmap_t dbitmap, const ref_t sref, const binmap_t& source, const bin_t::uint_t twist, bool match=false);
+    static bin_t _find_complement(const bin_t& bin, const ref_t dref, const binmap_t& destination, const bitmap_t sbitmap, const bin_t::uint_t twist, bool match=false);
+    static bin_t _find_complement(const bin_t& bin, const bitmap_t dbitmap, const bitmap_t sbitmap, const bin_t::uint_t twist, bool match=false);
 
 
     /* Disabled */

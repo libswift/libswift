@@ -440,7 +440,7 @@ int utf8main (int argc, char** argv)
         // No file/dir nor HTTP gateway nor CMD gateway, will never know what to swarm
         if (ret == -1) {
             usage();
-            quit("Don't understand command line parameters.")
+            quit("Don't understand command line parameters.\n")
         }
     }
     else if (livesource_input != "")
@@ -779,7 +779,8 @@ void ReportCallback(int fd, short event, void *arg) {
 		Channel* c = swift::Channel::channel(1);
 		if (c!=NULL) {
 			fprintf(stderr,"ledbat %3.2f\n",c->GetCwnd());
-			fprintf(stderr,"hints_in %lu\n",c->GetHintSize());
+            fprintf(stderr,"hints_in  %lu\n",c->GetHintSize(DDIR_UPLOAD));
+			fprintf(stderr,"hints_out %lu\n",c->GetHintSize(DDIR_DOWNLOAD));
 		}
 		//fprintf(stderr,"npeers %d\n",ft->GetNumLeechers()+ft->GetNumSeeders() );
 	}

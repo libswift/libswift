@@ -330,6 +330,11 @@ void    Channel::AddHint (struct evbuffer *evb) {
         return;
     }
 
+    FileTransfer * ft = (FileTransfer *)transfer();
+
+    if (ft->hashtree()->is_complete())
+        return;
+
     // 1. Calc max of what we are allowed to request, uncongested bandwidth wise
     tint plan_for = max(TINT_SEC*HINT_TIME,rtt_avg_*4);
     tint timed_out = NOW - plan_for*2;
@@ -374,7 +379,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
 		double slowStart = (double)LONG_MAX;
 		tint running = now_t::now-start;
 		// It takes ~3 sec to get a stable DL speed estimation
-		if (running<TINT_SEC*3 && hint_out_size_>1) {
+		if (running<TINT_SEC*3) {// && hint_out_size_>1) {
 			count_hints = true;
 			slowStart = rate_hints_limit_float*running/TINT_SEC;
 			if (slowStart>transfer()->GetSlowStartHints())
@@ -400,7 +405,27 @@ void    Channel::AddHint (struct evbuffer *evb) {
     // Arno, 2012-10-30: not HINT_GRANULARITY for LIVE
     if (hint_out_size_ == 0 || plan_pck >= HINT_GRANULARITY || transfer()->ttype() == LIVE_TRANSFER)
     {
-        bin_t hint = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2,id_);
+    	bin_t hint = bin_t::NONE;
+    	uint64_t max_hints = 32;
+    	if (hint_out_size_<max_hints && plan_pck > 0) {
+
+
+    	    int want = min(max_hints-hint_out_size_, plan_pck);
+
+    	    //fprintf(stderr, "want %d\tplan %d\n", want, plan_pck);
+    	    hint = DequeueHintOut(want);
+
+    	    if (hint.is_none()) {
+                bin_t res = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2,id_);
+                if (!res.is_none()) {
+                    hint_queue_out_.push_back( tintbin(NOW,res));
+                    hint_queue_out_size_ += res.base_length();
+                    hint = DequeueHintOut(max_hints-hint_out_size_);
+                }
+    	    }
+
+    	}
+
         if (!hint.is_none()) {
             if (DEBUGTRAFFIC)
             {
@@ -905,6 +930,38 @@ void    Channel::CleanHintOut (bin_t pos) {
     hint_out_.pop_front();
 }
 
+bin_t    Channel::DequeueHintOut(uint64_t size) {
+
+    if (DEBUGTRAFFIC)
+        fprintf(stderr, "%s #%u Dequeue hint out size (%d) [%d are req] ",tintstr(),id_, hint_queue_out_size_, size);
+	// TODO check... the seconds should depend on previous speed of the peer
+	while (hint_queue_out_.size() && hint_queue_out_.front().time<NOW-TINT_SEC*HINT_TIME*3/2) { // FIXME sec
+		hint_queue_out_size_ -= hint_queue_out_.front().bin.base_length();
+		hint_queue_out_.pop_front();
+	}
+
+	if (!hint_queue_out_size_){
+	    if (DEBUGTRAFFIC)
+	            fprintf(stderr, " ..refill\n");
+		return bin_t::NONE;
+	}
+
+	while (hint_queue_out_.front().bin.base_length()>size) {
+		tintbin ret = hint_queue_out_.front();
+		ret.bin.to_left();
+		hint_queue_out_.front().bin = ret.bin.sibling();
+		hint_queue_out_.push_front(ret);
+	}
+
+	bin_t res = hint_queue_out_.front().bin;
+	hint_queue_out_.pop_front();
+	hint_queue_out_size_ -= res.base_length();
+	if (DEBUGTRAFFIC)
+	        fprintf(stderr, " sending %s [%d]\n",res.str().c_str(),res.base_length());
+	return res;
+
+}
+
 
 bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted data
 
@@ -1143,13 +1200,9 @@ void Channel::OnHave (struct evbuffer *evb) {
 	    return; // wow, peer has hashes
 
 	// PPPLUG
-	if (ENABLE_VOD_PIECEPICKER && transfer()->ttype() == FILE_TRANSFER) {
+	if (!hashtree()->is_complete() && transfer()->ttype() == FILE_TRANSFER) {
 	    FileTransfer *ft = (FileTransfer *)transfer();
-	    // Ric: check if we should set the size in the file transfer
-	    if (ft->availability()->size() <= 0 && ft->hashtree()->size() > 0)
-	    {
-		ft->availability()->setSize(hashtree()->size_in_chunks());
-	    }
+
 	    // Ric: update the availability if needed
 	    ft->availability()->set(id_, ack_in_, ackd_pos);
 	}
@@ -1818,12 +1871,12 @@ void Channel::Close(close_send_t closesend) {
 	hs_in_->peer_channel_id_ = 0;
 
     //LIVE
-    if (ENABLE_VOD_PIECEPICKER && transfer()->ttype() == FILE_TRANSFER) {
+    if (transfer()->ttype() == FILE_TRANSFER) {
         FileTransfer *ft = (FileTransfer *)transfer();
         if (!ft->IsZeroState() && ft->availability() != NULL) // availability() is NULL when this is called from ContentTransfer/CloseChannels()
         {
             // Ric: remove its binmap from the availability
-            ft->availability()->remove(id_, ack_in_);
+            ft->availability()->removeBinmap(id_, ack_in_);
         }
     }
 

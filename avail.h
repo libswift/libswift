@@ -23,73 +23,71 @@ class Availability
 {
     public:
 
-	   /**
-	     * Constructor
-	     */
-	    Availability(void) {  	size_ = 0;	    }
-
-
 	    /**
 	     * Constructor
 	     */
-            explicit Availability(int size) : waiting_peers_()
+        explicit Availability(int connections)
 	    {
-	    	assert(size <= 0);
-	    	size_ = size;
-	    	avail_ = new uint8_t[size];
+	    	connections_ = connections;
+	    	initRarity();
 	    }
 
 	    ~Availability(void)
-            {
-                if (size_)
-                    delete [] avail_;
-            }
+		{
+			for (int i=0; i<connections_; i++)
+				delete rarity_[i];
+			delete [] rarity_;
+		}
 
-	    /** return the availability array */
-	    uint8_t* get() { return avail_; }
+	    /** sets the number of connections */
+	    void setParams(int connections);
 
-	    /** returns the availability of a single bin */
-	    uint8_t get(const bin_t bin);
-
-	    /** set/update the availability */
+	    /** set/update the rarity */
 	    void set(uint32_t channel_id, binmap_t& binmap, bin_t target);
 
 	    /** removes the binmap of leaving peers */
-	    void remove(uint32_t channel_id, binmap_t& binmap);
+	    void removeBinmap(uint32_t channel_id, binmap_t& binmap);
 
-	    /** returns the size of the availability tree */
-	    int size() { return size_; }
-
-	    /** sets the size of the availability tree once we know the size of the file */
-	    void setSize(uint64_t size);
-
-	    /** sets a binmap */
-	    void setBinmap(binmap_t *binmap);
+	    /** adds an entire binmap from the rarity array */
+	    void addBinmap(binmap_t * binmap);
 
 	    /** get rarest bin, of specified width, within a range */
 	    bin_t getRarest(const bin_t range, int width);
+
+	    /** returns the entire array of binmaps ordered by rarity */
+	    binmap_t** getRarityArray() { return rarity_; }
+
+	    /** returns a binmaps filled with bins of rarity idx */
+	    binmap_t* get(int idx) { return rarity_[idx]; }
 
 	    /** Echo the availability status to stdout */
 		void status() const;
 
     protected:
-	    uint8_t *avail_;
-	    uint64_t 	size_;
-	    // a list of incoming have msgs, those are saved only it the file size is still unknown
-	     // TODO fix... set it depending on the # of channels * something
-	    WaitingPeers waiting_peers_;
-	    //binmap_t *waiting_[20];
-
+	    // init with the number of connections.
+	    // it is an array of pointers to binmaps, where the index represents the local view of
+	    // availability in the swarm, of which the binmap is composed from the rare bins.
+	    binmap_t **rarity_;
+	    int connections_;
 
 
 	    /** removes the binmap */
 	    void removeBinmap(binmap_t& binmap);
 
 	    /** removes the bin */
-	    void removeBin(bin_t bin);
+	    void removeBin(bin_t bin, int idx);
 
 	    /** sets a bin */
-	    void setBin(bin_t bin);
+	    void setBin(bin_t bin, int idx);
+
+	    /** updates the rarity array*/
+	    void updateRarity(bin_t bin, int idx);
+
+	    /** initialize the rarity array */
+	    void initRarity();
+
+	    void find_empty(binmap_t& binmap, bin_t range);
+
 
 };
 

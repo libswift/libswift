@@ -69,7 +69,8 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     direct_sending_(false),
     peer_is_source_(peerissource),
     hs_out_(NULL), hs_in_(NULL),
-    rtt_hint_tintbin_()
+    rtt_hint_tintbin_(),
+    hint_queue_out_(NULL), hint_queue_out_size_(0)
 {
     if (peer_==Address())
         peer_ = tracker;
