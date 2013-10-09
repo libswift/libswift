@@ -162,22 +162,8 @@ env.Program(
     LIBPATH=libpath )
 
 env.Program( 
-    target='test_bug',
-    source=['test_bug.cpp'],
-    CPPPATH=cpppath,
-    LIBS=libs,
-    LIBPATH=libpath )
-
-env.Program( 
     target='binstest5',
     source=['binstest5.cpp'],
-    CPPPATH=cpppath,
-    LIBS=libs,
-    LIBPATH=libpath )
-
-env.Program( 
-    target='pickertest',
-    source=['pickertest.cpp'],
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )

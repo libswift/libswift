@@ -10,7 +10,7 @@
 
 #!/bin/bash
 
-for tst in tests/*avail*; do
+for tst in tests/*; do
     if [ -x $tst ]; then
         echo $tst 
         $tst
