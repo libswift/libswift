@@ -800,8 +800,8 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
              req->startoff = soff;
              req->endoff = eoff;
 
-             //fprintf(stderr,"HTTP tosend DASH\n");
              req->tosend = req->endoff+1-req->startoff;
+             fprintf(stderr,"HTTP tosend DASH soff %lld eoff %lld tosend %lld\n", soff, eoff, req->tosend );
         }
     }
     else if (!HttpGwParseContentRangeHeader(req,filesize))
@@ -986,11 +986,11 @@ bool swift::ParseURI(std::string uri,parseduri_t &map)
         }
 
         // Syntax check bt URL, if any
-        std::string bttrackerurl = map["et"];
-        if (bttrackerurl != "")
+        std::string exttrackerurl = map["et"];
+        if (exttrackerurl != "")
         {
             // Handle possibly escaped "http:..."
-            char *decoded = evhttp_uridecode(bttrackerurl.c_str(),false,NULL);
+            char *decoded = evhttp_uridecode(exttrackerurl.c_str(),false,NULL);
             std::string unesctrackerurl = decoded;
             free(decoded);
 
@@ -1140,7 +1140,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     std::string trackerstr = puri["server"];
     std::string swarmidhexstr = puri["swarmidhex"];
     std::string mfstr = puri["filename"];
-    std::string bttrackerurl = puri["et"];
+    std::string exttrackerurl = puri["et"];
     std::string urlmimetype = puri["mt"];
     std::string durstr = puri["cd"];
     std::string dashrangestr = puri["dr"];
@@ -1148,13 +1148,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     // Handle tracker
     // External tracker via URL param
     std::string trackerurl = "";
-    if (trackerstr == "" && bttrackerurl == "" && Channel::trackerurl == "")
-    {
-	evhttp_send_error(evreq,400,"Semantic Error: No tracker defined");
-	dprintf("%s @%i http get: ERROR 400 Semantic Error: No tracker defined\n",tintstr(),0 );
-	return;
-    }
-    if (bttrackerurl == "")
+    if (exttrackerurl == "")
     {
 	if (trackerstr == "")
 	    trackerurl = Channel::trackerurl;
@@ -1232,13 +1226,28 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     // 4. Initiate transfer, activating FileTransfer if needed
     bool activate=true;
     int td = swift::Find(swarm_id,activate);
-    if (td != -1 && dashrestart)
+    if (td == -1)
     {
-	// Arno, 2013-10-02: DASH player restarted, close swarm, and reopen (live)
-	dprintf("%s @%i http get: Closing swarm on DASH restart.\n",tintstr(),0 );
-	swift::Close(td);
-	td = -1;
+	// New swarm, must know tracker
+	if (trackerstr == "" && exttrackerurl == "" && Channel::trackerurl == "")
+	{
+	    evhttp_send_error(evreq,400,"Semantic Error: No tracker defined");
+	    dprintf("%s @%i http get: ERROR 400 Semantic Error: No tracker defined\n",tintstr(),0 );
+	    return;
+	}
     }
+    else
+    {
+	// Reusing existing (created by CMDGW most likely)
+	if (dashrestart)
+	{
+	    // Arno, 2013-10-02: DASH player restarted, close swarm, and reopen (live)
+	    dprintf("%s @%i http get: Closing swarm on DASH restart.\n",tintstr(),0 );
+	    swift::Close(td);
+	    td = -1;
+	}
+    }
+
     // Reuse existing or open
     if (td == -1)
     {

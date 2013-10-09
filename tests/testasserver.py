@@ -55,6 +55,7 @@ class TestServerFramework:
         self.chunksize = None
         self.urlfilename = None
         self.livesigalg = None
+        self.trackerurl = None
         
         self.debug = True
         
@@ -130,6 +131,9 @@ class TestServerFramework:
         if self.livesigalg is not None:
             args.append("-a") 
             args.append(str(self.livesigalg))
+        if self.trackerurl is not None:
+            args.append("-t") 
+            args.append(self.trackerurl)
             
             
           
