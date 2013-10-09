@@ -1107,7 +1107,7 @@ static int fake_openssl_write_private_key(std::string keypairfilename, EVP_PKEY 
 
 static EVP_PKEY *fake_openssl_read_private_key(std::string keypairfilename, popt_live_sig_alg_t *algptr)
 {
-    *algptr = POPT_LIVE_SIG_ALG_RSASHA1; // Not
+    *algptr = DEFAULT_LIVE_SIG_ALG; // Not
 
     FILE *fp = fopen_utf8(keypairfilename.c_str(),"rb");
     if (fp == NULL)

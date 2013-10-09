@@ -52,6 +52,10 @@ typedef enum {
 } popt_live_sig_alg_t;
 
 
+// Arno, 2013-10-09: Gives nice short SwarmIDs
+#define DEFAULT_LIVE_SIG_ALG	POPT_LIVE_SIG_ALG_ECDSAP256SHA256
+
+
 /** Structure for holding a signature */
 struct Signature
 {

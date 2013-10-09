@@ -43,7 +43,7 @@ static uint32_t HTTPGW_VOD_PROGRESS_STEP_BYTES = (256*1024); // configurable
 // Arno: Minimum amout of content to download before replying to HTTP
 static uint32_t HTTPGW_MIN_PREBUF_BYTES  = (256*1024); // configurable
 
-const char *url_query_keys[] = { "v", "cp", "hf", "ca", "ld", "ia", "cs", "cl", "cd", "bt", "mt", "dr" };
+const char *url_query_keys[] = { "v", "cp", "hf", "ca", "ld", "ia", "cs", "cl", "cd", "et", "mt", "dr" };
 #define NUM_URL_QUERY_KEYS 	12
 
 
@@ -905,7 +905,7 @@ bool swift::ParseURI(std::string uri,parseduri_t &map)
     //    cs = Chunk Size
     //    cl = Content Length
     //    cd = Content Duration (in seconds)
-    //    bt = BT tracker URL
+    //    et = external tracker URL
     //	  mt = MIME type
     //    ia = injector address
     //    dr = range for DASH
@@ -986,7 +986,7 @@ bool swift::ParseURI(std::string uri,parseduri_t &map)
         }
 
         // Syntax check bt URL, if any
-        std::string bttrackerurl = map["bt"];
+        std::string bttrackerurl = map["et"];
         if (bttrackerurl != "")
         {
             // Handle possibly escaped "http:..."
@@ -1069,15 +1069,15 @@ std::string swift::URIToSwarmMeta(parseduri_t &map, SwarmMeta *sm)
             return "injector address must be hostname:port, ip:port or just port";
     }
 
-    if (map["bt"].length() > 0)
+    if (map["et"].length() > 0)
     {
-        // BT track. Handle possibly escaped "http:..."
-        char *decoded = evhttp_uridecode(map["bt"].c_str(),false,NULL);
-        sm->bttracker_url_ = decoded;
+        // External track. Handle possibly escaped "http:..."
+        char *decoded = evhttp_uridecode(map["et"].c_str(),false,NULL);
+        sm->ext_tracker_url_ = decoded;
         free(decoded);
     }
     else
-	sm->bttracker_url_ = "";
+	sm->ext_tracker_url_ = "";
     sm->mime_type_ = map["mt"];
 
     return "";
@@ -1140,13 +1140,13 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     std::string trackerstr = puri["server"];
     std::string swarmidhexstr = puri["swarmidhex"];
     std::string mfstr = puri["filename"];
-    std::string bttrackerurl = puri["bt"];
+    std::string bttrackerurl = puri["et"];
     std::string urlmimetype = puri["mt"];
     std::string durstr = puri["cd"];
     std::string dashrangestr = puri["dr"];
 
     // Handle tracker
-    // BT tracker via URL param
+    // External tracker via URL param
     std::string trackerurl = "";
     if (trackerstr == "" && bttrackerurl == "" && Channel::trackerurl == "")
     {

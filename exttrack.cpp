@@ -1,12 +1,13 @@
 /*
- *  bttrack.cpp
+ *  exttrack.cpp
  *
- *  Implements a BitTorrent tracker client. If SwarmIDs are not SHA1 hashes
- *  they are hashed with a SHA1 MDC to turn them into an infohash.
+ *  Implements an external tracker client. Currently uses BT tracker protocol.
+ *  If SwarmIDs are not SHA1 hashes they are hashed with a SHA1 MDC to turn
+ *  them into an infohash. Only HTTP trackers supported at the moment.
  *
- *  Only HTTP trackers supported at the moment.
- *
+ *  TODO:
  *  - SwarmManager reregistrations
+ *  - IETF PPSP tracker protocol
  *
  *  Created by Arno Bakker
  *  Copyright 2013-2016 Vrije Universiteit Amsterdam. All rights reserved.
@@ -16,7 +17,7 @@
 #include <event2/http_struct.h>
 #include <sstream>
 
-#define bttrack_debug	true
+#define exttrack_debug	true
 
 
 using namespace swift;
@@ -47,7 +48,7 @@ typedef enum
 static int ParseBencodedPeers(struct evbuffer *evb, std::string key, peeraddrs_t *peerlist);
 static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startevbp, std::string key, bencoded_type_t valuetype, char **valueptr);
 
-BTTrackerClient::BTTrackerClient(std::string url) : url_(url), report_last_time_(0), report_interval_(BT_INITIAL_REPORT_INTERVAL), reported_complete_(false)
+ExternalTrackerClient::ExternalTrackerClient(std::string url) : url_(url), report_last_time_(0), report_interval_(BT_INITIAL_REPORT_INTERVAL), reported_complete_(false)
 {
     // Create PeerID
     peerid_ = new uint8_t[BT_PEER_ID_LENGTH];
@@ -74,14 +75,14 @@ BTTrackerClient::BTTrackerClient(std::string url) : url_(url), report_last_time_
     }
 }
 
-BTTrackerClient::~BTTrackerClient()
+ExternalTrackerClient::~ExternalTrackerClient()
 {
     if (peerid_ != NULL)
 	delete peerid_;
 }
 
 
-int BTTrackerClient::Contact(ContentTransfer *transfer, std::string event, bttrack_peerlist_callback_t callback)
+int ExternalTrackerClient::Contact(ContentTransfer *transfer, std::string event, exttrack_peerlist_callback_t callback)
 {
     Address myaddr = Channel::BoundAddress(Channel::default_socket());
     std::string q = CreateQuery(transfer,myaddr,event);
@@ -89,18 +90,18 @@ int BTTrackerClient::Contact(ContentTransfer *transfer, std::string event, bttra
 	return -1;
     else
     {
-	if (event == BT_EVENT_COMPLETED)
+	if (event == EXTTRACK_EVENT_COMPLETED)
 	    reported_complete_ = true;
 
 	report_last_time_ = NOW;
 
-	BTTrackCallbackRecord *callbackrec = new BTTrackCallbackRecord(transfer->td(),callback);
+	ExtTrackCallbackRecord *callbackrec = new ExtTrackCallbackRecord(transfer->td(),callback);
 	return HTTPConnect(q,callbackrec);
     }
 }
 
 /** IP in myaddr currently unused */
-std::string BTTrackerClient::CreateQuery(ContentTransfer *transfer, Address myaddr, std::string event)
+std::string ExternalTrackerClient::CreateQuery(ContentTransfer *transfer, Address myaddr, std::string event)
 {
     Sha1Hash infohash;
 
@@ -118,7 +119,7 @@ std::string BTTrackerClient::CreateQuery(ContentTransfer *transfer, Address myad
 
 	// "No completed is sent if the file was complete when started. "
 	// http://www.bittorrent.org/beps/bep_0003.html
-	if (event == BT_EVENT_STARTED && left == 0)
+	if (event == EXTTRACK_EVENT_STARTED && left == 0)
 	    reported_complete_ = true;
     }
     else
@@ -183,12 +184,12 @@ std::string BTTrackerClient::CreateQuery(ContentTransfer *transfer, Address myad
 }
 
 
-static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void *callbackrecvoid)
+static void ExternalTrackerClientHTTPResponseCallback(struct evhttp_request *req, void *callbackrecvoid)
 {
-    if (bttrack_debug)
+    if (exttrack_debug)
 	fprintf(stderr,"bttrack: Callback: ENTER %p\n", callbackrecvoid );
 
-    BTTrackCallbackRecord *callbackrec = (BTTrackCallbackRecord *)callbackrecvoid;
+    ExtTrackCallbackRecord *callbackrec = (ExtTrackCallbackRecord *)callbackrecvoid;
     if (callbackrec == NULL)
 	return;
     if (callbackrec->callback_ == NULL)
@@ -282,7 +283,7 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 	    }
 
 	    free(valuebytes);
-	    if (bttrack_debug)
+	    if (exttrack_debug)
 		fprintf(stderr,"bttrack: Got interval %u\n", interval);
 	}
     }
@@ -307,7 +308,7 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
     }
     evbuffer_free(evb);
 
-    if (bttrack_debug)
+    if (exttrack_debug)
 	fprintf(stderr,"btrack: Got %u IPv4 peers\n", peerlist.size() );
 
     // If not failure, find peers key whose value is compact IPv6 addresses
@@ -326,7 +327,7 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
     }
     evbuffer_free(evb);
 
-    if (bttrack_debug)
+    if (exttrack_debug)
 	fprintf(stderr,"btrack: Got %u peers total\n", peerlist.size() );
 
     // Report success
@@ -337,11 +338,11 @@ static void BTTrackerClientHTTPResponseCallback(struct evhttp_request *req, void
 }
 
 
-int BTTrackerClient::HTTPConnect(std::string query,BTTrackCallbackRecord *callbackrec)
+int ExternalTrackerClient::HTTPConnect(std::string query,ExtTrackCallbackRecord *callbackrec)
 {
     std::string fullurl = url_+"?"+query;
 
-    if (bttrack_debug)
+    if (exttrack_debug)
 	fprintf(stderr,"bttrack: HTTPConnect: %s\n", fullurl.c_str() );
 
     struct evhttp_uri *evu = evhttp_uri_parse(fullurl.c_str());
@@ -358,7 +359,7 @@ int BTTrackerClient::HTTPConnect(std::string query,BTTrackCallbackRecord *callba
 
     // Create HTTP client
     struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, evhttp_uri_get_host(evu), evhttp_uri_get_port(evu) );
-    struct evhttp_request *req = evhttp_request_new(BTTrackerClientHTTPResponseCallback, (void *)callbackrec);
+    struct evhttp_request *req = evhttp_request_new(ExternalTrackerClientHTTPResponseCallback, (void *)callbackrec);
 
     // Make request to server
     evhttp_make_request(cn, req, EVHTTP_REQ_GET, fullpath);
@@ -404,7 +405,7 @@ static int ParseBencodedPeers(struct evbuffer *evb, std::string key, peeraddrs_t
 	    Address addr = evbuffer_remove_pexaddr(evb2,family);
 	    peerlist->push_back(addr);
 
-	    if (bttrack_debug)
+	    if (exttrack_debug)
 		fprintf(stderr,"bttrack: Peerlist parsed %d %s\n", i, addr.str().c_str() );
 	}
 	evbuffer_free(evb2);

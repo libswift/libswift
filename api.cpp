@@ -204,7 +204,7 @@ void swift::Close( int td, bool removestate, bool removecontent ) {
     LiveTransfer *lt = LiveTransfer::FindByTD(td);
     if (lt != NULL)
     {
-        // Arno, 2013-09-11: If external BT tracker, sign off
+        // Arno, 2013-09-11: If external tracker, sign off
 	lt->ConnectToTracker(true);
 	delete lt;
     }
@@ -839,7 +839,7 @@ LiveTransfer *swift::LiveCreate(std::string filename, KeyPair &keypair, std::str
 
     if (lt->IsOperational())
     {
-	// External BT tracker
+	// External tracker
 	fprintf(stderr,"swift::LiveCreate: ConnectToTracker\n");
 	lt->ConnectToTracker();
 	return lt;

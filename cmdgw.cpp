@@ -769,13 +769,13 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         std::string trackerstr = puri["server"];
         std::string swarmidhexstr = puri["swarmidhex"];
         std::string mfstr = puri["filename"];
-        std::string bttrackerurl = puri["bt"];
+        std::string bttrackerurl = puri["et"];
         std::string durstr = puri["cd"];
 
         dprintf("cmd: START: %s with tracker %s chunksize %i duration %d\n",swarmidhexstr.c_str(),trackerstr.c_str(),sm.chunk_size_,sm.cont_dur_);
 
         // Handle tracker
-        // BT tracker via URL param
+        // External tracker via URL param
         std::string trackerurl = "";
         if (trackerstr == "" && bttrackerurl == "")
         {

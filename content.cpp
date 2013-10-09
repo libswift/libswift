@@ -37,7 +37,7 @@ ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype),
     tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START),
     tracker_retry_time_(NOW),
     slow_start_hints_(0),
-    bttrackclient_(NULL)
+    ext_tracker_client_(NULL)
 {
     cur_speed_[DDIR_UPLOAD] = MovingAverageSpeed();
     cur_speed_[DDIR_DOWNLOAD] = MovingAverageSpeed();
@@ -53,10 +53,10 @@ ContentTransfer::~ContentTransfer()
     if (storage_ != NULL)
         delete storage_;
 
-    if (bttrackclient_ != NULL)
+    if (ext_tracker_client_ != NULL)
     {
-	delete bttrackclient_;
-	bttrackclient_ = NULL;
+	delete ext_tracker_client_;
+	ext_tracker_client_ = NULL;
     }
 }
 
@@ -111,9 +111,9 @@ void ContentTransfer::GarbageCollectChannels()
     if (numestablishedpeers == 0)
 	movingforward = false;
 
-    // Arno, 2013-09-11: Don't pull for peers when seeder and BT tracker
+    // Arno, 2013-09-11: Don't pull extra for peers when seeder and external tracker
     bool complete = (swift::Complete(td_) > 0 && (swift::Complete(td_) == swift::Size(td_)) );
-    if (complete && bttrackclient_ != NULL)  // seed, periodic rereg helps find leechers
+    if (complete && ext_tracker_client_ != NULL)  // seed, periodic rereg helps find leechers
 	movingforward = true;
 
     // Arno, 2012-02-24: Check for liveliness.
@@ -157,10 +157,10 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
 	if ((ContentTransfer::cleancounter % CHANNEL_GARBAGECOLLECT_INTERVAL) == 0)
 	    ct->GarbageCollectChannels();
 
-	// BT tracker needs periodic reports
-	if (ct->bttrackclient_ != NULL)
+	// Some external trackers need periodic reports
+	if (ct->ext_tracker_client_ != NULL)
 	{
-	    tint report_time = ct->bttrackclient_->GetReportLastTime() + (TINT_SEC*ct->bttrackclient_->GetReportInterval());
+	    tint report_time = ct->ext_tracker_client_->GetReportLastTime() + (TINT_SEC*ct->ext_tracker_client_->GetReportInterval());
 	    if (NOW > report_time)
 	    {
 		fprintf(stderr,"content: periodic ConnectToTracker\n");
@@ -206,7 +206,7 @@ void ContentTransfer::ReConnectToTrackerIfAllowed(bool movingforward)
 }
 
 
-/** Called by BTTrackerClient when results come in from the server */
+/** Called by ExternalTrackerClient when results come in from the server */
 static void global_bttracker_callback(int td, std::string status, uint32_t interval, peeraddrs_t peerlist)
 {
     //fprintf(stderr,"content global_bttracker_callback: td %d status %s int %u npeers %u\n", td, status.c_str(), interval, peerlist.size() );
@@ -218,10 +218,10 @@ static void global_bttracker_callback(int td, std::string status, uint32_t inter
     if (status == "")
     {
 	// Success
-	dprintf("%s F%d content contact tracker: BT OK int %u npeers %u\n",tintstr(),td,interval,peerlist.size() );
+	dprintf("%s F%d content contact tracker: ext OK int %u npeers %u\n",tintstr(),td,interval,peerlist.size() );
 
 	// Record reporting interval
-	BTTrackerClient *bttrackclient = ct->GetBTTrackerClient();
+	ExternalTrackerClient *bttrackclient = ct->GetExternalTrackerClient();
 
 	if (bttrackclient != NULL) // unlikely
 	    bttrackclient->SetReportInterval(interval);
@@ -236,7 +236,7 @@ static void global_bttracker_callback(int td, std::string status, uint32_t inter
     }
     else
     {
-	dprintf("%s F%d content contact tracker: BT failure reason %s\n",tintstr(),td,status.c_str());
+	dprintf("%s F%d content contact tracker: ext failure reason %s\n",tintstr(),td,status.c_str());
     }
 }
 
@@ -290,29 +290,29 @@ void ContentTransfer::ConnectToTracker(bool stop)
     }
     else
     {
-	// BT tracker
-	std::string event = BT_EVENT_WORKING;
-	if (bttrackclient_ == NULL)
+	// External tracker
+	std::string event = EXTTRACK_EVENT_WORKING;
+	if (ext_tracker_client_ == NULL)
 	{
 	    // First call, create client
-	    event = BT_EVENT_STARTED;
+	    event = EXTTRACK_EVENT_STARTED;
 	    if (trackerurl_ != "")
-		bttrackclient_ = new BTTrackerClient(trackerurl_);
+		ext_tracker_client_ = new ExternalTrackerClient(trackerurl_);
 	    else
-		bttrackclient_ = new BTTrackerClient(Channel::trackerurl);
+		ext_tracker_client_ = new ExternalTrackerClient(Channel::trackerurl);
 	}
 	else if (stop)
 	{
-	    event = BT_EVENT_STOPPED;
+	    event = EXTTRACK_EVENT_STOPPED;
 	}
-	else if (!bttrackclient_->GetReportedComplete())
+	else if (!ext_tracker_client_->GetReportedComplete())
 	{
 	    // Vulnerable to Automatic Size detection not being finished
 	    if (swift::Complete(td()) > 0 && swift::Complete(td()) == swift::Size(td()))
-		event = BT_EVENT_COMPLETED;
+		event = EXTTRACK_EVENT_COMPLETED;
 	}
 
-	bttrackclient_->Contact(this,event,global_bttracker_callback);
+	ext_tracker_client_->Contact(this,event,global_bttracker_callback);
     }
 
     evhttp_uri_free(evu);

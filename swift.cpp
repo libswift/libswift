@@ -140,7 +140,7 @@ uint64_t livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
 std::string livesource_checkpoint_filename = "";
 bool livesource_isfile=false;
 popt_cont_int_prot_t swarm_cipm=POPT_CONT_INT_PROT_MERKLE;
-popt_live_sig_alg_t livesource_sigalg=POPT_LIVE_SIG_ALG_RSASHA1;
+popt_live_sig_alg_t livesource_sigalg=DEFAULT_LIVE_SIG_ALG;
 
 long long int cmdgw_report_counter=0;
 long long int cmdgw_report_interval=REPORT_INTERVAL; // seconds
@@ -184,7 +184,7 @@ int utf8main (int argc, char** argv)
         {"cipm",required_argument, 0, 'S'}, // PPSP
         {"lsa",required_argument, 0, 'a'}, // PPSP
         {"ldw",required_argument, 0, 'W'}, // PPSP
-        {"ia",required_argument, 0, 'I'}, // BTTRACK
+        {"ia",required_argument, 0, 'I'}, // EXTTRACK
         {0, 0, 0, 0}
     };
 
@@ -239,7 +239,7 @@ int utf8main (int argc, char** argv)
                     trackerurl += "://";
                     trackerurl += strdup(optarg);
                 }
-                else // BT tracker. No UDP support
+                else // External tracker.
                     trackerurl = strdup(optarg);
                 break;
             case 'D':

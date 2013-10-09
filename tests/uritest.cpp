@@ -23,7 +23,7 @@ TEST(URITest,All)
     uri += "&cs=576";
     uri += "&cl=8192";
     uri += "&cd=-1";
-    uri += "&bt=http://www.cs.vu.nl/bt";
+    uri += "&et=http://www.cs.vu.nl/track";
     uri += "&mt=text/html";
     uri += "&ia=130.37.193.64:6778";
     uri += "&dr=500-600";
@@ -45,7 +45,7 @@ TEST(URITest,All)
     ASSERT_EQ(576,sm.chunk_size_);
     ASSERT_EQ(8192,sm.cont_len_);
     ASSERT_EQ(-1,sm.cont_dur_);
-    ASSERT_EQ("http://www.cs.vu.nl/bt",sm.bttracker_url_);
+    ASSERT_EQ("http://www.cs.vu.nl/track",sm.ext_tracker_url_);
     ASSERT_EQ("text/html",sm.mime_type_);
     ASSERT_TRUE(Address("130.37.193.64",6778) ==  sm.injector_addr_);
     // ASSERT_EQ(500,sm.dash_range_end_)

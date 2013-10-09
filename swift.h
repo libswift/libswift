@@ -84,6 +84,8 @@
 #include "avgspeed.h"
 // Arno, 2012-05-21: MacOS X has an Availability.h :-(
 #include "avail.h"
+#include "exttrack.h"
+
 
 namespace swift {
 
@@ -141,13 +143,6 @@ namespace swift {
 
 // How much time a SIGNED_INTEGRITY timestamp may diverge from current time
 #define SWIFT_LIVE_MAX_SOURCE_DIVERGENCE_TIME	30 // seconds
-
-// For BT tracker
-#define BT_EVENT_STARTED	"started"
-#define BT_EVENT_COMPLETED	"completed"
-#define BT_EVENT_STOPPED	"stopped"
-#define BT_EVENT_WORKING	""
-
 
 
     typedef enum {
@@ -218,7 +213,6 @@ namespace swift {
 	socklen_t get_family_sockaddr_length() const;
     };
 
-typedef std::vector<Address>	peeraddrs_t;
 
 // Arno, 2011-10-03: Use libevent callback functions, no on_error?
 #define sockcb_t        event_callback_fn
@@ -368,9 +362,9 @@ typedef std::vector<Address>	peeraddrs_t;
     {
       public:
 #if ENABLE_IETF_PPSP_VERSION == 1
-	Handshake() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), live_sig_alg_(POPT_LIVE_SIG_ALG_RSASHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
+	Handshake() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), live_sig_alg_(DEFAULT_LIVE_SIG_ALG), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
 #else
-	Handshake() : version_(VER_SWIFT_LEGACY), min_version_(VER_SWIFT_LEGACY), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), live_sig_alg_(POPT_LIVE_SIG_ALG_RSASHA1), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
+	Handshake() : version_(VER_SWIFT_LEGACY), min_version_(VER_SWIFT_LEGACY), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), live_sig_alg_(DEFAULT_LIVE_SIG_ALG), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
 #endif
 	Handshake(Handshake &c)
 	{
@@ -436,7 +430,7 @@ typedef std::vector<Address>	peeraddrs_t;
     class SwarmMeta
     {
       public:
-	SwarmMeta() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), cont_int_prot_(POPT_CONT_INT_PROT_MERKLE), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1),  live_sig_alg_(POPT_LIVE_SIG_ALG_RSASHA1), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), injector_addr_(), chunk_size_(SWIFT_DEFAULT_CHUNK_SIZE), cont_dur_(0), cont_len_(0), bttracker_url_(""), mime_type_("")
+	SwarmMeta() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), cont_int_prot_(POPT_CONT_INT_PROT_MERKLE), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1),  live_sig_alg_(DEFAULT_LIVE_SIG_ALG), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), injector_addr_(), chunk_size_(SWIFT_DEFAULT_CHUNK_SIZE), cont_dur_(0), cont_len_(0), ext_tracker_url_(""), mime_type_("")
 	{
 	}
 	popt_version_t   	version_;
@@ -450,7 +444,7 @@ typedef std::vector<Address>	peeraddrs_t;
 	uint32_t		chunk_size_;
 	int32_t			cont_dur_;
 	uint64_t		cont_len_;
-	std::string		bttracker_url_;
+	std::string		ext_tracker_url_;
 	std::string		mime_type_;
     };
 
@@ -458,41 +452,6 @@ typedef std::vector<Address>	peeraddrs_t;
     typedef std::map<std::string,std::string>  parseduri_t;
     bool ParseURI(std::string uri,parseduri_t &map);
     std::string URIToSwarmMeta(parseduri_t &map, SwarmMeta *sm);
-
-    /** External tracker */
-    typedef void (*bttrack_peerlist_callback_t)(int td, std::string result, uint32_t interval, peeraddrs_t peerlist);
-
-    class ContentTransfer;
-
-    struct BTTrackCallbackRecord
-    {
-	BTTrackCallbackRecord(int td, bttrack_peerlist_callback_t callback) : td_(td), callback_(callback) {}
-        int td_;
-        bttrack_peerlist_callback_t	callback_;
-    };
-
-    class BTTrackerClient
-    {
-       public:
-	BTTrackerClient(std::string url);
-	~BTTrackerClient();
-	/** (Re)Registers at tracker and adds returned peer addresses to peerlist */
-	int Contact(ContentTransfer *transfer, std::string event, bttrack_peerlist_callback_t callback);
-	bool GetReportedComplete() { return reported_complete_; }
-	tint GetReportLastTime() { return report_last_time_; }
-	void SetReportInterval(uint32_t interval) { report_interval_ = interval; }
-	uint32_t GetReportInterval() { return report_interval_; }
-       protected:
-	std::string 		url_;
-	uint8_t 		*peerid_;
-	tint			report_last_time_; // tint
-	uint32_t 		report_interval_; // seconds
-	bool			reported_complete_;
-
-	/** IP in myaddr currently unused */
-	std::string CreateQuery(ContentTransfer *transfer, Address myaddr, std::string event);
-	int HTTPConnect(std::string query,BTTrackCallbackRecord *callbackrec);
-    };
 
     class PiecePicker;
     //class CongestionController; // Arno: Currently part of Channel. See ::NextSendTime()
@@ -589,7 +548,7 @@ typedef std::vector<Address>	peeraddrs_t;
         /** Arno: Reconnect to the tracker if no established peers or is connected
          * to a live source that went silent and exp backoff allows it. */
         void            ReConnectToTrackerIfAllowed(bool movingforward);
-        BTTrackerClient *GetBTTrackerClient() { return bttrackclient_; }
+        ExternalTrackerClient *GetExternalTrackerClient() { return ext_tracker_client_; }
 
         /** Progress callback management **/
         void 		AddProgressCallback(ProgressCallback cb, uint8_t agg);
@@ -630,7 +589,7 @@ typedef std::vector<Address>	peeraddrs_t;
         std::string     trackerurl_; // Tracker URL for this transfer
         tint            tracker_retry_interval_;
         tint            tracker_retry_time_;
-        BTTrackerClient *bttrackclient_; // if BT tracker
+        ExternalTrackerClient *ext_tracker_client_; // if external tracker
         // Ric: slow start 4 requesting hints
         uint32_t        slow_start_hints_;
 

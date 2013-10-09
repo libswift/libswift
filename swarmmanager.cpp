@@ -356,7 +356,7 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
     {
 	newSwarm->ft_->SetTD(newSwarm->id_);
 
-	// Arno, 2013-09-11: BuildSwarm could not use BTTrackClient while td was -1
+	// Arno, 2013-09-11: BuildSwarm could not use ExternalTrackerClient while td was -1
 	fprintf(stderr,"swarmmgr: AddSwarm: ConnectToTracker\n");
 	newSwarm->ft_->ConnectToTracker();
     }
@@ -508,7 +508,7 @@ void SwarmManager::RemoveSwarm( const Sha1Hash& rootHash, bool removeState, bool
 
     if (swarm->ft_)
     {
-        // Arno, 2013-09-11: If external BT tracker, sign off
+        // Arno, 2013-09-11: If external tracker, sign off
 	swarm->ft_->ConnectToTracker(true);
     }
 

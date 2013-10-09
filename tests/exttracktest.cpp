@@ -126,7 +126,7 @@ bool InstallBTTrackerTestServer( struct event_base *evbase, Address bindaddr)
 bool tracker_called=false;
 bool tracker_response_valid=false;
 
-/** Called by BTTrackerClient when results come in from the server */
+/** Called by ExternalTrackerClient when results come in from the server */
 void tracker_callback(int td, std::string status, uint32_t interval, peeraddrs_t peerlist)
 {
     tracker_called = true;
@@ -163,7 +163,7 @@ TEST(TBTTrack,FileTransferEncodeRequestResponseOK) {
 
     FileTransfer ft( 481, "storage.dat", roothash, true, POPT_CONT_INT_PROT_NONE, 1024, false );
 
-    BTTrackerClient bt("http://127.0.0.1:8921/announce");
+    ExternalTrackerClient bt("http://127.0.0.1:8921/announce");
     bt.Contact(&ft,"started",tracker_callback);
 
     fprintf(stderr,"swift: Mainloop\n");
@@ -189,7 +189,7 @@ TEST(TBTTrack,FileTransferEncodeRequestResponseFailure) {
 
     FileTransfer ft( 481, "storage.dat", roothash, true, POPT_CONT_INT_PROT_NONE, 1024, false );
 
-    BTTrackerClient bt("http://127.0.0.1:8921/announce");
+    ExternalTrackerClient bt("http://127.0.0.1:8921/announce");
     bt.Contact(&ft,"started",tracker_callback);
 
     fprintf(stderr,"swift: Mainloop\n");
