@@ -1,5 +1,5 @@
 /*
- *  vod_picker.cpp
+ *  rf_picker.cpp
  *  swift
  *
  *  Created by Riccardo Petrocco.
@@ -14,10 +14,9 @@ using namespace swift;
 
 #define DEBUGPICKER 	1
 
-/** Picks pieces in VoD fashion. The stream is divided in three priority
- *  sets based on the current playback position. In the high priority set
- *  bins are selected in order, while on the medium and low priority sets
- *  in a rarest fist fashion */
+/**
+ * Picks pieces in rarest first fashion.
+ * */
 class RFPiecePicker : public PiecePicker {
 
     binmap_t        ack_hint_out_;
