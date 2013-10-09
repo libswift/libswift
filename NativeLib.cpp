@@ -27,10 +27,11 @@ using namespace swift;
 #define ASYNC_POLL_INTERVAL	(100*TINT_MSEC)
 
 // httpgw.cpp functions
-bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf );
+bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf);
+
 bool HTTPIsSending();
-std::string HttpGwGetProgressString(Sha1Hash swarmid);
-std::string HttpGwStatsGetSpeedCallback(Sha1Hash swarmid);
+std::string HttpGwGetProgressString(SwarmID &swarmid);
+std::string HttpGwStatsGetSpeedCallback(SwarmID &swarmid);
 
 // Local functions
 // Libevent* functions are executed by Mainloop thread,
@@ -58,34 +59,34 @@ class AsyncParams
   public:
     int      	callid_;
     event_callback_fn	func_;
-    Sha1Hash 	swarmid_;
-    Address 	tracker_;
+    SwarmID 	swarmid_;
+    std::string	trackerurl_;
     std::string filename_;
     char 	*data_;
     int		datalen_;
     bool 	removestate_;
     bool 	removecontent_;
 
-    AsyncParams(event_callback_fn func, Sha1Hash &swarmid, Address &tracker, std::string filename) :
-	callid_(-1), func_(func), swarmid_(swarmid), tracker_(tracker), filename_(filename),
+    AsyncParams(event_callback_fn func, SwarmID &swarmid, std::string &trackerurl, std::string filename) :
+	callid_(-1), func_(func), swarmid_(swarmid), trackerurl_(trackerurl), filename_(filename),
 	data_(NULL), datalen_(-1), removestate_(false), removecontent_(false)
     {
     }
 
-    AsyncParams(event_callback_fn func, Sha1Hash &swarmid) :
-	callid_(-1), func_(func), swarmid_(swarmid), tracker_(""), filename_(""),
+    AsyncParams(event_callback_fn func, SwarmID &swarmid) :
+	callid_(-1), func_(func), swarmid_(swarmid), trackerurl_(""), filename_(""),
 	data_(NULL), datalen_(-1), removestate_(false), removecontent_(false)
     {
     }
 
     AsyncParams(event_callback_fn func, char *data, int datalen) :
-	callid_(-1), func_(func), swarmid_(Sha1Hash::ZERO), tracker_(""), filename_(""),
+	callid_(-1), func_(func), swarmid_(SwarmID::NOSWARMID), trackerurl_(""), filename_(""),
 	data_(data), datalen_(datalen), removestate_(false), removecontent_(false)
     {
     }
 
-    AsyncParams(event_callback_fn func, Sha1Hash &swarmid, bool removestate, bool removecontent) :
-	callid_(-1), func_(func), swarmid_(swarmid), tracker_(""), filename_(""),
+    AsyncParams(event_callback_fn func, SwarmID &swarmid, bool removestate, bool removecontent) :
+	callid_(-1), func_(func), swarmid_(swarmid), trackerurl_(""), filename_(""),
 	data_(NULL), datalen_(-1), removestate_(removestate), removecontent_(removecontent)
     {
     }
@@ -171,7 +172,7 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Init(JNI
 	// Playback via HTTP GW: Client should contact 127.0.0.1:8082/roothash-in-hex and
 	// that will call swift::(Live)Open to start the actual download
 	// 32 K steps and no minimal prebuf for Android
-	bool ret = InstallHTTPGateway(Channel::evbase,httpgwaddr,chunk_size,maxspeed,"/sdcard/swift/", 32*1024, 0);
+	bool ret = InstallHTTPGateway(Channel::evbase,httpgwaddr,POPT_CONT_INT_PROT_MERKLE, DEFAULT_MOBILE_LIVE_DISC_WND_BYTES, chunk_size, maxspeed, "/sdcard/swift/", 32*1024, 0 );
 	if (ret == false)
 	    errorstr = "cannot start HTTP gateway";
     }
@@ -332,11 +333,11 @@ JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncOpen( 
     const char *trackercstr = (env)->GetStringUTFChars(jtracker, &blnIsCopy);
     const char *filenamecstr = (env)->GetStringUTFChars(jfilename, &blnIsCopy);
 
-    Sha1Hash swarmid = Sha1Hash(true,swarmidcstr);
+    SwarmID swarmid = SwarmID(std::string(swarmidcstr));
     std::string dest = "";
 
     // If no filename, use roothash-in-hex as default
-    if (swarmid != Sha1Hash::ZERO && filenamecstr == "")
+    if (!(swarmid == SwarmID::NOSWARMID) && filenamecstr == "")
 	dest = swarmid.hex();
     else
 	dest = filenamecstr;
@@ -344,8 +345,8 @@ JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncOpen( 
     if (dest == "")
 	return -1; // "No destination could be determined"
 
-    Address tracker(trackercstr);
-    AsyncParams *aptr = new AsyncParams(&LibeventOpenCallback,swarmid,tracker,dest);
+    std::string trackerurl(trackercstr);
+    AsyncParams *aptr = new AsyncParams(&LibeventOpenCallback,swarmid,trackerurl,dest);
 
     // Register callback
     int callid = AsyncRegisterCallback(aptr);
@@ -368,12 +369,12 @@ void LibeventOpenCallback(int fd, short event, void *arg)
 
     std::string errorstr="";
     dprintf("NativeLib::Open: %s writing to %s\n", aptr->swarmid_.hex().c_str(), aptr->filename_.c_str() );
-    int td = swift::Open(aptr->filename_,aptr->swarmid_,aptr->tracker_,false);
+    int td = swift::Open(aptr->filename_,aptr->swarmid_,aptr->trackerurl_,false);
     if (td < 0)
 	errorstr = "cannot open destination file";
     else
     {
-	errorstr = swift::SwarmID(td).hex();
+	errorstr = swift::GetSwarmID(td).hex();
 	dprintf("NativeLib::Open: swarmid: %s\n", errorstr.c_str());
     }
 
@@ -395,7 +396,7 @@ JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncClose(
 
     const char *swarmidcstr = (env)->GetStringUTFChars(jswarmid, &blnIsCopy);
 
-    Sha1Hash swarmid = Sha1Hash(true,swarmidcstr);
+    SwarmID swarmid = SwarmID(std::string(swarmidcstr));
     bool rs = (bool)jremovestate;
     bool rc = (bool)jremovecontent;
     AsyncParams *aptr = new AsyncParams(&LibeventCloseCallback,swarmid,rs,rc);
@@ -444,12 +445,15 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_hashChec
     const char *filenamecstr = (env)->GetStringUTFChars(jfilename, &blnIsCopy);
 
     std::string errorstr = "";
-    Sha1Hash swarmid;
-    int ret = swift::HashCheckOffline(filenamecstr,&swarmid);
+    Sha1Hash roothash;
+    int ret = swift::HashCheckOffline(filenamecstr,&roothash);
     if (ret < 0)
 	errorstr = "Error hash check offline";
     else
+    {
+	SwarmID swarmid(roothash);
 	errorstr = swarmid.hex();
+    }
 
     (env)->ReleaseStringUTFChars(jfilename, filenamecstr); // release jstring
 
@@ -467,11 +471,11 @@ JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_SetTracker(
     jboolean blnIsCopy;
 
     const char * trackercstr = (env)->GetStringUTFChars(jtracker, &blnIsCopy);
-    Address tracker = Address(trackercstr);
-    if (tracker==Address())
+    std::string trackerurl(trackercstr);
+    if (trackerurl=="")
         dprintf("NativeLib::SetTracker: Tracker address must be hostname:port, ip:port or just port\n");
     else
-	SetTracker(tracker);
+	SetTracker(trackerurl);
 
     (env)->ReleaseStringUTFChars(jtracker , trackercstr); // release jstring
 }
@@ -486,7 +490,7 @@ JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetHTT
     jboolean blnIsCopy;
 
     const char * swarmidcstr = (env)->GetStringUTFChars(jswarmid, &blnIsCopy);
-    Sha1Hash swarmid = Sha1Hash(true,swarmidcstr);
+    SwarmID swarmid = SwarmID(std::string(swarmidcstr));
 
     AsyncParams *aptr = new AsyncParams(&LibeventGetHTTPProgressCallback,swarmid);
 
@@ -523,7 +527,7 @@ JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetSta
     jboolean blnIsCopy;
 
     const char * swarmidcstr = (env)->GetStringUTFChars(jswarmid, &blnIsCopy);
-    Sha1Hash swarmid = Sha1Hash(true,swarmidcstr);
+    SwarmID swarmid = SwarmID(std::string(swarmidcstr));
 
     AsyncParams *aptr = new AsyncParams(&LibeventGetStatsCallback,swarmid);
 
@@ -576,15 +580,19 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_LiveCrea
 
     const char * swarmidcstr = (env)->GetStringUTFChars(jswarmid, &blnIsCopy);
     // std::string swarmidstr = "ArnosFirstSwarm";
-    Sha1Hash swarmid = Sha1Hash(true,swarmidcstr);
+    SwarmID swarmid = SwarmID(std::string(swarmidcstr));
 
     // Start swarm
+    std::string errorstr = "";
     std::string filename = "/sdcard/swift/storage.dat";
-    livesource_lt = swift::LiveCreate(filename,swarmid);
+    // livesource_lt = swift::LiveCreate(filename,swarmid);
+    // Arno, 2013-10-09: Disabled.
+    errorstr = "LiveCreate currently not supported. Adjust JNI interface to pass keypair, or some other method";
+
 
     (env)->ReleaseStringUTFChars(jswarmid , swarmidcstr); // release jstring
 
-    return env->NewStringUTF("");
+    return env->NewStringUTF(errorstr.c_str());
 }
 
 

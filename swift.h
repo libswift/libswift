@@ -98,36 +98,19 @@ namespace swift {
 // Arno, 2011-12-22: Enable Riccardo's VodPiecePicker
 #define ENABLE_VOD_PIECEPICKER        1
 
-#define SWIFT_MAX_UDP_OVER_ETH_PAYLOAD        (1500-20-8)
-// Arno: Maximum size of non-DATA messages in a UDP packet we send.
-#define SWIFT_MAX_NONDATA_DGRAM_SIZE         (SWIFT_MAX_UDP_OVER_ETH_PAYLOAD-SWIFT_DEFAULT_CHUNK_SIZE-1-4)
-// Arno: Maximum size of a UDP packet we send. Note: depends on CHUNKSIZE 8192
-#define SWIFT_MAX_SEND_DGRAM_SIZE            (SWIFT_MAX_NONDATA_DGRAM_SIZE+1+4+8192)
-// Arno: Maximum size of a UDP packet we are willing to accept. Note: depends on CHUNKSIZE 8192
-#define SWIFT_MAX_RECV_DGRAM_SIZE            (SWIFT_MAX_SEND_DGRAM_SIZE*2)
-
-#define layer2bytes(ln,cs)    (uint64_t)( ((double)cs)*pow(2.0,(double)ln))
-#define bytes2layer(bn,cs)  (int)log2(  ((double)bn)/((double)cs) )
-
-
-// Arno, 2012-12-12: Configure which PPSP version to use by default. Set to 0 for legacy swift.
-#define ENABLE_IETF_PPSP_VERSION      1
-
-// Whether to try legacy protocol when PPSP handshakes don't result in response
-#define ENABLE_FALLBACK_TO_LEGACY_PROTO	0
-
-// Arno, 2011-12-22: Enable Riccardo's VodPiecePicker
-#define ENABLE_VOD_PIECEPICKER        1
-
 // Arno, 2013-10-02: Configure which live piecepicker: default or with small-swarms optimization
 #define ENABLE_LIVE_SMALLSWARMOPT_PIECEPICKER      1
+
+
+// Arno, 2013-10-02: Default for mobile devices. Set to 0 to disable.
+#define DEFAULT_MOBILE_LIVE_DISC_WND_BYTES		   (1*1024*1024*1024) // 1 GB
+
+// Value for protocol option: Live Discard Window
+#define POPT_LIVE_DISC_WND_ALL	      	     0xFFFFFFFF	// automatically truncated for 32-bit
 
 // scheme for swift URLs
 #define SWIFT_URI_SCHEME              "tswift"
 
-
-// Value for protocol option: Live Discard Window
-#define POPT_LIVE_DISC_WND_ALL	      	     0xFFFFFFFF	// automatically truncated for 32-bit
 
 // Max size of the swarm ID protocol option in a HANDSHAKE message.
 #define POPT_MAX_SWARMID_SIZE		     1024
@@ -143,6 +126,20 @@ namespace swift {
 
 // How much time a SIGNED_INTEGRITY timestamp may diverge from current time
 #define SWIFT_LIVE_MAX_SOURCE_DIVERGENCE_TIME	30 // seconds
+
+
+#define SWIFT_MAX_UDP_OVER_ETH_PAYLOAD        (1500-20-8)
+// Arno: Maximum size of non-DATA messages in a UDP packet we send.
+#define SWIFT_MAX_NONDATA_DGRAM_SIZE         (SWIFT_MAX_UDP_OVER_ETH_PAYLOAD-SWIFT_DEFAULT_CHUNK_SIZE-1-4)
+// Arno: Maximum size of a UDP packet we send. Note: depends on CHUNKSIZE 8192
+#define SWIFT_MAX_SEND_DGRAM_SIZE            (SWIFT_MAX_NONDATA_DGRAM_SIZE+1+4+8192)
+// Arno: Maximum size of a UDP packet we are willing to accept. Note: depends on CHUNKSIZE 8192
+#define SWIFT_MAX_RECV_DGRAM_SIZE            (SWIFT_MAX_SEND_DGRAM_SIZE*2)
+
+#define layer2bytes(ln,cs)    (uint64_t)( ((double)cs)*pow(2.0,(double)ln))
+#define bytes2layer(bn,cs)  (int)log2(  ((double)bn)/((double)cs) )
+
+
 
 
     typedef enum {

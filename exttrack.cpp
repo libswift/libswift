@@ -126,7 +126,7 @@ std::string ExternalTrackerClient::CreateQuery(ContentTransfer *transfer, Addres
     {
 	SwarmPubKey spubkey = transfer->swarm_id().spubkey();
 	infohash = Sha1Hash(spubkey.bits(),spubkey.length());
-	left = 0x7fffffffffffffff;
+	left = 0x7fffffffffffffffULL;
     }
 
     // See
@@ -432,12 +432,12 @@ static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startev
     if (ret < 0)
 	return -1;
 
-    char *separator = BT_BENCODE_STRING_SEP;
+    std::string separator = BT_BENCODE_STRING_SEP;
     if (valuetype == BENCODED_INT)
 	separator = BT_BENCODE_INT_SEP;
 
     // Find separator to determine string len
-    struct evbuffer_ptr endevbp = evbuffer_search(evb,separator,strlen(separator),&startevbp);
+    struct evbuffer_ptr endevbp = evbuffer_search(evb,separator.c_str(),strlen(separator.c_str()),&startevbp);
     if (endevbp.pos == -1)
 	return -1;
 
