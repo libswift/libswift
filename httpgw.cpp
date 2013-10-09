@@ -708,60 +708,68 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
      * error if it doesn't make sense
      */
     uint64_t filesize = 0;
-    if (req->mfspecname != "")
+    if (!req->live)
     {
-        // MULTIFILE
-        // Find out size of selected file
-        storage_files_t sfs = storage->GetStorageFiles();
-        storage_files_t::iterator iter;
-        bool found = false;
-        for (iter = sfs.begin(); iter < sfs.end(); iter++)
-        {
-            StorageFile *sf = *iter;
-            if (sf->GetSpecPathName() == req->mfspecname)
-            {
-                found = true;
-                req->startoff = sf->GetStart();
-                req->endoff = sf->GetEnd();
-                filesize = sf->GetSize();
-                break;
-            }
-        }
-        if (!found) {
-            evhttp_send_error(req->sinkevreq,404,"Individual file not found in multi-file content.");
-	    req->replied = true;
-	    dprintf("%s @%i http get: ERROR 404 file %s not found in multi-file\n",tintstr(),req->id,req->mfspecname.c_str() );
-            return;
-        }
-    }
-    else
-    {
-        // Single file
-        if (req->contentlen != 0)
-	    filesize = req->contentlen;
-        else
-	    filesize = swift::Size(td);
+	// VOD
+	if (req->mfspecname != "")
+	{
+	    // MULTIFILE
+	    // Find out size of selected file
+	    storage_files_t sfs = storage->GetStorageFiles();
+	    storage_files_t::iterator iter;
+	    bool found = false;
+	    for (iter = sfs.begin(); iter < sfs.end(); iter++)
+	    {
+		StorageFile *sf = *iter;
+		if (sf->GetSpecPathName() == req->mfspecname)
+		{
+		    found = true;
+		    req->startoff = sf->GetStart();
+		    req->endoff = sf->GetEnd();
+		    filesize = sf->GetSize();
+		    break;
+		}
+	    }
+	    if (!found) {
+		evhttp_send_error(req->sinkevreq,404,"Individual file not found in multi-file content.");
+		req->replied = true;
+		dprintf("%s @%i http get: ERROR 404 file %s not found in multi-file\n",tintstr(),req->id,req->mfspecname.c_str() );
+		return;
+	    }
+	}
+	else
+	{
+	    // Single file
+	    if (req->contentlen != 0)
+		filesize = req->contentlen;
+	    else
+		filesize = swift::Size(td);
 
-        req->startoff = 0;
-        req->endoff = filesize-1;
-    }
+	    req->startoff = 0;
+	    req->endoff = filesize-1;
+	}
 
-    // Handle HTTP GET Range request, i.e. additional offset within content
-    // or file. Sets some headers or sends HTTP error.
-    if (req->live) //LIVE
+	// Handle HTTP GET Range request, i.e. additional offset within content
+	// or file. Sets some headers or sends HTTP error.
+	// Sets req->rangefirst and req->rangelast
+	//
+	if (!HttpGwParseContentRangeHeader(req,filesize))
+	    return;
+    }
+    else //LIVE
     {
 	uint64_t hookinoff = swift::GetHookinOffset(td);
 	req->startoff = hookinoff;
-        req->rangefirst = -1;
+	req->endoff = 0x0fffffffffffffffULL; // MAX
         req->replycode = 200;
 
 	fprintf(stderr,"httpgw: Live: hook-in at %llu\n", hookinoff );
 	dprintf("%s @%i http first: hook-in at %llu\n",tintstr(),req->id, hookinoff );
 
-        req->tosend = 0x0fffffffffffffffULL; // MAX
-
         if (req->dashrangestr.length() > 0)
         {
+            // iOS DASH support
+            fprintf(stderr,"HTTP FIRST DASH RANGE <%s>\n", req->dashrangestr.c_str() );
             bool baddashspec=false;
             uint64_t soff=0,eoff=0;
 
@@ -772,7 +780,7 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
             }
             else
             {
-                std::string startstr = req->dashrangestr.substr(0,sidx-1);
+                std::string startstr = req->dashrangestr.substr(0,sidx);
                 std::string endstr = req->dashrangestr.substr(sidx+1,req->dashrangestr.length()-sidx);
 
                 fprintf(stderr,"HTTP FIRST DASH <%s> <%s>\n", startstr.c_str(), endstr.c_str() );
@@ -797,19 +805,20 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
              }
 
              req->dash = true;
-             req->startoff = soff;
-             req->endoff = eoff;
+             req->rangefirst = soff;
+             req->rangelast = eoff;
 
-             req->tosend = req->endoff+1-req->startoff;
-             fprintf(stderr,"HTTP tosend DASH soff %lld eoff %lld tosend %lld\n", soff, eoff, req->tosend );
+             fprintf(stderr,"HTTP tosend DASH soff %lld eoff %lld\n", soff, eoff );
         }
+        else
+            req->rangefirst = -1;
     }
-    else if (!HttpGwParseContentRangeHeader(req,filesize))
-        return;
 
+
+    // Set tosend and offset from selected file and/or range
     if (req->rangefirst != -1)
     {
-        // Range request
+        // VOD Range request or live DASH
         // Arno, 2012-06-15: Oops, use startoff before mod.
         req->endoff = req->startoff + req->rangelast;
         req->startoff += req->rangefirst;
@@ -817,14 +826,21 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
         //fprintf(stderr,"HTTP tosend RANGE\n");
         req->tosend = req->rangelast+1-req->rangefirst;
     }
-    else if (!req->live)
+    else if (req->live)
     {
-    	//fprintf(stderr,"HTTP tosend not DASH\n");
+	// Live without DASH
+        req->tosend = req->endoff;
+    }
+    else
+    {
+	// VOD
         req->tosend = filesize;
     }
     req->offset = req->startoff;
 
-    // SEEKTODO: concurrent requests to same resource
+    fprintf(stderr,"HTTP offset %lld tosend %lld\n", req->offset, req->tosend );
+
+    // Seek to wanted position in stream
     if (!req->live && req->startoff != 0)
     {
         // Seek to multifile/range start
