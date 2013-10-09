@@ -769,7 +769,7 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
         if (req->dashrangestr.length() > 0)
         {
             // iOS DASH support
-            fprintf(stderr,"HTTP FIRST DASH RANGE <%s>\n", req->dashrangestr.c_str() );
+            //fprintf(stderr,"HTTP FIRST DASH RANGE <%s>\n", req->dashrangestr.c_str() );
             bool baddashspec=false;
             uint64_t soff=0,eoff=0;
 
@@ -782,8 +782,6 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
             {
                 std::string startstr = req->dashrangestr.substr(0,sidx);
                 std::string endstr = req->dashrangestr.substr(sidx+1,req->dashrangestr.length()-sidx);
-
-                fprintf(stderr,"HTTP FIRST DASH <%s> <%s>\n", startstr.c_str(), endstr.c_str() );
 
                 int ret = sscanf(startstr.c_str(),"%lld",&soff);
                 if (ret != 1)
@@ -808,7 +806,8 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
              req->rangefirst = soff;
              req->rangelast = eoff;
 
-             fprintf(stderr,"HTTP tosend DASH soff %lld eoff %lld\n", soff, eoff );
+             fprintf(stderr,"httpgw: Live: DASH request from %lld till %lld\n", soff, eoff );
+             dprintf("%s @%i http first: DASH request from %lld till %lld\n", tintstr(),req->id, soff, eoff );
         }
         else
             req->rangefirst = -1;
