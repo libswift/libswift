@@ -187,7 +187,7 @@ std::string ExternalTrackerClient::CreateQuery(ContentTransfer *transfer, Addres
 static void ExternalTrackerClientHTTPResponseCallback(struct evhttp_request *req, void *callbackrecvoid)
 {
     if (exttrack_debug)
-	fprintf(stderr,"bttrack: Callback: ENTER %p\n", callbackrecvoid );
+	fprintf(stderr,"exttrack: Callback: ENTER %p\n", callbackrecvoid );
 
     ExtTrackCallbackRecord *callbackrec = (ExtTrackCallbackRecord *)callbackrecvoid;
     if (callbackrec == NULL)
@@ -217,7 +217,7 @@ static void ExternalTrackerClientHTTPResponseCallback(struct evhttp_request *req
 	return;
     }
 
-    //fprintf(stderr,"bttrack: Raw response <%s>\n", copybuf );
+    //fprintf(stderr,"exttrack: Raw response <%s>\n", copybuf );
 
 
     evb = evbuffer_new();
@@ -284,7 +284,7 @@ static void ExternalTrackerClientHTTPResponseCallback(struct evhttp_request *req
 
 	    free(valuebytes);
 	    if (exttrack_debug)
-		fprintf(stderr,"bttrack: Got interval %u\n", interval);
+		fprintf(stderr,"exttrack: Got interval %u\n", interval);
 	}
     }
     evbuffer_free(evb);
@@ -343,7 +343,7 @@ int ExternalTrackerClient::HTTPConnect(std::string query,ExtTrackCallbackRecord 
     std::string fullurl = url_+"?"+query;
 
     if (exttrack_debug)
-	fprintf(stderr,"bttrack: HTTPConnect: %s\n", fullurl.c_str() );
+	fprintf(stderr,"exttrack: HTTPConnect: %s\n", fullurl.c_str() );
 
     struct evhttp_uri *evu = evhttp_uri_parse(fullurl.c_str());
     if (evu == NULL)
@@ -355,7 +355,7 @@ int ExternalTrackerClient::HTTPConnect(std::string query,ExtTrackCallbackRecord 
     strcat(fullpath,"?");
     strcat(fullpath,evhttp_uri_get_query(evu));
 
-    //fprintf(stderr,"bttrack: HTTPConnect: Composed fullpath %s\n", fullpath );
+    //fprintf(stderr,"exttrack: HTTPConnect: Composed fullpath %s\n", fullpath );
 
     // Create HTTP client
     struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, evhttp_uri_get_host(evu), evhttp_uri_get_port(evu) );
@@ -384,7 +384,7 @@ static int ParseBencodedPeers(struct evbuffer *evb, std::string key, peeraddrs_t
 	    return -1;
 
 	int peerlistenclen = ret;
-	//fprintf(stderr,"bttrack: Peerlist encoded len %d\n", peerlistenclen );
+	//fprintf(stderr,"exttrack: Peerlist encoded len %d\n", peerlistenclen );
 
 	// Decompact addresses
 	struct evbuffer *evb2 = evbuffer_new();
@@ -406,7 +406,7 @@ static int ParseBencodedPeers(struct evbuffer *evb, std::string key, peeraddrs_t
 	    peerlist->push_back(addr);
 
 	    if (exttrack_debug)
-		fprintf(stderr,"bttrack: Peerlist parsed %d %s\n", i, addr.str().c_str() );
+		fprintf(stderr,"exttrack: Peerlist parsed %d %s\n", i, addr.str().c_str() );
 	}
 	evbuffer_free(evb2);
 
@@ -420,13 +420,13 @@ static int ParseBencodedPeers(struct evbuffer *evb, std::string key, peeraddrs_t
 /** Failure reported, extract string from bencoded dictionary */
 static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startevbp, std::string key, bencoded_type_t valuetype, char **valueptr)
 {
-    //fprintf(stderr,"bttrack: Callback: key %s starts at " PRISIZET "\n", key.c_str(), startevbp.pos );
+    //fprintf(stderr,"exttrack: Callback: key %s starts at " PRISIZET "\n", key.c_str(), startevbp.pos );
 
     size_t pastkeypos = startevbp.pos+key.length();
     if (valuetype == BENCODED_INT)
 	pastkeypos++; // skip 'i'
 
-    //fprintf(stderr,"bttrack: Callback: key ends at " PRISIZET "\n", pastkeypos );
+    //fprintf(stderr,"exttrack: Callback: key ends at " PRISIZET "\n", pastkeypos );
 
     int ret = evbuffer_ptr_set(evb, &startevbp, pastkeypos, EVBUFFER_PTR_SET);
     if (ret < 0)
@@ -441,15 +441,15 @@ static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startev
     if (endevbp.pos == -1)
 	return -1;
 
-    //fprintf(stderr,"bttrack: Callback: separator at " PRISIZET " key len %d\n", endevbp.pos, key.length() );
+    //fprintf(stderr,"exttrack: Callback: separator at " PRISIZET " key len %d\n", endevbp.pos, key.length() );
 
     size_t intcstrlen = endevbp.pos - startevbp.pos;
 
-    //fprintf(stderr,"bttrack: Callback: value length " PRISIZET "\n", intcstrlen );
+    //fprintf(stderr,"exttrack: Callback: value length " PRISIZET "\n", intcstrlen );
 
     size_t strpos = endevbp.pos+1;
 
-    //fprintf(stderr,"bttrack: Callback: value starts at " PRISIZET "\n", strpos );
+    //fprintf(stderr,"exttrack: Callback: value starts at " PRISIZET "\n", strpos );
 
     ret = evbuffer_ptr_set(evb, &startevbp, strpos, EVBUFFER_PTR_SET);
     if (ret < 0)
@@ -470,7 +470,7 @@ static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startev
     }
 
 
-    //fprintf(stderr,"bttrack: Callback: Length value string %s\n", intcstr );
+    //fprintf(stderr,"exttrack: Callback: Length value string %s\n", intcstr );
 
     if (valuetype == BENCODED_INT)
     {
@@ -485,7 +485,7 @@ static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startev
     if (ret != 1)
 	return -1;
 
-    //fprintf(stderr,"bttrack: Callback: Length value int %d\n", slen );
+    //fprintf(stderr,"exttrack: Callback: Length value int %d\n", slen );
 
     // Drain colon
     ret = evbuffer_drain(evb,1);
@@ -503,7 +503,7 @@ static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startev
     }
     else
     {
-	//fprintf(stderr,"bttrack: Callback: Value string <%s>\n", valuecstr );
+	//fprintf(stderr,"exttrack: Callback: Value string <%s>\n", valuecstr );
 
 	*valueptr = valuecstr;
 	// do not delete valuecstr;
