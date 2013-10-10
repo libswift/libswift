@@ -573,8 +573,10 @@ int OpenSwiftFile(std::string filename, const Sha1Hash& hash, Address tracker, b
 
     // Client mode: regular or live download
     int td = -1;
-    if (!livestream)
-	td = swift::Open(filename,hash,tracker,force_check_diskvshash,true,false,activate,chunk_size);
+    if (!livestream) {
+    	td = swift::Open(filename,hash,tracker,force_check_diskvshash,true,false,activate,chunk_size);
+        printf("Root hash: %s\n", swift::SwarmID(td).hex().c_str());
+    }
     else
 	td = swift::LiveOpen(filename,hash,Address(),false,chunk_size);
     return td;

@@ -1670,7 +1670,6 @@ bin_t binmap_t::_find_complement(const bin_t& bin, const bitmap_t dbitmap, const
             bitmap = ((bitmap & 0x00ff) << 8)  | ((bitmap & 0xff00) >> 8);
         }
 
-        // Arno, 2012-03-21: Do workaround (see below) here as well?
         // Ric,  2013-09-09: Solved
         uint32_t offset = bin.base_left().twisted(twist & ~0x0f).toUInt() & ~31;
         return bin_t(offset + bitmap_to_bin(bitmap)).to_twisted(twist & 0x0f);

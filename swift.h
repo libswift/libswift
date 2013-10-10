@@ -94,7 +94,7 @@ namespace swift {
 // Arno: Maximum size of a UDP packet we are willing to accept. Note: depends on CHUNKSIZE 8192
 #define SWIFT_MAX_RECV_DGRAM_SIZE            (SWIFT_MAX_SEND_DGRAM_SIZE*2)
 // Ric: Victor's magic # :-)
-#define SWIFT_MAX_CONNECTIONS 30
+#define SWIFT_MAX_CONNECTIONS 20
 
 #define layer2bytes(ln,cs)    (uint64_t)( ((double)cs)*pow(2.0,(double)ln))
 #define bytes2layer(bn,cs)  (int)log2(  ((double)bn)/((double)cs) )
@@ -107,7 +107,7 @@ namespace swift {
 #define ENABLE_FALLBACK_TO_LEGACY_PROTO	0
 
 // Arno, 2011-12-22: Enable Riccardo's VodPiecePicker
-#define ENABLE_VOD_PIECEPICKER        1
+#define ENABLE_VOD_PIECEPICKER        0
 
 // Arno, 2013-10-02: Configure which live piecepicker: default or with small-swarms optimization
 #define ENABLE_LIVE_SMALLSWARMOPT_PIECEPICKER      1
