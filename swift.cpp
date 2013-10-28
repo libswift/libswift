@@ -766,25 +766,31 @@ void ReportCallback(int fd, short event, void *arg) {
                 Channel::global_dgrams_up, Channel::global_raw_bytes_up,
                 Channel::global_dgrams_down, Channel::global_raw_bytes_down );
 
-        double up = swift::GetCurrentSpeed(single_td,DDIR_UPLOAD);
-        double dw = swift::GetCurrentSpeed(single_td,DDIR_DOWNLOAD);
-        if (up/1048576 > 1)
-            fprintf(stderr,"upload %.2f MB/s (%lf B/s)\n", up/(1<<20), up);
-        else
-            fprintf(stderr,"upload %.2f KB/s (%lf B/s)\n", up/(1<<10), up);
-        if (dw/1048576 > 1)
-            fprintf(stderr,"dwload %.2f MB/s (%lf B/s)\n", dw/(1<<20), dw);
-        else
-            fprintf(stderr,"dwload %.2f KB/s (%lf B/s)\n", dw/(1<<10), dw);
+            double up = swift::GetCurrentSpeed(single_td,DDIR_UPLOAD);
+            double dw = swift::GetCurrentSpeed(single_td,DDIR_DOWNLOAD);
 
-		// Ric: remove. LEDBAT tests
-		Channel* c = swift::Channel::channel(1);
-		if (c!=NULL) {
-			fprintf(stderr,"ledbat %3.2f\n",c->GetCwnd());
-            fprintf(stderr,"hints_in  %lu\n",c->GetHintSize(DDIR_UPLOAD));
-			fprintf(stderr,"hints_out %lu\n",c->GetHintSize(DDIR_DOWNLOAD));
-		}
-		//fprintf(stderr,"npeers %d\n",ft->GetNumLeechers()+ft->GetNumSeeders() );
+            fprintf(stderr, "     %d%%", Complete(single_td)*100/Size(single_td));
+            if (!IsComplete(single_td ))
+                fprintf(stderr, "\tTransfer complete in: %.2f min.", (Size(single_td)-Complete(single_td))/(dw*60));
+            fprintf(stderr, "\n");
+
+            if (up/1048576 > 1)
+                fprintf(stderr,"upload %.2f MB/s (%lf B/s)\n", up/(1<<20), up);
+            else
+                fprintf(stderr,"upload %.2f KB/s (%lf B/s)\n", up/(1<<10), up);
+            if (dw/1048576 > 1)
+                fprintf(stderr,"dwload %.2f MB/s (%lf B/s)\n", dw/(1<<20), dw);
+            else
+                fprintf(stderr,"dwload %.2f KB/s (%lf B/s)\n", dw/(1<<10), dw);
+
+            // Ric: remove. LEDBAT tests
+            Channel* c = swift::Channel::channel(1);
+            if (c!=NULL) {
+                fprintf(stderr,"ledbat %3.2f\n",c->GetCwnd());
+                fprintf(stderr,"hints_in  %lu\n",c->GetHintSize(DDIR_UPLOAD));
+                fprintf(stderr,"hints_out %lu\n",c->GetHintSize(DDIR_DOWNLOAD));
+        }
+        //fprintf(stderr,"npeers %d\n",ft->GetNumLeechers()+ft->GetNumSeeders() );
 	}
 
 
