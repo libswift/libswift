@@ -111,6 +111,11 @@ namespace swift {
 // scheme for swift URLs
 #define SWIFT_URI_SCHEME              "tswift"
 
+// Max incoming connections. Must be set to large value with swift tracker
+#define SWIFT_MAX_INCOMING_CONNECTIONS		0xffff
+
+// Max outgoing connections
+#define SWIFT_MAX_OUTGOING_CONNECTIONS 		20
 
 // Max size of the swarm ID protocol option in a HANDSHAKE message.
 #define POPT_MAX_SWARMID_SIZE		     1024
@@ -844,7 +849,8 @@ namespace swift {
         /** the current time */
         static tint     Time();
         static tint 	last_tick;
-
+        // Arno: send explicit close outside Channel context
+        static void 	StaticSendClose(evutil_socket_t socket,Address &addr, uint32_t peer_channel_id);
 
         // Ric: used for testing LEDBAT's behaviour
         float		GetCwnd() { return cwnd_; }
@@ -1411,7 +1417,6 @@ namespace swift {
     binvector bin_fragment(bin_t &origbin, bin_t &cancelbin);
 
     const char* tintstr(tint t=0);
- #define SWIFT_MAX_CONNECTIONS 20
 
     // SOCKTUNNEL
     void CmdGwTunnelUDPDataCameIn(Address srcaddr, uint32_t srcchan, struct evbuffer* evb);

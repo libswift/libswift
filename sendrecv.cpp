@@ -1987,7 +1987,7 @@ void Channel::AddPexReq(struct evbuffer *evb) {
     pex_request_outstanding_ = false;
 
     // Initiate at most SWIFT_MAX_CONNECTIONS connections
-    if (transfer()->GetChannels()->size() >= SWIFT_MAX_CONNECTIONS ||
+    if (transfer()->GetChannels()->size() >= SWIFT_MAX_OUTGOING_CONNECTIONS ||
             // Check whether this channel has been providing useful peer information
             useless_pex_count_ > 2)
     {
@@ -2036,8 +2036,9 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
 #define return_log(...) { dprintf(__VA_ARGS__); evbuffer_free(evb); if (hishs != NULL) { delete hishs; } return; }
     if (evbuffer_get_length(evb)<4)
         return_log("socket layer weird: datagram < 4 bytes from %s (prob ICMP unreach)\n",addr.str().c_str());
+
     uint32_t mych = evbuffer_remove_32be(evb);
-    Sha1Hash hash;
+
     Channel* channel = NULL;
     if (mych==0) { // peer initiates handshake
 
@@ -2053,17 +2054,23 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
             ZeroState *zs = ZeroState::GetInstance();
             td = zs->Find(swarmid.roothash());
             if (td == -1)
-                return_log ("%s #0 hash %s unknown, requested by %s\n",tintstr(),hishs->GetSwarmID().hex().c_str(),addr.str().c_str());
+            {
+        	// Don't reply to strangers knocking
+        	//StaticSendClose(socket,addr,hishs->peer_channel_id_);
+                return_log ("%s #0 swarm %s unknown, requested by %s\n",tintstr(),hishs->GetSwarmID().hex().c_str(),addr.str().c_str());
+            }
         }
         ContentTransfer *ct = swift::GetActivatedTransfer(td);
         if (ct == NULL)
         {
-            return_log( "%s #0 hash %s known, couldn't be activated; requested by %s\n", tintstr(), hishs->GetSwarmID().hex().c_str(), addr.str().c_str() );
+            StaticSendClose(socket,addr,hishs->peer_channel_id_);
+            return_log( "%s #0 swarm %s known, couldn't be activated; requested by %s\n", tintstr(), hishs->GetSwarmID().hex().c_str(), addr.str().c_str() );
         }
         else if (!ct->IsOperational())
         {
             // Activated, but broken
-            return_log ("%s #0 hash %s broken, requested by %s\n",tintstr(),hishs->GetSwarmID().hex().c_str(),addr.str().c_str());
+            StaticSendClose(socket,addr,hishs->peer_channel_id_);
+            return_log ("%s #0 swarm %s broken, requested by %s\n",tintstr(),hishs->GetSwarmID().hex().c_str(),addr.str().c_str());
         }
 
         // Arno, 2012-02-27: Check for duplicate channel
@@ -2094,9 +2101,19 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
                 //fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: reuse channel %s\n", channel->peer_.str() );
             }
         }
-        if (channel == NULL) {
-            //fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: create new channel %s\n", addr.str().c_str() );
-            channel = new Channel(ct, socket, addr);
+        if (channel == NULL)
+        {
+            if (ct->GetChannels()->size() < SWIFT_MAX_INCOMING_CONNECTIONS)
+            {
+        	//fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: create new channel %s\n", addr.str().c_str() );
+        	channel = new Channel(ct, socket, addr);
+            }
+            else
+            {
+                // Too many connections
+        	StaticSendClose(socket,addr,hishs->peer_channel_id_);
+                return_log ("%s #0 swarm %s too many connections, requested by %s\n",tintstr(),hishs->GetSwarmID().hex().c_str(),addr.str().c_str());
+            }
         }
         //fprintf(stderr,"CHANNEL INCOMING DEF hass %s is id %d\n",hishs->GetSwarmID().hex().c_str(),channel->id());
 
@@ -2254,3 +2271,21 @@ void Channel::LibeventSendCallback(int fd, short event, void *arg) {
         sender->Send();
 }
 
+
+void Channel::StaticSendClose(evutil_socket_t socket,Address &addr, uint32_t peer_channel_id)
+{
+    if (peer_channel_id == 0)
+	return; // safety catch
+
+    struct evbuffer *evb = evbuffer_new();
+    evbuffer_add_32be(evb, peer_channel_id ); // His channel ID
+    evbuffer_add_8(evb, SWIFT_HANDSHAKE);
+    evbuffer_add_32be(evb, 0 ); // Initial channel ID
+    evbuffer_add_8(evb, POPT_END); // Empty protocol options list
+
+    int r = SendTo(socket,addr,evb);
+    if (r==-1)
+	print_error("swift can't send datagram");
+
+    evbuffer_free(evb);
+}

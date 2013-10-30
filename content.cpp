@@ -339,7 +339,7 @@ bool ContentTransfer::OnPexIn (const Address& addr)
             return false; // already connected or connecting, Gertjan fix = return false
     }
     // Gertjan fix: PEX redo
-    if (mychannels_.size()<SWIFT_MAX_CONNECTIONS)
+    if (mychannels_.size()<SWIFT_MAX_OUTGOING_CONNECTIONS)
         new Channel(this,Channel::default_socket(),addr);
     return true;
 }
