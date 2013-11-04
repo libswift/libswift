@@ -219,7 +219,7 @@ tint Channel::LedbatNextSendTime () {
     if (owd_cur==TINT_NEVER || owd_min==TINT_NEVER) 
         cwnd_ = 1;
 
-    //Arno, 2012-02-02: Somehow LEDBAT gets stuck at cwnd_ == 1 sometimes
+    /*Arno, 2012-02-02: Somehow LEDBAT gets stuck at cwnd_ == 1 sometimes
     // This hack appears to work to get it back on the right track quickly.
     if (oldcwnd == 1 && cwnd_ == 1)
        cwnd_count1_++;
@@ -233,7 +233,7 @@ tint Channel::LedbatNextSendTime () {
             owd_min_bins_[i] = TINT_NEVER;
             owd_current_[i] = TINT_NEVER;
         }
-    }
+    }*/
 
     dprintf("%s #%u sendctrl ledbat %lld-%lld => %3.2f\n",
             tintstr(),id_,owd_cur,owd_min,cwnd_);
