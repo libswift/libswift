@@ -29,7 +29,8 @@ source = [ 'bin.cpp', 'binmap.cpp', 'sha1.cpp','hashtree.cpp',
 env = Environment()
 if sys.platform == "win32":
     libevent2path = '\\build\\libevent-2.0.19-stable'
-    #libevent2path = '\\build\\ttuki\\libevent-2.0.15-arno-http'
+    if not os.path.exists(libevent2path):
+        libevent2path = '\\build\\libevent-2.0.21'
 
     # "MSVC works out of the box". Sure.
     # Make sure scons finds cl.exe, etc.
@@ -78,6 +79,7 @@ if sys.platform == "win32":
 
     # Somehow linker can't find uuid.lib
     libpath += 'C:\\Program Files\\Microsoft SDKs\\Windows\\v6.0A\\Lib;'
+    libpath += 'C:\\Program Files\\Microsoft SDKs\\Windows\\v7.0A\\Lib;'
     
     # TODO: Make the swift.exe a Windows program not a Console program
     if not DEBUG:
