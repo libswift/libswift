@@ -70,9 +70,9 @@ if sys.platform == "win32":
         if not os.path.exists(gtest_dir):
             gtest_dir = u"\\build\\gtest-1.7.0"
 
-        include += os.path.join(gtest_dir, u"\\include") + u";"
-        libpath += os.path.join(gtest_dir, u"\\lib") + u";"
-        libpath += os.path.join(gtest_dir, u"\\msvc\\gtest\\Debug") + u";"
+        include += os.path.join(gtest_dir, u"include") + u";"
+        libpath += os.path.join(gtest_dir, u"lib") + u";"
+        libpath += os.path.join(gtest_dir, u"msvc\\gtest\\Debug") + u";"
         libs += [u"gtestd"]
 
     # Somehow linker can't find uuid.lib
