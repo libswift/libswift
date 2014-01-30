@@ -12,47 +12,45 @@
 
 
 import os
-import re
 import sys
 
 DEBUG = True
 
-TestDir='tests'
+TestDir = u"tests"
 
-target = 'swift'
+target = "swift"
 source = [ 'bin.cpp', 'binmap.cpp', 'sha1.cpp','hashtree.cpp',
-           'transfer.cpp', 'channel.cpp', 'sendrecv.cpp', 'send_control.cpp',
-           'compat.cpp','avgspeed.cpp', 'avail.cpp', 'cmdgw.cpp',
-           'storage.cpp', 'zerostate.cpp', 'zerohashtree.cpp']
+        'transfer.cpp', 'channel.cpp', 'sendrecv.cpp', 'send_control.cpp',
+        'compat.cpp','avgspeed.cpp', 'avail.cpp', 'cmdgw.cpp',
+        'storage.cpp', 'zerostate.cpp', 'zerohashtree.cpp']
 # cmdgw.cpp now in there for SOCKTUNNEL
 
 env = Environment()
 if sys.platform == "win32":
-    libevent2path = '\\build\\libevent-2.0.19-stable'
-    if not os.path.exists(libevent2path):
-        libevent2path = '\\build\\libevent-2.0.21'
+    # get default environment
+    include = os.environ.get("INCLUDE", "")
+    libpath = os.environ.get("LIBPATH", "")
+
+    # environment check
+    if not include:
+        print u"swift: Please run scons in a Visual Studio Command Prompt"
+        sys.exit(-1)
 
     # "MSVC works out of the box". Sure.
     # Make sure scons finds cl.exe, etc.
     env.Append ( ENV = { 'PATH' : os.environ['PATH'] } )
 
-    # Make sure scons finds std MSVC include files
-    if not 'INCLUDE' in os.environ:
-        print "swift: Please run scons in a Visual Studio Command Prompt"
-        sys.exit(-1)
-
-    include = os.environ['INCLUDE']
-    include += libevent2path+'\\include;'
-    include += libevent2path+'\\WIN32-Code;'
-    if DEBUG:
-        include += '\\build\\gtest-1.4.0\\include;'
+    # --- libevent2
+    libevent2path = "\\build\\libevent-2.0.19-stable"
+    if not os.path.exists(libevent2path):
+        libevent2path = '\\build\\libevent-2.0.21-stable'
+    include += os.path.join(libevent2path, u"include") + u";"
+    include += os.path.join(libevent2path, u"WIN32-Code") + u";"
+    libpath += os.path.join(libevent2path, u"lib") + u";"
 
     env.Append ( ENV = { 'INCLUDE' : include } )
 
-    if 'CXXPATH' in os.environ:
-        cxxpath = os.environ['CXXPATH']
-    else:
-        cxxpath = ""
+    cxxpath = os.environ.get("CXXPATH", "")
     cxxpath += include
     if DEBUG:
         env.Append(CXXFLAGS="/Zi /MTd")
@@ -63,24 +61,23 @@ if sys.platform == "win32":
     env.Append(CPPPATH=cxxpath)
 
     # getopt for win32
-    source += ['getopt.c','getopt_long.c']
- 
-     # Set libs to link to
-     # Advapi32.lib for CryptGenRandom in evutil_rand.obj
-    libs = ['ws2_32','libevent','Advapi32'] 
-    if DEBUG:
-        libs += ['gtestd']
+    source += [u"getopt.c", u"getopt_long.c"]
+    libs = [u"ws2_32", u"libevent", u"Advapi32"]
 
-    # Update lib search path
-    libpath = os.environ.get('LIBPATH', '')
-    libpath += libevent2path + ';'
+    # --- gtest
     if DEBUG:
-        libpath += '\\build\\gtest-1.4.0\\msvc\\gtest\\Debug;'
+        gtest_dir = u"\\build\\gtest-1.4.0"
+        if not os.path.exists(gtest_dir):
+            gtest_dir = u"\\build\\gtest-1.7.0"
+
+        include += gtest_dir + u"\\include;"
+        libs += [u"gtestd"]
+        libpath += gtest_dir + u"\\msvc\\gtest\\Debug;"
 
     # Somehow linker can't find uuid.lib
-    libpath += 'C:\\Program Files\\Microsoft SDKs\\Windows\\v6.0A\\Lib;'
-    libpath += 'C:\\Program Files\\Microsoft SDKs\\Windows\\v7.0A\\Lib;'
-    
+    libpath += u"C:\\Program Files\\Microsoft SDKs\\Windows\\v6.0A\\Lib;"
+    libpath += u"C:\\Program Files (x86)\\Microsoft SDKs\\Windows\\v7.0A\\Lib;"
+
     # TODO: Make the swift.exe a Windows program not a Console program
     if not DEBUG:
     	env.Append(LINKFLAGS="/SUBSYSTEM:WINDOWS")
