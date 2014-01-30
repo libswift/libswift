@@ -21,8 +21,8 @@ TestDir='tests'
 
 target = 'swift'
 source = [ 'bin.cpp', 'binmap.cpp', 'sha1.cpp','hashtree.cpp',
-    	   'transfer.cpp', 'channel.cpp', 'sendrecv.cpp', 'send_control.cpp', 
-    	   'compat.cpp','avgspeed.cpp', 'avail.cpp', 'cmdgw.cpp', 
+           'transfer.cpp', 'channel.cpp', 'sendrecv.cpp', 'send_control.cpp',
+           'compat.cpp','avgspeed.cpp', 'avail.cpp', 'cmdgw.cpp',
            'storage.cpp', 'zerostate.cpp', 'zerohashtree.cpp']
 # cmdgw.cpp now in there for SOCKTUNNEL
 
@@ -40,15 +40,15 @@ if sys.platform == "win32":
     if not 'INCLUDE' in os.environ:
         print "swift: Please run scons in a Visual Studio Command Prompt"
         sys.exit(-1)
-        
+
     include = os.environ['INCLUDE']
     include += libevent2path+'\\include;'
     include += libevent2path+'\\WIN32-Code;'
     if DEBUG:
         include += '\\build\\gtest-1.4.0\\include;'
-    
+
     env.Append ( ENV = { 'INCLUDE' : include } )
-    
+
     if 'CXXPATH' in os.environ:
         cxxpath = os.environ['CXXPATH']
     else:
@@ -70,10 +70,10 @@ if sys.platform == "win32":
     libs = ['ws2_32','libevent','Advapi32'] 
     if DEBUG:
         libs += ['gtestd']
-        
+
     # Update lib search path
-    libpath = os.environ.get('LIBPATH','')
-    libpath += libevent2path+';'
+    libpath = os.environ.get('LIBPATH', '')
+    libpath += libevent2path + ';'
     if DEBUG:
         libpath += '\\build\\gtest-1.4.0\\msvc\\gtest\\Debug;'
 
@@ -122,7 +122,6 @@ else:
 
     linkflags = '-Wl,-rpath,'+libevent2path+'/lib'
     env.Append(LINKFLAGS=linkflags);
-
 
     APPSOURCE=['swift.cpp','httpgw.cpp','statsgw.cpp']
 
