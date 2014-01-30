@@ -1,3 +1,5 @@
+@ECHO off
+
 svn-build-rev.py
 
 IF EXIST c:\python273\Scripts\scons.bat (

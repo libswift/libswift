@@ -70,9 +70,10 @@ if sys.platform == "win32":
         if not os.path.exists(gtest_dir):
             gtest_dir = u"\\build\\gtest-1.7.0"
 
-        include += gtest_dir + u"\\include;"
+        include += os.path.join(gtest_dir, u"\\include") + u";"
+        libpath += os.path.join(gtest_dir, u"\\lib") + u";"
+        libpath += os.path.join(gtest_dir, u"\\msvc\\gtest\\Debug") + u";"
         libs += [u"gtestd"]
-        libpath += gtest_dir + u"\\msvc\\gtest\\Debug;"
 
     # Somehow linker can't find uuid.lib
     libpath += u"C:\\Program Files\\Microsoft SDKs\\Windows\\v6.0A\\Lib;"
@@ -93,7 +94,7 @@ else:
     else:
         cpppath = ""
         print "To use external libs, set CPPPATH environment variable to list of colon-separated include dirs"
-    cpppath += libevent2path+'/include:'
+    cpppath += libevent2path + '/include:'
     env.Append(CPPPATH=".:"+cpppath)
     #env.Append(LINKFLAGS="--static")
 
