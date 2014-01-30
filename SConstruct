@@ -45,8 +45,8 @@ if sys.platform == "win32":
     if not os.path.exists(libevent2path):
         libevent2path = '\\build\\libevent-2.0.21-stable'
     include += os.path.join(libevent2path, u"include") + u";"
+    include += os.path.join(libevent2path, u"WIN32-Code") + u";"
     if libevent2path is u"\\build\\libevent-2.0.19-stable":
-        include += os.path.join(libevent2path, u"WIN32-Code") + u";"
         libpath += libevent2path + u";"
     else:
         libpath += os.path.join(libevent2path, u"lib") + u";"
