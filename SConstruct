@@ -79,8 +79,20 @@ if sys.platform == "win32":
         libs += [u"gtestd"]
 
     # Somehow linker can't find uuid.lib
-    libpath += u"C:\\Program Files\\Microsoft SDKs\\Windows\\v6.0A\\Lib;"
-    libpath += u"C:\\Program Files (x86)\\Microsoft SDKs\\Windows\\v7.0A\\Lib;"
+    WINSDK_60A = u"C:\\Program Files\\Microsoft SDKs\\Windows\\v6.0A"
+    WINSDK_70A = u"C:\\Program Files (x86)\\Microsoft SDKs\\Windows\\v7.0A"
+    WINSDK_71A = u"C:\\Program Files (x86)\\Microsoft SDKs\\Windows\\v7.1A"
+    winsdk_libpath = u""
+    if os.path.exists(WINSDK_71A):
+        winsdk_libpath = os.path.join(WINSDK_71A, u"\\Lib") + u";"
+    elif os.path.exists(WINSDK_70A):
+        winsdk_libpath = os.path.join(WINSDK_70A, u"\\Lib") + u";"
+    elif os.path.exists(WINSDK_60A):
+        winsdk_libpath = os.path.join(WINSDK_60A, u"\\Lib") + u";"
+    else:
+        print u"swift: Cannot find Windows SDK."
+        sys.exit(-1)
+    libpath += winsdk_libpath
 
     # TODO: Make the swift.exe a Windows program not a Console program
     if not DEBUG:
@@ -121,7 +133,7 @@ else:
         print "To use external libs, set LIBPATH environment variable to list of colon-separated lib dirs"
     libpath += libevent2path+'/lib:'
 
-    linkflags = '-Wl,-rpath,'+libevent2path+'/lib'
+    linkflags = '-Wl,-rpath,' + libevent2path + '/lib'
     env.Append(LINKFLAGS=linkflags);
 
     APPSOURCE=['swift.cpp','httpgw.cpp','statsgw.cpp']
