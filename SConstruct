@@ -79,7 +79,7 @@ if sys.platform == "win32":
         libs += [u"gtestd"]
 
     # Somehow linker can't find uuid.lib
-    WINSDK_60A = u"C:\\Program Files\\Microsoft SDKs\\Windows\\v6.0A"
+    WINSDK_70 = u"C:\\Program Files\\Microsoft SDKs\\Windows\\v7.0"
     WINSDK_70A = u"C:\\Program Files (x86)\\Microsoft SDKs\\Windows\\v7.0A"
     WINSDK_71A = u"C:\\Program Files (x86)\\Microsoft SDKs\\Windows\\v7.1A"
     WINSDK_80A = u"C:\\Program Files (x86)\\Windows Kits\\8.0"
@@ -92,8 +92,8 @@ if sys.platform == "win32":
         libpath += os.path.join(WINSDK_71A, u"Lib") + u";"
     elif os.path.exists(WINSDK_70A):
         libpath += os.path.join(WINSDK_70A, u"Lib") + u";"
-    elif os.path.exists(WINSDK_60A):
-        libpath += os.path.join(WINSDK_60A, u"Lib") + u";"
+    elif os.path.exists(WINSDK_70):
+        libpath += os.path.join(WINSDK_70, u"Lib") + u";"
     else:
         print u"swift: Cannot find Windows SDK."
         sys.exit(-1)
