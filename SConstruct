@@ -82,8 +82,14 @@ if sys.platform == "win32":
     WINSDK_60A = u"C:\\Program Files\\Microsoft SDKs\\Windows\\v6.0A"
     WINSDK_70A = u"C:\\Program Files (x86)\\Microsoft SDKs\\Windows\\v7.0A"
     WINSDK_71A = u"C:\\Program Files (x86)\\Microsoft SDKs\\Windows\\v7.1A"
+    WINSDK_80A = u"C:\\Program Files (x86)\\Windows Kits\\v8.0"
+    WINSDK_81A = u"C:\\Program Files (x86)\\Windows Kits\\v8.1"
     winsdk_libpath = u""
-    if os.path.exists(WINSDK_71A):
+    if os.path.exists(WINSDK_81A):
+        winsdk_libpath = os.path.join(WINSDK_81A, u"\\Lib\\winv63\\um\\x86") + u";"
+    elif os.path.exists(WINSDK_80A):
+        winsdk_libpath = os.path.join(WINSDK_80A, u"\\Lib\\Win8\\um\\x86") + u";"
+    elif os.path.exists(WINSDK_71A):
         winsdk_libpath = os.path.join(WINSDK_71A, u"\\Lib") + u";"
     elif os.path.exists(WINSDK_70A):
         winsdk_libpath = os.path.join(WINSDK_70A, u"\\Lib") + u";"
