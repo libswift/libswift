@@ -85,15 +85,15 @@ if sys.platform == "win32":
     WINSDK_80A = u"C:\\Program Files (x86)\\Windows Kits\\8.0"
     WINSDK_81A = u"C:\\Program Files (x86)\\Windows Kits\\8.1"
     if os.path.exists(WINSDK_81A):
-        libpath += os.path.join(WINSDK_81A, u"\\Lib\\winv6.3\\um\\x86") + u";"
+        libpath += os.path.join(WINSDK_81A, u"Lib\\winv6.3\\um\\x86") + u";"
     elif os.path.exists(WINSDK_80A):
-        libpath += os.path.join(WINSDK_80A, u"\\Lib\\Win8\\um\\x86") + u";"
+        libpath += os.path.join(WINSDK_80A, u"Lib\\Win8\\um\\x86") + u";"
     elif os.path.exists(WINSDK_71A):
-        libpath += os.path.join(WINSDK_71A, u"\\Lib") + u";"
+        libpath += os.path.join(WINSDK_71A, u"Lib") + u";"
     elif os.path.exists(WINSDK_70A):
-        libpath += os.path.join(WINSDK_70A, u"\\Lib") + u";"
+        libpath += os.path.join(WINSDK_70A, u"Lib") + u";"
     elif os.path.exists(WINSDK_60A):
-        libpath += os.path.join(WINSDK_60A, u"\\Lib") + u";"
+        libpath += os.path.join(WINSDK_60A, u"Lib") + u";"
     else:
         print u"swift: Cannot find Windows SDK."
         sys.exit(-1)
