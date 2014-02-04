@@ -43,7 +43,7 @@ if sys.platform == "win32":
     # --- libevent2
     libevent2path = "\\build\\libevent-2.0.19-stable"
     if not os.path.exists(libevent2path):
-        libevent2path = '\\build\\libevent-2.0.21-stable'
+        libevent2path = 'C:\\build\\libevent-2.0.21-stable'
     include += os.path.join(libevent2path, u"include") + u";"
     include += os.path.join(libevent2path, u"WIN32-Code") + u";"
     if libevent2path == u"\\build\\libevent-2.0.19-stable":
@@ -71,7 +71,7 @@ if sys.platform == "win32":
     if DEBUG:
         gtest_dir = u"\\build\\gtest-1.4.0"
         if not os.path.exists(gtest_dir):
-            gtest_dir = u"\\build\\gtest-1.7.0"
+            gtest_dir = u"C:\\build\\gtest-1.7.0"
 
         include += os.path.join(gtest_dir, u"include") + u";"
         libpath += os.path.join(gtest_dir, u"lib") + u";"
