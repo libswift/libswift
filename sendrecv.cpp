@@ -303,8 +303,8 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
     // Arno, 2012-01-23: Extra protection against channel loss, don't send DATA
     if (last_recv_time_ < NOW-(3*TINT_SEC))
     {
-            dprintf("%s #%u dequeue hint aborted, long time no recv %s\n",tintstr(),id_, tintstr(last_recv_time_) );
-            return bin_t::NONE;
+    	dprintf("%s #%u dequeue hint aborted, long time no recv %s\n",tintstr(),id_, tintstr(last_recv_time_) );
+    	return bin_t::NONE;
     }
 
     // Arno, 2012-07-27: Reenable Victor's retransmit, check for ACKs
@@ -549,7 +549,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
     std::deque<bin_t> tbc;
     while ( !hint_out_.empty() && hint_out_.front().time < timed_out ) {
-            bin_t hint = hint_out_.front().bin;
+    	bin_t hint = hint_out_.front().bin;
         hint_out_size_ -= hint.base_length();
         hint_out_.pop_front();
         // Ric: keep track of what we want to remove
@@ -604,7 +604,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
         rate_allowed_hints = max(0,rate_hints_limit-(int)rough_global_hint_out_size);
     }
     if (DEBUGTRAFFIC)
-            fprintf(stderr,"hint c%u: %lf want %d qallow %d rallow %d chanout %llu globout %llu\n", id(), transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, queue_allowed_hints, rate_allowed_hints, hint_out_size_, rough_global_hint_out_size );
+        fprintf(stderr,"hint c%u: %lf want %d qallow %d rallow %d chanout %llu globout %llu\n", id(), transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, queue_allowed_hints, rate_allowed_hints, hint_out_size_, rough_global_hint_out_size );
 
     // 3. Take the smallest allowance from rate and queue limit
     uint64_t plan_pck = (uint64_t)min(rate_allowed_hints,queue_allowed_hints);
@@ -613,26 +613,30 @@ void    Channel::AddHint (struct evbuffer *evb) {
     // Arno, 2012-10-30: not HINT_GRANULARITY for LIVE
     if (hint_out_size_ == 0 || plan_pck >= HINT_GRANULARITY || transfer()->ttype() == LIVE_TRANSFER)
     {
-    	bin_t hint = bin_t::NONE;
-    	uint64_t max_hints = 32;
-    	if (hint_out_size_<max_hints && plan_pck > 0) {
+		bin_t hint = bin_t::NONE;
+        if (transfer()->ttype() == LIVE_TRANSFER)
+            hint = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2,id_);
+		else {
+			uint64_t max_hints = 32;
+			if (hint_out_size_<max_hints && plan_pck > 0) {
 
 
-    	    int want = min(max_hints-hint_out_size_, plan_pck);
+			    int want = min(max_hints-hint_out_size_, plan_pck);
 
-    	    //fprintf(stderr, "want %d\tplan %d\n", want, plan_pck);
-    	    hint = DequeueHintOut(want);
+			    //fprintf(stderr, "want %d\tplan %d\n", want, plan_pck);
+			    hint = DequeueHintOut(want);
 
-    	    if (hint.is_none()) {
-                bin_t res = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2,id_);
-                if (!res.is_none()) {
-                    hint_queue_out_.push_back( tintbin(NOW,res));
-                    hint_queue_out_size_ += res.base_length();
-                    hint = DequeueHintOut(max_hints-hint_out_size_);
-                }
-    	    }
+			    if (hint.is_none()) {
+		            bin_t res = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2,id_);
+		            if (!res.is_none()) {
+		                hint_queue_out_.push_back( tintbin(NOW,res));
+		                hint_queue_out_size_ += res.base_length();
+		                hint = DequeueHintOut(max_hints-hint_out_size_);
+		            }
+			    }
 
-    	}
+			}
+		}
 
         if (!hint.is_none()) {
             if (DEBUGTRAFFIC)
@@ -1220,12 +1224,12 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     bin_t pos = bv.front();
     tint peer_time = TINT_NEVER;
     if (hs_out_->version_ == VER_PPSPP_v1)
-            peer_time = evbuffer_remove_64be(evb);
+        peer_time = evbuffer_remove_64be(evb);
 
     // Arno: Assuming DATA last message in datagram
     if (evbuffer_get_length(evb) > transfer()->chunk_size()) {
-            dprintf("%s #%u !data chunk size mismatch %s: exp %u got " PRISIZET "\n",tintstr(),id_,pos.str().c_str(), transfer()->chunk_size(), evbuffer_get_length(evb));
-            fprintf(stderr,"WARNING: chunk size mismatch: exp %u got " PRISIZET "\n",transfer()->chunk_size(), evbuffer_get_length(evb));
+        dprintf("%s #%u !data chunk size mismatch %s: exp %u got " PRISIZET "\n",tintstr(),id_,pos.str().c_str(), transfer()->chunk_size(), evbuffer_get_length(evb));
+        fprintf(stderr,"WARNING: chunk size mismatch: exp %u got " PRISIZET "\n",transfer()->chunk_size(), evbuffer_get_length(evb));
     }
 
     int length = (evbuffer_get_length(evb) < transfer()->chunk_size()) ? evbuffer_get_length(evb) : transfer()->chunk_size();
@@ -1456,13 +1460,13 @@ void Channel::OnHave (struct evbuffer *evb) {
         if (ackd_pos.is_none()) // safety catch
             return; // wow, peer has hashes
 
-	// PPPLUG
-	if (!hashtree()->is_complete() && transfer()->ttype() == FILE_TRANSFER) {
-	    FileTransfer *ft = (FileTransfer *)transfer();
+		// PPPLUG
+		if (!hashtree()->is_complete() && transfer()->ttype() == FILE_TRANSFER) {
+			FileTransfer *ft = (FileTransfer *)transfer();
 
-	    // Ric: update the availability if needed
-	    ft->availability()->set(id_, ack_in_, ackd_pos);
-	}
+			// Ric: update the availability if needed
+			ft->availability()->set(id_, ack_in_, ackd_pos);
+		}
 
         ack_in_.set(ackd_pos);
         dprintf("%s #%u -have %s\n",tintstr(),id_,ackd_pos.str().c_str());

@@ -13,7 +13,7 @@ Import("linkflags")
 if sys.platform == "win32":
 	gtestpath = "\\build\\gtest-1.6.0"
 else:
-	gtestpath = "/home/arno/build/gtest-1.6.0"
+	gtestpath = "../build/gtest-1.6.0"
 
 if DEBUG and sys.platform == "win32":
 	libs = ['libswift','gtestd'] + libs  # order is important, crypto needs to be last
@@ -129,29 +129,8 @@ env.Program(
     LIBPATH=libpath )
 
 env.Program( 
-    target='connecttest',
-    source=['connecttest.cpp'],
-    CPPPATH=cpppath,
-    LIBS=libs,
-    LIBPATH=libpath )
-
-env.Program( 
     target='apitest',
     source=['apitest.cpp'],
-    CPPPATH=cpppath,
-    LIBS=libs,
-    LIBPATH=libpath )
-
-env.Program( 
-    target='binstest5',
-    source=['binstest5.cpp'],
-    CPPPATH=cpppath,
-    LIBS=libs,
-    LIBPATH=libpath )
-
-env.Program( 
-    target='availtest',
-    source=['availtest.cpp'],
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )
@@ -191,6 +170,19 @@ env.Program(
     LIBS=libs,
     LIBPATH=libpath )
 
+env.Program( 
+    target='binstest5',
+    source=['binstest5.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+env.Program( 
+    target='availtest',
+    source=['availtest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
 
 if DEBUG and sys.platform == "linux2":
 	scxxflags = "" 

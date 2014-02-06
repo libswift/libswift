@@ -152,7 +152,7 @@ public:
             if (!retry)
                 rarity_idx++;
 
-        } while (rarity_idx<SWIFT_MAX_CONNECTIONS && hint.is_none());
+        } while (rarity_idx<SWIFT_MAX_OUTGOING_CONNECTIONS && hint.is_none());
 
 
         return hint;

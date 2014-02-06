@@ -72,7 +72,8 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr) :
     hs_out_(NULL), hs_in_(NULL),
     last_sent_munro_(bin_t::NONE),
     munro_ack_rcvd_(false),
-    rtt_hint_tintbin_()
+    rtt_hint_tintbin_(),
+    hint_queue_out_(NULL), hint_queue_out_size_(0)
 {
     // ARNOTODO: avoid infinitely growing vector
     this->id_ = channels.size();

@@ -2,7 +2,7 @@
  *  swift.cpp
  *  swift the multiparty transport protocol
  *
- *  Created by Victor Grishchenko, Arno Bakker
+ *  Created by Victor Grishchenko, Arno Bakker, Riccardo Petrocco
  *  Copyright 2009-2016 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
@@ -79,6 +79,7 @@ void usage(void)
     fprintf(stderr,"  -a live signature algorithm\n");
     fprintf(stderr,"  -W live discard window in chunks\n");
     fprintf(stderr,"  -I live source address (used with ext tracker)\n");
+    fprintf(stderr,"  -L, --ledbat\tfile name for the LEDBAT congestion control logs (no default)\n");
 
 
     fprintf(stderr, "%s\n", SubversionRevisionString.c_str() );
@@ -212,7 +213,7 @@ int utf8main (int argc, char** argv)
     while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:pg:s:c:o:u:y:z:w:BNHmM:e:r:ji:kC:1:2:3:T:GW:P:K:S:a:I:", long_options, 0)) ) {
         switch (c) {
             case 'h':
-        	optargstr = optarg;
+                optargstr = optarg;
                 swarmid = SwarmID(optargstr);
                 if (swarmid==SwarmID::NOSWARMID)
                     quit("SwarmID must be in hex symbols\n");
@@ -657,9 +658,9 @@ int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerur
     // Client mode: regular or live download
     int td = -1;
     if (!livestream)
-	td = swift::Open(filename,swarmid,trackerurl,force_check_diskvshash,swarm_cipm,false,activate,chunk_size);
+        td = swift::Open(filename,swarmid,trackerurl,force_check_diskvshash,swarm_cipm,false,activate,chunk_size);
     else
-	td = swift::LiveOpen(filename,swarmid,trackerurl,srcaddr,swarm_cipm,livesource_disc_wnd,chunk_size);
+        td = swift::LiveOpen(filename,swarmid,trackerurl,srcaddr,swarm_cipm,livesource_disc_wnd,chunk_size);
     return td;
 }
 
@@ -921,7 +922,6 @@ void ReportCallback(int fd, short event, void *arg) {
                 Channel::global_dgrams_up, Channel::global_raw_bytes_up,
                 Channel::global_dgrams_down, Channel::global_raw_bytes_down );
 
-<<<<<<< HEAD
             double up = swift::GetCurrentSpeed(single_td,DDIR_UPLOAD);
             double dw = swift::GetCurrentSpeed(single_td,DDIR_DOWNLOAD);
 
@@ -938,37 +938,7 @@ void ReportCallback(int fd, short event, void *arg) {
                 fprintf(stderr,"dwload %.2f MB/s (%lf B/s)\n", dw/(1<<20), dw);
             else
                 fprintf(stderr,"dwload %.2f KB/s (%lf B/s)\n", dw/(1<<10), dw);
-
-            // Ric: remove. LEDBAT tests
-            Channel* c = swift::Channel::channel(1);
-            if (c!=NULL) {
-                fprintf(stderr,"ledbat %3.2f\n",c->GetCwnd());
-                fprintf(stderr,"hints_in  %lu\n",c->GetHintSize(DDIR_UPLOAD));
-                fprintf(stderr,"hints_out %lu\n",c->GetHintSize(DDIR_DOWNLOAD));
         }
-        //fprintf(stderr,"npeers %d\n",ft->GetNumLeechers()+ft->GetNumSeeders() );
-=======
-        double up = swift::GetCurrentSpeed(single_td,DDIR_UPLOAD);
-        double dw = swift::GetCurrentSpeed(single_td,DDIR_DOWNLOAD);
-        if (up/1048576 > 1)
-            fprintf(stderr,"upload %.2f MB/s (%lf B/s)\n", up/(1<<20), up);
-        else
-            fprintf(stderr,"upload %.2f KB/s (%lf B/s)\n", up/(1<<10), up);
-        if (dw/1048576 > 1)
-            fprintf(stderr,"dwload %.2f MB/s (%lf B/s)\n", dw/(1<<20), dw);
-        else
-            fprintf(stderr,"dwload %.2f KB/s (%lf B/s)\n", dw/(1<<10), dw);
-
-		// Ric: remove. LEDBAT tests
-		Channel* c = swift::Channel::channel(1);
-		/*if (c!=NULL) {
-			fprintf(stderr,"ledbat %3.2f\n",c->GetCwnd());
-			fprintf(stderr,"hints_in %lu\n",c->GetHintSize());
-		}*/
-		//fprintf(stderr,"npeers %d\n",ft->GetNumLeechers()+ft->GetNumSeeders() );
->>>>>>> svn_switft-umt-nchunksig
-	}
-
 
         AttemptCheckpoint();
 

@@ -57,8 +57,8 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
     // automatic size determination via peak hashes.
     if (!zerostate_)
     {
-        hashtree_ = (HashTree *)new MmapHashTree(storage_,root_hash,chunk_size,hash_filename,force_check_diskvshash,check_netwvshash,binmap_filename);
-        availability_ = new Availability(SWIFT_MAX_CONNECTIONS);
+        hashtree_ = (HashTree *)new MmapHashTree(storage_,root_hash,chunk_size,hash_filename,force_check_diskvshash,binmap_filename);
+        availability_ = new Availability(SWIFT_MAX_OUTGOING_CONNECTIONS);
 
         if (ENABLE_VOD_PIECEPICKER) 
             picker_ = new VodPiecePicker(this);

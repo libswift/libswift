@@ -127,7 +127,7 @@ namespace swift {
 #define SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN   32
 
 	// Ric: allowed hints in the future (e.g., 2 x TINT_SEC)
-#define HINT_TIME                       2	// seconds
+#define HINT_TIME                       1	// seconds
 
 // How much time a SIGNED_INTEGRITY timestamp may diverge from current time
 #define SWIFT_LIVE_MAX_SOURCE_DIVERGENCE_TIME	30 // seconds

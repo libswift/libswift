@@ -137,7 +137,7 @@ public:
         	if (!retry)
         	    rarity_idx++;
 
-        } while (rarity_idx<SWIFT_MAX_CONNECTIONS && hint.is_none());
+        } while (rarity_idx<SWIFT_MAX_OUTGOING_CONNECTIONS && hint.is_none());
 
         if (hint.is_none()) {
         	hint = binmap_t::find_complement(ack_hint_out_, offer, twist_);
