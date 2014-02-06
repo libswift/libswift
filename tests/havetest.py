@@ -91,7 +91,7 @@ class TestHave(TestAsServer):
         
         # Send HANDSHAKE and HAVE
         d = s.makeDatagram()
-        d.add( HandshakeMessage(s.c.get_my_chanid(),POPT_VER_PPSP,None,swarmid) )
+        d.add( HandshakeMessage(s.c.get_my_chanid(),POPT_VER_PPSP,None,swarmid,cipm=POPT_CIPM_MERKLE,mhf=POPT_MHF_SHA1,cam=CHUNK_SPEC_ID_CHUNK32) )
 
         d.add( HaveMessage(ChunkRange(0,6)) )
         s.send(d)

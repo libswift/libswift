@@ -50,15 +50,15 @@ namespace swift {
 
 SwarmManager SwarmManager::instance_;
 
-SwarmData::SwarmData( const std::string filename, const Sha1Hash& rootHash, const Address& tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, uint32_t chunk_size ) :
+SwarmData::SwarmData( const std::string filename, const Sha1Hash& rootHash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, uint32_t chunk_size ) :
     id_(-1), rootHash_( rootHash ), active_( false ), latestUse_(0), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
-    filename_( filename ), tracker_( tracker ), forceCheckDiskVSHash_(force_check_diskvshash), checkNetworkVSHash_(check_netwvshash),  chunkSize_( chunk_size ), zerostate_( zerostate ), cached_(false)
+    filename_( filename ), trackerurl_( trackerurl ), forceCheckDiskVSHash_(force_check_diskvshash), contIntProtMethod_(cipm),  chunkSize_( chunk_size ), zerostate_( zerostate ), cached_(false)
 {
 }
 
 SwarmData::SwarmData( const SwarmData& sd ) : // Arno, 2012-12-05: Note: latestUse not copied
     id_(-1), rootHash_( sd.rootHash_ ), active_( false ), latestUse_(0), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
-    filename_( sd.filename_ ), tracker_( sd.tracker_ ), forceCheckDiskVSHash_( sd.forceCheckDiskVSHash_ ), checkNetworkVSHash_(sd.checkNetworkVSHash_), chunkSize_( sd.chunkSize_ ), zerostate_( sd.zerostate_ ), cached_(false)
+    filename_( sd.filename_ ), trackerurl_( sd.trackerurl_ ), forceCheckDiskVSHash_( sd.forceCheckDiskVSHash_ ), contIntProtMethod_(sd.contIntProtMethod_), chunkSize_( sd.chunkSize_ ), zerostate_( sd.zerostate_ ), cached_(false)
 {
 }
 
@@ -105,8 +105,8 @@ std::string& SwarmData::Filename() {
     return filename_;
 }
 
-Address& SwarmData::Tracker() {
-    return tracker_;
+std::string SwarmData::Tracker() {
+    return trackerurl_;
 }
 
 uint32_t SwarmData::ChunkSize() {
@@ -244,12 +244,12 @@ SwarmManager::~SwarmManager() {
 
 #define rootHashToList( rootHash ) (knownSwarms_[rootHash.bits[0]&63])
 
-SwarmData* SwarmManager::AddSwarm( const std::string filename, const Sha1Hash& hash, const Address& tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, bool activate, uint32_t chunk_size)
+SwarmData* SwarmManager::AddSwarm( const std::string filename, const Sha1Hash& hash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size)
 {
-    //fprintf(stderr,"sm: AddSwarm %s hash %s track %s cdisk %d cnet %d zs %d act %d cs %u\n", filename.c_str(), hash.hex().c_str(), tracker.str().c_str(), force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
+    //fprintf(stderr,"sm: AddSwarm %s hash %s track %s cdisk %d cipm %u zs %d act %d cs %u\n", filename.c_str(), hash.hex().c_str(), trackerurl.c_str(), force_check_diskvshash, cipm, zerostate, activate, chunk_size );
     enter( "addswarm( many )" );
     invariant();
-    SwarmData sd( filename, hash, tracker, force_check_diskvshash, check_netwvshash, zerostate, chunk_size );
+    SwarmData sd( filename, hash, trackerurl, force_check_diskvshash, cipm, zerostate, chunk_size );
 #if SWARMMANAGER_ASSERT_INVARIANTS
     SwarmData* res = AddSwarm( sd, activate );
     assert( hash == Sha1Hash::ZERO || res == FindSwarm( hash ) );
@@ -353,7 +353,13 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
 
     // Arno: transfer id as assigned by SwarmManager not known at constructor time :-(
     if (newSwarm->ft_)
+    {
 	newSwarm->ft_->SetTD(newSwarm->id_);
+
+	// Arno, 2013-09-11: BuildSwarm could not use ExternalTrackerClient while td was -1
+	fprintf(stderr,"swarmmgr: AddSwarm: ConnectToTracker\n");
+	newSwarm->ft_->ConnectToTracker();
+    }
 
     // Arno
     if (activate)
@@ -380,13 +386,13 @@ void SwarmManager::BuildSwarm( SwarmData* swarm ) {
     if( swarm->rootHash_ == Sha1Hash::ZERO && file_size_by_path_utf8( swarm->filename_ ) == 0 )
         return;
 
-    swarm->ft_ = new FileTransfer( swarm->id_, swarm->filename_, swarm->rootHash_, swarm->forceCheckDiskVSHash_, swarm->checkNetworkVSHash_, swarm->chunkSize_, swarm->zerostate_ );
+    swarm->ft_ = new FileTransfer( swarm->id_, swarm->filename_, swarm->rootHash_, swarm->forceCheckDiskVSHash_, swarm->contIntProtMethod_, swarm->chunkSize_, swarm->zerostate_ );
     if( !swarm->ft_ || !swarm->ft_->IsOperational()) { // Arno, 2012-10-01: Check if operational
         exit( "buildswarm (1)" );
         return;
     }
     if( swarm->rootHash_ == Sha1Hash::ZERO )
-        swarm->rootHash_ = swarm->ft_->swarm_id();
+        swarm->rootHash_ = swarm->ft_->swarm_id().roothash();
     assert( swarm->RootHash() != Sha1Hash::ZERO );
     if( swarm->cached_ ) {
         swarm->cached_ = false;
@@ -400,10 +406,11 @@ void SwarmManager::BuildSwarm( SwarmData* swarm ) {
     }
     // Hashes have been checked, don't check again
     swarm->forceCheckDiskVSHash_ = false;
-    if( swarm->tracker_ != Address() ) {
+    if( swarm->trackerurl_ != "" && swarm->id_ != -1) {
         // initiate tracker connections
         // SWIFTPROC
-        swarm->ft_->SetTracker( swarm->tracker_ );
+        swarm->ft_->SetTracker( swarm->trackerurl_ );
+        fprintf(stderr,"swarmmgr: BuildSwarm: ConnectToTracker\n");
         swarm->ft_->ConnectToTracker();
     }
 
@@ -497,6 +504,12 @@ void SwarmManager::RemoveSwarm( const Sha1Hash& rootHash, bool removeState, bool
             for( iter = filenames.begin(); iter != filenames.end(); iter++ )
                 delset.insert( *iter );
         }
+    }
+
+    if (swarm->ft_)
+    {
+        // Arno, 2013-09-11: If external tracker, sign off
+	swarm->ft_->ConnectToTracker(true);
     }
 
     delete swarm; // Arno, 2012-10-01: calls delete ft_ which causes storage layer to close files

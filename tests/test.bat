@@ -5,15 +5,22 @@ binfragtest.exe
 binstest2.exe
 binstest3.exe
 binstest4.exe
+bttracktest.exe
 chunkaddrtest.exe
+REM connecttest.exe
 dgramtest.exe
 freemap.exe
 hashtest.exe
+livepptest.exe
+livesigtest.exe
+livetreetest.exe
 transfertest.exe
+
 activatetest.py
 cmdgwtest.py
 havetest.py
 httpmftest.py
+livetest-umt1.py
 livetest.py
 livetest2.py
 pexreqtest.py

@@ -31,6 +31,9 @@ namespace swift {
 
 #ifdef _WIN32
 static HANDLE map_handles[1024];
+
+// Arno, 2013-10-16: For improved usec_time()
+LARGE_INTEGER epochcounter;
 #endif
 
 int64_t file_size (int fd) {
@@ -148,11 +151,21 @@ int inet_aton(const char *cp, struct in_addr *inp)
 
 #ifdef _WIN32
 
-LARGE_INTEGER get_freq() {
+static LARGE_INTEGER get_freq() {
     LARGE_INTEGER proc_freq;
     if (!::QueryPerformanceFrequency(&proc_freq))
         print_error("HiResTimeOfDay: QueryPerformanceFrequency() failed");
     return proc_freq;
+}
+
+static tint get_ftime()
+{
+    struct timeb t;
+    ftime(&t);
+    tint usec;
+    usec =  t.time * 1000000;
+    usec += t.millitm * 1000;
+    return usec;
 }
 
 tint usec_time(void)
@@ -164,7 +177,11 @@ tint usec_time(void)
         print_error("QueryPerformanceCounter wrapped"); // does this happen?
     last_time = cur_time;
     static float freq = 1000000.0/get_freq().QuadPart;
-    tint usec = cur_time.QuadPart * freq;
+    // Arno, 2013-10-16: As these are now used for signature timestamps
+    // it can no longer be a local clock.
+    tint usec = get_ftime();
+    usec += (cur_time.QuadPart - swift::epochcounter.QuadPart ) * freq;
+
     return usec;
 }
 
@@ -177,7 +194,7 @@ tint usec_time(void)
     gettimeofday(&t,NULL);
     tint ret;
     ret = t.tv_sec;
-    ret *= 1000000;
+    ret *= TINT_SEC;
     ret += t.tv_usec;
     return ret;
 }
@@ -193,6 +210,17 @@ void LibraryInit(void)
     WORD wVersionRequested;
     wVersionRequested = MAKEWORD(2, 2);
     WSAStartup(wVersionRequested, &_WSAData);
+
+    // Arno, 2013-10-16: As usec_time() is now used for signature timestamps
+    // it can no longer be a local clock on Win32.
+    DWORD_PTR oldmask = ::SetThreadAffinityMask(::GetCurrentThread(), 0);
+    if (!::QueryPerformanceCounter(&swift::epochcounter))
+	std::cerr << "LibraryInit: QueryPerformanceCounter() failed";
+    ::SetThreadAffinityMask(::GetCurrentThread(), oldmask);
+
+    // Arno, 2013-10-16: Why o why
+    Channel::epoch = Channel::Time()/360000000LL*360000000LL;
+
 #endif
 }
 

@@ -17,6 +17,108 @@ using namespace swift;
 
 #define api_debug	false
 
+/*
+ * SwarmID
+ */
+
+const SwarmID SwarmID::NOSWARMID = SwarmID();
+
+
+SwarmID::SwarmID(std::string hexstr)
+{
+    int val,len=hexstr.length()/2;
+
+    empty_ = false;
+    if (len == Sha1Hash::SIZE) // Assumption: pubkey always bigger
+    {
+	ttype_ = FILE_TRANSFER;
+	roothash_ = Sha1Hash(true,hexstr.c_str());
+	if (roothash_ == Sha1Hash::ZERO)
+	    empty_ = true;
+    }
+    else
+    {
+	ttype_ = LIVE_TRANSFER;
+	spubkey_ = SwarmPubKey(hexstr);
+	if (spubkey_ == SwarmPubKey::NOSPUBKEY)
+	{
+	    empty_ = true;
+	}
+    }
+}
+
+
+SwarmID::SwarmID(uint8_t *data,uint16_t datalength)
+{
+    empty_ = false;
+    if (datalength == Sha1Hash::SIZE) // Assumption: pubkey always bigger
+    {
+	ttype_ = FILE_TRANSFER;
+	roothash_ = Sha1Hash(false,(const char*)data);
+    }
+    else
+    {
+	ttype_ = LIVE_TRANSFER;
+	spubkey_ = SwarmPubKey(data,datalength);
+    }
+}
+
+SwarmID::~SwarmID()
+{
+}
+
+
+SwarmID & SwarmID::operator= (const SwarmID & source)
+{
+    if (this != &source)
+    {
+	empty_ = source.empty_;
+	ttype_ = source.ttype_;
+	roothash_ = source.roothash_;
+	spubkey_ = source.spubkey_;
+    }
+    return *this;
+ }
+
+
+bool    SwarmID::operator == (const SwarmID& b) const
+{
+    if (empty_ && b.empty_)
+	return true;
+    else if ((empty_ && !b.empty_) && (!empty_ && b.empty_))
+	return false;
+    else if (ttype_ == b.ttype_) {
+	return roothash_ == b.roothash_ && spubkey_ == b.spubkey_;
+    }
+    else
+	return false;
+}
+
+
+
+std::string    SwarmID::hex() const
+{
+    if (empty_)
+	return Sha1Hash::ZERO.hex();
+
+    if (ttype_ == FILE_TRANSFER)
+	return roothash_.hex();
+    else
+    {
+	return spubkey_.hex();
+    }
+}
+
+
+std::string     SwarmID::tofilename() const
+{
+    if (ttype_ == LIVE_TRANSFER) {
+	// Arno, 2013-08-22: Full swarmID in hex too large for filesystem, take 40 byte prefix
+	return hex().substr(0,Sha1Hash::SIZE*2);
+    }
+    else
+	return hex();
+}
 
 
 /*
@@ -71,12 +173,15 @@ void    swift::Shutdown()
  */
 
 
-int swift::Open( std::string filename, const Sha1Hash& hash, Address tracker, bool force_check_diskvshash, bool check_netwvshash, bool zerostate, bool activate, uint32_t chunk_size)
+int swift::Open( std::string filename, SwarmID& swarmid, std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size)
 {
     if (api_debug)
-	fprintf(stderr,"swift::Open %s hash %s track %s cdisk %d cnet %d zs %d act %d cs %u\n", filename.c_str(), hash.hex().c_str(), tracker.str().c_str(), force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
+	fprintf(stderr,"swift::Open %s id %s track %s cdisk %d cipm %u zs %d act %d cs %u\n", filename.c_str(), swarmid.hex().c_str(), trackerurl.c_str(), force_check_diskvshash, cipm, zerostate, activate, chunk_size );
 
-    SwarmData* swarm = SwarmManager::GetManager().AddSwarm( filename, hash, tracker, force_check_diskvshash, check_netwvshash, zerostate, activate, chunk_size );
+    if (swarmid.ttype() != FILE_TRANSFER)
+	return -1;
+
+    SwarmData* swarm = SwarmManager::GetManager().AddSwarm( filename, swarmid.roothash(), trackerurl, force_check_diskvshash, cipm, zerostate, activate, chunk_size );
     if (swarm == NULL)
 	return -1;
     else
@@ -89,22 +194,40 @@ void swift::Close( int td, bool removestate, bool removecontent ) {
 	fprintf(stderr,"swift::Close td %d rems %d remc%d\n", td, (int)removestate, (int)removecontent );
 
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm( td );
-    if (swarm)
+    if (swarm != NULL)
+    {
 	SwarmManager::GetManager().RemoveSwarm( swarm->RootHash(), removestate, removecontent );
+        return;
+    }
 
     //LIVE
     LiveTransfer *lt = LiveTransfer::FindByTD(td);
     if (lt != NULL)
+    {
+        // Arno, 2013-09-11: If external tracker, sign off
+	lt->ConnectToTracker(true);
 	delete lt;
+    }
 }
 
-int swift::Find(const Sha1Hash& swarmid, bool activate)
+int swift::Find(SwarmID& swarmid, bool activate)
 {
     if (api_debug)
 	fprintf(stderr,"swift::Find %s act %d\n", swarmid.hex().c_str(), (int)activate );
 
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(swarmid);
-    if (swarm==NULL)
+    if (swarmid.ttype() == FILE_TRANSFER)
+    {
+	SwarmData* swarm = SwarmManager::GetManager().FindSwarm(swarmid.roothash());
+	if (swarm==NULL)
+	    return -1;
+	else
+	{
+	    if (activate)
+		SwarmManager::GetManager().ActivateSwarm(swarm->RootHash());
+	    return swarm->Id();
+	}
+    }
+    else
     {
 	//LIVE
 	LiveTransfer *lt = LiveTransfer::FindBySwarmID(swarmid);
@@ -112,12 +235,6 @@ int swift::Find(const Sha1Hash& swarmid, bool activate)
 	    return -1;
 	else
 	    return lt->td();
-    }
-    else
-    {
-	if (activate)
-	    SwarmManager::GetManager().ActivateSwarm(swarm->RootHash());
-	return swarm->Id();
     }
 }
 
@@ -186,6 +303,12 @@ ssize_t swift::Write( int td, const void *buf, size_t nbyte, int64_t offset )
 }
 
 
+
+void     swift::SetTracker(std::string trackerurl) {
+    Channel::trackerurl = trackerurl;
+}
+
+
 /*
  * Swarm Info
  */
@@ -230,7 +353,7 @@ uint64_t swift::Complete(int td)
 uint64_t swift::SeqComplete( int td, int64_t offset )
 {
     if (api_debug)
-	fprintf(stderr,"swift::SeqComplete td %d o %ld\n", td, offset );
+	fprintf(stderr,"swift::SeqComplete td %d o %lld\n", td, offset );
 
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
     if (swarm == NULL)
@@ -248,7 +371,7 @@ uint64_t swift::SeqComplete( int td, int64_t offset )
 }
 
 
-const Sha1Hash& swift::SwarmID(int td)
+SwarmID swift::GetSwarmID(int td)
 {
     if (api_debug)
 	fprintf(stderr,"swift::SwarmID td %d\n", td );
@@ -258,12 +381,12 @@ const Sha1Hash& swift::SwarmID(int td)
     {
 	LiveTransfer *lt = LiveTransfer::FindByTD(td);
 	if (lt == NULL)
-	    return Sha1Hash::ZERO;
+	    return SwarmID::NOSWARMID;
 	else
 	    return lt->swarm_id();
     }
     else
-	return swarm->RootHash();
+	return SwarmID(swarm->RootHash());
 }
 
 
@@ -536,9 +659,9 @@ int swift::Checkpoint(int td)
 int swift::Seek(int td, int64_t offset, int whence)
 {
     if (api_debug)
-	fprintf(stderr,"swift::Seek td %d o %ld w %d\n", td, offset, whence );
+	fprintf(stderr,"swift::Seek td %d o %lld w %d\n", td, offset, whence );
 
-    dprintf("%s F%d Seek: to %ld\n",tintstr(), td, offset );
+    dprintf("%s F%d Seek: to %lld\n",tintstr(), td, offset );
     SwarmData* swarm = SwarmManager::GetManager().FindSwarm(td);
     if (swarm == NULL)
 	return -1; // also for LIVE
@@ -571,26 +694,32 @@ int swift::Seek(int td, int64_t offset, int whence)
 
 
 
-void swift::AddPeer(Address& addr, const Sha1Hash& swarmid)
+void swift::AddPeer(Address& addr, SwarmID& swarmid)
 {
     if (api_debug)
 	fprintf(stderr,"swift::AddPeer addr %s hash %s\n", addr.str().c_str(), swarmid.hex().c_str() );
 
     ContentTransfer *ct = NULL;
-    SwarmData* swarm = SwarmManager::GetManager().FindSwarm(swarmid);
-    if (swarm == NULL)
-	ct = (ContentTransfer *)LiveTransfer::FindBySwarmID(swarmid);
-    else
+    if (swarmid.ttype() == FILE_TRANSFER)
     {
-	if (!swarm->Touch()) {
-	    swarm = SwarmManager::GetManager().ActivateSwarm(swarmid);
-            if (swarm == NULL)
-                return;
-	    if (!swarm->Touch())
-		return;
+	SwarmData* swarm = SwarmManager::GetManager().FindSwarm(swarmid.roothash());
+	if (swarm == NULL)
+	    return;
+	else
+	{
+	    if (!swarm->Touch()) {
+		swarm = SwarmManager::GetManager().ActivateSwarm(swarmid.roothash());
+		if (swarm == NULL)
+		    return;
+		if (!swarm->Touch())
+		    return;
+	    }
+	    ct = (ContentTransfer *)swarm->GetTransfer();
 	}
-	ct = (ContentTransfer *)swarm->GetTransfer();
     }
+    else
+	ct = (ContentTransfer *)LiveTransfer::FindBySwarmID(swarmid);
+
     if (ct == NULL)
 	return;
     else
@@ -676,7 +805,7 @@ int swift::HashCheckOffline( std::string filename, Sha1Hash *calchashptr, uint32
     binmap_filename.assign(filename);
     binmap_filename.append(".mbinmap");
 
-    MmapHashTree *hashtree_ = new MmapHashTree(storage_,Sha1Hash::ZERO,chunk_size,hash_filename,true,true,binmap_filename);
+    MmapHashTree *hashtree_ = new MmapHashTree(storage_,Sha1Hash::ZERO,chunk_size,hash_filename,true,binmap_filename);
 
     FILE *fp = fopen_utf8(binmap_filename.c_str(),"wb");
     if (!fp) {
@@ -699,21 +828,25 @@ int swift::HashCheckOffline( std::string filename, Sha1Hash *calchashptr, uint32
  * LIVE
  */
 
-
-LiveTransfer *swift::LiveCreate(std::string filename, const Sha1Hash& swarmid, uint32_t chunk_size)
+LiveTransfer *swift::LiveCreate(std::string filename, KeyPair &keypair, std::string checkpoint_filename, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t nchunks_per_sign, uint32_t chunk_size)
 {
     if (api_debug)
-	fprintf(stderr,"swift::LiveCreate %s hash %s cs %u\n", filename.c_str(), swarmid.hex().c_str(), chunk_size );
+	fprintf(stderr,"swift::LiveCreate %s keypair checkp %s cipm %u ldw %llu nsign %u cs %u\n", filename.c_str(), checkpoint_filename.c_str(), cipm, disc_wnd, nchunks_per_sign, chunk_size );
 
     // Arno: LIVE streams are not managed by SwarmManager
-    fprintf(stderr,"swift::LiveCreate: swarmid: %s\n",swarmid.hex().c_str() );
-    LiveTransfer *lt = new LiveTransfer(filename,swarmid,true,chunk_size);
+    LiveTransfer *lt = new LiveTransfer(filename,keypair,checkpoint_filename,cipm,disc_wnd,nchunks_per_sign,chunk_size);
+    fprintf(stderr,"swift::LiveCreate: swarmid: %s\n",lt->swarm_id().hex().c_str() );
 
     if (lt->IsOperational())
+    {
+	// External tracker
+	fprintf(stderr,"swift::LiveCreate: ConnectToTracker\n");
+	lt->ConnectToTracker();
 	return lt;
+    }
     else
     {
-	fprintf(stderr,"swift::LiveCreate: %s swarm created, but not operational\n",swarmid.hex().c_str() );
+	fprintf(stderr,"swift::LiveCreate: %s swarm created, but not operational\n", lt->swarm_id().hex().c_str() );
 	delete lt;
 	return NULL;
     }
@@ -729,16 +862,21 @@ int swift::LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte)
 }
 
 
-int swift::LiveOpen(std::string filename, const Sha1Hash& swarmid, Address tracker, bool check_netwvshash, uint32_t chunk_size)
+int swift::LiveOpen(std::string filename, SwarmID &swarmid, std::string trackerurl, Address &srcaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size)
 {
     if (api_debug)
-	fprintf(stderr,"swift::LiveOpen %s hash %s addr %s cnet %d cs %u\n", filename.c_str(), swarmid.hex().c_str(), tracker.str().c_str(), check_netwvshash, chunk_size );
+	fprintf(stderr,"swift::LiveOpen %s hash %s track %s src %s cipm %u ldw %llu cs %u\n", filename.c_str(), swarmid.hex().c_str(), trackerurl.c_str(), srcaddr.str().c_str(), cipm, disc_wnd, chunk_size );
 
-    LiveTransfer *lt = new LiveTransfer(filename,swarmid,false,chunk_size);
+    // Help user
+    if (cipm == POPT_CONT_INT_PROT_MERKLE)
+	cipm = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
+
+    LiveTransfer *lt = new LiveTransfer(filename,swarmid,srcaddr,cipm,disc_wnd,chunk_size);
 
     // initiate tracker connections
     // SWIFTPROC
-    lt->SetTracker(tracker);
+    lt->SetTracker(trackerurl);
+    fprintf(stderr,"swift::LiveOpen: ConnectToTracker\n");
     lt->ConnectToTracker();
     return lt->td();
 }

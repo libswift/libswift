@@ -23,9 +23,9 @@ from swiftconn import *
 DEBUG=False
 
 
-class TestLive(TestAsNPeers):
+class TestLiveDownloadFramework(TestAsNPeers):
     """
-    Test that starts 2 swift process which do a live streaming transfer
+    Framework for a test that starts 2 swift process which do a live streaming transfer
     """
     def setUpPreSession(self):
         TestAsNPeers.setUpPreSession(self)
@@ -39,22 +39,47 @@ class TestLive(TestAsNPeers):
             f.write(data)
         f.close()
 
+        self.peers[0].listenport = 6778
+
         self.peers[0].livesourceinput = "liveinput.dat"
         self.peers[0].filename = "storage.dat"
         
         # Start peer1 as live downloader
         self.peers[1].destdir = '.'
-        #self.peers[1].usegtest = False
-        #self.peers[1].binpath = os.path.join("..","Debug","SwiftPPSP.exe")
+        
+        self.peers[1].usegtest = False
+        #self.peers[1].binpath = os.path.join("..","Debug","SwiftUMT.exe")
+
+        self.peers[0].debug = True
+        self.peers[1].debug = True
 
         # For CMDGW communication for peer1        
         self.buffer = ''
         self.stop = False
+
+        self.peers[0].urlfilename = "swarm.url"
+        self.peers[0].livesigalg = ord(POPT_LSA_ECDSAP256SHA256)
         
     def setUpPostSession(self):
         TestAsNPeers.setUpPostSession(self)
 
+        f = open(self.peers[0].urlfilename,"rb")
+        swarmurl = f.read()
+        f.close()
+        swarmurl = swarmurl.strip()
+        idx = swarmurl.find("/")
+        if idx == -1:
+            self.assertFalse(True)
+        else:
+            liveswarmidhex = swarmurl[idx+1:]
+            print >>sys.stderr,"test: SwarmID <"+liveswarmidhex+">"
+            self.peers[1].liveswarmid = binascii.unhexlify(liveswarmidhex)
+
+
     def tearDown(self):
+        
+        #time.sleep(100)
+        
         TestAsNPeers.tearDown(self)
         try:
             os.remove(self.peers[0].livesourceinput)
@@ -66,10 +91,12 @@ class TestLive(TestAsNPeers):
             pass
 
 
-    def test_live_download(self):
+class TestLiveDownloadTests: # subclassed below
+    """ Actual tests """
+
+    def tst_live_download(self):
         # Start peer1 as live downloader
-        liveswarmid = "e5a12c7ad2d8fab33c699d1e198d66f79fa610c3"
-        CMD = "START tswift://127.0.0.1:"+str(self.peers[0].listenport)+"/"+liveswarmid+"@-1 "+self.peers[1].destdir+"\r\n"
+        CMD = "START tswift://127.0.0.1:"+str(self.peers[0].listenport)+"/"+binascii.hexlify(self.peers[1].liveswarmid)+"?cd=-1 "+self.peers[1].destdir+"\r\n"
         self.peers[1].cmdsock.send(CMD)
 
         # Let peers interact
@@ -159,11 +186,36 @@ class TestLive(TestAsNPeers):
                 break
 
 
+class TestLiveDownloadDiscardNone(TestLiveDownloadFramework,TestLiveDownloadTests):
+    """
+    Test with live discard window None (i.e., source remembers all)
+    """
+    def test_live_download(self):
+        self.tst_live_download()
+
+
+class TestLiveDownloadDiscardWrap128(TestLiveDownloadFramework,TestLiveDownloadTests):
+    """
+    Test with live discard window set for both peers. Should give same output
+    as with no discard window.
+    """
+    def setUpPreSession(self):
+        TestLiveDownloadFramework.setUpPreSession(self)
+        
+        self.peers[0].livediscardwindow = 128
+        self.peers[1].livediscardwindow = 128
+
+    def test_live_download(self):
+        self.tst_live_download()
+
+ 
+
 
     
 def test_suite():
     suite = unittest.TestSuite()
-    suite.addTest(unittest.makeSuite(TestLive))
+    suite.addTest(unittest.makeSuite(TestLiveDownloadDiscardNone))
+    suite.addTest(unittest.makeSuite(TestLiveDownloadDiscardWrap128))
     
     return suite
 

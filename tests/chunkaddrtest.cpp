@@ -123,6 +123,27 @@ TEST(ChunkAddrTest,Chunk32ToBin32b)
 }
 
 
+TEST(ChunkAddrTest,Bin32)
+{
+    bin_t want(1,843);
+    uint32_t s = want.base_offset();
+    uint32_t e = (want.base_offset()+want.base_length()-1);
+
+    fprintf(stderr,"want start %u end %u\n", s, e );
+    
+    binvector bv;
+    swift::chunk32_to_bin32(s,e,&bv);
+
+    binvector::iterator iter;
+    for (iter=bv.begin(); iter != bv.end(); iter++)
+    {
+	bin_t b = *iter;
+        fprintf(stderr,"got %s\n", b.str().c_str() );
+    }
+}
+
+
+
 int main (int argc, char** argv) {
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

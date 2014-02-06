@@ -8,6 +8,7 @@
 #include "swift.h"
 #include <cfloat>
 #include "swarmmanager.h"
+#include <event2/http.h>
 
 
 using namespace swift;
@@ -30,13 +31,13 @@ uint64_t ContentTransfer::cleancounter = 0;
 #define TRACKER_RETRY_INTERVAL_EXP	1.1	// exponent used to increase INTERVAL_START
 #define TRACKER_RETRY_INTERVAL_MAX	(1800*TINT_SEC) // 30 minutes
 
-
-
-ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), mychannels_(), callbacks_(), picker_(NULL),
-    speedupcount_(0), speeddwcount_(0), tracker_(),
+ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype),
+    swarm_id_(), mychannels_(), callbacks_(), picker_(NULL),
+    speedupcount_(0), speeddwcount_(0), trackerurl_(),
     tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START),
     tracker_retry_time_(NOW),
-    slow_start_hints_(0)
+    slow_start_hints_(0),
+    ext_tracker_client_(NULL)
 {
     cur_speed_[DDIR_UPLOAD] = MovingAverageSpeed();
     cur_speed_[DDIR_DOWNLOAD] = MovingAverageSpeed();
@@ -48,13 +49,19 @@ ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype), mychannels_
 ContentTransfer::~ContentTransfer()
 {
     dprintf("%s F%d content deconstructor\n",tintstr(),td_);
-    CloseChannels(mychannels_);
+    CloseChannels(mychannels_,true);
     if (storage_ != NULL)
         delete storage_;
+
+    if (ext_tracker_client_ != NULL)
+    {
+	delete ext_tracker_client_;
+	ext_tracker_client_ = NULL;
+    }
 }
 
 
-void ContentTransfer::CloseChannels(channels_t delset)
+void ContentTransfer::CloseChannels(channels_t delset,bool isall)
 {
     channels_t::iterator iter;
     for (iter=delset.begin(); iter!=delset.end(); iter++)
@@ -62,6 +69,8 @@ void ContentTransfer::CloseChannels(channels_t delset)
         Channel *c = *iter;
         dprintf("%s F%d content close chans\n",tintstr(),td_);
         c->Close(CLOSE_SEND_IF_ESTABLISHED);
+        if (isall)
+            c->ClearTransfer();
         delete c;
         // ~Channel removes it from Channel::channels and mychannels_.erase(c);
     }
@@ -73,29 +82,52 @@ void ContentTransfer::GarbageCollectChannels()
     // STL and MS and conditional delete from set not a happy place :-(
     channels_t   delset;
     channels_t::iterator iter;
-    bool hasestablishedpeers=false;
+    uint32_t numestablishedpeers=0;
+    bool movingforward=false;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
         Channel *c = *iter;
-        if (c != NULL) {
+        if (c != NULL)
+        {
             if (c->IsScheduled4Delete())
                 delset.push_back(c);
 
             if (c->is_established ())
-                hasestablishedpeers = true;
+            {
+                numestablishedpeers++;
+
+                // Moving forward is when any channel is moving forward
+                if (c->IsMovingForward())
+                    movingforward = true;
+            }
         }
     }
     //dprintf("%s F%d content gc chans\n",tintstr(),td_);
-    CloseChannels(delset);
+    CloseChannels(delset,false);
+
+    /*
+     * If we have no peers left, see if we can get some more (if not seed)
+     */
+    if (numestablishedpeers == 0)
+	movingforward = false;
+
+    // Arno, 2013-09-11: Don't pull extra for peers when seeder and external tracker
+    bool complete = (swift::Complete(td_) > 0 && (swift::Complete(td_) == swift::Size(td_)) );
+    if (complete && ext_tracker_client_ != NULL)  // seed, periodic rereg helps find leechers
+	movingforward = true;
 
     // Arno, 2012-02-24: Check for liveliness.
-    ReConnectToTrackerIfAllowed(hasestablishedpeers);
+    ReConnectToTrackerIfAllowed(movingforward);
 }
+
+
+
+
 
 // Global method
 void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg)
 {
-    //fprintf(stderr,"ContentTransfer::GlobalCleanCallback\n");
+    //fprintf(stderr,"ContentTransfer::GlobalCleanCallback %llu\n", ContentTransfer::cleancounter );
 
     // Arno, 2012-02-24: Why-oh-why, update NOW
     Channel::Time();
@@ -124,6 +156,17 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
 	// Arno: Call garage collect only once every CHANNEL_GARBAGECOLLECT_INTERVAL
 	if ((ContentTransfer::cleancounter % CHANNEL_GARBAGECOLLECT_INTERVAL) == 0)
 	    ct->GarbageCollectChannels();
+
+	// Some external trackers need periodic reports
+	if (ct->ext_tracker_client_ != NULL)
+	{
+	    tint report_time = ct->ext_tracker_client_->GetReportLastTime() + (TINT_SEC*ct->ext_tracker_client_->GetReportInterval());
+	    if (NOW > report_time)
+	    {
+		fprintf(stderr,"content: periodic ConnectToTracker\n");
+		ct->ConnectToTracker();
+	    }
+	}
     }
 
     ContentTransfer::cleancounter++;
@@ -135,16 +178,20 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
 
 
 
-void ContentTransfer::ReConnectToTrackerIfAllowed(bool hasestablishedpeers)
+void ContentTransfer::ReConnectToTrackerIfAllowed(bool movingforward)
 {
+    // fprintf(stderr,"%s F%d content reconnect to tracker: movingfwd %s\n",tintstr(),td_,(movingforward ? "true":"false") );
+
     // If I'm not connected to any
     // peers, try to contact the tracker again.
-    if (!hasestablishedpeers)
+    if (!movingforward)
     {
         if (NOW > tracker_retry_time_)
         {
+            fprintf(stderr,"content: -movingforward ConnectToTracker\n");
             ConnectToTracker();
 
+            // Should be: if fail then exp backoff
             tracker_retry_interval_ *= TRACKER_RETRY_INTERVAL_EXP;
             if (tracker_retry_interval_ > TRACKER_RETRY_INTERVAL_MAX)
                 tracker_retry_interval_ = TRACKER_RETRY_INTERVAL_MAX;
@@ -159,18 +206,116 @@ void ContentTransfer::ReConnectToTrackerIfAllowed(bool hasestablishedpeers)
 }
 
 
-void ContentTransfer::ConnectToTracker()
+/** Called by ExternalTrackerClient when results come in from the server */
+static void global_bttracker_callback(int td, std::string status, uint32_t interval, peeraddrs_t peerlist)
+{
+    //fprintf(stderr,"content global_bttracker_callback: td %d status %s int %u npeers %u\n", td, status.c_str(), interval, peerlist.size() );
+
+    ContentTransfer *ct = swift::GetActivatedTransfer(td);
+    if (ct == NULL)
+	return; // not activated, don't bother
+
+    if (status == "")
+    {
+	// Success
+	dprintf("%s F%d content contact tracker: ext OK int %u npeers %u\n",tintstr(),td,interval,peerlist.size() );
+
+	// Record reporting interval
+	ExternalTrackerClient *bttrackclient = ct->GetExternalTrackerClient();
+
+	if (bttrackclient != NULL) // unlikely
+	    bttrackclient->SetReportInterval(interval);
+
+	// Attempt to create channels to peers
+	peeraddrs_t::iterator iter;
+	for (iter=peerlist.begin(); iter!=peerlist.end(); iter++)
+	{
+	    Address addr = *iter;
+	    ct->OnPexIn(addr);
+	}
+    }
+    else
+    {
+	dprintf("%s F%d content contact tracker: ext failure reason %s\n",tintstr(),td,status.c_str());
+    }
+}
+
+
+void ContentTransfer::ConnectToTracker(bool stop)
 {
     // dprintf("%s F%d content contact tracker\n",tintstr(),td_);
 
     if (!IsOperational())
  	return;
 
-    Channel *c = NULL;
-    if (tracker_ != Address())
-        c = new Channel(this,INVALID_SOCKET,tracker_,true);
-    else if (Channel::tracker!=Address())
-        c = new Channel(this,INVALID_SOCKET,Channel::tracker,true);
+    struct evhttp_uri *evu = NULL;
+
+    if (trackerurl_ != "")
+	evu = evhttp_uri_parse(trackerurl_.c_str());
+    else
+    {
+	if (Channel::trackerurl == "")
+	{
+	    // Testing
+	    dprintf("%s F%d content contact tracker: No tracker defined\n",tintstr(),td_);
+	    return;
+	}
+	evu = evhttp_uri_parse(Channel::trackerurl.c_str());
+    }
+
+    if (evu == NULL)
+    {
+	dprintf("%s F%d content contact tracker: failure parsing URL\n",tintstr(),td_);
+	return;
+    }
+
+    char buf[1024+1];
+    char *uricstr = evhttp_uri_join(evu,buf,1024);
+    dprintf("%s F%d content contact tracker: Tracker is %s scheme %s\n",tintstr(),td_,uricstr, evhttp_uri_get_scheme(evu));
+
+    std::string scheme = evhttp_uri_get_scheme(evu);
+    if (scheme == SWIFT_URI_SCHEME)
+    {
+	// swift tracker
+	const char *host = evhttp_uri_get_host(evu);
+	if (host == NULL)
+	{
+	    dprintf("%s F%d content contact tracker: failure parsing URL host\n",tintstr(),td_);
+	    return;
+	}
+	int port = evhttp_uri_get_port(evu);
+
+	Address trackaddr(host,port);
+	Channel *c = new Channel(this,INVALID_SOCKET,trackaddr);
+    }
+    else
+    {
+	// External tracker
+	std::string event = EXTTRACK_EVENT_WORKING;
+	if (ext_tracker_client_ == NULL)
+	{
+	    // First call, create client
+	    event = EXTTRACK_EVENT_STARTED;
+	    if (trackerurl_ != "")
+		ext_tracker_client_ = new ExternalTrackerClient(trackerurl_);
+	    else
+		ext_tracker_client_ = new ExternalTrackerClient(Channel::trackerurl);
+	}
+	else if (stop)
+	{
+	    event = EXTTRACK_EVENT_STOPPED;
+	}
+	else if (!ext_tracker_client_->GetReportedComplete())
+	{
+	    // Vulnerable to Automatic Size detection not being finished
+	    if (swift::Complete(td()) > 0 && swift::Complete(td()) == swift::Size(td()))
+		event = EXTTRACK_EVENT_COMPLETED;
+	}
+
+	ext_tracker_client_->Contact(this,event,global_bttracker_callback);
+    }
+
+    evhttp_uri_free(evu);
 }
 
 
@@ -182,6 +327,10 @@ bool ContentTransfer::OnPexIn (const Address& addr)
     //if (addr.is_private())
     //   return false;
 
+    Address myaddr = Channel::BoundAddress(Channel::default_socket());
+    if (addr == myaddr)
+	return false; // Connect to self
+
     channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
@@ -190,7 +339,7 @@ bool ContentTransfer::OnPexIn (const Address& addr)
             return false; // already connected or connecting, Gertjan fix = return false
     }
     // Gertjan fix: PEX redo
-    if (mychannels_.size()<SWIFT_MAX_CONNECTIONS)
+    if (mychannels_.size()<SWIFT_MAX_OUTGOING_CONNECTIONS)
         new Channel(this,Channel::default_socket(),addr);
     return true;
 }

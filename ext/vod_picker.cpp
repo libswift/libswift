@@ -27,8 +27,8 @@ class VodPiecePicker : public PiecePicker {
     Availability* 	avail_;
     uint64_t        twist_;
     bin_t           range_;
-    int				playback_pos_;		// playback position in KB
-    int				high_pri_window_;
+    int		    playback_pos_;		// playback position in KB
+    int		    high_pri_window_;
     bin_t           initseq_;			// Hack by Arno to avoid large hints at startup
 
 public:

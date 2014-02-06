@@ -30,12 +30,14 @@ struct Sha1Hash {
     Sha1Hash(const uint8_t* data, size_t length);
     /** Either parse hash from hex representation of read in raw format. */
     Sha1Hash(bool hex, const char* hash);
+    Sha1Hash(const Sha1Hash& h) { memcpy(bits,h.bits,SIZE);}
     
     std::string    hex() const;
     bool    operator == (const Sha1Hash& b) const
         { return 0==memcmp(bits,b.bits,SIZE); }
     bool    operator != (const Sha1Hash& b) const { return !(*this==b); }
-    const char* operator * () const { return (char*) bits; }
+    const char* operator * () const { return (char*) bits; } // where used?
+    uint8_t  *bytes() { return (uint8_t*)bits; } // bits already taken
     Sha1Hash & operator = (const Sha1Hash &source);
 
     const static Sha1Hash ZERO;
@@ -101,15 +103,9 @@ class HashTree : public Operational {
     virtual binmap_t *      ack_out() = 0;
     virtual uint32_t        chunk_size()  = 0; // CHUNKSIZE
 
-    //NETWVSHASH
-    virtual bool get_check_netwvshash() = 0;
-
-
     // for transfertest.cpp
     virtual Storage *       get_storage() = 0;
     virtual void            set_size(uint64_t size) = 0;
-
-    virtual int TESTGetFD() = 0;
 
     virtual ~HashTree() {};
 };
@@ -150,9 +146,6 @@ class MmapHashTree : public HashTree, Serializable {
 
     int             internal_deserialize(FILE *fp,bool contentavail=true);
 
-    //NETWVSHASH
-    bool            check_netwvshash_;
-
 protected:
     
     int             OpenHashFile();
@@ -166,7 +159,7 @@ protected:
 public:
     
     MmapHashTree (Storage *storage, const Sha1Hash& root=Sha1Hash::ZERO, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE,
-              std::string hash_filename="", bool force_check_diskvshash=true, bool check_netwvshash=true, std::string binmap_filename="");
+              std::string hash_filename="", bool force_check_diskvshash=true, std::string binmap_filename="");
     
     // Arno, 2012-01-03: Hack to quickly learn root hash from a checkpoint
     MmapHashTree (bool dummy, std::string binmap_filename);
@@ -200,11 +193,6 @@ public:
     int serialize(FILE *fp);
     int deserialize(FILE *fp);
     int partial_deserialize(FILE *fp);
-
-    //NETWVSHASH
-    bool get_check_netwvshash() { return check_netwvshash_; }
-
-    int TESTGetFD() { return hash_fd_; }
 };
 
 
@@ -272,11 +260,6 @@ public:
     // for transfertest.cpp
     Storage *       get_storage() { return storage_; }
     void            set_size(uint64_t size) { size_ = size; }
-
-    //NETWVSHASH
-    bool get_check_netwvshash() { return true; }
-
-    int TESTGetFD() { return hash_fd_; }
 };
 
 

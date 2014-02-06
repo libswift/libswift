@@ -36,11 +36,11 @@ TEST(Sha1HashTest,OfferDataTest) {
     fprintf(stderr,"BEFORE STREQ hash\n");
     EXPECT_STREQ(rooth123,roothash123.hex().c_str());
     fprintf(stderr,"BEFORE swift::Open\n");
-    int file = swift::Open("123", roothash123);
+    int td = swift::Open("123", SwarmID(roothash123));
     fprintf(stderr,"BEFORE Storage\n");
-    Storage storage("123", ".", file, 0);
+    Storage storage("123", ".", td, 0);
     fprintf(stderr,"BEFORE MmapHashTree\n");
-    MmapHashTree tree(&storage,roothash123,1024,"123.mhash",false,true,"123.mbinmap");
+    MmapHashTree tree(&storage,roothash123,1024,"123.mhash",false,"123.mbinmap");
 
     fprintf(stderr,"BEFORE OfferHash\n");
     tree.OfferHash(bin_t(0,0),Sha1Hash(true,hash123));
@@ -58,10 +58,10 @@ TEST(Sha1HashTest,SubmitTest) {
     FILE* f123 = fopen("123","wb+");
     fprintf(f123, "123\n");
     fclose(f123);
-    int file = swift::Open("123");
-    Storage storage("123", ".", file, 0);
-    //MmapHashTree ht123(&storage);
-    MmapHashTree ht123(&storage,Sha1Hash::ZERO,1024,"123.mhash",false,true,"123.mbinmap");
+    SwarmID noswarmid = SwarmID::NOSWARMID;
+    int td = swift::Open("123",noswarmid);
+    Storage storage("123", ".", td, POPT_LIVE_DISC_WND_ALL);
+    MmapHashTree ht123(&storage,Sha1Hash::ZERO,1024,"123.mhash",false,"123.mbinmap");
     EXPECT_STREQ(hash123,ht123.hash(bin_t(0,0)).hex().c_str());
     EXPECT_STREQ(rooth123,ht123.root_hash().hex().c_str());
     EXPECT_EQ(4,ht123.size());
@@ -84,10 +84,9 @@ TEST(Sha1HashTest,OfferDataTest2) {
     Sha1Hash roothash456(Sha1Hash(true,hash456a),Sha1Hash(true,hash456b));
     unlink("456");
     EXPECT_STREQ(rooth456,roothash456.hex().c_str());
-    int file = swift::Open("456", roothash456);
-    Storage storage("456", ".", file, 0);
-    // MmapHashTree tree(&storage,roothash456);
-    MmapHashTree tree(&storage,roothash456,1024,"456.mhash",false,true,"456.mbinmap");
+    int td = swift::Open("456", SwarmID(roothash456));
+    Storage storage("456", ".", td, POPT_LIVE_DISC_WND_ALL);
+    MmapHashTree tree(&storage,roothash456,1024,"456.mhash",false,"456.mbinmap");
     tree.OfferHash(bin_t(1,0),roothash456);
     tree.OfferHash(bin_t(0,0),Sha1Hash(true,hash456a));
     tree.OfferHash(bin_t(0,1),Sha1Hash(true,hash456b));
@@ -98,38 +97,6 @@ TEST(Sha1HashTest,OfferDataTest2) {
 	ASSERT_EQ(1028,tree.size());
 }
 
-
-/*TEST(Sha1HashTest,HashFileTest) {
-	uint8_t a [1024], b[1024], c[1024];
-	memset(a,'a',1024);
-	memset(b,'b',1024);
-	memset(c,'c',1024);
-	Sha1Hash aaahash(a,1024), bbbhash(b,1024), ccchash(c,1024);
-	Sha1Hash abhash(aaahash,bbbhash), c0hash(ccchash,Sha1Hash::ZERO);
-	Sha1Hash aabbccroot(abhash,c0hash);
-	for(bin pos=bin(7); pos<bin::ALL; pos=pos.parent())
-		aabbccroot = Sha1Hash(aabbccroot,Sha1Hash::ZERO);
-	int f = open("testfile",O_RDWR|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-	write(f,a,1024);
-	write(f,b,1024);
-	write(f,c,1024);
-	MmapHashTree filetree(f);
-	close(f);
-	ASSERT_TRUE(aabbccroot==filetree.root);
-	EXPECT_EQ(2,filetree.peaks.size());
-	EXPECT_TRUE(aaahash==filetree[1]);
-	MmapHashTree bootstree(filetree.root);
-	EXPECT_EQ( MmapHashTree::DUNNO, bootstree.offer(filetree.peaks[0].first,filetree.peaks[0].second) );
-	EXPECT_EQ( MmapHashTree::PEAK_ACCEPT, bootstree.offer(filetree.peaks[1].first,filetree.peaks[1].second) );
-	EXPECT_EQ( 3, bootstree.length );
-	EXPECT_EQ( 4, bootstree.mass );
-	EXPECT_EQ( MmapHashTree::DUNNO, bootstree.offer(1,aaahash) );
-	EXPECT_EQ( MmapHashTree::ACCEPT, bootstree.offer(2,bbbhash) );
-	EXPECT_TRUE ( bootstree.bits[3]==abhash );
-	EXPECT_TRUE ( bootstree.bits[1]==aaahash );
-	EXPECT_TRUE ( bootstree.bits[2]==bbbhash );
-	EXPECT_FALSE ( bootstree.bits[2]==aaahash );
-}*/
 
 
 int main (int argc, char** argv) {

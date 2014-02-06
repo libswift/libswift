@@ -124,6 +124,7 @@ class TstMultiFileSeekFramework(TestAsServer):
         shutil.copyfile(self.specfn,self.mfdestfn)
         shutil.copyfile(self.specfn+".mhash",self.mfdestfn+".mhash")
         shutil.copyfile(self.specfn+".mbinmap",self.mfdestfn+".mbinmap")
+        
 
     def setUpFileList(self):
         self.filelist = []

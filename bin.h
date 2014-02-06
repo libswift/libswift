@@ -209,7 +209,7 @@ public:
 
 
     /**
-     * Sets this object to the right child
+     * Sets this object to the right child. WARNING: does NOT calculate next-in-layer when at base!
      */
     bin_t& to_right(void);
 
@@ -257,7 +257,7 @@ public:
 
 
     /**
-     * Gets the right child
+     * Gets the right child. WARNING: does NOT calculate next-in-layer when at base!
      */
     bin_t right(void) const;
 
@@ -778,5 +778,11 @@ inline bool bin_t::contains(const bin_t& bin) const
     return (v_ & (v_ + 1)) <= bin.v_ && bin.v_ < (v_ | (v_ + 1));
 }
 
+// Arno, 2013-03-06: Define here as livehashtree.h needs it.
+#include <vector>
+typedef std::vector<bin_t> binvector;
+
+
+bool bin_sort_on_layer_cmp(bin_t i, bin_t j);
 
 #endif /*_bin_h__*/

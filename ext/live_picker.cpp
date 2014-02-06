@@ -17,15 +17,7 @@
 
 using namespace swift;
 
-
-#define FALLBACK_LIVE_PP_NUMBER_PREBUF_CHUNKS	10 // chunks
-
-// Set this to a few seconds worth of data to get a decent prebuffer. Should
-// work when content is MPEG-TS. With LIVESOURCE=ANDROID and H.264 prebuffering
-// does *not* work, as video player (VLC) will play super-realtime and catch up
-// with source. Probably due to lack of timing codes in raw H.264?!
-//
-#define LIVE_PP_NUMBER_PREBUF_CHUNKS		10 // chunks
+#define LIVE_PP_MIN_BITRATE_MEASUREMENT_INTERVAL	10 // seconds
 
 
 // Map to store the highest chunk each peer has, used for hooking in.
@@ -41,18 +33,22 @@ class SimpleLivePiecePicker : public LivePiecePicker {
     LiveTransfer*   transfer_;		// Pointer to container
     uint64_t        twist_;		// Unused
 
-    bool	    search4hookin_;	// Finding hook-in point y/n?
-    PeerPosMapType  peer_pos_map_;	// Highest HAVEs for each peer
-    bool	    source_seen_;	// Whether connected to source
-    uint32_t	    source_channel_id_;	// Channel ID of the source
+    bool	    search4hookin_;	// Search for hook-in point y/n?
+    bin_t           last_munro_bin_;	// Last known munro from source
+    tint	    last_munro_tint_;	// Timestamp of source's last known munro
     bin_t	    hookin_bin_;	// Chosen hook-in point when search4hookin_ = false
+    tint	    hookin_tint_;	// Timestamp of *munro* off which hook-in was calculated
     bin_t           current_bin_;	// Current pos, not yet received
-
 
   public:
 
     SimpleLivePiecePicker (LiveTransfer* trans_to_pick_from) :
-           ack_hint_out_(), transfer_(trans_to_pick_from), twist_(0), search4hookin_(true), source_seen_(false), source_channel_id_(0), hookin_bin_(bin_t::NONE), current_bin_(bin_t::NONE) {
+           ack_hint_out_(), transfer_(trans_to_pick_from),
+           twist_(0), search4hookin_(true),
+           last_munro_bin_(bin_t::NONE), last_munro_tint_(0),
+           hookin_bin_(bin_t::NONE), hookin_tint_(0),
+           current_bin_(bin_t::NONE)
+    {
         binmap_t::copy(ack_hint_out_, *(transfer_->ack_out()));
     }
     virtual ~SimpleLivePiecePicker() {}
@@ -68,8 +64,7 @@ class SimpleLivePiecePicker : public LivePiecePicker {
     virtual void LimitRange (bin_t range) {
     }
 
-    virtual bin_t Pick (binmap_t& offer, uint64_t max_width, tint expires)
-    {
+    virtual bin_t Pick (binmap_t& offer, uint64_t max_width, tint expires, uint32_t channelid) {
     	if (search4hookin_)
     	    return bin_t::NONE;
 
@@ -86,7 +81,6 @@ class SimpleLivePiecePicker : public LivePiecePicker {
             //fprintf(stderr,"live: pp: new cur is %s\n", current_bin_.str().c_str() );
         }
         //dprintf("live: pp: new cur end\n" );
-
 
         // Request next from this peer, if not already requested
         bin_t hint = PickLargestBin(offer,current_bin_);
@@ -141,96 +135,123 @@ class SimpleLivePiecePicker : public LivePiecePicker {
     }
 
 
-    /** Arno: Because multiple HAVE messages may be encoded in single datagram,
-     * make this a transaction like thing.
-     *
-     * LIVETODO: if latest source pos is not in first datagram, you may hook-in too late.
-     *
-     * LIVETODO: what if peer departs?
-     */
-    void StartAddPeerPos(uint32_t channelid, bin_t peerpos, bool peerissource)
+    void AddPeerMunro(bin_t munro, tint sourcet)
     {
-    	//fprintf(stderr,"live: pp: StartAddPeerPos: peerpos %s\n", peerpos.str().c_str());
-    	if (search4hookin_) {
+    	//fprintf(stderr,"live: pp: AddPeerMunro: munro %s\n", munro.str().c_str());
 
-    	    if (peerissource) {
-    		source_seen_ = true;
-    		source_channel_id_ = channelid;
-    	    }
+	// Source has advanced
+	if (sourcet > last_munro_tint_)
+	{
+	    last_munro_bin_ = munro;
+	    last_munro_tint_ = sourcet;
+	}
 
-    	    bin_t peerbasepos(peerpos.base_right());
+	if (!search4hookin_)
+	{
+	    // Already hooked in, check for too much divergence from source
+	    if (!CheckIfLaggingWithSourceInfo())
+		return;
+	    fprintf(stderr,"live: pp: AddPeerMunro: We are lagging behind\n");
+	}
 
-    	    fprintf(stderr,"live: pp: StartAddPeerPos: peerbasepos %s\n", peerbasepos.str().c_str());
-    	    bin_t cand;
-    	    cand = bin_t(0,peerbasepos.layer_offset());
-
-    	    PeerPosMapType::iterator iter = peer_pos_map_.find(channelid);
-    	    if (iter ==  peer_pos_map_.end())
-    	    {
-    	        // Unknown channel, just store
-    	    	peer_pos_map_.insert(PeerPosMapType::value_type(channelid, cand));
-    	    }
-    	    else
-    	    {
-    	    	// Update channelid's position, if newer
-		bin_t oldcand = peer_pos_map_[channelid];
-		if (cand.layer_offset() > oldcand.layer_offset())
-		    peer_pos_map_[channelid] = cand;
-    	    }
-    	}
-    }
-
-
-    void EndAddPeerPos(uint32_t channelid)
-    {
-    	if (!search4hookin_)
-    	    return;
-
-    	if (source_seen_) {
-
-    	    bin_t cand = peer_pos_map_[source_channel_id_];
-    	    Channel *c = Channel::channel(source_channel_id_);
-    	    if (c == NULL)
-    	    {
-    		// Source left building, fallback to old prebuf method (just 10
-    		// chunks from source). Perhaps there are still some peers around.
-    		hookin_bin_ = bin_t(0,std::max((bin_t::uint_t)0,cand.layer_offset()-FALLBACK_LIVE_PP_NUMBER_PREBUF_CHUNKS));
-    	    }
-    	    else
-    	    {
-    		// Create prebuffer, try to find a chunk a few seconds before source.
-    		bin_t::uint_t m = std::max((bin_t::uint_t)LIVE_PP_NUMBER_PREBUF_CHUNKS,cand.layer_offset());
-    		m -= LIVE_PP_NUMBER_PREBUF_CHUNKS;
-    		bin_t iterbin = bin_t(0,m);
-
-    		// Check what is actually first available chunk
-    		while(!c->ack_in().is_filled(iterbin) && iterbin < cand)
-    		    iterbin.to_right();
-
-    		hookin_bin_ = iterbin;
-    	    }
+	// First time hook-in, or diverging
+	bin_t candbin = CalculateHookinPos();
+	if (candbin != bin_t::NONE)
+	{
+	    hookin_bin_ = candbin;
 	    current_bin_ = hookin_bin_;
+	    hookin_tint_ = last_munro_tint_;
 	    search4hookin_ = false;
-
-	    fprintf(stderr,"live: pp: EndAddPeerPos: hookin on source, pos %s diff %llu\n", hookin_bin_.str().c_str(), cand.base_offset() - hookin_bin_.base_offset() );
-    	}
-    	else if (peer_pos_map_.size() > 0)
-    	{
-    	    fprintf(stderr,"live: pp: EndAddPeerPos: not connected to source, wait (peer hook-in TODO)\n");
-    	    // See if there is a quorum for a certain position
-    	    // LIVETODO
-    	    /*PeerPosMapType::const_iterator iter;
-    	    for (iter=peer_pos_map_.begin(); iter!=peer_pos_map_.end(); iter++)
-    	    {
-    	    	hookin_pos_ = iter->second;
-    	    	current_pos_ = hookin_pos_;
-    	    	fprintf(stderr,"live: pp: EndAddPeerPos: cand pos %s\n", hookin_pos_.str().c_str());
-    	    }
-	    fprintf(stderr,"live: pp: EndAddPeerPos: hookin on peers, pos %s\n", hookin_pos_.str().c_str());
-	    search4hookin_ = false;*/
-    	}
+	    fprintf(stderr,"live: pp: Execute hook-in on %s\n", hookin_bin_.str().c_str() );
+	}
     }
 
+
+    bool CheckIfLaggingWithSourceInfo()
+    {
+	// Case: we are getting SIGNED_INTEGITY messages from peers, but
+	// we are not making download progress. Solution: re-hook-in on
+	// new source position.
+
+	tint candtint = CalculateCurrentPosInTime(current_bin_);
+	if (candtint == TINT_NEVER)
+	    return false; // could not calc
+
+	tint sourcedifft = last_munro_tint_ - candtint;
+	double sourcedifftinsecs = (double)sourcedifft/(double)TINT_SEC;
+	//fprintf(stderr,"live: pp: Current source lag %lf\n", sourcedifftinsecs );
+
+	if (sourcedifft < (SWIFT_LIVE_MAX_SOURCE_DIVERGENCE_TIME*TINT_SEC))
+	    // Not lagging
+	    return false;
+	else
+	    return true;
+    }
+
+
+    // TODO: use
+    bool CheckIfLaggingWithoutSourceInfo()
+    {
+	// Case: we are not getting SIGNED_INTEGRITY messages and we
+	// are not downloading. Solution: reconnect to tracker
+
+	tint candtint = CalculateCurrentPosInTime(current_bin_);
+	if (candtint == TINT_NEVER)
+	    return false; // could not calc
+
+	tint nowdifft = NOW - candtint;
+	double nowdifftinsecs = (double)nowdifft/(double)TINT_SEC;
+	fprintf(stderr,"live: pp: Current now lag %lf\n", nowdifftinsecs );
+
+	if (nowdifft < (SWIFT_LIVE_MAX_SOURCE_DIVERGENCE_TIME*TINT_SEC))
+	    // Not lagging
+	    return false;
+	else
+	    return true;
+    }
+
+
+    bin_t CalculateHookinPos()
+    {
+	/* If you want more prebuffering, you should substract a few seconds worth
+	 * of chunks from last_munro_bin_. Be sure to check if they are
+	 * actually available from peers (e.g. case where source just started)
+	 */
+
+	// Return base start of munro subtree, this means prebuffering of
+	// nchunks_per_sign
+	//
+	return last_munro_bin_.base_left();
+	//return bin_t(0,1077);
+    }
+
+
+    /** Returns estimated bitrate */
+    double CalculateBitrate()
+    {
+	if (hookin_tint_ == last_munro_tint_ || (hookin_tint_+(LIVE_PP_MIN_BITRATE_MEASUREMENT_INTERVAL*TINT_SEC)) > last_munro_tint_)
+	{
+	    // No info to calc bitrate on, or too short interval
+	    return 0.0;
+	}
+	tint bdifft = last_munro_tint_ - hookin_tint_;
+	bin_t::uint_t bdiffc = last_munro_bin_.base_right().layer_offset() - hookin_bin_.layer_offset();
+	double bitrate = ((double)bdiffc*transfer_->chunk_size()) / (double)(bdifft/TINT_SEC);
+	return bitrate;
+    }
+
+
+    /** Returns the equivalent in time of current_bin_, using bitrate estimation */
+    tint CalculateCurrentPosInTime(bin_t pos)
+    {
+	double bitrate = CalculateBitrate();
+	if (bitrate == 0.0)
+	    return TINT_NEVER;
+
+	bin_t::uint_t cdiffc = pos.base_right().layer_offset() - hookin_bin_.layer_offset();
+	tint cdifft = TINT_SEC * (tint)((double)(cdiffc*transfer_->chunk_size())/bitrate);
+	return hookin_tint_ + cdifft;
+    }
 
 
     bin_t GetHookinPos()
@@ -243,6 +264,11 @@ class SimpleLivePiecePicker : public LivePiecePicker {
     	// LIVETODO?
     	// GetCurrentPos doesn't mean we obtain the indicated piece!
     	return current_bin_;
+    }
+
+    bool GetSearch4Hookin()
+    {
+	return search4hookin_;
     }
 
     /** See if chunks are on offer beyond current pos */
@@ -261,14 +287,14 @@ class SimpleLivePiecePicker : public LivePiecePicker {
 
 	return hint;
     }
-};
 
+};
 
 
 /*
  * SharingLivePiecePicker: A piece picker with optimizations for small swarms.
  * Below is a description of the idea. TODO is to look at the due time better
- * and to reactivate the bonus for uploaders (if possible, see down).
+ * and to reactivate the bonus for uploaders.
  *
  * From P2P-Next deliverable D4.0.5:
  *
@@ -306,18 +332,16 @@ class SimpleLivePiecePicker : public LivePiecePicker {
  * is lowest (aka Z in the above text).  */
 #define SHAR_LIVE_PP_BIAS_LOW_NPEERS 		10
 
-// Arno, 2013-10-02: Not sure we have this info in swift, no Give-to-Get.
 /* if a peer has not uploaded a chunk in this amount of seconds it is no longer
  * considered an uploader in the peers bias algorithm. */
-//#define SHAR_LIVE_PP_BIAS_UPLOAD_IDLE_SECS 	5.0
+#define SHAR_LIVE_PP_BIAS_UPLOAD_IDLE_SECS 	5.0
 
 /* The increase in probability of downloading from the source that peers get
  * that have uploaded data in the last SHAR_LIVE_PP_BIAS_UPLOAD_IDLE_SECS */
-//#define SHAR_LIVE_PP_BIAS_FORWARDER_DLPROB_BONUS  0.5  // 0..1
+#define SHAR_LIVE_PP_BIAS_FORWARDER_DLPROB_BONUS  0.5  // 0..1
 
 /** How often to test if a chunk should be skipped when curren pos not progressing */
 #define SHAR_LIVE_PP_MAX_ATTEMPTS_BEFORE_CHUNK_DROP	100
-
 
 
 /**
@@ -336,8 +360,7 @@ public:
     virtual ~SharingLivePiecePicker() {}
 
 
-    virtual bin_t Pick (binmap_t& offer, uint64_t max_width, tint expires, uint32_t channelid)
-    {
+    virtual bin_t Pick (binmap_t& offer, uint64_t max_width, tint expires, uint32_t channelid) {
 	if (search4hookin_)
 	    return bin_t::NONE;
 
@@ -442,14 +465,13 @@ public:
 	    double r = (double)rand()/(double)RAND_MAX;
 	    if (r >= dlprob)  // Trust you will get it from peers, don't dl from source
 	    {
-		//fprintf(stderr,"live: pp: Not from source r %.02lf dlprob %.02lf npeers %u\n", r, dlprob, npeers);
+		//fprintf(stderr,"live: pp: ssopt r %.02lf dlprob %.02lf npeers %u\n", r, dlprob, npeers);
 		return bin_t::NONE;
 	    }
 	}
 
 
-	//dprintf("live: pp: Picked %c %s\n", priority, hint.str().c_str() );
-	//fprintf(stderr,"live: pp: Picked %c %s\n", priority, hint.str().c_str() );
+	//dprintf("live: pp: Picked %s\n", hint.str().c_str() );
 
 	assert(ack_hint_out_.is_empty(hint));
 	ack_hint_out_.set(hint);

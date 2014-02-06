@@ -44,12 +44,13 @@ class TestCmdGw(TestZeroSeedFramework):
         self.exitwait = 1
 
     def test_start(self):
+        print >>sys.stderr,"test: start"
 
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
         self.swarmid = self.filelist[0][2]
         
         # self.cmdsock from TestAsServer
-        CMD = "START tswift:/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
+        CMD = "START tswift://127.0.0.1:65530/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
         
         self.cmdsock.send(CMD)
         
@@ -88,7 +89,7 @@ class TestCmdGw(TestZeroSeedFramework):
                     
                 self.assertEquals(dlspeed,0.0)
                 self.assertEquals(ulspeed,0.0)
-                self.assertEquals(numleech,0)
+                self.assertTrue(numleech == 0 or numleech == 1) # tracker conn
                 self.assertEquals(numseeds,0)
     
                 
@@ -118,12 +119,13 @@ class TestCmdGw(TestZeroSeedFramework):
         return 0
 
     def test_start_remove(self):
+        print >>sys.stderr,"test: start_remove"
 
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
         self.swarmid = self.filelist[0][2]
         
         # self.cmdsock from TestAsServer
-        CMD = "START tswift:/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
+        CMD = "START tswift://127.0.0.1:65530/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
         
         self.cmdsock.send(CMD)
         
@@ -152,12 +154,13 @@ class TestCmdGw(TestZeroSeedFramework):
     # CHECKPOINT tested in vodmftest.py
     
     def test_maxspeed(self):
+        print >>sys.stderr,"test: maxspeed"
 
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
         self.swarmid = self.filelist[0][2]
         
         # self.cmdsock from TestAsServer
-        CMD = "START tswift:/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
+        CMD = "START tswift://127.0.0.1:65530/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
         CMD += "MAXSPEED "+binascii.hexlify(self.swarmid)+" UPLOAD 10.0\r\n"
         
         # TODO: actually check speed change, requires different test :-(
@@ -172,12 +175,13 @@ class TestCmdGw(TestZeroSeedFramework):
 
 
     def test_setmoreinfo(self):
+        print >>sys.stderr,"test: setmoreinfo"
 
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
         self.swarmid = self.filelist[0][2]
         
         # self.cmdsock from TestAsServer
-        CMD = "START tswift:/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
+        CMD = "START tswift://127.0.0.1:65530/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
         CMD += "SETMOREINFO "+binascii.hexlify(self.swarmid)+" 1\r\n"
         
         self.cmdsock.send(CMD)
@@ -216,12 +220,13 @@ class TestCmdGw(TestZeroSeedFramework):
     # MOREINFO with channels tested in vodmftest.py
 
     def test_error(self):
+        print >>sys.stderr,"test: error"
 
         hiscmdgwaddr = ("127.0.0.1",self.cmdport)
         self.swarmid = self.filelist[0][2]
         
         # self.cmdsock from TestAsServer
-        CMD = "START tswift:/BADURL"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
+        CMD = "START tswift:/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
         
         self.cmdsock.send(CMD)
         
@@ -247,6 +252,7 @@ class TestCmdGw(TestZeroSeedFramework):
 
 
     def test_peeraddr(self):
+        print >>sys.stderr,"test: peeraddr"
         
         myaddr2 = ("127.0.0.1",15352) # fake peer to which swift should send
         
@@ -257,7 +263,7 @@ class TestCmdGw(TestZeroSeedFramework):
         self.listensock2 = Socket(myaddr2,family=socket.AF_INET)
         
         # self.cmdsock from TestAsServer
-        CMD = "START tswift:/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
+        CMD = "START tswift://127.0.0.1:65530/"+binascii.hexlify(self.swarmid)+" "+self.destdir+"\r\n"
         CMD += "PEERADDR "+binascii.hexlify(self.swarmid)+" "+myaddr2[0]+":"+str(myaddr2[1])+"\r\n"
 
         # Tell swift to DL swarm via CMDGW

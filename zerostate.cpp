@@ -81,7 +81,7 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 	else if (zs->connect_timeout_ != TINT_NEVER)
 	{
 	    // Garbage collect really slow connections, essential on Mac.
-	    dprintf("%s zero clean %s has %lu peers\n",tintstr(),ct->swarm_id().hex().c_str(), ct->GetChannels()->size() );
+	    dprintf("%s zero clean %s has %u peers\n",tintstr(),ct->swarm_id().hex().c_str(), ct->GetChannels()->size() );
 	    channels_t::iterator iter2;
 	    for (iter2=copychans.begin(); iter2!=copychans.end(); iter2++) {
 		Channel *c = *iter2;
@@ -112,7 +112,7 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
     for (iter=delset.begin(); iter!=delset.end(); iter++)
     {
 	int td = *iter;
-	dprintf("%s hash %s zero clean close\n",tintstr(),SwarmID(td).hex().c_str() );
+	dprintf("%s hash %s zero clean close\n",tintstr(),GetSwarmID(td).hex().c_str() );
 	//fprintf(stderr,"%s F%u zero clean close\n",tintstr(),td );
         swift::Close(td);
     }
@@ -169,7 +169,8 @@ int ZeroState::Find(const Sha1Hash &root_hash)
         return -1;
 
     // Open as ZeroState
-    return swift::Open(file_name, root_hash, Address(), false, true, true);
+    SwarmID swarmid(root_hash);
+    return swift::Open(file_name, swarmid, "", false, POPT_CONT_INT_PROT_MERKLE, true);
 }
 
 

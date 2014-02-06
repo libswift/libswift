@@ -13,7 +13,7 @@ Import("linkflags")
 if sys.platform == "win32":
 	gtestpath = "\\build\\gtest-1.6.0"
 else:
-	gtestpath = "../build/gtest-1.6.0"
+	gtestpath = "/home/arno/build/gtest-1.6.0"
 
 if DEBUG and sys.platform == "win32":
 	libs = ['libswift','gtestd'] + libs  # order is important, crypto needs to be last
@@ -86,7 +86,6 @@ env.Program(
     LIBS=libs,
     LIBPATH=libpath )
 
-
 env.Program( 
     target='binfragtest',
     source=['binfragtest.cpp'],
@@ -107,24 +106,6 @@ env.Program(
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )
-
-# Arno: must be rewritten to libevent
-#env.Program( 
-#    target='ledbattest',
-#    source=['ledbattest.cpp'],
-#    CPPPATH=cpppath,
-#    LIBS=libs,
-#    LIBPATH=libpath )
-
-# Arno: must be rewritten to libevent
-#if sys.platform != "win32":
-#    # Arno: Needs getopt
-#    env.Program( 
-#        target='ledbattest2',
-#        source=['ledbattest2.cpp'],
-#        CPPPATH=cpppath,
-#        LIBS=libs,
-#        LIBPATH=libpath )
 
 env.Program( 
     target='freemap',
@@ -174,6 +155,42 @@ env.Program(
     CPPPATH=cpppath,
     LIBS=libs,
     LIBPATH=libpath )
+
+env.Program( 
+    target='livetreetest',
+    source=['livetreetest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+env.Program( 
+    target='livesigtest',
+    source=['livesigtest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+env.Program( 
+    target='livepptest',
+    source=['livepptest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+env.Program( 
+    target='exttracktest',
+    source=['exttracktest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
+env.Program( 
+    target='uritest',
+    source=['uritest.cpp'],
+    CPPPATH=cpppath,
+    LIBS=libs,
+    LIBPATH=libpath )
+
 
 if DEBUG and sys.platform == "linux2":
 	scxxflags = "" 

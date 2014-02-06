@@ -34,7 +34,7 @@ int Channel::MAX_REORDERING = 4;
 bool Channel::SELF_CONN_OK = false;
 swift::tint Channel::TIMEOUT = TINT_SEC*60;
 channels_t Channel::channels(1);
-Address Channel::tracker;
+std::string Channel::trackerurl;
 FILE* Channel::debug_file = NULL;
 tint Channel::MIN_PEX_REQUEST_INTERVAL = TINT_SEC;
 
@@ -42,10 +42,11 @@ tint Channel::MIN_PEX_REQUEST_INTERVAL = TINT_SEC;
  * Instance methods
  */
 
-Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool peerissource) :
+Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr) :
     // Arno, 2011-10-03: Reordered to avoid g++ Wall warning
     peer_(peer_addr), socket_(socket==INVALID_SOCKET?default_socket():socket), // FIXME
     transfer_(transfer), own_id_mentioned_(false),
+    ack_in_right_basebin_(bin_t::NONE),
     data_in_(TINT_NEVER,bin_t::NONE), data_in_dbl_(bin_t::NONE),
     data_out_cap_(bin_t::ALL),hint_in_size_(0), hint_out_size_(0),
     // Gertjan fix 996e21e8abfc7d88db3f3f8158f2a2c4fc8a8d3f
@@ -65,16 +66,15 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     ack_not_rcvd_recent_(0), owd_min_bin_(0), owd_min_bin_start_(NOW),
     owd_cur_bin_(0), dgrams_sent_(0), dgrams_rcvd_(0),
     raw_bytes_up_(0), raw_bytes_down_(0), bytes_up_(0), bytes_down_(0),
+    old_movingfwd_bytes_(0),
     scheduled4del_(false),
     direct_sending_(false),
-    peer_is_source_(peerissource),
     hs_out_(NULL), hs_in_(NULL),
-    rtt_hint_tintbin_(),
-    hint_queue_out_(NULL), hint_queue_out_size_(0)
+    last_sent_munro_(bin_t::NONE),
+    munro_ack_rcvd_(false),
+    rtt_hint_tintbin_()
 {
-    if (peer_==Address())
-        peer_ = tracker;
-  
+    // ARNOTODO: avoid infinitely growing vector
     this->id_ = channels.size();
     channels.push_back(this);
 
@@ -92,11 +92,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr,bool p
     // RATELIMIT
     transfer_->GetChannels()->push_back(this);
 
-    hs_out_ = new Handshake();
-    if (transfer_->ttype() == FILE_TRANSFER)
-	hs_out_->cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
-    else
-	hs_out_->cont_int_prot_ = POPT_CONT_INT_PROT_NONE; // PPSPTODO implement live schemes
+    hs_out_ = new Handshake(transfer->GetDefaultHandshake());
 
     dprintf("%s #%u init channel %s transfer %d\n",tintstr(),id_,peer_.str().c_str(), transfer_->td() );
     //fprintf(stderr,"new Channel %d %s\n", id_, peer_.str().c_str() );
@@ -122,9 +118,15 @@ Channel::~Channel () {
     }
 
     if (hs_in_ != NULL)
+    {
 	delete hs_in_;
+        hs_in_ = NULL;
+    }
     if (hs_out_ != NULL)
+    {
 	delete hs_out_;
+        hs_out_ = NULL;
+    }
 }
 
 
@@ -147,16 +149,13 @@ void Channel::ClearEvents()
 
 HashTree * Channel::hashtree()
 {
-    if (transfer()->ttype() == LIVE_TRANSFER)
-        return NULL;
-    else
-        return ((FileTransfer *)transfer_)->hashtree();
+    return transfer()->hashtree();
 }
 
 bool Channel::IsComplete() {
 
     if (transfer()->ttype() == LIVE_TRANSFER)
-	return peer_is_source_;
+	return PeerIsSource();
 
     // Check if peak hash bins are filled.
     if (hashtree()->peak_count() == 0)
@@ -259,7 +258,7 @@ evutil_socket_t Channel::Bind (Address address, sckrwecb_t callbacks) {
     struct sockaddr_storage sa = address;
     evutil_socket_t fd;
     // Arno, 2013-06-05: MacOS X bind fails if sizeof(struct sockaddr_storage) is passed.
-    int len = address.get_real_sockaddr_length(), sndbuf=1<<20, rcvbuf=1<<20;
+    int len = address.get_family_sockaddr_length(), sndbuf=1<<20, rcvbuf=1<<20;
     #define dbnd_ensure(x) { if (!(x)) { \
         print_error("binding fails"); close_socket(fd); return INVALID_SOCKET; } }
     dbnd_ensure ( (fd = socket(address.get_family(), SOCK_DGRAM, 0)) >= 0 );
@@ -307,7 +306,7 @@ Address swift::BoundAddress(evutil_socket_t sock) {
 int Channel::SendTo (evutil_socket_t sock, const Address& addr, struct evbuffer *evb) {
     int length = evbuffer_get_length(evb);
     int r = sendto(sock,(const char *)evbuffer_pullup(evb, length),length,0,
-                   (struct sockaddr*)&(addr.addr),addr.get_real_sockaddr_length());
+                   (struct sockaddr*)&(addr.addr),addr.get_family_sockaddr_length());
     // SCHAAP: 2012-06-16 - How about EAGAIN and EWOULDBLOCK? Do we just drop the packet then as well?
     if (r<0) {
         print_error("can't send");
@@ -374,16 +373,78 @@ void Channel::Shutdown () {
         CloseSocket(sock_open[sock_count].sock);
 }
 
-void     swift::SetTracker(const Address& tracker) {
-    Channel::tracker = tracker;
-}
-
 int Channel::DecodeID(int scrambled) {
     return scrambled ^ (int)start;
 }
 int Channel::EncodeID(int unscrambled) {
     return unscrambled ^ (int)start;
 }
+
+
+bool Channel::IsMovingForward()
+{
+    if (transfer() == NULL)
+	return false;
+
+    bool fwd=false;
+    if (transfer()->ttype() == FILE_TRANSFER)
+    {
+	//FileTranfer *ft=(FileTransfer *)transfer();
+	if (swift::IsComplete(transfer()->td()))
+	{
+	    // Seeding peer, moving forward is uploading
+	    if (bytes_up_ > old_movingfwd_bytes_)
+	    {
+		fwd=true;
+	    }
+	    old_movingfwd_bytes_ = bytes_up_;
+	}
+	else
+	{
+	    // Leeching peer, moving forward is downloading
+	    if (bytes_down_ > old_movingfwd_bytes_)
+	    {
+		fwd=true;
+	    }
+	    old_movingfwd_bytes_ = bytes_down_;
+	}
+
+    }
+    else
+    {
+	LiveTransfer *lt = (LiveTransfer *)transfer();
+	if (lt->am_source())
+	{
+	    fwd = true; // simplification
+	}
+	else
+	{
+	    // Live peer, moving forward is downloading
+	    if (bytes_down_ > old_movingfwd_bytes_)
+	    {
+		fwd=true;
+	    }
+	    old_movingfwd_bytes_ = bytes_down_;
+	}
+    }
+    return fwd;
+}
+
+bool Channel::is_established()
+{
+    if (hs_in_ == NULL)
+        return false;
+    else
+        return (hs_in_->peer_channel_id_ && own_id_mentioned_); 
+}
+
+
+bool Channel::PeerIsSource()
+{
+    LiveTransfer *lt = (LiveTransfer *)transfer_;
+    return (lt->GetSourceAddress() != Address() && (peer_ == lt->GetSourceAddress() || recv_peer_ == lt->GetSourceAddress()));
+}
+
 
 
 /*
@@ -399,7 +460,7 @@ const char* swift::tintstr (tint time) {
     if (time==TINT_NEVER)
         return "NEVER";
     time -= Channel::epoch;
-    assert(time>=0);
+    assert(time>0);
     int hours = time/TINT_HOUR;
     time %= TINT_HOUR;
     int mins = time/TINT_MIN;

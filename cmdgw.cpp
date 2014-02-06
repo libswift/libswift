@@ -10,6 +10,7 @@
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
 #include <event2/listener.h>
+#include <event2/http.h>
 
 #include <iostream>
 #include <sstream>
@@ -52,6 +53,8 @@ struct cmd_gw_t {
     uint64_t    endoff;     // MULTIFILE: ending offset (careful, for an e.g. 100 byte interval this is 99)
     bool        playsent;
     std::string xcontentdur;
+    std::string contentlenstr;
+    std::string mimetype;
 
 } cmd_requests[CMDGW_MAX_CLIENT];
 
@@ -83,8 +86,11 @@ evutil_socket_t cmd_tunnel_sock=INVALID_SOCKET;
 
 // HTTP gateway address for PLAY cmd
 Address cmd_gw_httpaddr;
+uint64_t cmd_gw_livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
+popt_cont_int_prot_t cmd_gw_cipm=POPT_CONT_INT_PROT_MERKLE;
 
-#define cmd_gw_debug	false
+
+#define cmd_gw_debug	true
 
 tint cmd_gw_last_open=0;
 
@@ -108,6 +114,7 @@ void CmdGwFreeRequest(cmd_gw_t* req)
     req->endoff = -1;
     req->playsent = false;
     req->xcontentdur = "";
+    req->mimetype = "";
 }
 
 
@@ -163,9 +170,9 @@ cmd_gw_t* CmdGwFindRequestByFD(int td)
     return NULL;
 }
 
-cmd_gw_t* CmdGwFindRequestBySwarmID(Sha1Hash &want_hash)
+cmd_gw_t* CmdGwFindRequestBySwarmID(SwarmID &swarmid)
 {
-    int td = swift::Find(want_hash);
+    int td = swift::Find(swarmid);
     if (td < 0)
 	return NULL;
     else
@@ -173,13 +180,13 @@ cmd_gw_t* CmdGwFindRequestBySwarmID(Sha1Hash &want_hash)
 }
 
 
-void CmdGwGotCHECKPOINT(Sha1Hash &want_hash)
+void CmdGwGotCHECKPOINT(SwarmID &swarmid)
 {
     // Checkpoint the specified download
     if (cmd_gw_debug)
-        fprintf(stderr,"cmd: GotCHECKPOINT: %s\n",want_hash.hex().c_str());
+        fprintf(stderr,"cmd: GotCHECKPOINT: %s\n",swarmid.hex().c_str());
 
-    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
     if (req == NULL)
         return;
 
@@ -187,17 +194,17 @@ void CmdGwGotCHECKPOINT(Sha1Hash &want_hash)
 }
 
 
-void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
+void CmdGwGotREMOVE(SwarmID &swarmid, bool removestate, bool removecontent)
 {
     // Remove the specified download
     if (cmd_gw_debug)
-        fprintf(stderr,"cmd: GotREMOVE: %s %d %d\n",want_hash.hex().c_str(),removestate,removecontent);
+        fprintf(stderr,"cmd: GotREMOVE: %s %d %d\n",swarmid.hex().c_str(),removestate,removecontent);
 
-    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
     if (req == NULL)
     {
 	if (cmd_gw_debug)
-	    fprintf(stderr,"cmd: GotREMOVE: %s not found, bad swarm?\n",want_hash.hex().c_str());
+	    fprintf(stderr,"cmd: GotREMOVE: %s not found, bad swarm?\n",swarmid.hex().c_str());
 	return;
     }
     dprintf("%s @%i remove transfer %i\n",tintstr(),req->id,req->td);
@@ -210,42 +217,42 @@ void CmdGwGotREMOVE(Sha1Hash &want_hash, bool removestate, bool removecontent)
 }
 
 
-void CmdGwGotMAXSPEED(Sha1Hash &want_hash, data_direction_t ddir, double speed)
+void CmdGwGotMAXSPEED(SwarmID &swarmid, data_direction_t ddir, double speed)
 {
     // Set maximum speed on the specified download
-    //fprintf(stderr,"cmd: GotMAXSPEED: %s %d %lf\n",want_hash.hex().c_str(),ddir,speed);
+    //fprintf(stderr,"cmd: GotMAXSPEED: %s %d %lf\n",swarmid.hex().c_str(),ddir,speed);
 
-    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
     if (req == NULL)
     	return;
     swift::SetMaxSpeed(req->td, ddir, speed);
 }
 
 
-void CmdGwGotSETMOREINFO(Sha1Hash &want_hash, bool enable)
+void CmdGwGotSETMOREINFO(SwarmID &swarmid, bool enable)
 {
-    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
     if (req == NULL)
         return;
     req->moreinfo = enable;
 }
 
-void CmdGwGotPEERADDR(Sha1Hash &want_hash, Address &peer)
+void CmdGwGotPEERADDR(SwarmID &swarmid, Address &peer)
 {
-    cmd_gw_t* req = CmdGwFindRequestBySwarmID(want_hash);
+    cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
     if (req == NULL)
     	return;
-    swift::AddPeer(peer, want_hash);
+    swift::AddPeer(peer, swarmid);
 }
 
 
 
-void CmdGwSendINFOHashChecking(evutil_socket_t cmdsock, Sha1Hash swarm_id)
+void CmdGwSendINFOHashChecking(evutil_socket_t cmdsock, SwarmID &swarmid)
 {
     // Send INFO DLSTATUS_HASHCHECKING message.
 
     char cmd[MAX_CMD_MESSAGE];
-    sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",swarm_id.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,0.0,0,0);
+    sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",swarmid.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,0.0,0,0);
 
     //fprintf(stderr,"cmd: SendINFO: %s", cmd);
     send(cmdsock,cmd,strlen(cmd),0);
@@ -258,8 +265,8 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
     //if (cmd_gw_debug)
     //    fprintf(stderr,"cmd: SendINFO: F%d initdlstatus %d\n", req->td, dlstatus );
 
-    Sha1Hash swarm_id = swift::SwarmID(req->td);
-    if (swarm_id == Sha1Hash::ZERO)
+    SwarmID swarmid = swift::GetSwarmID(req->td);
+    if (swarmid == SwarmID::NOSWARMID)
 	return; // Arno: swarm deleted, ignore
 
     uint64_t size = swift::Size(req->td);
@@ -282,7 +289,7 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
     double ulspeed = swift::GetCurrentSpeed(req->td,DDIR_UPLOAD);
 
     char cmd[MAX_CMD_MESSAGE];
-    sprintf(cmd,"INFO %s %d %llu/%ld %lf %lf %u %u\r\n",swarm_id.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds);
+    sprintf(cmd,"INFO %s %d %llu/%llu %lf %lf %u %u\r\n",swarmid.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds);
 
     send(req->cmdsock,cmd,strlen(cmd),0);
 
@@ -299,7 +306,7 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
         if (ct)
             peerchans = ct->GetChannels();
 
-        oss << "MOREINFO" << " " << swarm_id.hex() << " ";
+        oss << "MOREINFO" << " " << swarmid.hex() << " ";
 
         double tss = (double)Channel::Time() / 1000000.0L;
         oss << "{\"timestamp\":\"" << tss << "\", ";
@@ -346,19 +353,44 @@ void CmdGwSendPLAY(cmd_gw_t *req)
     if (cmd_gw_debug)
         fprintf(stderr,"cmd: SendPLAY: %d\n", req->td);
 
-    Sha1Hash swarm_id = swift::SwarmID(req->td);
+    SwarmID swarmid = swift::GetSwarmID(req->td);
 
     std::ostringstream oss;
     oss << "PLAY ";
-    oss << swarm_id.hex() << " ";
+    oss << swarmid.hex() << " ";
     oss << "http://";
     oss << cmd_gw_httpaddr.str();
     oss << "/";
-    oss << swarm_id.hex();
-    if (swift::ChunkSize(req->td) != SWIFT_DEFAULT_CHUNK_SIZE)
-	oss << "$" <<  swift::ChunkSize(req->td);
+    oss << swarmid.hex();
+    // Arno, 2013-09-25: Only append params that need to be echoed back
+    // by the HTTPGW, because the Transfer already exists.
+    bool added=false;
     if (req->xcontentdur != "")
-	oss << "@" << req->xcontentdur;
+    {
+	if (!added)
+	    oss << "?";
+	oss << "cd=" << req->xcontentdur;
+	added = true;
+    }
+    if (req->mimetype != "")
+    {
+	if (!added)
+	    oss << "?";
+	else
+	    oss << "&";
+	oss << "mt=" << req->mimetype;
+	added = true;
+    }
+    // Arno FIXME: Should be replaced with swift::SetSize() method that stores value from URL.
+    if (req->contentlenstr != "")
+    {
+	if (!added)
+	    oss << "?";
+	else
+	    oss << "&";
+	oss << "cl=" << req->contentlenstr;
+	added = true;
+    }
     oss << "\r\n";
 
     std::stringbuf *pbuf=oss.rdbuf();
@@ -369,10 +401,10 @@ void CmdGwSendPLAY(cmd_gw_t *req)
 }
 
 
-void CmdGwSendERRORBySocket(evutil_socket_t cmdsock, std::string msg, const Sha1Hash& roothash=Sha1Hash::ZERO)
+void CmdGwSendERRORBySocket(evutil_socket_t cmdsock, std::string msg, const SwarmID& swarmid=SwarmID::NOSWARMID)
 {
      std::string cmd = "ERROR ";
-     cmd += roothash.hex();
+     cmd += swarmid.hex();
      cmd += " ";
      cmd += msg;
      cmd += "\r\n";
@@ -506,7 +538,7 @@ void CmdGwSwiftVODFirstProgressCallback (int td, bin_t bin)
             if (cmd_gw_debug)
                 fprintf(stderr,"cmd: SwiftFirstProgress: Error file not found %d\n", td );
 
-	        CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.",SwarmID(req->td));
+	        CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.",GetSwarmID(req->td));
 	        return;
 	    }
     }
@@ -609,7 +641,7 @@ void CmdGwProcessData(evutil_socket_t cmdsock)
         // size bytes, i.e., cmd_tunnel_expect bytes.
 
         if (cmd_gw_debug)
-            fprintf(stderr,"cmdgw: procTCPdata: tunnel state, got %lu, want %d\n", evbuffer_get_length(cmd_evbuffer), cmd_tunnel_expect );
+            fprintf(stderr,"cmdgw: procTCPdata: tunnel state, got " PRISIZET ", want %d\n", evbuffer_get_length(cmd_evbuffer), cmd_tunnel_expect );
 
         if (evbuffer_get_length(cmd_evbuffer) >= cmd_tunnel_expect)
         {
@@ -722,39 +754,52 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             return ERROR_BAD_ARG;
         }
 
-        std::string trackerstr = puri["server"];
-        std::string hashstr = puri["hash"];
-        std::string mfstr = puri["filename"];
-        std::string chunksizestr = puri["chunksizestr"];
-        std::string durationstr = puri["durationstr"];
-
-        if (hashstr.length()!=40) {
-            dprintf("cmd: START: roothash too short %lu\n", hashstr.length() );
-            return ERROR_BAD_ARG;
-        }
-        uint32_t chunksize=SWIFT_DEFAULT_CHUNK_SIZE;
-        if (chunksizestr.length() > 0)
-            std::istringstream(chunksizestr) >> chunksize;
-        int duration=0;
-        if (durationstr.length() > 0)
-            std::istringstream(durationstr) >> duration;
-
-        dprintf("cmd: START: %s with tracker %s chunksize %i duration %d\n",hashstr.c_str(),trackerstr.c_str(),chunksize,duration);
-
-        Address trackaddr;
-        trackaddr = Address(trackerstr.c_str());
-        if (trackerstr != "" && trackaddr==Address())
+        SwarmMeta sm;
+        // Set configured defaults for CMDGW
+        sm.cont_int_prot_ = cmd_gw_cipm;
+        sm.live_disc_wnd_ = cmd_gw_livesource_disc_wnd;
+        // Convert parsed URI to config values
+        std::string errorstr = URIToSwarmMeta(puri,&sm);
+        if (errorstr != "")
         {
-            dprintf("cmd: START: tracker address must be hostname:port, ip:port or just port\n");
+            dprintf("cmd: START: Error parsing URI: %s\n", errorstr.c_str() );
             return ERROR_BAD_ARG;
         }
-        // SetTracker(trackaddr); == set default tracker
+
+        std::string trackerstr = puri["server"];
+        std::string swarmidhexstr = puri["swarmidhex"];
+        std::string mfstr = puri["filename"];
+        std::string bttrackerurl = puri["et"];
+        std::string durstr = puri["cd"];
+
+        dprintf("cmd: START: %s with tracker %s chunksize %i duration %d\n",swarmidhexstr.c_str(),trackerstr.c_str(),sm.chunk_size_,sm.cont_dur_);
+
+        // Handle tracker
+        // External tracker via URL param
+        std::string trackerurl = "";
+        if (trackerstr == "" && bttrackerurl == "")
+        {
+            trackerstr = Channel::trackerurl;
+            if (trackerstr == "")
+            {
+                dprintf("cmd: START: tracker address must be URL server as hostname:port or ip:port, or set via ?bt=\n");
+                return ERROR_BAD_ARG;
+            }
+        }
+        // not else
+        if (bttrackerurl == "")
+        {
+            trackerurl = SWIFT_URI_SCHEME;
+            trackerurl += "://";
+            trackerurl += trackerstr;
+        }
+
 
         // initiate transmission
-        Sha1Hash swarm_id = Sha1Hash(true,hashstr.c_str());
+        SwarmID swarmid(swarmidhexstr);
 
         // Arno, 2012-06-12: Check for duplicate requests
-        cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarm_id);
+        cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
         if (req != NULL)
         {
             dprintf("cmd: START: request for given root hash already exists\n");
@@ -762,26 +807,26 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         }
 
         // Send INFO DLSTATUS_HASHCHECKING
-        CmdGwSendINFOHashChecking(cmdsock,swarm_id);
+        CmdGwSendINFOHashChecking(cmdsock,swarmid);
 
         // ARNOSMPTODO: disable/interleave hashchecking at startup
 
         // ARNOTODO: Allow for deactivated swarms. Needs cheap tracker registration
         bool activate=true;
-        int td = swift::Find(swarm_id,activate);
+        int td = swift::Find(swarmid,activate);
         if (td==-1) {
             std::string filename;
             if (storagepath != "")
                 filename = storagepath;
             else
-                filename = hashstr;
+                filename = swarmidhexstr;
 
-            if (duration != -1)
-                td = swift::Open(filename,swarm_id,trackaddr,false,true,false,activate,chunksize);
+            if (durstr != "-1")
+                td = swift::Open(filename,swarmid,trackerurl,false,sm.cont_int_prot_,false,activate,sm.chunk_size_);
             else
-                td = swift::LiveOpen(filename,swarm_id,trackaddr,false,chunksize);
+                td = swift::LiveOpen(filename,swarmid,trackerurl,sm.injector_addr_,sm.cont_int_prot_,sm.live_disc_wnd_,sm.chunk_size_);
             if (td == -1) {
-            	CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarm_id);
+            	CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarmid);
             	return ERROR_BAD_SWARM;
             }
         }
@@ -797,7 +842,9 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         req->startt = usec_time();
         req->mfspecname = mfstr;
         req->playsent = false;
-        req->xcontentdur = durationstr;
+        req->xcontentdur = puri["cd"];
+        req->contentlenstr = puri["cl"];
+        req->mimetype = puri["mt"];
 
         dprintf("%s @%i start transfer %d\n",tintstr(),req->id,req->td);
 
@@ -815,7 +862,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             if (storage == NULL)
             {
                 dprintf("cmd: START: cannot get storage td %d\n", req->td );
-                CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarm_id);
+                CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarmid);
         	return ERROR_BAD_SWARM;
             }
             storage_files_t sfs = storage->GetStorageFiles();
@@ -855,7 +902,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         token = strtok_r(paramstr," ",&savetok); //
         if (token == NULL)
             return ERROR_MISS_ARG;
-        char *hashstr = token;
+        char *swarmidhexcstr = token;
         token = strtok_r(NULL," ",&savetok);      // removestate
         if (token == NULL)
             return ERROR_MISS_ARG;
@@ -865,8 +912,9 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             return ERROR_MISS_ARG;
         removecontent = !strcmp(token,"1");
 
-        Sha1Hash swarm_id = Sha1Hash(true,hashstr);
-        CmdGwGotREMOVE(swarm_id,removestate,removecontent);
+        std::string swarmidhexstr(swarmidhexcstr);
+        SwarmID swarmid(swarmidhexstr);
+        CmdGwGotREMOVE(swarmid,removestate,removecontent);
     }
     else if (!strcmp(method,"MAXSPEED"))
     {
@@ -877,7 +925,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         token = strtok_r(paramstr," ",&savetok); //
         if (token == NULL)
             return ERROR_MISS_ARG;
-        char *hashstr = token;
+        char *swarmidhexcstr = token;
         token = strtok_r(NULL," ",&savetok);      // direction
         if (token == NULL)
             return ERROR_MISS_ARG;
@@ -890,14 +938,17 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             dprintf("cmd: MAXSPEED: speed is not a float\n");
             return ERROR_MISS_ARG;
         }
-        Sha1Hash swarm_id = Sha1Hash(true,hashstr);
-        CmdGwGotMAXSPEED(swarm_id,ddir,speed*1024.0);
+        std::string swarmidhexstr(swarmidhexcstr);
+        SwarmID swarmid(swarmidhexstr);
+        CmdGwGotMAXSPEED(swarmid,ddir,speed*1024.0);
     }
     else if (!strcmp(method,"CHECKPOINT"))
     {
         // CHECKPOINT roothash\r\n
-        Sha1Hash swarm_id = Sha1Hash(true,paramstr);
-        CmdGwGotCHECKPOINT(swarm_id);
+	char *swarmidhexcstr = paramstr;
+        std::string swarmidhexstr(swarmidhexcstr);
+        SwarmID swarmid(swarmidhexstr);
+        CmdGwGotCHECKPOINT(swarmid);
     }
     else if (!strcmp(method,"SETMOREINFO"))
     {
@@ -905,13 +956,15 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         token = strtok_r(paramstr," ",&savetok); // hash
         if (token == NULL)
             return ERROR_MISS_ARG;
-        char *hashstr = token;
+        char *swarmidhexcstr = token;
         token = strtok_r(NULL," ",&savetok);      // bool
         if (token == NULL)
             return ERROR_MISS_ARG;
         bool enable = (bool)!strcmp(token,"1");
-        Sha1Hash swarm_id = Sha1Hash(true,hashstr);
-        CmdGwGotSETMOREINFO(swarm_id,enable);
+
+        std::string swarmidhexstr(swarmidhexcstr);
+        SwarmID swarmid(swarmidhexstr);
+        CmdGwGotSETMOREINFO(swarmid,enable);
     }
     else if (!strcmp(method,"SHUTDOWN"))
     {
@@ -953,14 +1006,16 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         token = strtok_r(paramstr," ",&savetok); // hash
         if (token == NULL)
             return ERROR_MISS_ARG;
-        char *hashstr = token;
+        char *swarmidhexcstr = token;
         token = strtok_r(NULL," ",&savetok);      // bool
         if (token == NULL)
             return ERROR_MISS_ARG;
         char *addrstr = token;
+
         Address peer(addrstr);
-        Sha1Hash swarm_id = Sha1Hash(true,hashstr);
-        CmdGwGotPEERADDR(swarm_id,peer);
+        std::string swarmidhexstr(swarmidhexcstr);
+        SwarmID swarmid(swarmidhexstr);
+        CmdGwGotPEERADDR(swarmid,peer);
     }
     else
     {
@@ -1029,7 +1084,7 @@ void CmdGwListenErrorCallback(struct evconnlistener *listener, void *ctx)
 }
 
 
-bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr)
+bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr,popt_cont_int_prot_t cipm, uint64_t disc_wnd)
 {
     // Allocate libevent listener for cmd connections
     // From http://www.wangafu.net/~nickm/libevent-book/Ref8_listener.html
@@ -1040,7 +1095,7 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
 
     cmd_evlistener = evconnlistener_new_bind(evbase, CmdGwNewConnectionCallback, NULL,
         LEV_OPT_CLOSE_ON_FREE|LEV_OPT_REUSEABLE, -1,
-        (const struct sockaddr *)&sin, cmdaddr.get_real_sockaddr_length());
+        (const struct sockaddr *)&sin, cmdaddr.get_family_sockaddr_length());
     if (!cmd_evlistener) {
         print_error("Couldn't create listener");
         return false;
@@ -1048,6 +1103,8 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
     evconnlistener_set_error_cb(cmd_evlistener, CmdGwListenErrorCallback);
 
     cmd_gw_httpaddr = httpaddr;
+    cmd_gw_cipm=cipm;
+    cmd_gw_livesource_disc_wnd = disc_wnd;
 
     cmd_evbuffer = evbuffer_new();
 
@@ -1062,7 +1119,7 @@ void swift::CmdGwTunnelUDPDataCameIn(Address srcaddr, uint32_t srcchan, struct e
     // Message received on UDP socket, forward over TCP conn.
 
     if (cmd_gw_debug)
-        fprintf(stderr,"cmdgw: TunnelUDPData:DataCameIn %lu bytes from %s/%08x\n", evbuffer_get_length(evb), srcaddr.str().c_str(), srcchan );
+        fprintf(stderr,"cmdgw: TunnelUDPData:DataCameIn " PRISIZET " bytes from %s/%08x\n", evbuffer_get_length(evb), srcaddr.str().c_str(), srcchan );
 
     /*
      *  Format:
