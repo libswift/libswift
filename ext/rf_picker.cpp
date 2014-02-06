@@ -102,7 +102,7 @@ public:
 
                     if (hint.is_none()) {
                         if (DEBUGPICKER)
-                            dprintf(" => move to the next index\n", hint.str().c_str(), rarity_idx);
+                            dprintf(" => move to the next index\n");
                         checked_all = true;
                     }
                     else if (!ack_hint_out_.is_filled(hint)) {

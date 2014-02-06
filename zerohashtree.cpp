@@ -132,7 +132,7 @@ Sha1Hash        ZeroHashTree::DeriveRoot () {
             c--;
         }
     }
-    // fprintf(stderr,"derive: root bin is %lli covers %lli\n", p.toUInt(), p.base_length() );
+    // fprintf(stderr,"derive: root bin is %" PRIi64 " covers %" PRIi64 "\n", p.toUInt(), p.base_length() );
     return hash;
 }
 
@@ -158,7 +158,7 @@ const Sha1Hash& ZeroHashTree::hash (bin_t pos) const
         return Sha1Hash::ZERO;
     else
     {
-        //fprintf(stderr,"read hash %llu %s\n", pos.toUInt(), hash.hex().c_str() );
+        //fprintf(stderr,"read hash %" PRIu64 " %s\n", pos.toUInt(), hash.hex().c_str() );
         return hash;
     }
 }

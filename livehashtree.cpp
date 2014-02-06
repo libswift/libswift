@@ -415,7 +415,7 @@ Sha1Hash  LiveHashTree::DeriveRoot()
 
 bool LiveHashTree::InitFromCheckpoint(BinHashSigTuple lastmunrotup)
 {
-    fprintf(stderr,"umt: InitFromCheckpoint: %s %s %lld %s\n", lastmunrotup.bin().str().c_str(), lastmunrotup.hash().hex().c_str(), lastmunrotup.sigtint().time(), lastmunrotup.sigtint().sig().hex().c_str() );
+    fprintf(stderr,"umt: InitFromCheckpoint: %s %s %" PRIi64 " %s\n", lastmunrotup.bin().str().c_str(), lastmunrotup.hash().hex().c_str(), lastmunrotup.sigtint().time(), lastmunrotup.sigtint().sig().hex().c_str() );
 
     // Build fake tree to hold lastmunrotup
     bin_t fbin = lastmunrotup.bin();
@@ -460,7 +460,7 @@ bin_t LiveHashTree::GetMunro(bin_t pos)
     for (int i=0; i<nchunks_per_sign_layer; i++)
 	p = p.parent();
 
-    //fprintf(stderr,"umt: GetMunro: %s nchunks %u layer %d computed %u\n", pos.str().c_str(), nchunks_per_sig_, nchunks_per_sign_layer, p.layer() );
+    //fprintf(stderr,"umt: GetMunro: %s nchunks %" PRIu32 " layer %d computed %" PRIu32 "\n", pos.str().c_str(), nchunks_per_sig_, nchunks_per_sign_layer, p.layer() );
 
     return p;
 }
@@ -527,7 +527,7 @@ bool LiveHashTree::OfferSignedMunroHash(bin_t pos, SigTintTuple &sigtint)
     if (oldmunro != bin_t::NONE && oldmunro.layer_offset()+1 != pos.layer_offset())
     {
         if (tree_debug)
-            fprintf(stderr,"umt: OfferSignedMunroHash: SKIP old munro %s layer off %u new %u\n", oldmunro.str().c_str(), oldmunro.layer_offset(), pos.layer_offset() );
+            fprintf(stderr,"umt: OfferSignedMunroHash: SKIP old munro %s layer off %llu new %llu\n", oldmunro.str().c_str(), oldmunro.layer_offset(), pos.layer_offset() );
     }
 
     // Bootstrap tree if this is the first
@@ -860,7 +860,7 @@ bool LiveHashTree::SetVerifiedIfNot0(Node *piter, bin_t p, int verclass)
     if (piter == NULL)
     {
         if (tree_debug)
-            fprintf(stderr,"umt: OfferHash: SetVerified%u %s has NULL node!!!\n", verclass, p.str().c_str() );
+            fprintf(stderr,"umt: OfferHash: SetVerified%" PRIu32 " %s has NULL node!!!\n", verclass, p.str().c_str() );
         return true; // had success
     }
     else
@@ -868,12 +868,12 @@ bool LiveHashTree::SetVerifiedIfNot0(Node *piter, bin_t p, int verclass)
         if (piter->GetHash() == Sha1Hash::ZERO)
         {
             if (tree_debug)
-                fprintf(stderr,"umt: OfferHash: SetVerified%u %s has ZERO hash!!!\n", verclass, piter->GetBin().str().c_str() );
+                fprintf(stderr,"umt: OfferHash: SetVerified%" PRIu32 " %s has ZERO hash!!!\n", verclass, piter->GetBin().str().c_str() );
         }
         else
         {
             if (tree_debug)
-                fprintf(stderr,"umt: OfferHash: SetVerified%u %s\n", verclass, piter->GetBin().str().c_str() );
+                fprintf(stderr,"umt: OfferHash: SetVerified%" PRIu32 " %s\n", verclass, piter->GetBin().str().c_str() );
             piter->SetVerified(true);
         }
     }
@@ -933,7 +933,7 @@ bool LiveHashTree::OfferData(bin_t pos, const char* data, size_t length)
     if (length<chunk_size_ && pos!=bin_t(0,sizec_-1))
     {
         if (tree_debug)
-            fprintf(stderr,"umt: OfferData: bad len %d\n", length);
+            fprintf(stderr,"umt: OfferData: bad len " PRISIZET "\n", length);
         return false;
     }
     if (ack_out_.is_filled(pos))
@@ -956,13 +956,13 @@ bool LiveHashTree::OfferData(bin_t pos, const char* data, size_t length)
 
     if (!OfferHash(pos, data_hash)) {
         //printf("invalid hash for %s: %s\n",pos.str(bin_name_buf),data_hash.hex().c_str()); // paranoid
-        //fprintf(stderr,"umt: INVALID HASH FOR %lli layer %d\n", pos.toUInt(), pos.layer() );
+        //fprintf(stderr,"umt: INVALID HASH FOR %" PRIi64 " layer %d\n", pos.toUInt(), pos.layer() );
         // Ric: TODO it's not necessarily a bug.. it happens if a pkt was lost!
         dprintf("%s hashtree check failed (bug TODO) %s\n",tintstr(),pos.str().c_str());
         return false;
     }
 
-    //printf("g %lli %s\n",(uint64_t)pos,hash.hex().c_str());
+    //printf("g %" PRIi64 " %s\n",(uint64_t)pos,hash.hex().c_str());
     if (tree_debug)
         fprintf(stderr,"umt: OfferData: set ack_out_ %s\n", pos.str().c_str() );
 

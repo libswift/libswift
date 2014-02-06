@@ -133,7 +133,7 @@ void tracker_callback(int td, std::string status, uint32_t interval, peeraddrs_t
 
     if (status == "")
     {
-	fprintf(stderr,"test: Status OK int %u npeers %u\n", interval, peerlist.size() );
+	fprintf(stderr,"test: Status OK int %" PRIu32 " npeers %" PRIu32 "\n", interval, peerlist.size() );
 	if (interval == 1800 && peerlist.size() == 16)
 	    tracker_response_valid=true;
     }

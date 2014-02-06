@@ -129,7 +129,7 @@ LiveTransfer::LiveTransfer(std::string filename, KeyPair &keypair, std::string c
 	    }
 	}
 
-	fprintf(stderr,"live: source: restored lastchunkid %llu\n", last_chunkid_ );
+	fprintf(stderr,"live: source: restored lastchunkid %" PRIu64 "\n", last_chunkid_ );
     }
     else // SIGNALL
     {
@@ -180,9 +180,9 @@ void LiveTransfer::Initialize(KeyPair &keypair, popt_cont_int_prot_t cipm, uint6
 	hs.cont_int_prot_ = POPT_CONT_INT_PROT_NONE;
     hs.live_disc_wnd_ = disc_wnd;
 
-    fprintf(stderr,"LiveTransfer::Initialize: cipm %u\n", hs.cont_int_prot_);
-    fprintf(stderr,"LiveTransfer::Initialize: lsa  %u\n", hs.live_sig_alg_);
-    fprintf(stderr,"LiveTransfer::Initialize: ldw  %llu\n", hs.live_disc_wnd_);
+    fprintf(stderr,"LiveTransfer::Initialize: cipm %" PRIu32 "\n", hs.cont_int_prot_);
+    fprintf(stderr,"LiveTransfer::Initialize: lsa  %" PRIu32 "\n", hs.live_sig_alg_);
+    fprintf(stderr,"LiveTransfer::Initialize: ldw  %" PRIu64 "\n", hs.live_disc_wnd_);
 
     SetDefaultHandshake(hs);
 
@@ -306,7 +306,7 @@ uint64_t      LiveTransfer::GetHookinOffset() {
 
 int LiveTransfer::AddData(const void *buf, uint32_t nbyte)
 {
-    // fprintf(stderr,"%s live: AddData: writing to storage %lu\n", tintstr(), nbyte);
+    // fprintf(stderr,"%s live: AddData: writing to storage %" PRIu64 "\n", tintstr(), nbyte);
 
     // Save chunk on disk
     int ret = storage_->Write(buf,nbyte,offset_);
@@ -369,8 +369,8 @@ int LiveTransfer::AddData(const void *buf, uint32_t nbyte)
             newepoch = true;
     }
 
-    fprintf(stderr,"live: AddData: added till chunkid %lli\n", last_chunkid_);
-    dprintf("%s %%0 live: AddData: added till chunkid %lli\n", tintstr(), last_chunkid_);
+    fprintf(stderr,"live: AddData: added till chunkid %" PRIi64 "\n", last_chunkid_);
+    dprintf("%s %%0 live: AddData: added till chunkid %" PRIi64 "\n", tintstr(), last_chunkid_);
 
     // Arno, 2013-02-26: When UNIFIED_MERKLE chunks are published in batches
     // of nchunks_per_sign_
@@ -378,7 +378,7 @@ int LiveTransfer::AddData(const void *buf, uint32_t nbyte)
 	return 0;
 
     // Announce chunks to peers via HAVEs
-    fprintf(stderr,"live: AddData: announcing to %d channels\n", mychannels_.size() );
+    fprintf(stderr,"live: AddData: announcing to " PRISIZET " channels\n", mychannels_.size() );
     channels_t::iterator iter;
     for (iter=mychannels_.begin(); iter!=mychannels_.end(); iter++)
     {
@@ -506,7 +506,7 @@ void LiveTransfer::OnDataPruneTree(Handshake &hs_out, bin_t pos, uint32_t nchunk
 		    leftpos = leftpos.parent();
 		}
 	    }
-	    //fprintf(stderr,"live: OnDataPruneTree: prune %s log %lf nchunks %d window %llu when %llu\n", leftpos.str().c_str(), log2((double)lastchunkid), nchunks2forget, hs_out.live_disc_wnd_, lastchunkid );
+	    //fprintf(stderr,"live: OnDataPruneTree: prune %s log %lf nchunks %d window %" PRIu64 " when %" PRIu64 "\n", leftpos.str().c_str(), log2((double)lastchunkid), nchunks2forget, hs_out.live_disc_wnd_, lastchunkid );
 	    LiveHashTree *umt = (LiveHashTree *)hashtree();
 	    umt->PruneTree(leftpos);
 	}
@@ -518,7 +518,7 @@ int LiveTransfer::WriteCheckpoint(BinHashSigTuple &munrotup)
 {
     // FORMAT: (layer,layeroff) munrohash-in-hex timestamp munrosig-in-hex\n
     char tscstr[256];
-    sprintf(tscstr,"%lld",munrotup.sigtint().time());
+    sprintf(tscstr,"%" PRIi64 "",munrotup.sigtint().time());
     std::string s = munrotup.bin().str()+" "+munrotup.hash().hex()+" "+std::string(tscstr)+" "+munrotup.sigtint().sig().hex()+"\n";
     char *cstr = new char[strlen(s.c_str())+1];
 
@@ -634,7 +634,7 @@ BinHashSigTuple LiveTransfer::ReadCheckpoint()
 
 
     tint munrotimestamp;
-    ret = sscanf(timestr.c_str(),"%lld",&munrotimestamp);
+    ret = sscanf(timestr.c_str(),"%" SCNi64 "",&munrotimestamp);
     if (ret != 1)
     {
 	print_error("could not parsing live checkpoint: timestamp bad");
@@ -647,7 +647,7 @@ BinHashSigTuple LiveTransfer::ReadCheckpoint()
     Signature munrosig = Signature(true,(const uint8_t *)sigstr.c_str(),(uint16_t)sigstr.length());
     SigTintTuple munrost = SigTintTuple(munrosig,munrotimestamp);
 
-    //fprintf(stderr,"CHECKPOINT parsed <%s> %d %llu <%s> <%s> %lld <%s>\n", munrobin.str().c_str(), layer, layeroff, munrohash.hex().c_str(), timestr.c_str(), munrotimestamp, munrosig.hex().c_str() );
+    //fprintf(stderr,"CHECKPOINT parsed <%s> %d %" SCNu64 " <%s> <%s> %" PRIi64 " <%s>\n", munrobin.str().c_str(), layer, layeroff, munrohash.hex().c_str(), timestr.c_str(), munrotimestamp, munrosig.hex().c_str() );
 
     return BinHashSigTuple(munrobin,munrohash,munrost);
 }
@@ -673,7 +673,7 @@ void Channel::LiveSend()
         // Arno, 2013-02-01: Don't reassign, causes crashes.
         evtimer_assign(evsendlive_ptr_,evbase,&Channel::LibeventSendCallback,this);
     }
-    //fprintf(stderr,"live: LiveSend: next %lld\n", next_send_time_ );
+    //fprintf(stderr,"live: LiveSend: next %" PRIi64 "\n", next_send_time_ );
     evtimer_add(evsendlive_ptr_,tint2tv(next_send_time_));
 }
 

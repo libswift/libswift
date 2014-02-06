@@ -252,7 +252,7 @@ void CmdGwSendINFOHashChecking(evutil_socket_t cmdsock, SwarmID &swarmid)
     // Send INFO DLSTATUS_HASHCHECKING message.
 
     char cmd[MAX_CMD_MESSAGE];
-    sprintf(cmd,"INFO %s %d %lli/%lli %lf %lf %u %u\r\n",swarmid.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,0.0,0,0);
+    sprintf(cmd,"INFO %s %d %" PRIi64 "/%" PRIi64 " %lf %lf %" PRIu32 " %" PRIu32 "\r\n",swarmid.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,0.0,0,0);
 
     //fprintf(stderr,"cmd: SendINFO: %s", cmd);
     send(cmdsock,cmd,strlen(cmd),0);
@@ -289,7 +289,7 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
     double ulspeed = swift::GetCurrentSpeed(req->td,DDIR_UPLOAD);
 
     char cmd[MAX_CMD_MESSAGE];
-    sprintf(cmd,"INFO %s %d %llu/%llu %lf %lf %u %u\r\n",swarmid.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds);
+    sprintf(cmd,"INFO %s %d %" PRIu64 "/%" PRIu64 " %lf %lf %" PRIu32 " %" PRIu32 "\r\n",swarmid.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds);
 
     send(req->cmdsock,cmd,strlen(cmd),0);
 
@@ -436,7 +436,7 @@ void CmdGwSwiftPrebufferProgressCallback (int td, bin_t bin)
     uint64_t wantsize = std::min(req->endoff+1-req->startoff,(uint64_t)CMDGW_MAX_PREBUF_BYTES);
 
     //if (cmd_gw_debug)
-    //   fprintf(stderr,"cmd: SwiftPrebuffProgress: want %llu got %llu\n", swift::SeqComplete(req->td,req->startoff), wantsize );
+    //   fprintf(stderr,"cmd: SwiftPrebuffProgress: want %" PRIu64 " got %" PRIu64 "\n", swift::SeqComplete(req->td,req->startoff), wantsize );
 
 
     if (swift::SeqComplete(req->td,req->startoff) >= wantsize)
@@ -850,7 +850,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
 
         //if (cmd_gw_debug)
-	//    fprintf(stderr,"cmd: Already on disk is %llu/%llu\n", swift::Complete(td), swift::Size(td));
+	//    fprintf(stderr,"cmd: Already on disk is %" PRIu64 "/%" PRIu64 "\n", swift::Complete(td), swift::Size(td));
 
         // Set progress callbacks
         if (swift::ttype(req->td) == FILE_TRANSFER)
@@ -991,7 +991,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         int n = sscanf(chanstr,"%08x",&cmd_tunnel_dest_chanid);
         if (n != 1)
             return ERROR_BAD_ARG;
-        n = sscanf(sizestr,"%u",&cmd_tunnel_expect);
+        n = sscanf(sizestr,"%" PRIu32 "",&cmd_tunnel_expect);
         if (n != 1)
             return ERROR_BAD_ARG;
 

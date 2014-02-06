@@ -37,7 +37,7 @@ tint    Channel::NextSendTime () {
 }
 
 tint    Channel::SwitchSendControl (send_control_t control_mode) {
-    dprintf("%s #%u sendctrl switch %s->%s\n",tintstr(),id(),
+    dprintf("%s #%" PRIu32 " sendctrl switch %s->%s\n",tintstr(),id(),
             SEND_CONTROL_MODES[send_control_],SEND_CONTROL_MODES[control_mode]);
     switch (control_mode) {
         case KEEP_ALIVE_CONTROL:
@@ -97,7 +97,7 @@ tint    Channel::KeepAliveNextSendTime () {
     // Arno: Fix that doesn't do exponential growth always, only after sends
     // without following recvs
 
-    //dprintf("KeepAliveNextSendTime: gotka %d sentka %d ss %d si %lli rtt %lli\n", lastrecvwaskeepalive_, lastsendwaskeepalive_, sent_since_recv_, send_interval_, rtt_avg_ );
+    //dprintf("KeepAliveNextSendTime: gotka %d sentka %d ss %d si %" PRIi64 " rtt %" PRIi64 "\n", lastrecvwaskeepalive_, lastsendwaskeepalive_, sent_since_recv_, send_interval_, rtt_avg_ );
 
     if (lastrecvwaskeepalive_ && lastsendwaskeepalive_)
     {
@@ -126,7 +126,7 @@ tint    Channel::KeepAliveNextSendTime () {
 }
 
 tint    Channel::PingPongNextSendTime () { // FIXME INFINITE LOOP
-    //fprintf(stderr,"PING: dgrams %d ackrec %d dataintime %lli lastrecv %lli lastsend %lli\n", dgrams_sent_, ack_rcvd_recent_, data_in_.time, last_recv_time_, last_send_time_);
+    //fprintf(stderr,"PING: dgrams %d ackrec %d dataintime %" PRIi64 " lastrecv %" PRIi64 " lastsend %" PRIi64 "\n", dgrams_sent_, ack_rcvd_recent_, data_in_.time, last_recv_time_, last_send_time_);
     if (dgrams_sent_>=10)
         return SwitchSendControl(KEEP_ALIVE_CONTROL);
     if (ack_rcvd_recent_)
@@ -149,8 +149,8 @@ tint    Channel::CwndRateNextSendTime () {
     if (send_interval_>max(rtt_avg_,TINT_SEC)*4)
         return SwitchSendControl(KEEP_ALIVE_CONTROL);
     if (data_out_.size()<cwnd_) {
-        dprintf("%s #%u sendctrl next in %lldus (cwnd %.2f, data_out %u)\n",
-	    tintstr(),id_,send_interval_,cwnd_,data_out_.size());
+        dprintf("%s #%" PRIu32 " sendctrl next in %" PRIi64 "us (cwnd %.2f, data_out " PRISIZET ")\n",
+                tintstr(),id_,send_interval_,cwnd_,data_out_.size());
         return last_data_out_time_ + send_interval_;
     } else {
         assert(data_out_.front().time!=TINT_NEVER);
@@ -164,7 +164,7 @@ void    Channel::BackOffOnLosses (float ratio) {
     if (last_loss_time_<NOW-rtt_avg_) {
         cwnd_ *= ratio;
         last_loss_time_ = NOW;
-        dprintf("%s #%u sendctrl backoff %3.2f\n",tintstr(),id_,cwnd_);
+        dprintf("%s #%" PRIu32 " sendctrl backoff %3.2f\n",tintstr(),id_,cwnd_);
     }
 }
 
@@ -227,7 +227,7 @@ tint Channel::LedbatNextSendTime () {
        cwnd_count1_ = 0;
     if (cwnd_count1_ > 10)
     {
-        dprintf("%s #%u sendctrl ledbat stuck, reset\n",tintstr(),id() );
+        dprintf("%s #%" PRIu32 " sendctrl ledbat stuck, reset\n",tintstr(),id() );
         cwnd_count1_ = 0;
         for(int i=0; i<4; i++) {
             owd_min_bins_[i] = TINT_NEVER;
@@ -235,7 +235,7 @@ tint Channel::LedbatNextSendTime () {
         }
     }*/
 
-    dprintf("%s #%u sendctrl ledbat %lld-%lld => %3.2f\n",
+    dprintf("%s #%" PRIu32 " sendctrl ledbat %" PRIi64 "-%" PRIi64 " => %3.2f\n",
             tintstr(),id_,owd_cur,owd_min,cwnd_);
     return CwndRateNextSendTime();
 }

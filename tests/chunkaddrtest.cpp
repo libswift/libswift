@@ -96,7 +96,7 @@ TEST(ChunkAddrTest,Chunk32ToBin32b)
     {
 	for (uint32_t e=s; e<s+em; e++)
 	{
-	    //fprintf(stderr,"\ns %u e %u\n", s, e );
+	    //fprintf(stderr,"\ns %" PRIu32 " e %" PRIu32 "\n", s, e );
 	    binvector bv;
 
 	    swift::chunk32_to_bin32(s,e,&bv);
@@ -129,7 +129,7 @@ TEST(ChunkAddrTest,Bin32)
     uint32_t s = want.base_offset();
     uint32_t e = (want.base_offset()+want.base_length()-1);
 
-    fprintf(stderr,"want start %u end %u\n", s, e );
+    fprintf(stderr,"want start %" PRIu32 " end %" PRIu32 "\n", s, e );
     
     binvector bv;
     swift::chunk32_to_bin32(s,e,&bv);

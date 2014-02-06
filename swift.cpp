@@ -79,11 +79,6 @@ void usage(void)
     fprintf(stderr,"  -a live signature algorithm\n");
     fprintf(stderr,"  -W live discard window in chunks\n");
     fprintf(stderr,"  -I live source address (used with ext tracker)\n");
-    fprintf(stderr,"  -L, --ledbat\tfile name for the LEDBAT congestion control logs (no default)\n");
-
-
-    fprintf(stderr, "%s\n", SubversionRevisionString.c_str() );
-
 }
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
 int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
@@ -145,8 +140,8 @@ bool livesource_isfile=false;
 popt_cont_int_prot_t swarm_cipm=POPT_CONT_INT_PROT_MERKLE;
 popt_live_sig_alg_t livesource_sigalg=DEFAULT_LIVE_SIG_ALG;
 
-long long int cmdgw_report_counter=0;
-long long int cmdgw_report_interval=REPORT_INTERVAL; // seconds
+int64_t cmdgw_report_counter=0;
+int64_t cmdgw_report_interval=REPORT_INTERVAL; // seconds
 
 
 // UNICODE: TODO, convert to std::string carrying UTF-8 arguments. Problem is
@@ -264,7 +259,7 @@ int utf8main (int argc, char** argv)
             case 'w':
                 if (optarg) {
                     char unit = 'u';
-                    if (sscanf(optarg,"%lld%c",&wait_time,&unit)!=2)
+                    if (sscanf(optarg,"%" PRIi64 "%c",&wait_time,&unit)!=2)
                         quit("time format: 1234[umsMHD], e.g. 1M = one minute\n");
 
                     switch (unit) {
@@ -347,7 +342,7 @@ int utf8main (int argc, char** argv)
                     swarm_cipm = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
                 break;
             case 'C': // SWIFTPROC
-                if (sscanf(optarg,"%lli",&cmdgw_report_interval)!=1)
+                if (sscanf(optarg,"%" SCNi64 "",&cmdgw_report_interval)!=1)
                     quit("report interval must be int\n");
                 break;
             case '1': // SWIFTPROCUNICODE
@@ -367,7 +362,7 @@ int utf8main (int argc, char** argv)
                 gtesting = true;
                 break;
             case 'W': // PPSP
-                if (sscanf(optarg,"%llu",&livesource_disc_wnd)!=1)
+                if (sscanf(optarg,"%" SCNx64 ,&livesource_disc_wnd)!=1)
                     quit("report interval must be int\n");
                 break;
             case 'P':
@@ -792,7 +787,7 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
     if (keypairptr == NULL)
     {
 	keypairptr = KeyPair::Generate(livesource_sigalg, SWIFT_RSA_DEFAULT_KEYSIZE, OpenSSLGenerateCallback );
-	fprintf(stderr,"swift: siglen is %u\n", keypairptr->GetSigSizeInBytes() );
+	fprintf(stderr,"swift: siglen is %" PRIu16 "\n", keypairptr->GetSigSizeInBytes() );
     }
     if (keypairfilename != "")
     {
@@ -915,8 +910,8 @@ void ReportCallback(int fd, short event, void *arg) {
     {
         if (report_progress) {
             fprintf(stderr,
-                "%s %lli of %lli (seq %lli) %lli dgram %lli bytes up, "    \
-                "%lli dgram %lli bytes down\n",
+                "%s %" PRIi64 " of %" PRIi64 " (seq %" PRIi64 ") %" PRIi64 " dgram %" PRIi64 " bytes up, "    \
+                "%" PRIi64 " dgram %" PRIi64 " bytes down\n",
                 IsComplete(single_td ) ? "DONE" : "done",
                 Complete(single_td), Size(single_td), SeqComplete(single_td),
                 Channel::global_dgrams_up, Channel::global_raw_bytes_up,
@@ -925,7 +920,7 @@ void ReportCallback(int fd, short event, void *arg) {
             double up = swift::GetCurrentSpeed(single_td,DDIR_UPLOAD);
             double dw = swift::GetCurrentSpeed(single_td,DDIR_DOWNLOAD);
 
-            fprintf(stderr, "     %d%%", Complete(single_td)*100/Size(single_td));
+            fprintf(stderr, "     %" PRIi64 "%%", Complete(single_td)*100/Size(single_td));
             if (!IsComplete(single_td ))
                 fprintf(stderr, "\tTransfer complete in: %.2f min.", (Size(single_td)-Complete(single_td))/(dw*60));
             fprintf(stderr, "\n");
@@ -976,8 +971,8 @@ void ReportCallback(int fd, short event, void *arg) {
         }
         /*
         fprintf(stderr,
-            "%s %llu of %llu (seq %llu) %lld dgram %lld bytes up, " \
-            "%lld dgram %lld bytes down\n",
+            "%s %" PRIu64 " of %" PRIu64 " (seq %" PRIu64 ") %" PRIi64 " dgram %" PRIi64 " bytes up, " \
+            "%" PRIi64 " dgram %" PRIi64 " bytes down\n",
             allComplete ? "DONE" : "done",
             complete, size, seqcomplete,
             Channel::global_dgrams_up, Channel::global_raw_bytes_up,
@@ -1089,7 +1084,7 @@ int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int ar
     char numstr[100];
     sprintf(numstr,"%d",specsize);
     char numstr2[100];
-    sprintf(numstr2,"%u",specsize+strlen(numstr));
+    sprintf(numstr2,"%" PRIu64 "",specsize+strlen(numstr));
     if (strlen(numstr) == strlen(numstr2))
         specsize += strlen(numstr);
     else

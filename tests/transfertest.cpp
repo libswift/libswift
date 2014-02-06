@@ -44,7 +44,7 @@ TEST(TransferTest,TransferFile) {
     ROOT = ABCDE000;
     //for (bin_t pos(3,0); !pos.is_all(); pos=pos.parent()) {
     //    ROOT = Sha1Hash(ROOT,Sha1Hash::ZERO);
-        //printf("m %lli %s\n",(uint64_t)pos.parent(),ROOT.hex().c_str());
+        //printf("m %" PRIi64 " %s\n",(uint64_t)pos.parent(),ROOT.hex().c_str());
     //}
     
     // now, submit a new file

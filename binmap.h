@@ -28,7 +28,7 @@ public:
     /**
      * Destructor
      */
-    ~binmap_t();
+    virtual ~binmap_t();
 
 
     /**

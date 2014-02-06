@@ -19,7 +19,7 @@ Address::Address()
 Address::Address(const char* ip, uint16_t port)
 {
     if (addr_debug)
-	fprintf(stderr,"Addres::Address(ip=%s,port=%u)\n", ip, port);
+	fprintf(stderr,"Addres::Address(ip=%s,port=%" PRIu32 ")\n", ip, port);
     clear();
     set_ip(ip,AF_UNSPEC);
     set_port(port);
@@ -74,7 +74,7 @@ Address::Address(const char* ip_port)
 Address::Address(uint32_t ipv4addr, uint16_t port)
 {
     if (addr_debug)
-	fprintf(stderr,"Addres::Address(ipv4addr=%08x,port=%u)\n", ipv4addr, port);
+	fprintf(stderr,"Addres::Address(ipv4addr=%08x,port=%" PRIu32 ")\n", ipv4addr, port);
     clear();
     set_ipv4(ipv4addr);
     set_port(port);

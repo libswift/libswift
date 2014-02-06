@@ -161,13 +161,13 @@ void do_download(LiveHashTree *umt, int nchunks, int nchunkspersig, hmap_t &trut
     for (citer=pickorder.begin(); citer != pickorder.end(); citer++)
     {
 	int r = *citer;
-	fprintf(stderr,"test: \nAdd %u\n", r);
+	fprintf(stderr,"test: \nAdd %" PRIu32 "\n", r);
 
 	bin_t orig(0,r);
 	bin_t pos = orig;
 
 	bin_t munro = umt->GetMunro(pos);
-	fprintf(stderr,"test: Add: %u munro %s\n", r, munro.str().c_str() );
+	fprintf(stderr,"test: Add: %" PRIu32 " munro %s\n", r, munro.str().c_str() );
 
 	// Sending uncles
 	binvector bv;
@@ -181,13 +181,13 @@ void do_download(LiveHashTree *umt, int nchunks, int nchunkspersig, hmap_t &trut
 	for (iter=bv.rbegin(); iter != bv.rend(); iter++)
 	{
 	    bin_t uncle = *iter;
-	    fprintf(stderr,"test: Add %u uncle %s\n", r, uncle.str().c_str() );
+	    fprintf(stderr,"test: Add %" PRIu32 " uncle %s\n", r, uncle.str().c_str() );
 	    umt->OfferHash(uncle,truthhashmap[uncle]);
 	    umt->sane_tree();
 	}
 
 	// Sending actual chunk
-	fprintf(stderr,"test: Add %u orig %s\n", r, orig.str().c_str() );
+	fprintf(stderr,"test: Add %" PRIu32 " orig %s\n", r, orig.str().c_str() );
 	ASSERT_TRUE(umt->OfferHash(orig,truthhashmap[orig]));
 	umt->sane_tree();
 
@@ -195,7 +195,7 @@ void do_download(LiveHashTree *umt, int nchunks, int nchunkspersig, hmap_t &trut
 	for (iter=bv.rbegin(); iter != bv.rend(); iter++)
 	{
 	    bin_t uncle = *iter;
-	    fprintf(stderr,"test: Add %u check verified %s\n", r, uncle.str().c_str() );
+	    fprintf(stderr,"test: Add %" PRIu32 " check verified %s\n", r, uncle.str().c_str() );
 	    Node *n = umt->FindNode(uncle);
 	    ASSERT_EQ(n->GetHash(),truthhashmap[uncle]);
 	    ASSERT_TRUE(n->GetVerified());

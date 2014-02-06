@@ -111,8 +111,8 @@ Storage::~Storage()
 
 ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 {
-    dprintf("%s %s storage: Write: fd %d nbyte %d off %lld state %d\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
-    //fprintf(stderr,"%s %s storage: Write: fd %d nbyte %d off %lld state %d\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
+    dprintf("%s %s storage: Write: fd %d nbyte " PRISIZET " off %" PRIi64 " state %" PRIi32 "\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
+    //fprintf(stderr,"%s %s storage: Write: fd %d nbyte %d off %" PRIi64 " state %d\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
 
     if (state_ == STOR_STATE_SINGLE_FILE)
     {
@@ -122,13 +122,13 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
     {
 	int64_t newoff = offset % live_disc_wnd_bytes_;
 
-	dprintf("%s %d ?data writing disk %lld window %llu\n",tintstr(), 0, newoff, live_disc_wnd_bytes_ );
+	dprintf("%s %d ?data writing disk %" PRIi64 " window %" PRIu64 "\n",tintstr(), 0, newoff, live_disc_wnd_bytes_ );
 
 	if (newoff+nbyte > live_disc_wnd_bytes_)
 	{
 	    // Writing more than window
 	    size_t firstbyte = live_disc_wnd_bytes_ - newoff;
-	    dprintf("%s %d ?data writing disk %lld firstbyte " PRISIZET "\n",tintstr(), 0, newoff, firstbyte );
+	    dprintf("%s %d ?data writing disk %" PRIi64 " firstbyte " PRISIZET "\n",tintstr(), 0, newoff, firstbyte );
 	    int ret = pwrite(single_fd_, buf, firstbyte, newoff);
 	    if (ret < 0)
 		return ret;
@@ -158,14 +158,14 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 
             // multifile entry will fit into first chunk
             const char *bufstr = (const char *)buf;
-            int n = sscanf((const char *)&bufstr[strlen(MULTIFILE_PATHNAME.c_str())+1],"%lld",&spec_size_);
+            int n = sscanf((const char *)&bufstr[strlen(MULTIFILE_PATHNAME.c_str())+1],"%" PRIi64 "",&spec_size_);
             if (n != 1)
             {
                 errno = EINVAL;
                 return -1;
             }
 
-            //dprintf("%s %s storage: Write: multifile: specsize %lld\n", tintstr(), roothashhex().c_str(), spec_size_ );
+            //dprintf("%s %s storage: Write: multifile: specsize %" PRIi64 "\n", tintstr(), roothashhex().c_str(), spec_size_ );
 
             // Create StorageFile for multi-file spec.
             StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,spec_size_,os_pathname_);
@@ -222,7 +222,7 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
             return -1;
         }
 
-        //dprintf("%s %s storage: Write: complete: first %lld second %lld\n", tintstr(), roothashhex().c_str(), ht.first, ht.second);
+        //dprintf("%s %s storage: Write: complete: first %" PRIi64 " second %" PRIi64 "\n", tintstr(), roothashhex().c_str(), ht.first, ht.second);
 
         if (ht.second > 0)
         {
@@ -242,7 +242,7 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 
 int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset)
 {
-    //dprintf("%s %s storage: WriteSpecPart: %s %d %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), nbyte, offset );
+    //dprintf("%s %s storage: WriteSpecPart: %s %d %" PRIi64 "\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), nbyte, offset );
 
     std::pair<int64_t,int64_t> ht = WriteBuffer(sf,buf,nbyte,offset);
     if (ht.first == -1)
@@ -291,7 +291,7 @@ int Storage::WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64
 
 std::pair<int64_t,int64_t> Storage::WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset)
 {
-    //dprintf("%s %s storage: WriteBuffer: %s %d %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), nbyte, offset );
+    //dprintf("%s %s storage: WriteBuffer: %s %d %" PRIi64 "\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), nbyte, offset );
 
     int ret = -1;
     if (offset+nbyte <= sf->GetEnd()+1)
@@ -373,7 +373,7 @@ int Storage::ParseSpec(StorageFile *sf)
         std::string sizestr = pline.substr(idx+1,pline.length());
 
         int64_t fsize=0;
-        int n = sscanf(sizestr.c_str(),"%lld",&fsize);
+        int n = sscanf(sizestr.c_str(),"%" PRIi64 "",&fsize);
         if (n == 0)
         {
             ret = -1;
@@ -417,7 +417,7 @@ int Storage::ParseSpec(StorageFile *sf)
     for (iter = sfs_.begin(); iter < sfs_.end(); iter++)
     {
         StorageFile *sf = *iter;
-        dprintf("%s %s storage: parsespec: Got %s start %lld size %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), sf->GetStart(), sf->GetSize() );
+        dprintf("%s %s storage: parsespec: Got %s start %" PRIi64 " size %" PRIi64 "\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), sf->GetStart(), sf->GetSize() );
     }
 
     fclose(fp);
@@ -464,7 +464,7 @@ int Storage::OpenSingleFile()
 
 ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
 {
-    //dprintf("%s %s storage: Read: nbyte " PRISIZET " off %lld\n", tintstr(), roothashhex().c_str(), nbyte, offset );
+    //dprintf("%s %s storage: Read: nbyte " PRISIZET " off %" PRIi64 "\n", tintstr(), roothashhex().c_str(), nbyte, offset );
 
     if (state_ == STOR_STATE_SINGLE_FILE)
     {
@@ -473,7 +473,7 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
     else if (state_ == STOR_STATE_SINGLE_LIVE_WRAP)
     {
 	int64_t newoff = offset % live_disc_wnd_bytes_;
-	dprintf("%s %d ?data reading disk %lld window %llu\n",tintstr(), 0, newoff, live_disc_wnd_bytes_ );
+	dprintf("%s %d ?data reading disk %" PRIi64 " window %" PRIu64 "\n",tintstr(), 0, newoff, live_disc_wnd_bytes_ );
 
         return pread(single_fd_, buf, nbyte, newoff);
     }
@@ -499,7 +499,7 @@ ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
                 return -1;
             }
             last_sf_ = sf;
-            //dprintf("%s %s storage: Read: Found file %s for off %lld\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), offset );
+            //dprintf("%s %s storage: Read: Found file %s for off %" PRIi64 "\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), offset );
         }
 
         ssize_t ret = sf->Read(buf,nbyte,offset - sf->GetStart());
@@ -564,7 +564,7 @@ int64_t Storage::GetReservedSize()
             totaldisksize += fsize;
     }
 
-    dprintf("storage: getdisksize: total already sized is %lld\n", totaldisksize );
+    dprintf("storage: getdisksize: total already sized is %" PRIi64 "\n", totaldisksize );
 
     return totaldisksize;
 }
@@ -596,12 +596,12 @@ int Storage::ResizeReserved(int64_t size)
 
     if (state_ == STOR_STATE_SINGLE_FILE)
     {
-        dprintf("%s %s storage: Resizing single file %d to %lld\n", tintstr(), roothashhex().c_str(), single_fd_, size);
+        dprintf("%s %s storage: Resizing single file %d to %" PRIi64 "\n", tintstr(), roothashhex().c_str(), single_fd_, size);
         return file_resize(single_fd_,size);
     }
     else if (state_ == STOR_STATE_INIT)
     {
-        dprintf("%s %s storage: Postpone resize to %lld\n", tintstr(), roothashhex().c_str(), size);
+        dprintf("%s %s storage: Postpone resize to %" PRIi64 "\n", tintstr(), roothashhex().c_str(), size);
         reserved_size_ = size;
         return 0;
     }
@@ -611,7 +611,7 @@ int Storage::ResizeReserved(int64_t size)
     // MULTIFILE
     if (size > GetReservedSize())
     {
-        dprintf("%s %s storage: Resizing multi file to %lld\n", tintstr(), roothashhex().c_str(), size);
+        dprintf("%s %s storage: Resizing multi file to %" PRIi64 "\n", tintstr(), roothashhex().c_str(), size);
 
         // Resize files to wanted size, so pread() / pwrite() works for all offsets.
         storage_files_t::iterator iter;
@@ -624,7 +624,7 @@ int Storage::ResizeReserved(int64_t size)
         }
     }
     else
-        dprintf("%s %s storage: Resize multi-file to <= %lld, ignored\n", tintstr(), roothashhex().c_str(), size);
+        dprintf("%s %s storage: Resize multi-file to <= %" PRIi64 ", ignored\n", tintstr(), roothashhex().c_str(), size);
 
     return 0;
 }

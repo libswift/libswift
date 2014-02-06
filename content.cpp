@@ -127,7 +127,7 @@ void ContentTransfer::GarbageCollectChannels()
 // Global method
 void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg)
 {
-    //fprintf(stderr,"ContentTransfer::GlobalCleanCallback %llu\n", ContentTransfer::cleancounter );
+    //fprintf(stderr,"ContentTransfer::GlobalCleanCallback %" PRIu64 "\n", ContentTransfer::cleancounter );
 
     // Arno, 2012-02-24: Why-oh-why, update NOW
     Channel::Time();
@@ -209,7 +209,7 @@ void ContentTransfer::ReConnectToTrackerIfAllowed(bool movingforward)
 /** Called by ExternalTrackerClient when results come in from the server */
 static void global_bttracker_callback(int td, std::string status, uint32_t interval, peeraddrs_t peerlist)
 {
-    //fprintf(stderr,"content global_bttracker_callback: td %d status %s int %u npeers %u\n", td, status.c_str(), interval, peerlist.size() );
+    //fprintf(stderr,"content global_bttracker_callback: td %d status %s int %" PRIu32 " npeers %" PRIu32 "\n", td, status.c_str(), interval, peerlist.size() );
 
     ContentTransfer *ct = swift::GetActivatedTransfer(td);
     if (ct == NULL)
@@ -218,7 +218,7 @@ static void global_bttracker_callback(int td, std::string status, uint32_t inter
     if (status == "")
     {
 	// Success
-	dprintf("%s F%d content contact tracker: ext OK int %u npeers %u\n",tintstr(),td,interval,peerlist.size() );
+	dprintf("%s F%d content contact tracker: ext OK int %" PRIu32 " npeers " PRISIZET "\n",tintstr(),td,interval,peerlist.size() );
 
 	// Record reporting interval
 	ExternalTrackerClient *bttrackclient = ct->GetExternalTrackerClient();

@@ -51,7 +51,7 @@ TEST(FreemapTest,Freemap) {
             space.set(alloc);
             long dealloc_time = 1<<rand_norm(22);
 #ifdef SHOWPUTPUT
-            printf("alloc 2**%i starting at %lli for %li ticks\n",
+            printf("alloc 2**%i starting at %" PRIi64 " for %li ticks\n",
                 (int)lr,alloc.toUInt(),dealloc_time);
 #endif
             dealloc_time += t;
@@ -63,7 +63,7 @@ TEST(FreemapTest,Freemap) {
             to_free.erase(to_free.begin());
             space.reset(freebin);
 #ifdef SHOWOUTPUT
-            printf("freed at %lli\n",
+            printf("freed at %" PRIi64 "\n",
                 freebin.toUInt());
 #endif
        }

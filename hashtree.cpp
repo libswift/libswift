@@ -339,9 +339,9 @@ int MmapHashTree::serialize(FILE *fp)
 {
     fprintf_retiffail(fp,"version %i\n", 1 );
     fprintf_retiffail(fp,"root hash %s\n", root_hash_.hex().c_str() );
-    fprintf_retiffail(fp,"chunk size %u\n", chunk_size_ );
-    fprintf_retiffail(fp,"complete %lu\n", complete_ );
-    fprintf_retiffail(fp,"completec %lu\n", completec_ );
+    fprintf_retiffail(fp,"chunk size %" PRIu32 "\n", chunk_size_ );
+    fprintf_retiffail(fp,"complete %" PRIu64 "\n", complete_ );
+    fprintf_retiffail(fp,"completec %" PRIu64 "\n", completec_ );
     return ack_out_.serialize(fp);
 }
 
@@ -367,9 +367,9 @@ int MmapHashTree::internal_deserialize(FILE *fp,bool contentavail) {
 
     fscanf_retiffail(fp,"version %i\n", &version );
     fscanf_retiffail(fp,"root hash %s\n", hexhashstr);
-    fscanf_retiffail(fp,"chunk size %u\n", &cs);
-    fscanf_retiffail(fp,"complete %llu\n", &c );
-    fscanf_retiffail(fp,"completec %llu\n", &cc );
+    fscanf_retiffail(fp,"chunk size %" PRIu32 "\n", &cs);
+    fscanf_retiffail(fp,"complete %" PRIu64 "\n", &c );
+    fscanf_retiffail(fp,"completec %" PRIu64 "\n", &cc );
 
     if (ack_out_.deserialize(fp) < 0)
         return -1;
@@ -498,7 +498,7 @@ Sha1Hash        MmapHashTree::DeriveRoot () {
 
     //fprintf(stderr,"hashtree: derive: root hash is %s\n", hash.hex().c_str() );
 
-    //fprintf(stderr,"root bin is %lli covers %lli\n", p.toUInt(), p.base_length() );
+    //fprintf(stderr,"root bin is %" PRIi64 " covers %" PRIi64 "\n", p.toUInt(), p.base_length() );
     return hash;
 }
 
@@ -600,13 +600,13 @@ bool            MmapHashTree::OfferData (bin_t pos, const char* data, size_t len
     Sha1Hash data_hash(data,length);
     if (!OfferHash(pos, data_hash)) {
         //printf("invalid hash for %s: %s\n",pos.str(bin_name_buf),data_hash.hex().c_str()); // paranoid
-        //fprintf(stderr,"INVALID HASH FOR %lli layer %d\n", pos.toUInt(), pos.layer() );
+        //fprintf(stderr,"INVALID HASH FOR %" PRIi64 " layer %d\n", pos.toUInt(), pos.layer() );
         // Ric: TODO it's not necessarily a bug.. it happens if a pkt was lost!
         dprintf("%s hashtree check failed (bug TODO) %s\n",tintstr(),pos.str().c_str());
         return false;
     }
 
-    //printf("g %lli %s\n",(uint64_t)pos,hash.hex().c_str());
+    //printf("g %" PRIi64 " %s\n",(uint64_t)pos,hash.hex().c_str());
     ack_out_.set(pos);
     // Arno,2011-10-03: appease g++
     if (storage_->Write(data,length,pos.base_offset()*chunk_size_) < 0)

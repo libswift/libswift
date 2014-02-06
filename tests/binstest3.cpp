@@ -87,7 +87,7 @@ TEST(BinsTest,FindFiltered2) {
         filter.set(bin_t(0,j));
 
     fprintf(stderr,"test: width %d\n", filter.cells_number() );
-    fprintf(stderr,"test: empty %llu\n", filter.find_empty().toUInt() );
+    fprintf(stderr,"test: empty %" PRIu64 "\n", filter.find_empty().toUInt() );
 
 
     data.reset(bin_t(0,500));
@@ -267,7 +267,7 @@ TEST(BinsTest,FindFiltered12) {
 
     for (int x=0; x<999-8; x++)
     {
-    	fprintf(stderr,"x%u ", x);
+    	fprintf(stderr,"x%" PRIu32 " ", x);
     	for (int j=x; j<=x+7; j++)
     		data.reset(bin_t(0,j));
 
@@ -293,7 +293,7 @@ TEST(BinsTest,FindFiltered13) {
 
     for (int x=0; x<999-8; x++)
     {
-    	fprintf(stderr,"x%u ", x);
+    	fprintf(stderr,"x%" PRIu32 " ", x);
     	for (int j=x; j<=x+7; j++)
     		data.reset(bin_t(0,j));
 
@@ -327,7 +327,7 @@ TEST(BinsTest,FindFiltered14) {
 
     for (int x=0; x<999-8; x++)
     {
-    	fprintf(stderr,"x%u ", x);
+    	fprintf(stderr,"x%" PRIu32 " ", x);
     	for (int j=x; j<=x+7; j++)
     		data.reset(bin_t(0,j));
 

@@ -95,13 +95,13 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr) :
 
     hs_out_ = new Handshake(transfer->GetDefaultHandshake());
 
-    dprintf("%s #%u init channel %s transfer %d\n",tintstr(),id_,peer_.str().c_str(), transfer_->td() );
+    dprintf("%s #%" PRIu32 " init channel %s transfer %d\n",tintstr(),id_,peer_.str().c_str(), transfer_->td() );
     //fprintf(stderr,"new Channel %d %s\n", id_, peer_.str().c_str() );
 }
 
 
 Channel::~Channel () {
-    dprintf("%s #%u dealloc channel\n",tintstr(),id_);
+    dprintf("%s #%" PRIu32 " dealloc channel\n",tintstr(),id_);
     channels[id_] = NULL;
     ClearEvents();
 
@@ -216,11 +216,11 @@ bool Channel::IsDiffSenderOrDuplicate(Address addr, uint32_t chid)
             // this new incoming message would establish a duplicate.
             // One must break the connection, decide using port
             // number:
-            dprintf("%s #%u found duplicate channel to %s\n",
+            dprintf("%s #%" PRIu32 " found duplicate channel to %s\n",
                     tintstr(),chid,addr.str().c_str());
 
             if (addr.port() > GetMyPort()) {
-                dprintf("%s #%u closing duplicate channel to %s\n",
+                dprintf("%s #%" PRIu32 " closing duplicate channel to %s\n",
                     tintstr(),chid,addr.str().c_str());
                 return true;
             }
@@ -230,7 +230,7 @@ bool Channel::IsDiffSenderOrDuplicate(Address addr, uint32_t chid)
             // Received HANDSHAKE reply from other address than I sent
             // HANDSHAKE to, and the address is not an IANA private
             // address (=no NAT in play), so close.
-            dprintf("%s #%u invalid peer address %s!=%s\n",
+            dprintf("%s #%" PRIu32 " invalid peer address %s!=%s\n",
                     tintstr(),chid,peer().str().c_str(),addr.str().c_str());
             return true;
         }

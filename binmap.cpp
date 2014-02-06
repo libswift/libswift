@@ -1835,8 +1835,8 @@ void binmap_t::status() const
         printf("\n");
     }
 
-    printf("size: %u bytes\n", static_cast<unsigned int>(total_size()));
-    printf("cells number: %u (of %u)\n", static_cast<unsigned int>(allocated_cells_number_), static_cast<unsigned int>(cells_number_));
+    printf("size: %" PRIu32 " bytes\n", static_cast<unsigned int>(total_size()));
+    printf("cells number: %" PRIu32 " (of %" PRIu32 ")\n", static_cast<unsigned int>(allocated_cells_number_), static_cast<unsigned int>(cells_number_));
     printf("root bin: %llu\n", static_cast<unsigned long long>(root_bin_.toUInt()));
 }
 
@@ -2418,7 +2418,7 @@ int binmap_t::read_cell(FILE *fp,cell_t *c)
 	fscanf_retiffail(fp,"is_right %d\n", &is_right );
 	fscanf_retiffail(fp,"is_free %d\n", &is_free );
 
-	//fprintf(stderr,"binmapread_cell: l%ld r%ld %d %d %d\n", left, right, is_left, is_right, is_free );
+	//fprintf(stderr,"binmapread_cell: l%" PRIi64 " r%" PRIi64 " %d %d %d\n", left, right, is_left, is_right, is_free );
 
 	c->left_.bitmap_ = left;
 	c->right_.bitmap_ = right;
@@ -2432,7 +2432,7 @@ int binmap_t::read_cell(FILE *fp,cell_t *c)
 // Arno, 2011-10-20: Persistent storage
 int binmap_t::serialize(FILE *fp)
 {
-	 fprintf_retiffail(fp,"root bin %lli\n",root_bin_.toUInt() );
+	 fprintf_retiffail(fp,"root bin %llu\n",root_bin_.toUInt() );
 	 fprintf_retiffail(fp,"free top %i\n",free_top_ );
 	 fprintf_retiffail(fp,"alloc cells " PRISIZET"\n", allocated_cells_number_);
 	 fprintf_retiffail(fp,"cells num " PRISIZET"\n", cells_number_);
@@ -2452,13 +2452,13 @@ int binmap_t::deserialize(FILE *fp)
 	 bin_t::uint_t rootbinval;
 	 ref_t freetop;
 	 size_t alloccells,cells;
-	 fscanf_retiffail(fp,"root bin %lli\n", &rootbinval );
+	 fscanf_retiffail(fp,"root bin %llu\n", &rootbinval );
 	 fscanf_retiffail(fp,"free top %i\n", &freetop );
 	 fscanf_retiffail(fp,"alloc cells " PRISIZET"\n", &alloccells);
 	 fscanf_retiffail(fp,"cells num " PRISIZET"\n", &cells);
 
 	 //fprintf(stderr,"Filling BINMAP %p\n", this );
-	 //fprintf(stderr,"Rootbin %lli freetop %li alloc %li num %li\n", rootbinval, freetop, alloccells, cells );
+	 //fprintf(stderr,"Rootbin %" PRIi64 " freetop %li alloc %li num %li\n", rootbinval, freetop, alloccells, cells );
 
 	 root_bin_ = bin_t(rootbinval);
 	 free_top_ = freetop;

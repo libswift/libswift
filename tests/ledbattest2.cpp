@@ -88,7 +88,7 @@ TEST(Datagram,LedbatTest) {
             ack.Push64(now);
             if (4+8!=ack.Send())
                 fprintf(stderr,"short write\n");
-            fprintf(stderr,"%lli rcvd%i\n",now/TINT_SEC,seq);
+            fprintf(stderr,"%" PRIi64 " rcvd%i\n",now/TINT_SEC,seq);
             // TODO: peer cwnd !!!
             continue;
         }
@@ -146,7 +146,7 @@ TEST(Datagram,LedbatTest) {
             tint off_target = TARGET - queueing_delay;
             //cerr<<"\t"<<cwnd<<"+="<<GAIN<<"*"<<off_target<<"/"<<cwnd<<endl;
             cwnd += GAIN * off_target / cwnd;
-            fprintf(stderr,"ackd cwnd%f cur%lli min%lli seq%i off%i\n",
+            fprintf(stderr,"ackd cwnd%f cur%" PRIi64 " min%" PRIi64 " seq%i off%i\n",
                     cwnd,current_delay,min_delay,seq_off+seq,seq);
 
             if (now/TINT_SEC!=last_sec/TINT_SEC) {

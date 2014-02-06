@@ -146,7 +146,7 @@ void Availability::addBinmap(binmap_t * binmap)
 void Availability::set(uint32_t channel_id, binmap_t& binmap, bin_t target)
 {
 	if (DEBUGAVAILABILITY)
-		fprintf(stderr, "%s #%u Availability -> setting %s (%llu)\n",tintstr(),channel_id,target.str().c_str(),target.toUInt());
+		fprintf(stderr, "%s #%" PRIu32 " Availability -> setting %s (%llu)\n",tintstr(),channel_id,target.str().c_str(),target.toUInt());
 
 	if (false)
 		for (int i=0; i<connections_; i++)
@@ -196,7 +196,7 @@ void Availability::find_empty(binmap_t& binmap, bin_t range)
 void Availability::removeBinmap(uint32_t channel_id, binmap_t& binmap)
 {
 	if (DEBUGAVAILABILITY)
-		fprintf(stderr, "%s #%u Availability -> removing peer ",tintstr(),channel_id);
+		fprintf(stderr, "%s #%" PRIu32 " Availability -> removing peer ",tintstr(),channel_id);
 
 	// if it's a complete binmap of the file (or of our current knowledge)
 	// just move the binmaps down 1 idx in the rarity array
@@ -329,7 +329,7 @@ void Availability::removeBin(bin_t bin, int idx)
 
 		if (DEBUGAVAILABILITY)
 		{
-		    dprintf("%s #1 Availability -> setting size in chunk %lu \t avail size %lu\n",tintstr(), size, s);
+		    dprintf("%s #1 Availability -> setting size in chunk %" PRIu64 " \t avail size %" PRIu64 "\n",tintstr(), size, s);
 		}
 	}
 }*/

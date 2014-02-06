@@ -104,7 +104,7 @@ TEST(BinTest,Fragment4)
     for (iter=bv.begin(); iter != bv.end(); iter++)
     {
 	bin_t cancelbin = *iter;
-	fprintf(stderr,"%s #%u -cancel MUST %s\n",fakestr(),id_,cancelbin.str().c_str());
+	fprintf(stderr,"%s #%" PRIu32 " -cancel MUST %s\n",fakestr(),id_,cancelbin.str().c_str());
 
 	// Remove hint from hint_in_ if contained in cancelbin. Use Riccardo's solution:
 	int hi = 0;
@@ -116,7 +116,7 @@ TEST(BinTest,Fragment4)
 	{
 	    // Assumption: all fragments of a bin being cancelled consecutive in hint_in_
 	    do {
-		fprintf(stderr,"%s #%u -cancel frag %s\n",fakestr(),id_,hint_in_[hi].bin.str().c_str());
+		fprintf(stderr,"%s #%" PRIu32 " -cancel frag %s\n",fakestr(),id_,hint_in_[hi].bin.str().c_str());
 		hint_in_.erase(hint_in_.begin()+hi);
 		if (hint_in_.size() == 0)
 		    break;
@@ -125,7 +125,7 @@ TEST(BinTest,Fragment4)
 
 	id_ = 2;
 
-	fprintf(stderr,"%s #%u -cancel MUST %s len %d\n",fakestr(),id_,cancelbin.str().c_str(), hint_in_.size() );
+	fprintf(stderr,"%s #%" PRIu32 " -cancel MUST %s len %d\n",fakestr(),id_,cancelbin.str().c_str(), hint_in_.size() );
 
 	// Fragment hint from hint_in_ if it covers cancelbin. Use Riccardo's solution:
 	hi = 0;
@@ -148,7 +148,7 @@ TEST(BinTest,Fragment4)
 	for (iter2=fragbins.begin(); iter2 != fragbins.end(); iter2++)
 	{
 	    bin_t fragbin = *iter2;
-	    fprintf(stderr,"%s #%u -cancel keep %s\n",fakestr(),id_,fragbin.str().c_str());
+	    fprintf(stderr,"%s #%" PRIu32 " -cancel keep %s\n",fakestr(),id_,fragbin.str().c_str());
 	    tintbin newtb(origt,fragbin);
 	    hint_in_.insert(hint_in_.begin()+hi+idx,newtb);
 	    idx++;

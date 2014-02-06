@@ -52,6 +52,9 @@ typedef unsigned __int64 uint64_t;
 #include <errno.h>
 #include <math.h>
 #include <signal.h>
+// Ric: get rid of printing warnings.. using ISO C99 standard for exact-width integer types
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 
 #ifdef _MSC_VER
 #include "getopt_win.h"
@@ -110,10 +113,14 @@ typedef void* setsockoptptr_t;
 #error SIZE_MAX undefined, check stdint.h and __STDC_LIMIT_MACROS
 #endif
 
+#ifdef _WIN32
 #if SIZE_MAX > UINT_MAX
 #define PRISIZET	"%llu"
 #else
 #define PRISIZET	"%u"
+#endif
+#else
+#define PRISIZET    "%zu"
 #endif
 
 #ifdef _WIN32

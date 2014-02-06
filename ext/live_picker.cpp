@@ -276,7 +276,7 @@ class SimpleLivePiecePicker : public LivePiecePicker {
     {
 	//dprintf("live: pp: Look beyond %s\n", current_bin_.str().c_str() );
 	bin_t hint = ack_hint_out_.find_empty(current_bin_);
-	//dprintf("live: pp: Empty is %s boe %llu boc %llu\n", hint.str().c_str(), hint.toUInt(), current_bin_.toUInt() );
+	//dprintf("live: pp: Empty is %s boe %" PRIu64 " boc %" PRIu64 "\n", hint.str().c_str(), hint.toUInt(), current_bin_.toUInt() );
 
 	// Safety catch, find_empty(offset) apparently buggy.
 	if (hint.base_offset() <= current_bin_.base_offset())
@@ -465,7 +465,7 @@ public:
 	    double r = (double)rand()/(double)RAND_MAX;
 	    if (r >= dlprob)  // Trust you will get it from peers, don't dl from source
 	    {
-		//fprintf(stderr,"live: pp: ssopt r %.02lf dlprob %.02lf npeers %u\n", r, dlprob, npeers);
+		//fprintf(stderr,"live: pp: ssopt r %.02lf dlprob %.02lf npeers %" PRIu32 "\n", r, dlprob, npeers);
 		return bin_t::NONE;
 	    }
 	}

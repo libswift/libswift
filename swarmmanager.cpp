@@ -246,7 +246,7 @@ SwarmManager::~SwarmManager() {
 
 SwarmData* SwarmManager::AddSwarm( const std::string filename, const Sha1Hash& hash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size)
 {
-    //fprintf(stderr,"sm: AddSwarm %s hash %s track %s cdisk %d cipm %u zs %d act %d cs %u\n", filename.c_str(), hash.hex().c_str(), trackerurl.c_str(), force_check_diskvshash, cipm, zerostate, activate, chunk_size );
+    //fprintf(stderr,"sm: AddSwarm %s hash %s track %s cdisk %d cipm %" PRIu32 " zs %d act %d cs %" PRIu32 "\n", filename.c_str(), hash.hex().c_str(), trackerurl.c_str(), force_check_diskvshash, cipm, zerostate, activate, chunk_size );
     enter( "addswarm( many )" );
     invariant();
     SwarmData sd( filename, hash, trackerurl, force_check_diskvshash, cipm, zerostate, chunk_size );
@@ -306,7 +306,7 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
 	}
 	else
 	{
-	    //fprintf(stderr,"sm: AddSwarm: Swarm incomplete, mhash %d complete %llu content %lld\n", (int)mhash_exists, ht->complete(), content_size );
+	    //fprintf(stderr,"sm: AddSwarm: Swarm incomplete, mhash %d complete %" PRIu64 " content %" PRIi64 "\n", (int)mhash_exists, ht->complete(), content_size );
 	    // Swarm incomplete, can't let sleep
 	    activate = true;
 	}

@@ -270,7 +270,7 @@ static void ExternalTrackerClientHTTPResponseCallback(struct evhttp_request *req
 	}
 	else
 	{
-	    ret = sscanf(valuebytes,"%u",&interval);
+	    ret = sscanf(valuebytes,"%" PRIu32 "",&interval);
 	    if (ret != 1)
 	    {
 		free(valuebytes);
@@ -284,7 +284,7 @@ static void ExternalTrackerClientHTTPResponseCallback(struct evhttp_request *req
 
 	    free(valuebytes);
 	    if (exttrack_debug)
-		fprintf(stderr,"exttrack: Got interval %u\n", interval);
+		fprintf(stderr,"exttrack: Got interval %" PRIu32 "\n", interval);
 	}
     }
     evbuffer_free(evb);
@@ -309,7 +309,7 @@ static void ExternalTrackerClientHTTPResponseCallback(struct evhttp_request *req
     evbuffer_free(evb);
 
     if (exttrack_debug)
-	fprintf(stderr,"btrack: Got %u IPv4 peers\n", peerlist.size() );
+	fprintf(stderr,"btrack: Got " PRISIZET " IPv4 peers\n", peerlist.size() );
 
     // If not failure, find peers key whose value is compact IPv6 addresses
     // http://www.bittorrent.org/beps/bep_0007.html
@@ -328,7 +328,7 @@ static void ExternalTrackerClientHTTPResponseCallback(struct evhttp_request *req
     evbuffer_free(evb);
 
     if (exttrack_debug)
-	fprintf(stderr,"btrack: Got %u peers total\n", peerlist.size() );
+	fprintf(stderr,"btrack: Got " PRISIZET " peers total\n", peerlist.size() );
 
     // Report success
     callbackrec->callback_(callbackrec->td_,"",interval,peerlist);

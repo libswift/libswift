@@ -75,7 +75,7 @@ void print_error(const char* msg) {
 #ifdef _WIN32
     int e = WSAGetLastError();
     if (e)
-        fprintf(stderr,"windows error #%u\n",e);
+        fprintf(stderr,"windows error #%" PRIu32 "\n",e);
 #endif
 }
 

@@ -81,19 +81,19 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
 	else if (zs->connect_timeout_ != TINT_NEVER)
 	{
 	    // Garbage collect really slow connections, essential on Mac.
-	    dprintf("%s zero clean %s has %u peers\n",tintstr(),ct->swarm_id().hex().c_str(), ct->GetChannels()->size() );
+	    dprintf("%s zero clean %s has " PRISIZET " peers\n",tintstr(),ct->swarm_id().hex().c_str(), ct->GetChannels()->size() );
 	    channels_t::iterator iter2;
 	    for (iter2=copychans.begin(); iter2!=copychans.end(); iter2++) {
 		Channel *c = *iter2;
 		if (c != NULL)
 		{
-		    //fprintf(stderr,"%s F%u zero clean %s opentime %lld connect %lld\n",tintstr(),ft->fd(), c->peer().str().c_str(), (NOW-c->GetOpenTime()), zs->connect_timeout_ );
+		    //fprintf(stderr,"%s F%" PRIu32 " zero clean %s opentime %" PRIi64 " connect %" PRIi64 "\n",tintstr(),ft->fd(), c->peer().str().c_str(), (NOW-c->GetOpenTime()), zs->connect_timeout_ );
 		    // Garbage collect copychans when open for long and slow upload
 		    if ((NOW-c->GetOpenTime()) > zs->connect_timeout_)
 		    {
-			//fprintf(stderr,"%s F%u zero clean %s opentime %lld ulspeed %lf\n",tintstr(),ft->fd(), c->peer().str().c_str(), (NOW-c->GetOpenTime())/TINT_SEC, ft->GetCurrentSpeed(DDIR_UPLOAD) );
-			fprintf(stderr,"%s F%u zero clean %s close slow channel\n",tintstr(),td, c->peer().str() .c_str());
-			dprintf("%s F%u zero clean %s close slow channel\n",tintstr(),td, c->peer().str().c_str() );
+			//fprintf(stderr,"%s F%" PRIu32 " zero clean %s opentime %" PRIi64 " ulspeed %lf\n",tintstr(),ft->fd(), c->peer().str().c_str(), (NOW-c->GetOpenTime())/TINT_SEC, ft->GetCurrentSpeed(DDIR_UPLOAD) );
+			fprintf(stderr,"%s F%" PRIu32 " zero clean %s close slow channel\n",tintstr(),td, c->peer().str() .c_str());
+			dprintf("%s F%" PRIu32 " zero clean %s close slow channel\n",tintstr(),td, c->peer().str().c_str() );
 			c->Close(CLOSE_SEND_IF_ESTABLISHED);
 			delete c;
 		    }
@@ -113,7 +113,7 @@ void ZeroState::LibeventCleanCallback(int fd, short event, void *arg)
     {
 	int td = *iter;
 	dprintf("%s hash %s zero clean close\n",tintstr(),GetSwarmID(td).hex().c_str() );
-	//fprintf(stderr,"%s F%u zero clean close\n",tintstr(),td );
+	//fprintf(stderr,"%s F%" PRIu32 " zero clean close\n",tintstr(),td );
         swift::Close(td);
     }
 
@@ -141,7 +141,7 @@ void ZeroState::SetContentDir(std::string contentdir)
 
 void ZeroState::SetConnectTimeout(tint timeout)
 {
-    //fprintf(stderr,"ZeroState: SetConnectTimeout: %lld\n", timeout/TINT_SEC );
+    //fprintf(stderr,"ZeroState: SetConnectTimeout: %" PRIi64 "\n", timeout/TINT_SEC );
     connect_timeout_ = timeout;
 }
 
@@ -176,7 +176,7 @@ int ZeroState::Find(const Sha1Hash &root_hash)
 
 void Channel::OnDataZeroState(struct evbuffer *evb)
 {
-    dprintf("%s #%u zero -data, don't need it, am a seeder\n",tintstr(),id_);
+    dprintf("%s #%" PRIu32 " zero -data, don't need it, am a seeder\n",tintstr(),id_);
 }
 
 void Channel::OnHaveZeroState(struct evbuffer *evb)
@@ -187,7 +187,7 @@ void Channel::OnHaveZeroState(struct evbuffer *evb)
 
 void Channel::OnHashZeroState(struct evbuffer *evb)
 {
-    dprintf("%s #%u zero -hash, don't need it, am a seeder\n",tintstr(),id_);
+    dprintf("%s #%" PRIu32 " zero -hash, don't need it, am a seeder\n",tintstr(),id_);
 }
 
 void Channel::OnPexAddZeroState(struct evbuffer *evb, int family)
@@ -200,7 +200,7 @@ void Channel::OnPexAddCertZeroState(struct evbuffer *evb)
 {
     uint16_t size = evbuffer_remove_16be(evb);
     if (size > PEX_RES_MAX_CERT_SIZE || evbuffer_get_length(evb) < size) {
-	dprintf("%s #%u ?pex cert too big\n",tintstr(),id_);
+	dprintf("%s #%" PRIu32 " ?pex cert too big\n",tintstr(),id_);
 	return;
     }
     //swarmidbytes = evbuffer_pullup(evb,size);

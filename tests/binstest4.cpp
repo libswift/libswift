@@ -28,7 +28,7 @@ TEST(BinsTest,FindEmptyStart1)
 	{
 	    hole.set(bin_t(3,0));
 	    hole.reset(bin_t(0,i));
-	    fprintf(stderr,"\nFindEmptyStart1: from %llu want %llu\n", bin_t(0,s).toUInt(),  bin_t(0,i).toUInt() );
+	    fprintf(stderr,"\nFindEmptyStart1: from %" PRIu64 " want %" PRIu64 "\n", bin_t(0,s).toUInt(),  bin_t(0,i).toUInt() );
 	    bin_t f = hole.find_empty(bin_t(0,s));
 	    EXPECT_EQ(bin_t(0,i),f);
 	}
@@ -40,11 +40,11 @@ uint64_t seqcomp(binmap_t *ack_out_,uint32_t chunk_size_,uint64_t size_, int64_t
 {
     bin_t binoff = bin_t(0,(offset - (offset % chunk_size_)) / chunk_size_);
 
-    fprintf(stderr,"seqcomp: binoff is %llu\n", binoff.toUInt() );
+    fprintf(stderr,"seqcomp: binoff is %" PRIu64 "\n", binoff.toUInt() );
 
     bin_t nextempty = ack_out_->find_empty(binoff);
 
-    fprintf(stderr,"seqcomp: nextempty is %llu\n", nextempty.toUInt() );
+    fprintf(stderr,"seqcomp: nextempty is %" PRIu64 "\n", nextempty.toUInt() );
 
     if (nextempty == bin_t::NONE || nextempty.base_offset() * chunk_size_ > size_)
 	return size_-offset; // All filled from offset
@@ -83,7 +83,7 @@ TEST(BinsTest,FindEmptyStart2){
 	    else
 		want = i*chunk_size - offset;
 
-	    fprintf(stderr,"FindEmptyStart2: from %llu want %llu i %d\n", offset, want, i );
+	    fprintf(stderr,"FindEmptyStart2: from %" PRIu64 " want %" PRIu64 " i %d\n", offset, want, i );
 
 	    uint64_t got = seqcomp(&hole,chunk_size,size,offset);
 
@@ -115,7 +115,7 @@ TEST(BinsTest,FindEmptyStart2b){
 		want = size-offset;
 	    else
 		want = ((uint64_t)i*(uint64_t)chunk_size) - (offset % chunk_size);
-	    fprintf(stderr,"\nFindEmptyStart2b: from %llu want %llu\n", offset, want );
+	    fprintf(stderr,"\nFindEmptyStart2b: from %" PRIu64 " want %" PRIu64 "\n", offset, want );
 
 	    uint64_t got = seqcomp(&hole,chunk_size,size,offset);
 

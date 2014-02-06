@@ -259,7 +259,7 @@ void HttpGwWrite(struct evhttp_request *evreq) {
 
     int64_t want = std::min(avail,(int64_t)req->tosend);
 
-    dprintf("%s @%d http write: avail %lld want %lld relcomp %llu offset %llu start %llu end %llu tosend %llu\n",tintstr(),req->id, avail, want, relcomplete, req->offset, req->startoff, req->endoff, req->tosend );
+    dprintf("%s @%d http write: avail %" PRIi64 " want %" PRIi64 " relcomp %" PRIu64 " offset %" PRIu64 " start %" PRIu64 " end %" PRIu64 " tosend %" PRIu64 "\n",tintstr(),req->id, avail, want, relcomplete, req->offset, req->startoff, req->endoff, req->tosend );
 
     struct evhttp_connection *evconn = evhttp_request_get_connection(req->sinkevreq);
     struct bufferevent* buffy = evhttp_connection_get_bufferevent(evconn);
@@ -342,7 +342,7 @@ void HttpGwWrite(struct evhttp_request *evreq) {
         		// http://mailman.videolan.org/pipermail/x264-devel/2007-February/002681.html
         		naluoffset = i;
         		req->foundH264NALU = true;
-        		dprintf("%s @%i http write: Found H.264 NALU at %d\n",tintstr(),req->id, naluoffset );
+        		dprintf("%s @%i http write: Found H.264 NALU at " PRISIZET "\n",tintstr(),req->id, naluoffset );
         		break;
         	    }
         	}
@@ -471,8 +471,8 @@ void HttpGwSwiftPlayingProgressCallback (int td, bin_t bin) {
 	    req->startoff = hookinoff;
 	    req->offset = hookinoff;
 
-	    fprintf(stderr,"httpgw: Live: Re-hook-in at %llu\n", hookinoff );
-	    dprintf("%s @%i http play: Re-hook-in at %llu\n",tintstr(),req->id, hookinoff );
+	    fprintf(stderr,"httpgw: Live: Re-hook-in at %" PRIu64 "\n", hookinoff );
+	    dprintf("%s @%i http play: Re-hook-in at %" PRIu64 "\n",tintstr(),req->id, hookinoff );
 	}
     }
 
@@ -501,13 +501,13 @@ void HttpGwSwiftPrebufferProgressCallback (int td, bin_t bin) {
 
     // ARNOSMPTODO: bitrate-dependent prebuffering?
 
-    dprintf("%s T%i http prebuf progress: startoff %llu endoff %llu\n",tintstr(),td, req->startoff, req->endoff);
+    dprintf("%s T%i http prebuf progress: startoff %" PRIu64 " endoff %" PRIu64 "\n",tintstr(),td, req->startoff, req->endoff);
 
     int64_t wantsize = std::min(req->endoff+1-req->startoff,(uint64_t)HTTPGW_MIN_PREBUF_BYTES);
 
-    dprintf("%s T%i http prebuf progress: want %lld got %lld\n",tintstr(),td, wantsize, swift::SeqComplete(req->td,req->startoff) );
+    dprintf("%s T%i http prebuf progress: want %" PRIi64 " got %" PRIi64 "\n",tintstr(),td, wantsize, swift::SeqComplete(req->td,req->startoff) );
     if (http_debug)
-	fprintf(stderr,"httpgw: %s T%i http prebuf progress: want %lld got %lld\n",tintstr(),td, wantsize, swift::SeqComplete(req->td,req->startoff) );
+	fprintf(stderr,"httpgw: %s T%i http prebuf progress: want %" PRIi64 " got %" PRIi64 "\n",tintstr(),td, wantsize, swift::SeqComplete(req->td,req->startoff) );
 
     if (swift::SeqComplete(req->td,req->startoff) < wantsize)
     {
@@ -580,7 +580,7 @@ bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
         }
 
 
-        dprintf("%s @%i http get: range request first %s %lld\n", tintstr(),req->id, seek.substr(0,idx).c_str(), req->rangefirst );
+        dprintf("%s @%i http get: range request first %s %" PRIi64 "\n", tintstr(),req->id, seek.substr(0,idx).c_str(), req->rangefirst );
 
         if (idx == seek.length()-1)
             req->rangelast = -1;
@@ -589,7 +589,7 @@ bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
             std::istringstream(seek.substr(idx+1)) >> req->rangelast;
         }
 
-        dprintf("%s @%i http get: range request last %s %lld\n", tintstr(),req->id, seek.substr(idx+1).c_str(), req->rangelast );
+        dprintf("%s @%i http get: range request last %s %" PRIi64 "\n", tintstr(),req->id, seek.substr(idx+1).c_str(), req->rangelast );
 
         // Check sanity of range request
         if (filesize == -1) {
@@ -626,7 +626,7 @@ bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
         evhttp_send_error(req->sinkevreq,416,"Malformed range specification");
 	req->replied = true;
 
-        dprintf("%s @%i http get: ERROR 416 invalid range %lld-%lld\n",tintstr(),req->id,req->rangefirst,req->rangelast );
+        dprintf("%s @%i http get: ERROR 416 invalid range %" PRIi64 "-%" PRIi64 "\n",tintstr(),req->id,req->rangefirst,req->rangelast );
         return false;
     }
 
@@ -649,7 +649,7 @@ bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
     // Reply is sent when content is avail
     req->replycode = 206;
 
-    dprintf("%s @%i http get: valid range %lld-%lld\n",tintstr(),req->id,req->rangefirst,req->rangelast );
+    dprintf("%s @%i http get: valid range %" PRIi64 "-%" PRIi64 "\n",tintstr(),req->id,req->rangefirst,req->rangelast );
 
     return true;
 }
@@ -763,8 +763,8 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
 	req->endoff = 0x0fffffffffffffffULL; // MAX
         req->replycode = 200;
 
-	fprintf(stderr,"httpgw: Live: hook-in at %llu\n", hookinoff );
-	dprintf("%s @%i http first: hook-in at %llu\n",tintstr(),req->id, hookinoff );
+	fprintf(stderr,"httpgw: Live: hook-in at %" PRIu64 "\n", hookinoff );
+	dprintf("%s @%i http first: hook-in at %" PRIu64 "\n",tintstr(),req->id, hookinoff );
 
         if (req->dashrangestr.length() > 0)
         {
@@ -783,12 +783,12 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
                 std::string startstr = req->dashrangestr.substr(0,sidx);
                 std::string endstr = req->dashrangestr.substr(sidx+1,req->dashrangestr.length()-sidx);
 
-                int ret = sscanf(startstr.c_str(),"%lld",&soff);
+                int ret = sscanf(startstr.c_str(),"%" PRIi64 "",&soff);
                 if (ret != 1)
                 	baddashspec = true;
                 else
                 {
-                    int ret = sscanf(endstr.c_str(),"%lld",&eoff);
+                    int ret = sscanf(endstr.c_str(),"%" PRIi64 "",&eoff);
                     if (ret != 1)
                     	baddashspec = true;
                 }
@@ -806,8 +806,8 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
              req->rangefirst = soff;
              req->rangelast = eoff;
 
-             fprintf(stderr,"httpgw: Live: DASH request from %lld till %lld\n", soff, eoff );
-             dprintf("%s @%i http first: DASH request from %lld till %lld\n", tintstr(),req->id, soff, eoff );
+             fprintf(stderr,"httpgw: Live: DASH request from %" PRIi64 " till %" PRIi64 "\n", soff, eoff );
+             dprintf("%s @%i http first: DASH request from %" PRIi64 " till %" PRIi64 "\n", tintstr(),req->id, soff, eoff );
         }
         else
             req->rangefirst = -1;
@@ -837,7 +837,7 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
     }
     req->offset = req->startoff;
 
-    fprintf(stderr,"HTTP offset %lld tosend %lld\n", req->offset, req->tosend );
+    fprintf(stderr,"HTTP offset %" PRIi64 " tosend %" PRIi64 "\n", req->offset, req->tosend );
 
     // Seek to wanted position in stream
     if (!req->live && req->startoff != 0)
@@ -847,7 +847,7 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
         if (ret < 0) {
             evhttp_send_error(req->sinkevreq,500,"Internal error: Cannot seek to file start in range request or multi-file content.");
             req->replied = true;
-            dprintf("%s @%i http get: ERROR 500 cannot seek to %llu\n",tintstr(),req->id, req->startoff);
+            dprintf("%s @%i http get: ERROR 500 cannot seek to %" PRIu64 "\n",tintstr(),req->id, req->startoff);
             return;
         }
     }
@@ -880,7 +880,7 @@ void HttpGwFirstProgressCallback (int td, bin_t bin) {
         evhttp_add_header(reqheaders, "Accept-Ranges", "none" );
     }
 
-    dprintf("%s @%i http first: headers set, tosend %lli\n",tintstr(),req->id,req->tosend);
+    dprintf("%s @%i http first: headers set, tosend %" PRIi64 "\n",tintstr(),req->id,req->tosend);
 
 
     // Reconfigure callbacks for prebuffering

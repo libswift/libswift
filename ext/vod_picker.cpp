@@ -252,7 +252,7 @@ public:
         // TODO clean ... printing percentage of completeness for the priority sets
         //status();
 
-        //fprintf(stderr,"%s #1 http Picker -> picked %s\t from %c set\t max width %lu \n",tintstr(), hint.str().c_str(), set, max_width );
+        //fprintf(stderr,"%s #1 http Picker -> picked %s\t from %c set\t max width %" PRIu64 " \n",tintstr(), hint.str().c_str(), set, max_width );
         //if (avail_->size())
         return hint;
     }
@@ -269,7 +269,7 @@ public:
     	if (cid > 0)
 	    cid--; // Riccardo assumes playbackpos is already in.
 
-    	//fprintf(stderr,"vodpp: pos in K %llu size %llu\n", cid, hashtree()->size_in_chunks() );
+    	//fprintf(stderr,"vodpp: pos in K %" PRIu64 " size %" PRIu64 "\n", cid, hashtree()->size_in_chunks() );
 
     	if (cid > hashtree()->size_in_chunks())
 	    return -1;
@@ -297,7 +297,7 @@ public:
 	}
 	total = t;
 	t = t*100/((x<<1)-1);
-	fprintf(stderr, "low %u, ", t);
+	fprintf(stderr, "low %" PRIu32 ", ", t);
 	t = 0;
 	while (i<=end_mid)
 	{
@@ -307,7 +307,7 @@ public:
 	}
 	total += t;
 	t = t*100/((x*y)<<1);
-	fprintf(stderr, "mid %u, ", t);
+	fprintf(stderr, "mid %" PRIu32 ", ", t);
 	t = 0;
 	while (i<=hashtree()->size_in_chunks()<<1)
 	{
@@ -317,7 +317,7 @@ public:
 	}
 	total += t;
 	t = t*100/((hashtree()->size_in_chunks()-(x*y+playback_pos_))<<1);
-	fprintf(stderr, "low %u  -> in total: %i\t pp: %i\n", t, total, playback_pos_);
+	fprintf(stderr, "low %" PRIu32 "  -> in total: %i\t pp: %i\n", t, total, playback_pos_);
     }
 
 };
