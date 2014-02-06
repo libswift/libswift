@@ -1,12 +1,18 @@
-swift: the multiparty transport protocol
-    (aka BitTorrent at the transport layer)
+libswift
+========
+
+The multiparty transport protocol
+
+## Description ##
+    Libswift (aka BitTorrent at the transport layer).
     Differently from TCP, the protocol does not use the ordered data stream
     abstraction. Effectively, it splits a file into 1KB packets and sends
     them around. The secret sauce is Merkle hash trees and binmaps.
  
     Requires libevent-2.0.17 or higher.
 
-see doc/index.html for marketing stuff, ideas and rants
+## Usage ##
+    see doc/index.html for marketing stuff, ideas and rants
     doc/draft-ietf-ppsp-grishchenko-swift.txt for protocol draft spec
     *.cpp for the actual code
     swift.cpp is the main exec file; may run as e.g.
