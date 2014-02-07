@@ -467,6 +467,32 @@ void    Channel::Send () {
 
     dprintf("%s #%" PRIu32 " Send called \n",tintstr(),id_);
 
+    // Ledbat log
+    // Time - PingPong - SlowStart - CC - KeepAlive - Close - CCwindow - Loss
+    switch (send_control_) {
+        case KEEP_ALIVE_CONTROL:
+            lprintf("%li \t %d \t %d \t %d \t %li \t %d \t %d \t %d \t %li \t %li\n", NOW-open_time_, 0, 0, 0, NOW-last_send_time_, 0, 0, 0, dip_avg_, hint_out_size_);
+            break;
+        case PING_PONG_CONTROL:
+            lprintf("%li \t %li \t %d \t %d \t %d \t %d \t %d \t %d \n", NOW-open_time_, NOW-last_send_time_, 0, 0, 0, 0, 0, 0);
+            break;
+        case SLOW_START_CONTROL:
+            lprintf("%li \t %d \t %li \t %d \t %d \t %d \t %d \t %d \n", NOW-open_time_, 0, NOW-last_send_time_, 0, 0, 0, 0, 0);
+            break;
+        case AIMD_CONTROL:
+            lprintf("%li \t %d \t %d \t %li \t %d \t %d \t %d \t %.2f \n", NOW-open_time_, 0, 0, NOW-last_send_time_, 0, 0, 0, cwnd_);
+            break;
+        case LEDBAT_CONTROL:
+            lprintf("%li \t %d \t %d \t %li \t %d \t %d \t %d \t %.2f \t %li\n", NOW-open_time_, 0, 0, NOW-last_send_time_, 0, 0, 0, cwnd_, hint_in_size_);
+            break;
+        case CLOSE_CONTROL:
+            lprintf("%li \t %d \t %d \t %d \t %d \t %li \t %d \t %d \n", NOW-open_time_, 0, 0, 0, 0, NOW-last_send_time_, 0, 0);
+            break;
+        default:
+            assert(false);
+            break;
+    }
+
     struct evbuffer *evb = evbuffer_new();
     uint32_t pcid = 0;
     if (hs_in_ != NULL)

@@ -921,6 +921,8 @@ namespace swift {
         static tint MAX_POSSIBLE_RTT;
         static tint MIN_PEX_REQUEST_INTERVAL;
         static FILE* debug_file;
+        // Only in devel: file used to debug LEDBAT
+        static FILE* debug_ledbat;
 
         const std::string id_string () const;
         /** A channel is "established" if had already sent and received packets. */
@@ -1436,6 +1438,8 @@ namespace swift {
 #ifndef SWIFT_MUTE
 #define dprintf(...) do { if (Channel::debug_file) fprintf(Channel::debug_file,__VA_ARGS__); } while (0)
 #define dflush() fflush(Channel::debug_file)
+#define lprintf(...) do { if (Channel::debug_ledbat) fprintf(Channel::debug_ledbat,__VA_ARGS__); } while (0)
+#define lflush() fflush(Channel::debug_ledbat)
 #else
 #define dprintf(...) do {} while(0)
 #define dflush() do {} while(0)

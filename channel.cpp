@@ -36,6 +36,8 @@ swift::tint Channel::TIMEOUT = TINT_SEC*60;
 channels_t Channel::channels(1);
 std::string Channel::trackerurl;
 FILE* Channel::debug_file = NULL;
+// Only in dev: ledbat log file
+FILE* Channel::debug_ledbat = NULL;
 tint Channel::MIN_PEX_REQUEST_INTERVAL = TINT_SEC;
 
 /*
