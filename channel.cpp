@@ -50,7 +50,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr) :
     transfer_(transfer), own_id_mentioned_(false),
     ack_in_right_basebin_(bin_t::NONE),
     data_in_(TINT_NEVER,bin_t::NONE), data_in_dbl_(bin_t::NONE),
-    data_out_cap_(bin_t::ALL),hint_in_size_(0), hint_out_size_(0),
+    data_out_cap_(bin_t::ALL),hint_in_size_(0), hint_out_size_(0), hint_queue_out_size_(0),
     // Gertjan fix 996e21e8abfc7d88db3f3f8158f2a2c4fc8a8d3f
     // "Changed PEX rate limiting to per channel limiting"
     pex_requested_(false),  // Ric: init var that wasn't initialiazed
@@ -73,8 +73,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr) :
     hs_out_(NULL), hs_in_(NULL),
     last_sent_munro_(bin_t::NONE),
     munro_ack_rcvd_(false),
-    rtt_hint_tintbin_(),
-    hint_queue_out_(NULL), hint_queue_out_size_(0)
+    rtt_hint_tintbin_()
 {
     // ARNOTODO: avoid infinitely growing vector
     this->id_ = channels.size();
