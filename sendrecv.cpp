@@ -471,22 +471,22 @@ void    Channel::Send () {
     // Time - PingPong - SlowStart - CC - KeepAlive - Close - CCwindow - Loss
     switch (send_control_) {
         case KEEP_ALIVE_CONTROL:
-            lprintf("%li \t %d \t %d \t %d \t %li \t %d \t %d \t %d \t %li \t %li\n", NOW-open_time_, 0, 0, 0, NOW-last_send_time_, 0, 0, 0, dip_avg_, hint_out_size_);
+            lprintf("%lu \t %d \t %d \t %d \t %li \t %d \t %d \t %d \t %li \t %li\n", NOW-open_time_, 0, 0, 0, NOW-last_send_time_, 0, 0, 0, dip_avg_, hint_out_size_);
             break;
         case PING_PONG_CONTROL:
-            lprintf("%li \t %li \t %d \t %d \t %d \t %d \t %d \t %d \n", NOW-open_time_, NOW-last_send_time_, 0, 0, 0, 0, 0, 0);
+            lprintf("%lu \t %li \t %d \t %d \t %d \t %d \t %d \t %d \n", NOW-open_time_, NOW-last_send_time_, 0, 0, 0, 0, 0, 0);
             break;
         case SLOW_START_CONTROL:
-            lprintf("%li \t %d \t %li \t %d \t %d \t %d \t %d \t %d \n", NOW-open_time_, 0, NOW-last_send_time_, 0, 0, 0, 0, 0);
+            lprintf("%lu \t %d \t %li \t %d \t %d \t %d \t %d \t %d \n", NOW-open_time_, 0, NOW-last_send_time_, 0, 0, 0, 0, 0);
             break;
         case AIMD_CONTROL:
-            lprintf("%li \t %d \t %d \t %li \t %d \t %d \t %d \t %.2f \n", NOW-open_time_, 0, 0, NOW-last_send_time_, 0, 0, 0, cwnd_);
+            lprintf("%lu \t %d \t %d \t %li \t %d \t %d \t %d \t %.2f \n", NOW-open_time_, 0, 0, NOW-last_send_time_, 0, 0, 0, cwnd_);
             break;
         case LEDBAT_CONTROL:
-            lprintf("%li \t %d \t %d \t %li \t %d \t %d \t %d \t %.2f \t %li\n", NOW-open_time_, 0, 0, NOW-last_send_time_, 0, 0, 0, cwnd_, hint_in_size_);
+            lprintf("%lu \t %d \t %d \t %li \t %d \t %d \t %d \t %.2f \t %li\n", NOW-open_time_, 0, 0, NOW-last_send_time_, 0, 0, 0, cwnd_, hint_in_size_);
             break;
         case CLOSE_CONTROL:
-            lprintf("%li \t %d \t %d \t %d \t %d \t %li \t %d \t %d \n", NOW-open_time_, 0, 0, 0, 0, NOW-last_send_time_, 0, 0);
+            lprintf("%lu \t %d \t %d \t %d \t %d \t %li \t %d \t %d \n", NOW-open_time_, 0, 0, 0, 0, NOW-last_send_time_, 0, 0);
             break;
         default:
             assert(false);
@@ -771,8 +771,10 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         tosend = DequeueHint(&isretransmit);
         if (tosend.is_none()) {
             dprintf("%s #%" PRIu32 " sendctrl no idea what data to send\n",tintstr(),id_);
-            if (send_control_!=KEEP_ALIVE_CONTROL && send_control_!=CLOSE_CONTROL)
+            if (send_control_!=KEEP_ALIVE_CONTROL && send_control_!=CLOSE_CONTROL) {
+                lprintf("\t\t==== Switch to Keep Alive Control (nothing to send) ==== \n");
                 SwitchSendControl(KEEP_ALIVE_CONTROL);
+            }
         }
     } else
         dprintf("%s #%" PRIu32 " sendctrl wait cwnd %f data_out %i next %s\n",
@@ -2268,6 +2270,7 @@ void Channel::Close(close_send_t closesend) {
 
     dprintf("%s #%" PRIu32 " closing channel\n",tintstr(),id_ );
 
+    lprintf("\t\t==== Switch to Close Control ==== \n");
     this->SwitchSendControl(CLOSE_CONTROL);
 
     if (closesend == CLOSE_SEND || (closesend == CLOSE_SEND_IF_ESTABLISHED && is_established()))

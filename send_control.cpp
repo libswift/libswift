@@ -71,10 +71,14 @@ tint    Channel::SwitchSendControl (send_control_t control_mode) {
 }
 
 tint    Channel::KeepAliveNextSendTime () {
-    if (sent_since_recv_>=3 && last_recv_time_<NOW-3*MAX_SEND_INTERVAL)
+    if (sent_since_recv_>=3 && last_recv_time_<NOW-3*MAX_SEND_INTERVAL) {
+        lprintf("\t\t==== Switch to Close Control ==== \n");
         return SwitchSendControl(CLOSE_CONTROL);
-    if (ack_rcvd_recent_)
+    }
+    if (ack_rcvd_recent_) {
+        lprintf("\t\t==== Switch to Slow Start Control ==== \n");
         return SwitchSendControl(SLOW_START_CONTROL);
+    }
     if (data_in_.time!=TINT_NEVER)
         return NOW;
 
@@ -129,10 +133,14 @@ tint    Channel::KeepAliveNextSendTime () {
 
 tint    Channel::PingPongNextSendTime () { // FIXME INFINITE LOOP
     //fprintf(stderr,"PING: dgrams %d ackrec %d dataintime %" PRIi64 " lastrecv %" PRIi64 " lastsend %" PRIi64 "\n", dgrams_sent_, ack_rcvd_recent_, data_in_.time, last_recv_time_, last_send_time_);
-    if (dgrams_sent_>=10)
+    if (dgrams_sent_>=10) {
+        lprintf("\t\t==== Switch to Keep Alive Control (dgrams_sent_>=10) ==== \n");
         return SwitchSendControl(KEEP_ALIVE_CONTROL);
-    if (ack_rcvd_recent_)
+    }
+    if (ack_rcvd_recent_) {
+        lprintf("\t\t==== Switch to Slow Start Control ==== \n");
         return SwitchSendControl(SLOW_START_CONTROL);
+    }
     if (data_in_.time!=TINT_NEVER)
         return NOW;
     if (last_recv_time_>last_send_time_)
@@ -145,11 +153,15 @@ tint    Channel::PingPongNextSendTime () { // FIXME INFINITE LOOP
 tint    Channel::CwndRateNextSendTime () {
     if (data_in_.time!=TINT_NEVER)
         return NOW; // TODO: delayed ACKs
-    if (last_recv_time_<NOW-rtt_avg_*4)
+    if (last_recv_time_<NOW-rtt_avg_*4) {
+        lprintf("\t\t==== Switch to Keep Alive Control (last_recv_time_<NOW-rtt_avg_*4) ==== \n");
         return SwitchSendControl(KEEP_ALIVE_CONTROL);
+    }
     send_interval_ = rtt_avg_/cwnd_;
-    if (send_interval_>max(rtt_avg_,TINT_SEC)*4)
+    if (send_interval_>max(rtt_avg_,TINT_SEC)*4) {
+        lprintf("\t\t==== Switch to Keep Alive Control (send_interval_>max(rtt_avg_,TINT_SEC)*4) ==== \n");
         return SwitchSendControl(KEEP_ALIVE_CONTROL);
+    }
     if (data_out_.size()<cwnd_) {
         dprintf("%s #%" PRIu32 " sendctrl next in %" PRIi64 "us (cwnd %.2f, data_out " PRISIZET ")\n",
                 tintstr(),id_,send_interval_,cwnd_,data_out_.size());
@@ -173,10 +185,13 @@ void    Channel::BackOffOnLosses (float ratio) {
 tint    Channel::SlowStartNextSendTime () {
     if (ack_not_rcvd_recent_) {
         BackOffOnLosses();
+        lprintf("\t\t==== Switch to LEDBAT Control (1) ==== \n");
         return SwitchSendControl(LEDBAT_CONTROL);//AIMD_CONTROL);
     }
-    if (rtt_avg_/cwnd_<TINT_SEC/10)
+    if (rtt_avg_/cwnd_<TINT_SEC/10) {
+        lprintf("\t\t==== Switch to LEDBAT Control (2) ==== \n");
         return SwitchSendControl(LEDBAT_CONTROL);//AIMD_CONTROL);
+    }
     cwnd_+=ack_rcvd_recent_;
     ack_rcvd_recent_=0;
     return CwndRateNextSendTime();
