@@ -2294,32 +2294,48 @@ void Channel::Reschedule () {
     // Arno: CAREFUL: direct send depends on diff between next_send_time_ and
     // NOW to be 0, so any calls to Time in between may put things off. Sigh.
     Time();
+
+    int pending_event = 0;
+    // Ric: before rescheduling check if we already have scheduled it in the past
+    if (evsend_ptr_ == NULL) {
+        dprintf("%s #%" PRIu32 " cannot requeue for %s, closed\n",tintstr(),id_,tintstr(next_send_time_));
+        return;
+    }
+
     dprintf("%s schedule\n",tintstr() );
+
+    struct timeval currtv;
+    if (evtimer_pending(evsend_ptr_, &currtv)) {
+        //if (timercmp(&currtv, tint2tv(NOW), <)) {
+        if (next_send_time_<NOW && send_control_ != PING_PONG_CONTROL) {
+            dprintf("%s #%" PRIu32 " Already something scheduled for: %s\n",tintstr(),id_, tintstr(next_send_time_));
+            direct_sending_ = true;
+        }
+        evtimer_del(evsend_ptr_);
+    }
 
     next_send_time_ = NextSendTime();
     if (next_send_time_!=TINT_NEVER) {
 
         assert(next_send_time_<NOW+TINT_MIN);
         tint duein = next_send_time_-NOW;
-        if (duein <= 0 && !direct_sending_) {
+        if (duein <= 0 || direct_sending_) {
             // Arno, 2011-10-18: libevent's timer implementation appears to be
             // really slow, i.e., timers set for 100 usec from now get called
             // at least two times later :-( Hence, for sends after receives
             // perform them directly.
-            dprintf("%s #%" PRIu32 " requeue direct send\n",tintstr(),id_);
-            direct_sending_ = true;
-            LibeventSendCallback(-1,EV_TIMEOUT,this);
+            // Ric: TODO add comment on direct sending!
+            dprintf("%s #%" PRIu32 " requeue direct send (%s)\n",tintstr(),id_, duein<=0 ? "duein" : "direct sending");
+            next_send_time_ = NOW;
             direct_sending_ = false;
+            LibeventSendCallback(-1,EV_TIMEOUT,this);
+
         }
         else
         {
-            if (evsend_ptr_ != NULL) {
-                struct timeval duetv = *tint2tv(duein);
-                evtimer_add(evsend_ptr_,&duetv);
-                dprintf("%s #%" PRIu32 " requeue for %s in %" PRIi64 "\n",tintstr(),id_,tintstr(next_send_time_), duein);
-            }
-            else
-                dprintf("%s #%" PRIu32 " cannot requeue for %s, closed\n",tintstr(),id_,tintstr(next_send_time_));
+            struct timeval duetv = *tint2tv(duein);
+            evtimer_add(evsend_ptr_,&duetv);
+            dprintf("%s #%" PRIu32 " requeue for %s in %" PRIi64 "\n",tintstr(),id_,tintstr(next_send_time_), duein);
         }
     } else {
         // SAFECLOSE

@@ -558,6 +558,11 @@ struct timeval* tint2tv (tint t) {
     return &tv;
 }
 
+tint tv2tint ( struct timeval* tv )
+{
+    return( (int64_t)tv->tv_sec * 1000000 + tv->tv_usec ) ;
+}
+
 
 std::string hex2bin(std::string input)
 {
