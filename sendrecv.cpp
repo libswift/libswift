@@ -1402,11 +1402,12 @@ void    Channel::OnAck (struct evbuffer *evb) {
             di++;
         // FUTURE: delayed acks
         // rule out retransmits
+        // Ric: by ruling out retransmits we scrw up ledbat calculations
         while (ri<data_out_tmo_.size() && !ackd_pos.contains(data_out_tmo_[ri].bin) )
             ri++;
         dprintf("%s #%" PRIu32 " %cack %s owd:%" PRIi64 "\n",tintstr(),id_,
-                di==data_out_.size()?'?':'-',ackd_pos.str().c_str(),peer_owd);
-        if (di!=data_out_.size() && ri==data_out_tmo_.size()) { // not a retransmit
+                di==data_out_.size() && ri==data_out_tmo_.size()?'?':'-',ackd_pos.str().c_str(),peer_owd);
+        if (di!=data_out_.size()) { // || ri!=data_out_tmo_.size()) { // not a retransmit (? why?)
             // round trip time calculations
             // Ric: FIXME assuming direct sending of acks
             tint rtt = NOW-data_out_[di].time;
