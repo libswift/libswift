@@ -702,8 +702,8 @@ void    Channel::AddHint (struct evbuffer *evb) {
             // RTTFIX
             if (rtt_hint_tintbin_.bin == bin_t::NONE)
             {
-        	rtt_hint_tintbin_.bin = hint.base_left();
-        	rtt_hint_tintbin_.time = NOW;
+                rtt_hint_tintbin_.bin = hint.base_left();
+                rtt_hint_tintbin_.time = NOW;
             }
 
             return;
@@ -1349,16 +1349,24 @@ void Channel::UpdateDIP(bin_t pos)
     /* Arno: in a true client/server scenario the initial RTT is used to set
      * rtt_avg_ and it is never updated. If that gets a bad sample this can
      * kill performance. Simple workaround against too high values.
+     * Ric: we need to prevent also against burst in the network link.
+     * It also happens that RTT is too small
      */
     if (rtt_hint_tintbin_.bin == pos) {
-	tint diff = NOW - rtt_hint_tintbin_.time;
-	// Conservative: only adjust rtt_avg_ if 2x smaller
-	if (diff < rtt_avg_/2 && IsComplete())
-	{
-	    fprintf(stderr,"%s #%" PRIu32 " rtt adjust %" PRIi64 " -> %" PRIi64 "\n",tintstr(),id_,rtt_avg_,diff);
-	    rtt_avg_ = diff;
-	}
-	rtt_hint_tintbin_.bin = bin_t::NONE;
+        tint diff = NOW - rtt_hint_tintbin_.time;
+        // Conservative: only adjust rtt_avg_ if 2x smaller
+        if (diff < rtt_avg_/2 && IsComplete())
+        {
+            dprintf("%s #%" PRIu32 " rtt adjust %" PRIi64 " -> %" PRIi64 "\n",tintstr(),id_,rtt_avg_,diff);
+            rtt_avg_ = diff;
+        }
+        // Ric: check if our values are wrong!
+        tint owd = data_in_.time;
+        if (owd != TINT_NEVER && owd<<2 > rtt_avg_) {
+            dprintf("%s #%" PRIu32 " rtt adjust %" PRIi64 " -> %" PRIi64 "\n",tintstr(),id_,rtt_avg_,diff);
+            rtt_avg_ = owd<<2;
+        }
+        rtt_hint_tintbin_.bin = bin_t::NONE;
     }
 }
 
@@ -1405,11 +1413,12 @@ void    Channel::OnAck (struct evbuffer *evb) {
                 di==data_out_.size()?'?':'-',ackd_pos.str().c_str(),peer_owd);
         if (di!=data_out_.size() && ri==data_out_tmo_.size()) { // not a retransmit
             // round trip time calculations
-                // Ric: TODO delayed acks
+            // Ric: FIXME assuming direct sending of acks
             tint rtt = NOW-data_out_[di].time;
             rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
             dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
             assert(data_out_[di].time!=TINT_NEVER);
+            dprintf("%s #%" PRIu32 " rtt:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_, rtt_avg_, dev_avg_);
             // one-way delay calculations
             // Ric: we r always re-writing the first element
             owd_cur_bin_ = 0;//(owd_cur_bin_+1) & 3;
