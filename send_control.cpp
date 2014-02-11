@@ -176,7 +176,7 @@ tint    Channel::CwndRateNextSendTime () {
 }
 
 void    Channel::BackOffOnLosses (float ratio) {
-    ack_rcvd_recent_ = 0;
+    //ack_rcvd_recent_ = 0;
     ack_not_rcvd_recent_ =  0;
     if (last_loss_time_<NOW-rtt_avg_) {
         cwnd_ *= ratio;
@@ -269,8 +269,7 @@ tint Channel::LedbatNextSendTime () {
         }
     }*/
 
-    dprintf("%s #%" PRIu32 " sendctrl ledbat %" PRIi64 "-%" PRIi64 " => %3.2f\n",
-            tintstr(),id_,owd_cur,owd_min,cwnd_);
+
     return CwndRateNextSendTime();
 }
 
