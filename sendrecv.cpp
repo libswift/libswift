@@ -765,7 +765,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     bin_t tosend = bin_t::NONE;
     bool isretransmit = false;
     tint luft = send_interval_>>4; // may wake up a bit earlier
-    if (data_out_.size()<cwnd_ &&
+    if (data_out_size_<cwnd_ &&
             last_data_out_time_+send_interval_<=NOW+luft) {
         tosend = DequeueHint(&isretransmit);
         if (tosend.is_none()) {
@@ -777,7 +777,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         }
     } else
         dprintf("%s #%" PRIu32 " sendctrl wait cwnd %f data_out %i next %s\n",
-                tintstr(),id_,cwnd_,(int)data_out_.size(),tintstr(last_data_out_time_+send_interval_));
+                tintstr(),id_,cwnd_,data_out_size_,tintstr(last_data_out_time_+send_interval_));
 
     // Add required hashes. Also for initial peaks and munros
     // Note this is called always, not just when there are requests pending.
@@ -834,6 +834,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
 
     last_data_out_time_ = NOW;
     data_out_.push_back(tosend);
+    data_out_size_++;
     bytes_up_ += r;
     global_bytes_up += r;
 
@@ -1308,7 +1309,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     data_in_.bin = pos;
     // Ric: the time of the ack is the owd.
     if (peer_time!=TINT_NEVER)
-	data_in_.time = NOW - peer_time;
+        data_in_.time = NOW - peer_time;
 
     UpdateDIP(pos);
     CleanHintOut(pos);
@@ -1328,6 +1329,52 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     return pos;
 }
 
+
+void Channel::UpdateRTT(int32_t pos, tbqueue data_out, tint owd) {
+
+    assert(pos && !data_out.empty() && owd);
+    assert(pos < data_out.size());
+
+    // Ric: FIXME assuming direct sending of acks
+    tint rtt = NOW-data_out[pos].time;
+
+    // Ric: quickly adapt to new network changes! (with large owd samples the previous rtt values influence
+    if (owd > rtt_avg_)
+       rtt_avg_ = (rtt_avg_*3 + rtt) >> 2;
+    else
+       rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
+    dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
+    assert(data_out_[di].time!=TINT_NEVER);
+    dprintf("%s #%" PRIu32 " rtt:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_, rtt_avg_, dev_avg_);
+    // one-way delay calculations
+    // Ric: we r always re-writing the first element
+    owd_cur_bin_ = 0;//(owd_cur_bin_+1) & 3;
+    owd_current_[owd_cur_bin_] = owd;
+    if ( owd_min_bin_start_+TINT_SEC*30 < NOW ) {
+               owd_min_bin_start_ = NOW;
+               owd_min_bin_ = (owd_min_bin_+1) & 3;
+               owd_min_bins_[owd_min_bin_] = TINT_NEVER;
+    }
+    if (owd_min_bins_[owd_min_bin_]>owd)
+           owd_min_bins_[owd_min_bin_] = owd;
+
+    ack_rcvd_recent_++;
+    data_out_size_--;
+
+    // early loss detection by packet reordering
+    for (int re=0; re<pos-MAX_REORDERING; re++) {
+       if (data_out[re]==tintbin())
+               continue;
+       ack_not_rcvd_recent_++;
+       data_out_tmo_.push_back(data_out[re].bin);
+       dprintf("%s #%" PRIu32 " Rdata %s\n",tintstr(),id_,data_out.front().bin.str().c_str());
+       data_out_cap_ = bin_t::ALL;
+       data_out[re] = tintbin();
+    }
+
+    data_out[pos]=tintbin();
+
+}
 
 void Channel::UpdateDIP(bin_t pos)
 {
@@ -1406,56 +1453,21 @@ void    Channel::OnAck (struct evbuffer *evb) {
             ri++;
         dprintf("%s #%" PRIu32 " %cack %s owd:%" PRIi64 "\n",tintstr(),id_,
                 di==data_out_.size() ? (ri==data_out_tmo_.size() ? '?':'R' ) : '-',ackd_pos.str().c_str(),peer_owd);
-        if (di!=data_out_.size() || ri!=data_out_tmo_.size()) { // not a retransmit (? why?)
-            // round trip time calculations
-            // Ric: FIXME assuming direct sending of acks
-            tint rtt = TINT_NEVER;
-            if (di!=data_out_.size())
-                rtt = NOW-data_out_[di].time;
-            else
-                rtt = NOW-data_out_tmo_[ri].time;
-            // Ric: quickly adapt to new network changes!
-            rtt_avg_ = peer_owd > rtt_avg_ ? rtt : (rtt_avg_*7 + rtt) >> 3;
-            dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
-            assert(data_out_[di].time!=TINT_NEVER);
-            dprintf("%s #%" PRIu32 " rtt:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_, rtt_avg_, dev_avg_);
-            // one-way delay calculations
-            // Ric: we r always re-writing the first element
-            owd_cur_bin_ = 0;//(owd_cur_bin_+1) & 3;
-            owd_current_[owd_cur_bin_] = peer_owd;
-            if ( owd_min_bin_start_+TINT_SEC*30 < NOW ) {
-                        owd_min_bin_start_ = NOW;
-                        owd_min_bin_ = (owd_min_bin_+1) & 3;
-                        owd_min_bins_[owd_min_bin_] = TINT_NEVER;
-            }
-            if (owd_min_bins_[owd_min_bin_]>peer_owd)
-                    owd_min_bins_[owd_min_bin_] = peer_owd;
-            // Arno, 2012-12-20: Temp disable, getting SEGV on this
-            // dprintf("%s #%" PRIu32 " sendctrl rtt %" PRIi64 " dev %" PRIi64 " based on %s\n",
-            //            tintstr(),id_,rtt_avg_,dev_avg_,data_out_[di].bin.str().c_str());
-            ack_rcvd_recent_++;
-            // early loss detection by packet reordering
-            if (di!=data_out_.size())
-                for (int re=0; re<di-MAX_REORDERING; re++) {
-                    dprintf("%s #%" PRIu32 " checking %s\n",tintstr(),id_, data_out_[re].bin.str().c_str());
-                    if (data_out_[re]==tintbin())
-                            continue;
-                    ack_not_rcvd_recent_++;
-                    data_out_tmo_.push_back(data_out_[re].bin);
-                    dprintf("%s #%" PRIu32 " Rdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
-                    data_out_cap_ = bin_t::ALL;
-                    data_out_[re] = tintbin();
-                }
-        }
+
         if (di!=data_out_.size()) {
+            UpdateRTT(di, data_out_, peer_owd);
             dprintf("%s #%" PRIu32 " setting null %s\n",tintstr(),id_, data_out_[di].bin.str().c_str());
             data_out_[di]=tintbin();
         }
-        if (ri!=data_out_tmo_.size())
+        else if (ri!=data_out_tmo_.size()) {
+            UpdateRTT(ri, data_out_tmo_, peer_owd);
             data_out_tmo_[ri]=tintbin();
+        }
+
     }
 
     // clear zeroed items
+    /* TODO: do we really need it?
     while (!data_out_.empty() && ( data_out_.front()==tintbin() ||
             ack_in_.is_filled(data_out_.front().bin) ) ) {
         dprintf("%s #%" PRIu32 " removing %s\n",tintstr(),id_, data_out_.front().bin.str().c_str());
@@ -1464,7 +1476,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
     while (!data_out_tmo_.empty() && ( data_out_tmo_.front()==tintbin() ||
             ack_in_.is_filled(data_out_tmo_.front().bin) ) )
         data_out_tmo_.pop_front();
-    assert(data_out_.empty() || data_out_.front().time!=TINT_NEVER);
+    assert(data_out_.empty() || data_out_.front().time!=TINT_NEVER);*/
 }
 
 
@@ -1477,6 +1489,7 @@ void Channel::TimeoutDataOut ( ) {
             ack_not_rcvd_recent_++;
             data_out_cap_ = bin_t::ALL;
             data_out_tmo_.push_back(data_out_.front().bin);
+            data_out_size_--;
             dprintf("%s #%" PRIu32 " Tdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
         }
         data_out_.pop_front();

@@ -154,29 +154,29 @@ namespace swift {
 
     struct SwarmID  {
       public:
-	SwarmID() : empty_(true) {}
-	SwarmID(const Sha1Hash &roothash) { ttype_ = FILE_TRANSFER; roothash_ = roothash; empty_=false;}
-	SwarmID(const SwarmPubKey &spubkey) { ttype_ = LIVE_TRANSFER; spubkey_ = spubkey; empty_=false;}
-	SwarmID(std::string hexstr);
-	SwarmID(uint8_t *data,uint16_t datalength);
-	~SwarmID();
-	bool    operator == (const SwarmID& b) const;
-	SwarmID & operator = (const SwarmID &source);
-	/** Returns the type of transfer, FILE_TRANSFER or LIVE_TRANSFER */
+        SwarmID() : empty_(true) {}
+        SwarmID(const Sha1Hash &roothash) { ttype_ = FILE_TRANSFER; roothash_ = roothash; empty_=false;}
+        SwarmID(const SwarmPubKey &spubkey) { ttype_ = LIVE_TRANSFER; spubkey_ = spubkey; empty_=false;}
+        SwarmID(std::string hexstr);
+        SwarmID(uint8_t *data,uint16_t datalength);
+        ~SwarmID();
+        bool    operator == (const SwarmID& b) const;
+        SwarmID & operator = (const SwarmID &source);
+        /** Returns the type of transfer, FILE_TRANSFER or LIVE_TRANSFER */
         transfer_t      ttype() { return ttype_; }
         const Sha1Hash	&roothash() const { return roothash_; }
-	const SwarmPubKey &spubkey() const { return spubkey_; }
-	std::string     hex() const;
-	std::string     tofilename() const;
-	void		SetRootHash(const Sha1Hash &roothash) { ttype_ = FILE_TRANSFER; roothash_ = roothash; empty_=false;}
+        const SwarmPubKey &spubkey() const { return spubkey_; }
+        std::string     hex() const;
+        std::string     tofilename() const;
+        void		SetRootHash(const Sha1Hash &roothash) { ttype_ = FILE_TRANSFER; roothash_ = roothash; empty_=false;}
 
-	const static SwarmID NOSWARMID;
+        const static SwarmID NOSWARMID;
 
       protected:
-	bool		empty_; // if NOSWARMID
-	transfer_t	ttype_;
-	Sha1Hash	roothash_;
-	SwarmPubKey	spubkey_;
+        bool		empty_; // if NOSWARMID
+        transfer_t	ttype_;
+        Sha1Hash	roothash_;
+        SwarmPubKey	spubkey_;
     };
 
 
@@ -1002,6 +1002,7 @@ namespace swift {
         bin_t       data_in_dbl_;
         /** The history of data sent and still unacknowledged. */
         tbqueue     data_out_;
+        uint32_t    data_out_size_; // pkts not acknowledged
         /** Timeouted data (potentially to be retransmitted). */
         tbqueue     data_out_tmo_;
         bin_t       data_out_cap_; // Ric: maybe we should remove it.. creates problems if lost
@@ -1102,6 +1103,7 @@ namespace swift {
         void        CleanHintOut(bin_t pos);
         void        Reschedule();
         void        UpdateDIP(bin_t pos); // RETRANSMIT
+        void        UpdateRTT(int32_t pos, tbqueue data_out, tint owd);
 
         bin_t       DequeueHintOut(uint64_t size);
 
