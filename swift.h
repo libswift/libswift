@@ -1004,7 +1004,7 @@ namespace swift {
         tbqueue     data_out_;
         /** Timeouted data (potentially to be retransmitted). */
         tbqueue     data_out_tmo_;
-        bin_t       data_out_cap_;
+        bin_t       data_out_cap_; // Ric: maybe we should remove it.. creates problems if lost
         /** Index in the history array. */
         binmap_t    have_out_;
         /**    Transmit schedule: in most cases filled with the peer's hints */

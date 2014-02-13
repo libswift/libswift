@@ -62,90 +62,90 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
     //
     if (transfer()->ttype() == FILE_TRANSFER)
     {
-	// Arno, 2013-02-25: Need to send peak bins always (also CIPM None)
-	// to cold clients to communicate tree size
-	if (ack_in_.is_empty() && hashtree() != NULL && hashtree()->peak_count() > 0)
-	{
-	    AddUnsignedPeakHashes(evb);
-	}
+        // Arno, 2013-02-25: Need to send peak bins always (also CIPM None)
+        // to cold clients to communicate tree size
+        if (ack_in_.is_empty() && hashtree() != NULL && hashtree()->peak_count() > 0)
+        {
+            AddUnsignedPeakHashes(evb);
+        }
 
         if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE)
         {
-	    if (pos != bin_t::NONE)
-	        AddFileUncleHashes(evb,pos);
+            if (pos != bin_t::NONE)
+                AddFileUncleHashes(evb,pos);
         }
     }
     else
     {
-	// LIVE
-	if (PeerIsSource())
-	    return;
+        // LIVE
+        if (PeerIsSource())
+            return;
 
-	// See if there is a first, or new signed munro to send
-	bin_t munro = bin_t::NONE;
-	if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
-	{
-	    // No content integrity protection, so just report current pos as
-	    // source pos == munro
-	    LivePiecePicker *lpp = (LivePiecePicker *)transfer()->picker();
-	    if (lpp == NULL)
-	    {
-		// I am source
-		LiveTransfer *lt = (LiveTransfer *)transfer();
-		munro = lt->GetSourceCurrentPos();
-	    }
-	    else
-		munro = lpp->GetCurrentPos();
-	}
-	else //POPT_CONT_INT_PROT_UNIFIED_MERKLE
-	{
-	    LiveHashTree *umt = (LiveHashTree *)hashtree();
-	    if (pos == bin_t::NONE)
-	    {
-		// Initially send last signed munro
-		munro = umt->GetLastMunro();
-	    }
-	    else
-	    {
-		// After, send munro required for pos
-		munro = umt->GetMunro(pos);
-		if (munro == bin_t::NONE)
-		    return;
-	    }
-	}
+        // See if there is a first, or new signed munro to send
+        bin_t munro = bin_t::NONE;
+        if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
+        {
+            // No content integrity protection, so just report current pos as
+            // source pos == munro
+            LivePiecePicker *lpp = (LivePiecePicker *)transfer()->picker();
+            if (lpp == NULL)
+            {
+                // I am source
+                LiveTransfer *lt = (LiveTransfer *)transfer();
+                munro = lt->GetSourceCurrentPos();
+            }
+            else
+            munro = lpp->GetCurrentPos();
+        }
+        else //POPT_CONT_INT_PROT_UNIFIED_MERKLE
+        {
+            LiveHashTree *umt = (LiveHashTree *)hashtree();
+            if (pos == bin_t::NONE)
+            {
+                // Initially send last signed munro
+                munro = umt->GetLastMunro();
+            }
+            else
+            {
+                // After, send munro required for pos
+                munro = umt->GetMunro(pos);
+                if (munro == bin_t::NONE)
+                return;
+            }
+        }
 
-	if (pos == bin_t::NONE)
-	{
-	    // Initially send last signed munro
-	    dprintf("%s #%" PRIu32 " last munro %s\n",tintstr(),id_,munro.str().c_str() );
-	    bool ahead=false;
-	    if (ack_in_right_basebin_ != bin_t::NONE)
-	    {
-		if (ack_in_right_basebin_ > munro.base_right())
-		    ahead = true;
-	    }
-	    // Don't send when peer has chunks in range, or when it's downloading from us (e.g. chunks earlier than munro)
-	    if (munro != bin_t::NONE && ack_in_.is_empty(munro) && !munro_ack_rcvd_ && !ahead)
-	    {
-		AddLiveSignedMunroHash(evb,munro);
-		last_sent_munro_ = munro;
-	    }
-	}
-	else
-	{
-	    // After, send munro required for pos
-	    // Don't repeat if same and not retransmit
-	    bool diff = (munro != last_sent_munro_);
-	    last_sent_munro_ = munro;
+        if (pos == bin_t::NONE)
+        {
+            // Initially send last signed munro
+            dprintf("%s #%" PRIu32 " last munro %s\n",tintstr(),id_,munro.str().c_str() );
+            bool ahead=false;
+            if (ack_in_right_basebin_ != bin_t::NONE)
+            {
+                if (ack_in_right_basebin_ > munro.base_right())
+                    ahead = true;
+            }
+            // Don't send when peer has chunks in range, or when it's downloading from us (e.g. chunks earlier than munro)
+            if (munro != bin_t::NONE && ack_in_.is_empty(munro) && !munro_ack_rcvd_ && !ahead)
+            {
+                AddLiveSignedMunroHash(evb,munro);
+                last_sent_munro_ = munro;
+            }
+        }
+        else
+        {
+            // After, send munro required for pos
+            // Don't repeat if same and not retransmit
+            bool diff = (munro != last_sent_munro_);
+            last_sent_munro_ = munro;
 
-	    dprintf("%s #%" PRIu32 " munro for %s is %s\n",tintstr(),id_,pos.str().c_str(), munro.str().c_str());
+            dprintf("%s #%" PRIu32 " munro for %s is %s\n",tintstr(),id_,pos.str().c_str(), munro.str().c_str());
 
-	    if (isretransmit || diff)
-		AddLiveSignedMunroHash(evb,munro);
+            if (isretransmit || diff)
+                AddLiveSignedMunroHash(evb,munro);
 
             if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
-	        AddLiveUncleHashes(evb,pos,munro,isretransmit);
-	}
+                AddLiveUncleHashes(evb,pos,munro,isretransmit);
+        }
     }
 }
 
@@ -210,12 +210,11 @@ void    Channel::AddLiveSignedMunroHash(struct evbuffer *evb, bin_t munro)
 
 void    Channel::AddFileUncleHashes (struct evbuffer *evb, bin_t pos) {
     bin_t peak = hashtree()->peak_for(pos);
-    // Ric: TODO check (remove data_out_cap??)
-    //      For the moment lets keep the old behaviour
     binvector bv;
-    while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
-            ack_in_.is_empty(pos.parent()) ) {
-    //while (pos!=peak && ack_in_.is_empty(pos.parent()) ) {
+    //while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
+    //        ack_in_.is_empty(pos.parent()) ) {
+    // Ric: TODO optimise.. send based on pkt loss statistics
+    while (pos!=peak && ack_in_.is_empty(pos.parent()) ) {
         bin_t uncle = pos.sibling();
         bv.push_back(uncle);
         pos = pos.parent();
@@ -1406,12 +1405,17 @@ void    Channel::OnAck (struct evbuffer *evb) {
         while (ri<data_out_tmo_.size() && !ackd_pos.contains(data_out_tmo_[ri].bin) )
             ri++;
         dprintf("%s #%" PRIu32 " %cack %s owd:%" PRIi64 "\n",tintstr(),id_,
-                di==data_out_.size() && ri==data_out_tmo_.size()?'?':'-',ackd_pos.str().c_str(),peer_owd);
-        if (di!=data_out_.size()) { // || ri!=data_out_tmo_.size()) { // not a retransmit (? why?)
+                di==data_out_.size() ? (ri==data_out_tmo_.size() ? '?':'R' ) : '-',ackd_pos.str().c_str(),peer_owd);
+        if (di!=data_out_.size() || ri!=data_out_tmo_.size()) { // not a retransmit (? why?)
             // round trip time calculations
             // Ric: FIXME assuming direct sending of acks
-            tint rtt = NOW-data_out_[di].time;
-            rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
+            tint rtt = TINT_NEVER;
+            if (di!=data_out_.size())
+                rtt = NOW-data_out_[di].time;
+            else
+                rtt = NOW-data_out_tmo_[ri].time;
+            // Ric: quickly adapt to new network changes!
+            rtt_avg_ = peer_owd > rtt_avg_ ? rtt : (rtt_avg_*7 + rtt) >> 3;
             dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
             assert(data_out_[di].time!=TINT_NEVER);
             dprintf("%s #%" PRIu32 " rtt:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_, rtt_avg_, dev_avg_);
@@ -1431,24 +1435,35 @@ void    Channel::OnAck (struct evbuffer *evb) {
             //            tintstr(),id_,rtt_avg_,dev_avg_,data_out_[di].bin.str().c_str());
             ack_rcvd_recent_++;
             // early loss detection by packet reordering
-            for (int re=0; re<di-MAX_REORDERING; re++) {
-                        if (data_out_[re]==tintbin())
-                                continue;
-                        ack_not_rcvd_recent_++;
-                        data_out_tmo_.push_back(data_out_[re].bin);
-                        dprintf("%s #%" PRIu32 " Rdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
-                        data_out_cap_ = bin_t::ALL;
-                        data_out_[re] = tintbin();
-            }
+            if (di!=data_out_.size())
+                for (int re=0; re<di-MAX_REORDERING; re++) {
+                    dprintf("%s #%" PRIu32 " checking %s\n",tintstr(),id_, data_out_[re].bin.str().c_str());
+                    if (data_out_[re]==tintbin())
+                            continue;
+                    ack_not_rcvd_recent_++;
+                    data_out_tmo_.push_back(data_out_[re].bin);
+                    dprintf("%s #%" PRIu32 " Rdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
+                    data_out_cap_ = bin_t::ALL;
+                    data_out_[re] = tintbin();
+                }
         }
-        if (di!=data_out_.size())
+        if (di!=data_out_.size()) {
+            dprintf("%s #%" PRIu32 " setting null %s\n",tintstr(),id_, data_out_[di].bin.str().c_str());
             data_out_[di]=tintbin();
+        }
+        if (ri!=data_out_tmo_.size())
+            data_out_tmo_[ri]=tintbin();
     }
 
     // clear zeroed items
     while (!data_out_.empty() && ( data_out_.front()==tintbin() ||
-            ack_in_.is_filled(data_out_.front().bin) ) )
+            ack_in_.is_filled(data_out_.front().bin) ) ) {
+        dprintf("%s #%" PRIu32 " removing %s\n",tintstr(),id_, data_out_.front().bin.str().c_str());
         data_out_.pop_front();
+    }
+    while (!data_out_tmo_.empty() && ( data_out_tmo_.front()==tintbin() ||
+            ack_in_.is_filled(data_out_tmo_.front().bin) ) )
+        data_out_tmo_.pop_front();
     assert(data_out_.empty() || data_out_.front().time!=TINT_NEVER);
 }
 

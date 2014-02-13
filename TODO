@@ -1,3 +1,7 @@
+NEW FIXES:
+* RTT calculation with network burst
+* RTT sender >= owd
+
 OUTDATED:
 
 STATE MACHINE
