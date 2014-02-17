@@ -63,7 +63,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr) :
     lastrecvwaskeepalive_(false), lastsendwaskeepalive_(false), // Arno: nap bug fix
     live_have_no_hint_(false), // Arno: live speed opt
     ack_rcvd_recent_(0),
-    ack_not_rcvd_recent_(0), owd_min_bin_(0), owd_min_bin_start_(NOW),
+    ack_not_rcvd_recent_(0), owd_min_bin_(0), owd_min_bin_start_(NOW-LEDBAT_ROLLOVER),
     owd_cur_bin_(0), dgrams_sent_(0), dgrams_rcvd_(0),
     raw_bytes_up_(0), raw_bytes_down_(0), bytes_up_(0), bytes_down_(0),
     old_movingfwd_bytes_(0),
@@ -80,9 +80,12 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr) :
     channels.push_back(this);
 
     for(int i=0; i<4; i++) {
-        owd_min_bins_[i] = TINT_NEVER;
         owd_current_[i] = TINT_NEVER;
     }
+    for(int i=0; i<LEDBAT_BASE_HISTORY; i++) {
+        owd_min_bins_[i] = TINT_NEVER;
+    }
+
     evsend_ptr_ = new struct event;
     evtimer_assign(evsend_ptr_,evbase,&Channel::LibeventSendCallback,this);
     evtimer_add(evsend_ptr_,tint2tv(next_send_time_));

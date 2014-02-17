@@ -15,6 +15,8 @@ using namespace std;
 
 tint Channel::MIN_DEV = 50*TINT_MSEC;
 tint Channel::MAX_SEND_INTERVAL = TINT_SEC*58;
+uint32_t Channel::LEDBAT_BASE_HISTORY = 10;
+uint32_t Channel::LEDBAT_ROLLOVER = TINT_SEC*30;
 tint Channel::LEDBAT_TARGET = TINT_MSEC*25;
 float Channel::LEDBAT_GAIN = 1.0/LEDBAT_TARGET;
 tint Channel::LEDBAT_DELAY_BIN = TINT_SEC*30;

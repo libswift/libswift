@@ -1370,6 +1370,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
             ri++;
         dprintf("%s #%" PRIu32 " %cack %s owd:%" PRIi64 "\n",tintstr(),id_,
                 di==data_out_.size()?'?':'-',ackd_pos.str().c_str(),peer_owd);
+
         if (di!=data_out_.size() && ri==data_out_tmo_.size()) { // not a retransmit
             // round trip time calculations
                 // Ric: TODO delayed acks
@@ -1378,16 +1379,15 @@ void    Channel::OnAck (struct evbuffer *evb) {
             dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
             assert(data_out_[di].time!=TINT_NEVER);
             // one-way delay calculations
-            // Ric: we r always re-writing the first element
-            owd_cur_bin_ = 0;//(owd_cur_bin_+1) & 3;
+            owd_cur_bin_ = (owd_cur_bin_+1) & 3;
             owd_current_[owd_cur_bin_] = peer_owd;
-            if ( owd_min_bin_start_+TINT_SEC*30 < NOW ) {
+            if ( owd_min_bin_start_+ LEDBAT_ROLLOVER < NOW ) {
                         owd_min_bin_start_ = NOW;
-                        owd_min_bin_ = (owd_min_bin_+1) & 3;
-                        owd_min_bins_[owd_min_bin_] = TINT_NEVER;
+                        owd_min_bin_ = owd_min_bin_ == LEDBAT_BASE_HISTORY - 1 ? 0 : owd_min_bin_ + 1;
+                        owd_min_bins_[owd_min_bin_] = peer_owd;
             }
-            if (owd_min_bins_[owd_min_bin_]>peer_owd)
-                    owd_min_bins_[owd_min_bin_] = peer_owd;
+            else if (owd_min_bins_[owd_min_bin_]>peer_owd)
+                owd_min_bins_[owd_min_bin_] = peer_owd;
             // Arno, 2012-12-20: Temp disable, getting SEGV on this
             // dprintf("%s #%" PRIu32 " sendctrl rtt %" PRIi64 " dev %" PRIi64 " based on %s\n",
             //            tintstr(),id_,rtt_avg_,dev_avg_,data_out_[di].bin.str().c_str());

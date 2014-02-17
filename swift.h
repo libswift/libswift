@@ -914,6 +914,8 @@ namespace swift {
         static tint LEDBAT_TARGET;
         static float LEDBAT_GAIN;
         static tint LEDBAT_DELAY_BIN;
+        static uint32_t LEDBAT_BASE_HISTORY;
+        static uint32_t LEDBAT_ROLLOVER;
         static bool SELF_CONN_OK;
         static tint MAX_POSSIBLE_RTT;
         static tint MIN_PEX_REQUEST_INTERVAL;
@@ -1054,10 +1056,10 @@ namespace swift {
         /** Recent non-acknowlegements (losses) of data previously sent.    */
         int         ack_not_rcvd_recent_;
         /** LEDBAT one-way delay machinery */
-        tint        owd_min_bins_[4];
+        tint        owd_min_bins_[10];  // Ric: it should be 10
         int         owd_min_bin_;
         tint        owd_min_bin_start_;
-        tint        owd_current_[4];
+        tint        owd_current_[4];    // Ric: TODO: should be > 4 && == RTT
         int         owd_cur_bin_;
         /** Stats */
         int         dgrams_sent_;
