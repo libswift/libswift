@@ -617,25 +617,17 @@ void    Channel::AddHint (struct evbuffer *evb) {
         if (transfer()->ttype() == LIVE_TRANSFER)
             hint = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2,id_);
 		else {
-			uint64_t max_hints = 32;
-			if (hint_out_size_<max_hints && plan_pck > 0) {
+	        hint = DequeueHintOut(plan_pck);
 
+            if (hint.is_none()) {
+                bin_t res = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2,id_);
+                if (!res.is_none()) {
+                    hint_queue_out_.push_back( tintbin(NOW,res));
+                    hint_queue_out_size_ += res.base_length();
+                    hint = DequeueHintOut(plan_pck);
+                }
+            }
 
-			    int want = min(max_hints-hint_out_size_, plan_pck);
-
-			    //fprintf(stderr, "want %d\tplan %d\n", want, plan_pck);
-			    hint = DequeueHintOut(want);
-
-			    if (hint.is_none()) {
-		            bin_t res = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2,id_);
-		            if (!res.is_none()) {
-		                hint_queue_out_.push_back( tintbin(NOW,res));
-		                hint_queue_out_size_ += res.base_length();
-		                hint = DequeueHintOut(max_hints-hint_out_size_);
-		            }
-			    }
-
-			}
 		}
 
         if (!hint.is_none()) {
