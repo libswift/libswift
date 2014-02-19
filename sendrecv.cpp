@@ -1373,34 +1373,36 @@ void    Channel::OnAck (struct evbuffer *evb) {
 
         if (di!=data_out_.size() && ri==data_out_tmo_.size()) { // not a retransmit
             // round trip time calculations
-                // Ric: TODO delayed acks
+            // Ric: TODO delayed acks?
+            assert(data_out_[di].time!=TINT_NEVER);
+
             tint rtt = NOW-data_out_[di].time;
             rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
             dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
-            assert(data_out_[di].time!=TINT_NEVER);
+
             // one-way delay calculations
-            owd_cur_bin_ = (owd_cur_bin_+1) & 3;
-            owd_current_[owd_cur_bin_] = peer_owd;
+            tintt owd = (peer_owd, NOW);
+            owd_current_.push_front(owd);
+
             if ( owd_min_bin_start_+ LEDBAT_ROLLOVER < NOW ) {
-                        owd_min_bin_start_ = NOW;
-                        owd_min_bin_ = owd_min_bin_ == LEDBAT_BASE_HISTORY - 1 ? 0 : owd_min_bin_ + 1;
-                        owd_min_bins_[owd_min_bin_] = peer_owd;
+                owd_min_bin_start_ = NOW;
+                owd_min_bin_ = owd_min_bin_ == LEDBAT_BASE_HISTORY - 1 ? 0 : owd_min_bin_ + 1;
+                owd_min_bins_[owd_min_bin_] = peer_owd;
             }
             else if (owd_min_bins_[owd_min_bin_]>peer_owd)
                 owd_min_bins_[owd_min_bin_] = peer_owd;
-            // Arno, 2012-12-20: Temp disable, getting SEGV on this
-            // dprintf("%s #%" PRIu32 " sendctrl rtt %" PRIi64 " dev %" PRIi64 " based on %s\n",
-            //            tintstr(),id_,rtt_avg_,dev_avg_,data_out_[di].bin.str().c_str());
+
             ack_rcvd_recent_++;
+
             // early loss detection by packet reordering
             for (int re=0; re<di-MAX_REORDERING; re++) {
-                        if (data_out_[re]==tintbin())
-                                continue;
-                        ack_not_rcvd_recent_++;
-                        data_out_tmo_.push_back(data_out_[re].bin);
-                        dprintf("%s #%" PRIu32 " Rdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
-                        data_out_cap_ = bin_t::ALL;
-                        data_out_[re] = tintbin();
+                if (data_out_[re]==tintbin())
+                    continue;
+                ack_not_rcvd_recent_++;
+                data_out_tmo_.push_back(data_out_[re].bin);
+                dprintf("%s #%" PRIu32 " Rdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
+                data_out_cap_ = bin_t::ALL;
+                data_out_[re] = tintbin();
             }
         }
         if (di!=data_out_.size())
@@ -1431,6 +1433,11 @@ void Channel::TimeoutDataOut ( ) {
     // clear retransmit queue of older items
     while (!data_out_tmo_.empty() && data_out_tmo_.front().time<NOW-MAX_POSSIBLE_RTT)
         data_out_tmo_.pop_front();
+
+    // use the same value to clean the delay samples
+    while ( owd_current_.back().second < timeout && owd_current_.size() > 4) {
+        owd_current_.pop_back();
+    }
 }
 
 

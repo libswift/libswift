@@ -199,20 +199,31 @@ tint Channel::LedbatNextSendTime () {
     float oldcwnd = cwnd_;
 
     tint owd_cur(TINT_NEVER), owd_min(TINT_NEVER);
+
     // Ric: TODO for the moment we only use one sample!!
-    /*for(int i=0; i<4; i++) {
+    for(int i=0; i<LEDBAT_BASE_HISTORY; i++) {
         if (owd_min>owd_min_bins_[i])
             owd_min = owd_min_bins_[i];
-        if (owd_cur>owd_current_[i])
-            owd_cur = owd_current_[i];
-    }*/
-    // ---
-    owd_min = owd_min_bins_[0];
-    owd_cur = owd_current_[0];
-    // ---
+    }
+
+    // We may apply a filter over the elements.. as suggested in the rfc
+    ttqueue::iterator it = owd_current_.begin();
+    int32_t count = 0;
+    tint total = 0;
+    tint timeout = NOW - rtt_avg_;
+    // use the acks received during the last rtt, or at least 4 values
+    while (it != owd_current_.end() || (*it->second > timeout || count < 4) ) {
+        total += *it->first;
+        count++;
+        it++;
+    }
+    owd_cur = total/count;
+
     if (ack_not_rcvd_recent_)
         BackOffOnLosses(0.8);
+
     ack_rcvd_recent_ = 0;
+
     tint queueing_delay = owd_cur - owd_min;
     tint off_target = LEDBAT_TARGET - queueing_delay;
     cwnd_ += LEDBAT_GAIN * off_target / cwnd_;
