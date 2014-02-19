@@ -4,8 +4,8 @@ libswift
 The multiparty transport protocol.
 
 ## Description ##
-Libswift (aka BitTorrent at the transport layer). Differently from TCP,
-the protocol does not use the ordered data stream abstraction.
+This is Libswift (aka BitTorrent at the transport layer).
+Differently from TCP, the protocol does not use the ordered data stream abstraction.
 Effectively, it splits a file into 1KB packets and sends them around.
 The secret sauce is Merkle hash trees and binmaps.
  
