@@ -219,6 +219,9 @@ tint Channel::LedbatNextSendTime () {
     }
     owd_cur = total/count;
 
+    dprintf("%s #%" PRIu32 " sendctrl using %" PRIi32 " samples from the last rtt value (%" PRIi64 ")\n",
+            tintstr(),id_,count, rtt_avg_);
+
     if (ack_not_rcvd_recent_)
         BackOffOnLosses(0.8);
 
