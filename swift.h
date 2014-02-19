@@ -253,8 +253,7 @@ namespace swift {
 
     typedef std::deque<tintbin> tbqueue;
     typedef std::deque<bin_t> binqueue;
-    typedef std::pair<tint,tint> tintt;
-    typedef std::deque<tintt> ttqueue;
+    typedef std::deque< std::pair<tint,tint> > ttqueue;
     typedef Address   Address;
 
 
@@ -1058,7 +1057,7 @@ namespace swift {
         /** Recent non-acknowlegements (losses) of data previously sent.    */
         int         ack_not_rcvd_recent_;
         /** LEDBAT one-way delay machinery */
-        tint        owd_min_bins_[LEDBAT_BASE_HISTORY];
+        tint        owd_min_bins_[10];
         int         owd_min_bin_;
         tint        owd_min_bin_start_;
         /** LEDBAT current delay list should be > 4 && == RTT */

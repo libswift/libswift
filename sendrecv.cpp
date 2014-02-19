@@ -1381,12 +1381,12 @@ void    Channel::OnAck (struct evbuffer *evb) {
             dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
 
             // one-way delay calculations
-            tintt owd = (peer_owd, NOW);
+            std::pair <tint,tint> owd (peer_owd, NOW);
             owd_current_.push_front(owd);
 
             if ( owd_min_bin_start_+ LEDBAT_ROLLOVER < NOW ) {
                 owd_min_bin_start_ = NOW;
-                owd_min_bin_ = owd_min_bin_ == LEDBAT_BASE_HISTORY - 1 ? 0 : owd_min_bin_ + 1;
+                owd_min_bin_ = owd_min_bin_ == 9 ? 0 : owd_min_bin_ + 1;
                 owd_min_bins_[owd_min_bin_] = peer_owd;
             }
             else if (owd_min_bins_[owd_min_bin_]>peer_owd)

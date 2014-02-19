@@ -78,7 +78,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr) :
     this->id_ = channels.size();
     channels.push_back(this);
 
-    for(int i=0; i<LEDBAT_BASE_HISTORY; i++) {
+    for(int i=0; i<10; i++) {
         owd_min_bins_[i] = TINT_NEVER;
     }
 

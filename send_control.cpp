@@ -15,7 +15,7 @@ using namespace std;
 
 tint Channel::MIN_DEV = 50*TINT_MSEC;
 tint Channel::MAX_SEND_INTERVAL = TINT_SEC*58;
-uint32_t Channel::LEDBAT_BASE_HISTORY = 10;
+//const uint32_t Channel::LEDBAT_BASE_HISTORY = 10;
 uint32_t Channel::LEDBAT_ROLLOVER = TINT_SEC*30;
 tint Channel::LEDBAT_TARGET = TINT_MSEC*25;
 float Channel::LEDBAT_GAIN = 1.0/LEDBAT_TARGET;
@@ -201,7 +201,7 @@ tint Channel::LedbatNextSendTime () {
     tint owd_cur(TINT_NEVER), owd_min(TINT_NEVER);
 
     // Ric: TODO for the moment we only use one sample!!
-    for(int i=0; i<LEDBAT_BASE_HISTORY; i++) {
+    for(int i=0; i<10; i++) {
         if (owd_min>owd_min_bins_[i])
             owd_min = owd_min_bins_[i];
     }
@@ -212,8 +212,8 @@ tint Channel::LedbatNextSendTime () {
     tint total = 0;
     tint timeout = NOW - rtt_avg_;
     // use the acks received during the last rtt, or at least 4 values
-    while (it != owd_current_.end() || (*it->second > timeout || count < 4) ) {
-        total += *it->first;
+    while (it != owd_current_.end() || (it->second > timeout || count < 4) ) {
+        total += it->first;
         count++;
         it++;
     }
