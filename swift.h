@@ -253,6 +253,7 @@ namespace swift {
 
     typedef std::deque<tintbin> tbqueue;
     typedef std::deque<bin_t> binqueue;
+    typedef std::deque< std::pair<tint,tint> > ttqueue;
     typedef Address   Address;
 
 
@@ -914,6 +915,8 @@ namespace swift {
         static tint LEDBAT_TARGET;
         static float LEDBAT_GAIN;
         static tint LEDBAT_DELAY_BIN;
+        static uint32_t LEDBAT_BASE_HISTORY;
+        static uint32_t LEDBAT_ROLLOVER;
         static bool SELF_CONN_OK;
         static tint MAX_POSSIBLE_RTT;
         static tint MIN_PEX_REQUEST_INTERVAL;
@@ -1044,21 +1047,21 @@ namespace swift {
         /** Arno: Fix for KEEP_ALIVE_CONTROL */
         bool        lastrecvwaskeepalive_;
         bool        lastsendwaskeepalive_;
-	/** Arno: For live, we may receive a HAVE but have no hints
+        /** Arno: For live, we may receive a HAVE but have no hints
             outstanding. In that case we should not wait till next_send_time_
             but request directly. See send_control.cpp */
         bool	    live_have_no_hint_;
 
-        /** Recent acknowlegements for data previously sent.    */
+        /** Recent acknowlegements for data previously sent. */
         int         ack_rcvd_recent_; // Arno, 2013-07-01: appears broken at the moment
         /** Recent non-acknowlegements (losses) of data previously sent.    */
         int         ack_not_rcvd_recent_;
         /** LEDBAT one-way delay machinery */
-        tint        owd_min_bins_[4];
+        tint        owd_min_bins_[10];
         int         owd_min_bin_;
         tint        owd_min_bin_start_;
-        tint        owd_current_[4];
-        int         owd_cur_bin_;
+        /** LEDBAT current delay list should be > 4 && == RTT */
+        ttqueue     owd_current_;
         /** Stats */
         int         dgrams_sent_;
         int         dgrams_rcvd_;
