@@ -1435,7 +1435,7 @@ void Channel::TimeoutDataOut ( ) {
         data_out_tmo_.pop_front();
 
     // use the same value to clean the delay samples
-    while ( owd_current_.back().second < timeout && owd_current_.size() > 4) {
+    while ( owd_current_.size() > 4 && owd_current_.back().second < timeout) {
         owd_current_.pop_back();
     }
 }

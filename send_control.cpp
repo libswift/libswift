@@ -212,7 +212,7 @@ tint Channel::LedbatNextSendTime () {
     tint total = 0;
     tint timeout = NOW - rtt_avg_;
     // use the acks received during the last rtt, or at least 4 values
-    while (it != owd_current_.end() || (it->second > timeout || count < 4) ) {
+    while (it != owd_current_.end() && (it->second > timeout || count < 4) ) {
         total += it->first;
         count++;
         it++;
