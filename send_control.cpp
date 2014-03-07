@@ -216,44 +216,49 @@ tint    Channel::AimdNextSendTime () {
 }
 
 tint Channel::LedbatNextSendTime () {
-    float oldcwnd = cwnd_;
+    //float oldcwnd = cwnd_;
 
-    tint owd_cur(TINT_NEVER), owd_min(TINT_NEVER);
+    if (ack_rcvd_recent_) {
 
-    // Ric: TODO for the moment we only use one sample!!
-    for(int i=0; i<10; i++) {
-        if (owd_min>owd_min_bins_[i])
-            owd_min = owd_min_bins_[i];
+        //tint owd_cur(TINT_NEVER), owd_min(TINT_NEVER);
+        // reset the min value
+        owd_min_ = TINT_NEVER;
+
+        // Ric: TODO for the moment we only use one sample!!
+        for(int i=0; i<10; i++) {
+            if (owd_min_>owd_min_bins_[i])
+                owd_min_ = owd_min_bins_[i];
+        }
+
+        // We may apply a filter over the elements.. as suggested in the rfc
+        ttqueue::iterator it = owd_current_.begin();
+        int32_t count = 0;
+        tint total = 0;
+        tint timeout = NOW - rtt_avg_;
+        // use the acks received during the last rtt, or at least 4 values
+        while (it != owd_current_.end() && (it->second > timeout || count < 4) ) {
+            total += it->first;
+            count++;
+            it++;
+        }
+        owd_cur_ = total/count;
+
+        dprintf("%s #%" PRIu32 " sendctrl using %" PRIi32 " samples from the last rtt value [%" PRIi64 "], current owd: %" PRIi64 "\n",
+                tintstr(),id_,count, rtt_avg_, owd_cur_);
+
+        if (ack_not_rcvd_recent_)
+            BackOffOnLosses(0.8);
+
+        ack_rcvd_recent_ = 0;
+
+        tint queueing_delay = owd_cur_ - owd_min_;
+        tint off_target = LEDBAT_TARGET - queueing_delay;
+        cwnd_ += LEDBAT_GAIN * off_target / cwnd_;
+        if (cwnd_<1)
+            cwnd_ = 1;
+        if (owd_cur_==TINT_NEVER || owd_min_==TINT_NEVER)
+            cwnd_ = 1;
     }
-
-    // We may apply a filter over the elements.. as suggested in the rfc
-    ttqueue::iterator it = owd_current_.begin();
-    int32_t count = 0;
-    tint total = 0;
-    tint timeout = NOW - rtt_avg_;
-    // use the acks received during the last rtt, or at least 4 values
-    while (it != owd_current_.end() && (it->second > timeout || count < 4) ) {
-        total += it->first;
-        count++;
-        it++;
-    }
-    owd_cur = total/count;
-
-    dprintf("%s #%" PRIu32 " sendctrl using %" PRIi32 " samples from the last rtt value (%" PRIi64 ")\n",
-            tintstr(),id_,count, rtt_avg_);
-
-    if (ack_not_rcvd_recent_)
-        BackOffOnLosses(0.8);
-
-    ack_rcvd_recent_ = 0;
-
-    tint queueing_delay = owd_cur - owd_min;
-    tint off_target = LEDBAT_TARGET - queueing_delay;
-    cwnd_ += LEDBAT_GAIN * off_target / cwnd_;
-    if (cwnd_<1) 
-        cwnd_ = 1;
-    if (owd_cur==TINT_NEVER || owd_min==TINT_NEVER) 
-        cwnd_ = 1;
 
     /*Arno, 2012-02-02: Somehow LEDBAT gets stuck at cwnd_ == 1 sometimes
     // This hack appears to work to get it back on the right track quickly.

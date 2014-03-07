@@ -1063,6 +1063,8 @@ namespace swift {
         tint        owd_min_bins_[10];
         int         owd_min_bin_;
         tint        owd_min_bin_start_;
+        tint        owd_cur_;
+        tint        owd_min_;
         /** LEDBAT current delay list should be > 4 && == RTT */
         ttqueue     owd_current_;
         /** Stats */
