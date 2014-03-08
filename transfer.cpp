@@ -63,7 +63,8 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
         if (ENABLE_VOD_PIECEPICKER) 
             picker_ = new VodPiecePicker(this);
         else 
-			picker_ = new RFPiecePicker(this);
+            picker_ = new SeqPiecePicker(this);
+			//picker_ = new RFPiecePicker(this);
         picker_->Randomize(rand()&63);
     }
     else

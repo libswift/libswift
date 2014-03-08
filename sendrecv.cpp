@@ -571,7 +571,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
         return;
 
     // 1. Calc max of what we are allowed to request, uncongested bandwidth wise
-    tint plan_for = max(TINT_SEC*HINT_TIME,rtt_avg_*4);
+    tint plan_for = max(TINT_SEC*HINT_TIME,rtt_avg_<<2);
     tint timed_out = NOW - plan_for*2;
 
     std::deque<bin_t> tbc;
@@ -1174,10 +1174,13 @@ void    Channel::CleanHintOut (bin_t pos) {
         hi++;
     if (hi==hint_out_.size())
         return; // something not hinted or hinted in far past
+
+    // Ric: allow reordering of arriving pkts
     while (hi--) { // removing likely snubbed hints
-            bin_t hint = hint_out_.front().bin;
+        bin_t hint = hint_out_.front().bin;
         hint_out_size_ -= hint.base_length();
         hint_out_.pop_front();
+        dprintf("%s #%" PRIu32 " Clean outstanding hint %s\n",tintstr(),id_,hint.str().c_str());
 #if ENABLE_CANCEL == 1
         // Ric: add to the cancel queue
         cancel_out_.push_back(hint);
@@ -1212,12 +1215,13 @@ bin_t    Channel::DequeueHintOut(uint64_t size) {
 	// TODO check... the seconds should depend on previous speed of the peer
 	while (hint_queue_out_.size() && hint_queue_out_.front().time<NOW-TINT_SEC*HINT_TIME*3/2) { // FIXME sec
 		hint_queue_out_size_ -= hint_queue_out_.front().bin.base_length();
+		dprintf("%s #%" PRIu32 " Removing queued hint:%s\n",tintstr(),id_, hint_queue_out_.front().bin.str().c_str());
 		hint_queue_out_.pop_front();
 	}
 
 	if (!hint_queue_out_size_){
 	    if (DEBUGTRAFFIC)
-	            fprintf(stderr, " ..refill\n");
+            fprintf(stderr, " ..refill\n");
 		return bin_t::NONE;
 	}
 
@@ -1232,7 +1236,7 @@ bin_t    Channel::DequeueHintOut(uint64_t size) {
 	hint_queue_out_.pop_front();
 	hint_queue_out_size_ -= res.base_length();
 	if (DEBUGTRAFFIC)
-	        fprintf(stderr, " sending %s [%llu]\n",res.str().c_str(),res.base_length());
+        fprintf(stderr, " sending %s [%llu]\n",res.str().c_str(),res.base_length());
 	return res;
 
 }
@@ -1388,10 +1392,10 @@ void Channel::UpdateDIP(bin_t pos)
      * Ric: we need to prevent also against burst in the network link.
      * It also happens that RTT is too small
      */
-    if (rtt_hint_tintbin_.bin == pos) {
+    if (rtt_hint_tintbin_.bin == pos && IsComplete()) {
         tint diff = NOW - rtt_hint_tintbin_.time;
         // Conservative: only adjust rtt_avg_ if 2x smaller
-        if (diff < rtt_avg_/2 && IsComplete())
+        if (diff < rtt_avg_>>1)
         {
             dprintf("%s #%" PRIu32 " rtt adjust %" PRIi64 " -> %" PRIi64 "\n",tintstr(),id_,rtt_avg_,diff);
             rtt_avg_ = diff;
@@ -1453,6 +1457,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
             UpdateRTT(di, data_out_, peer_owd);
             dprintf("%s #%" PRIu32 " setting null %s\n",tintstr(),id_, data_out_[di].bin.str().c_str());
             // early loss detection by packet reordering
+            /* TODO do we really need it?
             for (int re=0; re<di-MAX_REORDERING; re++) {
                if (data_out_[re]==tintbin())
                    continue;
@@ -1462,7 +1467,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
                dprintf("%s #%" PRIu32 " Rdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
                data_out_cap_ = bin_t::ALL;
                data_out_[re] = tintbin();
-            }
+            }*/
             data_out_[di]=tintbin();
         }
         else if (ri!=data_out_tmo_.size()) {
@@ -1473,8 +1478,8 @@ void    Channel::OnAck (struct evbuffer *evb) {
     }
 
     // clear zeroed items
-    /* TODO: do we really need it?
-    while (!data_out_.empty() && ( data_out_.front()==tintbin() ||
+    // TODO: do we really need it?
+    /*while (!data_out_.empty() && ( data_out_.front()==tintbin() ||
             ack_in_.is_filled(data_out_.front().bin) ) ) {
         dprintf("%s #%" PRIu32 " removing %s\n",tintstr(),id_, data_out_.front().bin.str().c_str());
         data_out_.pop_front();
@@ -1501,7 +1506,7 @@ void Channel::TimeoutDataOut ( ) {
         data_out_.pop_front();
     }
     // clear retransmit queue of older items
-    while (!data_out_tmo_.empty() && data_out_tmo_.front().time<NOW-MAX_POSSIBLE_RTT)
+    while (!data_out_tmo_.empty() && (data_out_tmo_.front()==tintbin() || data_out_tmo_.front().time<NOW-MAX_POSSIBLE_RTT))
         data_out_tmo_.pop_front();
 
     // use the same value to clean the delay samples
