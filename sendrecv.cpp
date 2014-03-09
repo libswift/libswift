@@ -333,7 +333,7 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
         }
     }
     
-    dprintf("%s #%" PRIu32 " dequeue empty %d\n",tintstr(),id_, (int)hint_in_.empty() );
+    //dprintf("%s #%" PRIu32 " dequeue empty %d\n",tintstr(),id_, (int)hint_in_.empty() );
 
     while (!hint_in_.empty() && send.is_none()) {
         bin_t hint = hint_in_.front().bin;
@@ -814,7 +814,8 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         return bin_t::NONE;
     }
 
-    dprintf("%s #%" PRIu32 " ?data reading swarm %llu\n",tintstr(),id_, tosend.base_offset()*transfer()->chunk_size() );
+    if (DEBUGTRAFFIC)
+        dprintf("%s #%" PRIu32 " ?data reading swarm %llu\n",tintstr(),id_, tosend.base_offset()*transfer()->chunk_size() );
 
     ssize_t r = transfer()->GetStorage()->Read((char *)vec.iov_base,
              transfer()->chunk_size(),tosend.base_offset()*transfer()->chunk_size());
@@ -1170,7 +1171,7 @@ void    Channel::CleanHintOut (bin_t pos) {
     if (hi==hint_out_.size())
         return; // something not hinted or hinted in far past
 
-    // Ric: allow reordering of arriving pkts
+    // Ric: TODO allow reordering of arriving pkts
     while (hi--) { // removing likely snubbed hints
         bin_t hint = hint_out_.front().bin;
         hint_out_size_ -= hint.base_length();
@@ -1488,7 +1489,12 @@ void    Channel::OnAck (struct evbuffer *evb) {
 
 void Channel::TimeoutDataOut ( ) {
     // losses: timeouted packets
+    // Ric: aggressively timeout only if in active transmission (using cc like LEDBAT)
     tint timeout = NOW - ack_timeout();
+    if (send_control_!=LEDBAT_CONTROL)
+        timeout -= ack_timeout()<<1;
+    dprintf("%s #%" PRIu32 " ack timeout %" PRIi64 "\n",tintstr(),id_,ack_timeout());
+
     while (!data_out_.empty() &&
         ( data_out_.front().time<timeout || data_out_.front()==tintbin() ) ) {
         if (data_out_.front()!=tintbin() && ack_in_.is_empty(data_out_.front().bin)) {
