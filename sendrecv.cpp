@@ -2383,11 +2383,15 @@ void Channel::Reschedule () {
             dprintf("%s #%" PRIu32 " requeue direct send (%s)\n",tintstr(),id_, duein<=0 ? "duein" : "direct sending");
             next_send_time_ = NOW;
             direct_sending_ = false;
+            prev_duein_ = duein;
             LibeventSendCallback(-1,EV_TIMEOUT,this);
         }
         else
         {
-            struct timeval duetv = *tint2tv(duein);
+            // Ric: consider inaccuracy of previous call
+            assert(prev_duein_<=0);
+            struct timeval duetv = *tint2tv(duein+prev_duein_);
+            prev_duein_ = 0;
             evtimer_add(evsend_ptr_,&duetv);
             dprintf("%s #%" PRIu32 " requeue for %s in %" PRIi64 "\n",tintstr(),id_,tintstr(next_send_time_), duein);
         }
