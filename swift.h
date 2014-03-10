@@ -1037,7 +1037,6 @@ namespace swift {
         tint        last_loss_time_;
         tint        next_send_time_;
         tint	    open_time_;
-        tint        prev_duein_;        // Ric: keep memory of libevent accuracy (granularity < 1ms)
         /** Congestion window; TODO: int, bytes. */
         float       cwnd_;
         int         cwnd_count1_;
