@@ -535,16 +535,18 @@ void    Channel::Send () {
     if (evbuffer_get_length(evb)==4) {// only the channel id; bare keep-alive
         data = bin_t::ALL;
     }
+
     dprintf("%s #%" PRIu32 " sent %ib %s:%x\n",
-            tintstr(),id_,(int)evbuffer_get_length(evb),peer().str().c_str(),
-            pcid);
+                tintstr(),id_,(int)evbuffer_get_length(evb),peer().str().c_str(),
+                pcid);
+    last_send_time_ = NOW;
 
     int r = SendTo(socket_,peer(),evb);
     if (r==-1)
         print_error("swift can't send datagram");
     else
         raw_bytes_up_ += r;
-    last_send_time_ = NOW;
+
     sent_since_recv_++;
     dgrams_sent_++;
     evbuffer_free(evb);
@@ -767,8 +769,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     bin_t tosend = bin_t::NONE;
     bool isretransmit = false;
     tint luft = send_interval_>>4; // may wake up a bit earlier
-    if (data_out_size_<cwnd_ &&
-            last_data_out_time_+send_interval_<=NOW+luft) {
+    if (data_out_size_<cwnd_ && last_data_out_time_+send_interval_-timer_delay_<=NOW+luft) {
         tosend = DequeueHint(&isretransmit);
         if (tosend.is_none()) {
             dprintf("%s #%" PRIu32 " sendctrl no idea what data to send\n",tintstr(),id_);
@@ -841,7 +842,11 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     bytes_up_ += r;
     global_bytes_up += r;
 
+    timer_delay_ = last_data_out_time_-next_send_time_+reschedule_delay_;
+    reschedule_delay_ = 0;
+
     dprintf("%s #%" PRIu32 " +data %s\n",tintstr(),id_,tosend.str().c_str());
+    dprintf("%s #%" PRIu32 " timer delay :%" PRIi64 "\n",tintstr(),id_,timer_delay_);
 
     // RATELIMIT
     // ARNOSMPTODO: count overhead bytes too? Move to Send() then.
@@ -1351,8 +1356,8 @@ void Channel::UpdateRTT(int32_t pos, tbqueue data_out, tint owd) {
     else
        rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
     dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
-    assert(data_out_[di].time!=TINT_NEVER);
-    dprintf("%s #%" PRIu32 " rtt:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_, rtt_avg_, dev_avg_);
+    assert(data_out[pos].time!=TINT_NEVER);
+    dprintf("%s #%" PRIu32 " rtt:%" PRIu64 ", rtt_avg:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_,rtt, rtt_avg_, dev_avg_);
 
     // one-way delay calculations
     std::pair <tint,tint> delay (owd, NOW);
@@ -1493,22 +1498,25 @@ void Channel::TimeoutDataOut ( ) {
     tint timeout = NOW - ack_timeout();
     if (send_control_!=LEDBAT_CONTROL)
         timeout -= ack_timeout()<<1;
-    dprintf("%s #%" PRIu32 " ack timeout %" PRIi64 "\n",tintstr(),id_,ack_timeout());
 
     while (!data_out_.empty() &&
         ( data_out_.front().time<timeout || data_out_.front()==tintbin() ) ) {
         if (data_out_.front()!=tintbin() && ack_in_.is_empty(data_out_.front().bin)) {
             ack_not_rcvd_recent_++;
             data_out_cap_ = bin_t::ALL;
-            data_out_tmo_.push_back(data_out_.front().bin);
+            // Ric: keep the original timing... otherwise calculations are wrong once
+            //      we get the ack back
+            data_out_tmo_.push_back(data_out_.front());
             data_out_size_--;
             dprintf("%s #%" PRIu32 " Tdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
         }
         data_out_.pop_front();
     }
     // clear retransmit queue of older items
-    while (!data_out_tmo_.empty() && (data_out_tmo_.front()==tintbin() || data_out_tmo_.front().time<NOW-MAX_POSSIBLE_RTT))
+    while (!data_out_tmo_.empty() && (data_out_tmo_.front()==tintbin() || data_out_tmo_.front().time<NOW-MAX_POSSIBLE_RTT)) {
         data_out_tmo_.pop_front();
+        data_out_size_--;
+    }
 
     // use the same value to clean the delay samples
     while ( owd_current_.size() > 4 && owd_current_.back().second < timeout) {
@@ -2361,10 +2369,12 @@ void Channel::Reschedule () {
 
     struct timeval currtv;
     if (evtimer_pending(evsend_ptr_, &currtv)) {
-        //if (timercmp(&currtv, tint2tv(NOW), <)) {
-        if (next_send_time_<NOW && send_control_ != PING_PONG_CONTROL) {
+
+        if (next_send_time_<NOW && send_control_ == LEDBAT_CONTROL) {
             dprintf("%s #%" PRIu32 " Already something scheduled for: %s\n",tintstr(),id_, tintstr(next_send_time_));
             direct_sending_ = true;
+            reschedule_delay_ = NOW-next_send_time_;
+            dprintf("%s #%" PRIu32 " reschedule delay :%" PRIi64 "\n",tintstr(),id_,reschedule_delay_);
         }
         evtimer_del(evsend_ptr_);
     }
