@@ -1361,8 +1361,8 @@ void Channel::UpdateRTT(int32_t pos, tbqueue data_out, tint owd) {
     else
        rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
     dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
-    assert(data_out_[di].time!=TINT_NEVER);
-    dprintf("%s #%" PRIu32 " rtt:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_, rtt_avg_, dev_avg_);
+    assert(data_out[pos].time!=TINT_NEVER);
+    dprintf("%s #%" PRIu32 " rtt:%" PRIu64 ", rtt_avg:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_,rtt, rtt_avg_, dev_avg_);
 
     // one-way delay calculations
     std::pair <tint,tint> delay (owd, NOW);
@@ -1509,15 +1509,19 @@ void Channel::TimeoutDataOut ( ) {
         if (data_out_.front()!=tintbin() && ack_in_.is_empty(data_out_.front().bin)) {
             ack_not_rcvd_recent_++;
             data_out_cap_ = bin_t::ALL;
-            data_out_tmo_.push_back(data_out_.front().bin);
+            // Ric: keep the original timing... otherwise calculations are wrong once
+            //      we get the ack back
+            data_out_tmo_.push_back(data_out_.front());
             data_out_size_--;
             dprintf("%s #%" PRIu32 " Tdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
         }
         data_out_.pop_front();
     }
     // clear retransmit queue of older items
-    while (!data_out_tmo_.empty() && (data_out_tmo_.front()==tintbin() || data_out_tmo_.front().time<NOW-MAX_POSSIBLE_RTT))
+    while (!data_out_tmo_.empty() && (data_out_tmo_.front()==tintbin() || data_out_tmo_.front().time<NOW-MAX_POSSIBLE_RTT)) {
         data_out_tmo_.pop_front();
+        data_out_size_--;
+    }
 
     // use the same value to clean the delay samples
     while ( owd_current_.size() > 4 && owd_current_.back().second < timeout) {
