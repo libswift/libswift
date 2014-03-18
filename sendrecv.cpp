@@ -1377,7 +1377,6 @@ void Channel::UpdateRTT(int32_t pos, tbqueue data_out, tint owd) {
        owd_min_bins_[owd_min_bin_] = owd;
 
     ack_rcvd_recent_++;
-    data_out_size_--;
 
 }
 
@@ -1474,6 +1473,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
                data_out_cap_ = bin_t::ALL;
                data_out_[re] = tintbin();
             }*/
+            data_out_size_--;
             data_out_[di]=tintbin();
         }
         else if (ri!=data_out_tmo_.size()) {
