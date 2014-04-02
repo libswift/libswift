@@ -442,8 +442,9 @@ TribeChannel.prototype =
       args.push('-g');
       args.push('0.0.0.0:'+this.swift_http_port);
       // RATELIMIT
-      args.push('-y');  
-      args.push('1024');
+      // Arno, 2014-04-02: Temporary disabled. Broken in github/devel branch.
+      //args.push('-y');  
+      //args.push('1024');
       //args.push('-p');
       args.push('-w');
       // debugging on

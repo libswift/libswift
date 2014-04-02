@@ -602,6 +602,10 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
         // Actually allowed is max minus what we already asked for, globally (=all channels)
         rate_allowed_hints = max(0,rate_hints_limit-(int)rough_global_hint_out_size);
+
+        if (DEBUGTRAFFIC)
+            fprintf(stderr,"hint c%" PRIu32 ": rate_hints_limit %d rallow %d globout %" PRIu64 "\n", id(), rate_hints_limit, rate_allowed_hints, rough_global_hint_out_size );
+
     }
     if (DEBUGTRAFFIC)
         fprintf(stderr,"hint c%" PRIu32 ": %lf want %d qallow %d rallow %d chanout %" PRIu64 " globout %" PRIu64 "\n", id(), transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, queue_allowed_hints, rate_allowed_hints, hint_out_size_, rough_global_hint_out_size );
