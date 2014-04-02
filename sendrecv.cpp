@@ -602,6 +602,10 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
         // Actually allowed is max minus what we already asked for, globally (=all channels)
         rate_allowed_hints = max(0,rate_hints_limit-(int)rough_global_hint_out_size);
+
+        if (DEBUGTRAFFIC)
+            fprintf(stderr,"hint c%" PRIu32 ": rate_hints_limit %d rallow %d globout %" PRIu64 "\n", id(), rate_hints_limit, rate_allowed_hints, rough_global_hint_out_size );
+
     }
     if (DEBUGTRAFFIC)
         fprintf(stderr,"hint c%" PRIu32 ": %lf want %d qallow %d rallow %d chanout %" PRIu64 " globout %" PRIu64 "\n", id(), transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, queue_allowed_hints, rate_allowed_hints, hint_out_size_, rough_global_hint_out_size );
@@ -970,7 +974,7 @@ void    Channel::Recv (struct evbuffer *evb) {
         dev_avg_ = rtt_avg_;
         dip_avg_ = rtt_avg_;
         dprintf("%s #%" PRIu32 " sendctrl rtt init %" PRIi64 "\n",tintstr(),id_,rtt_avg_);
-        fprintf(stderr,"%s #%" PRIu32 " sendctrl rtt init %" PRIi64 "\n",tintstr(),id_,rtt_avg_);
+        //fprintf(stderr,"%s #%" PRIu32 " sendctrl rtt init %" PRIi64 "\n",tintstr(),id_,rtt_avg_);
     }
 
     bin_t data = evbuffer_get_length(evb) ? bin_t::NONE : bin_t::ALL;

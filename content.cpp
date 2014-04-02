@@ -188,7 +188,7 @@ void ContentTransfer::ReConnectToTrackerIfAllowed(bool movingforward)
     {
         if (NOW > tracker_retry_time_)
         {
-            fprintf(stderr,"content: -movingforward ConnectToTracker\n");
+            //fprintf(stderr,"content: -movingforward ConnectToTracker\n");
             ConnectToTracker();
 
             // Should be: if fail then exp backoff

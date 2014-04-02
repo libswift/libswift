@@ -1,0 +1,31 @@
+html, body 
+{
+    font-family:Verdana,Arial,Helvetica,sans-serif; 
+    font-size:14px; 
+    background-color:white; 
+}
+
+h1
+{
+	font-size: 20px;
+}
+
+
+h2 
+{
+	font-size: 18px;
+	padding-top: 20;
+}
+
+
+h3 
+{
+    padding-top: 16;
+	font-size: 16px;
+}
+
+
+img.install
+{
+	padding-left: 40px;
+}

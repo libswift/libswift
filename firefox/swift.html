@@ -1,0 +1,90 @@
+<html>
+<head>
+<title>Video-on-demand with libswift</title>
+<link href="main.css" rel="stylesheet" title="preferred"/>
+</head>
+
+<body>
+
+<!-- <div style="margin:0 auto; width:800; "> -->
+<div style="padding:40;" >
+
+<!-- 1st column -->
+<div style="width:1100; float:left; padding:20">
+
+<a href="http://www.p2p-next.org/"><img style="border:0; width:100;height:40; padding-bottom:20px;" src="p2p-next.png"></a>
+
+<h4 style="margin-top:0px; ">Video-on-demand with libswift </h4>
+
+<p>
+Video-on-demand delivered via the swift protocol (lean &amp; mean, UDP based, 
+LEDBAT congestion avoidance, <a href="http://www.libswift.org">www.libswift.org</a>)
+</p>
+
+<script>
+ function failed(e) {
+   // video playback failed - show a message saying why
+   switch (e.target.error.code) {
+     case e.target.error.MEDIA_ERR_ABORTED:
+       alert('You aborted the video playback.');
+       break;
+     case e.target.error.MEDIA_ERR_NETWORK:
+       alert('A network error caused the video download to fail part-way.');
+       break;
+     case e.target.error.MEDIA_ERR_DECODE:
+       alert('The video playback was aborted due to a corruption problem or because the video used features your browser did not support.');
+       break;
+     case e.target.error.MEDIA_ERR_SRC_NOT_SUPPORTED:
+       alert('The video could not be loaded, either because the server or network failed or because the format is not supported.');
+       break;
+     default:
+       alert('An unknown error occurred, code:'+e.target.error.code);
+       break;
+   }
+ }
+</script>
+
+
+<script>
+
+if (typeof swarmTransport == 'undefined')
+{
+	document.write("No swarmTransport<br/>");
+}
+else
+{
+    document.write("swarmTransport defined<br/>");
+}
+
+if (typeof tswiftTransport == 'undefined')
+{
+	document.write("No tswiftTransport<br/>");
+}
+else
+{
+    document.write("tswiftTransport defined<br/>");
+}
+
+</script>
+
+<!-- Bunny -->
+<video controls="true" autoplay="true">
+  <source src="tswift://127.0.0.1:20001/b0378d63859c78feaf160a81bc9cba00d9343248@81|http://127.0.0.1:8061/Sintel_excerpt.OGG"/>
+  <source src="http://127.0.0.1:8061/treeOfLife.ogv"/>
+  <!-- source src="http://upload.wikimedia.org/wikipedia/en/0/07/Sintel_excerpt.OGG"/ -->
+</video>
+
+
+<p style="padding-top: 50px;">
+<a href="index.html">Home</a> | <a href="bg.html">Technology</a> |</a>
+</p>
+
+</div>
+
+</div> <!-- main -->
+
+
+</body>
+</html>
+
+
