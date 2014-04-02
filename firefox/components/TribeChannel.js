@@ -3,6 +3,23 @@
 /*
   TribeChannel - Torrent video for <video>
 
+  = General Operation =
+   
+  On using a tswift:// URL a TribeChannel object is created by
+  TribeProtocolHandler. This nsIChannel implementing object is passed the URL
+  via setTorrentUrl(). Next, it is passed a nsIStreamListener object via 
+  asyncOpen by the video element handler. The channel should call this 
+  topListener's onStartRequest, onDataAvailable and onStopRequest methods when 
+  data from the P2P engine comes in.
+  
+  First thing that asyncOpen does is contact the P2P engine. If this fails,
+  it launches the engine via startBackgroundProcess. For Python, once a control
+  connection is established, it sends START and waits for PLAY. On PLAY it 
+  opens a data connection to the P2P engine's internal HTTP server and
+  passes the data onto the topListener. For Swift, when the engine is assumed
+  running we send a GET /roothash... to its HTTPGW server, and forward to the
+  topListener.
+
   Written by Jan Gerber, Riccardo Petrocco, Arno Bakker
   see LICENSE.txt for license information
  */
@@ -109,6 +126,14 @@ TribeChannel.prototype =
   },
   asyncOpen: function(aListener, aContext)
   {
+    /*
+     Video element handler opens TribeChannel. First establish control connection
+     to P2P engine, launching it if not already running. Then send START command
+     and wait for PLAY command. Then read data from HTTP data connection and
+     pass on to video element handler (Python backend). For swift, launch and 
+     send GET /roothash to Swift HTTPGW and forward.
+     */
+  
     var _this = this;
     if(this.init) {
       LOG('asyncOpen called again\n');
@@ -141,10 +166,21 @@ TribeChannel.prototype =
      */
     var msg = 'SUPPORTS VIDEVENT_START\r\n';
     msg = msg + 'START ' + this.torrent_url + '\r\n'; // concat, strange async interface
+    
+    // This write causes an NS_ERROR_CONNECTION_REFUSED to be thrown if
+    // the P2P engine is not yet running. ctrlListener is used to handle
+    // this connection attempt. The connection is linked to the ctrlListener
+    // below, see pump. 
     this.outputStream.write(msg, msg.length);
 
-    var dataListener = {
-      onStartRequest: function(request, context) {},
+    /*
+      Listener interface to handle control connection to P2P engine,
+      and to launch it if necessary. For Swift there is no control connection,
+      we just launch a new instance of the swift engine on a random port for
+      each video, currently and do a HTTP GET to the httpgw part of the engine.
+     */
+    var ctrlListener = {
+      onStartRequest: function(request, context) {  LOG('ARNO Connected to BackgroundProcess\n'); },
       onStopRequest: function(request, context, status) {
       
         LOG("onStopRequest " + _this.running );
@@ -153,11 +189,16 @@ TribeChannel.prototype =
           if (_this.backend == 'swift' && _this.running == true)
               return;
 
+	  // We got connection refuse, engine not running, start it!
           if (!_this.startBackgroundDaemon())
           {
               this.onBGError();
               return;
           }
+          
+          // Now wait a while to give engine time to start and then retry
+          // to establish control connection (Python) or GET /roothash (swift)
+          //
           _this.running=true;
           // swift backend
           if (_this.backend == 'swift')
@@ -165,9 +206,9 @@ TribeChannel.prototype =
               // Send GET /roothash?query to swift process
               var video_url = 'http://127.0.0.1:'+_this.swift_http_port+'/'+_this.swift_path_query;
 	      
-              // Give process time to start and listen
+              // Give process time to start and listen, then call onPlay directly
               var timer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
-              timer.initWithCallback(function() { dataListener.onPlay(video_url); },
+              timer.initWithCallback(function() { ctrlListener.onPlay(video_url); },
                                  1000, Ci.nsITimer.TYPE_ONE_SHOT);
           }
           else
@@ -185,6 +226,9 @@ TribeChannel.prototype =
         }
       },
       onDataAvailable: function(request, context, inputStream, offset, count) {
+      
+        // Called when data received from control connection (Python)
+      
         var sInputStream = Cc["@mozilla.org/scriptableinputstream;1"].createInstance(Ci.nsIScriptableInputStream);
         sInputStream.init(inputStream);
 
@@ -221,7 +265,10 @@ TribeChannel.prototype =
       },
       onPlay: function(video_url) {
 
-    	  // Start playback of P2P-delivered video
+          /*
+    	    Start playback of P2P-delivered video, i.e. connect to P2P engine's
+    	    internal HTTP server, retrieve data and forward it to topListener.
+    	   */
     	  LOG('PLAY !!!!!! '+video_url+'\n');
     	  
     	  //
@@ -235,6 +282,7 @@ TribeChannel.prototype =
     	  var orig_request = null;
           var swiftstopped=false;
     	  
+    	  // Prototype for a reader that reads from a HTTP source in case P2P fails
           var replaceListener = {
       
              onStartRequest: function(request, context) 
@@ -352,6 +400,11 @@ TribeChannel.prototype =
           }; // Failmon end
           
           
+          // Normal case: get video from HTTP connection to P2P engine and forward
+          // to topListener. If there is a fallback HTTP URL, monitor the P2P
+          // forwarding and fail over if required.
+          //
+          
           var ios = Cc["@mozilla.org/network/io-service;1"].getService(Ci.nsIIOService);
           var video_channel = ios.newChannel(video_url, null, null);
           video_httpchan = video_channel.QueryInterface(Components.interfaces.nsIHttpChannel);
@@ -372,9 +425,11 @@ TribeChannel.prototype =
           nsWindow.content.addEventListener("unload", function() { _this.shutdown() }, false);
       },
     };
+    
+    // Open control connection
     var pump = Cc["@mozilla.org/network/input-stream-pump;1"].createInstance(Ci.nsIInputStreamPump);
     pump.init(this.inputStream, -1, -1, 0, 0, false);
-    pump.asyncRead(dataListener, null);
+    pump.asyncRead(ctrlListener, null);
   },
   startBackgroundDaemon: function() {
       try 
