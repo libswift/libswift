@@ -33,6 +33,22 @@ typedef unsigned __int64 uint64_t;
 #include <direct.h>
 #include <In6addr.h>
 #include <Ws2tcpip.h>
+// Arno: PRIu32 stuff for Windows. From http://hg.rabbitmq.com/rabbitmq-c/file/73f65df29956/msinttypes/inttypes.h
+// Apparently MS VS 2013 has inttypes.h TODO
+#ifndef PRIu16
+#define PRIu16       "hu"
+#define PRId32       "I32d"
+#define PRIi32       "I32i"
+#define PRIu32       "I32u"
+#define PRId64       "I64d"
+#define PRIi64       "I64i"
+#define PRIu64       "I64u"
+#define SCNd32       "ld"
+#define SCNi32       "li"
+#define SCNd64       "I64d"
+#define SCNi64       "I64i"
+#define SCNx64       "I64x"
+#endif
 #else
 #include <sys/mman.h>
 #include <arpa/inet.h>
@@ -42,6 +58,9 @@ typedef unsigned __int64 uint64_t;
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/stat.h>
+// Ric: get rid of printing warnings.. using ISO C99 standard for exact-width integer types
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
 #endif
 
 #include <limits.h>
@@ -52,9 +71,6 @@ typedef unsigned __int64 uint64_t;
 #include <errno.h>
 #include <math.h>
 #include <signal.h>
-// Ric: get rid of printing warnings.. using ISO C99 standard for exact-width integer types
-#define __STDC_FORMAT_MACROS
-#include <inttypes.h>
 
 #ifdef _MSC_VER
 #include "getopt_win.h"

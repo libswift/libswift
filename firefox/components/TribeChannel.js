@@ -47,23 +47,21 @@ TribeChannel.prototype =
   running: false,
   torrent_url: '',
   swift_url: '',
-  swift_root_hash: '',
-  swift_duration: '',
+  swift_path_query: '',
   http_url: '',
   swift_http_port: 0,
-  debuglogfile: null, // TRIALM36
   setTorrentUrl: function(url) {
 	/* Format:
 	 * BT: 
 	 *     tribe://torrenturl
 	 *     where torrenturl is full URL of torrent file, unescaped.
 	 * Swift:
-	 *     tribe://tracker/roothash@duration
+	 *     tswift://tracker/roothash?k1=v1&k2=v2
 	 *  or
-	 *     tribe://tracker/roothash@duration|httpurl
+	 *     tswift://tracker/roothash?k1=v1&k2=v2|httpurl   FIXME2014
 	 *     where httpurl is the full URL of the HTTP equivalent, unescaped
 	 *     
-	 * Note: tribe:// is already stripped.
+	 * Note: tswift:// is already stripped in TribeProtocolHandler.js
 	 */
     
     var pidx = url.indexOf('|');
@@ -78,15 +76,14 @@ TribeChannel.prototype =
     }
     	
     
-    if (p2purl.lastIndexOf('@')-p2purl.lastIndexOf('/') == 41) // Format /root hash@xcontentdur
+    if (true)
     {
         this.backend = 'swift';
         this.swift_url = p2purl;
   	  
         hashidx = this.swift_url.indexOf('/')+1;
-        this.swift_root_hash = this.swift_url.substr(hashidx,40);
-        this.swift_duration = this.swift_url.substr(hashidx+41,this.swift_url.length-hashidx);
-        LOG("root hash #" + this.swift_root_hash + "# dur #" + this.swift_duration + "#");
+        this.swift_path_query = this.swift_url.substr(hashidx,this.swift_url.length-hashidx);
+        LOG("ARNO Swift path " + this.swift_path_query);
     }
     else
     {
@@ -165,20 +162,13 @@ TribeChannel.prototype =
           // swift backend
           if (_this.backend == 'swift')
           {
-        	  // Send GET /roothash@contendur to swift process
-        	  var video_url = 'http://127.0.0.1:'+_this.swift_http_port+'/'+_this.swift_root_hash+'@'+_this.swift_duration;
+              // Send GET /roothash?query to swift process
+              var video_url = 'http://127.0.0.1:'+_this.swift_http_port+'/'+_this.swift_path_query;
 	      
               // Give process time to start and listen
               var timer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
               timer.initWithCallback(function() { dataListener.onPlay(video_url); },
                                  1000, Ci.nsITimer.TYPE_ONE_SHOT);
-
-              // TRIALM36
-              var timer2 = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
-              timer2.initWithCallback(function() { _this.sendSwiftLog() },
-                                 90000, Ci.nsITimer.TYPE_ONE_SHOT);
-
-          
           }
           else
           {
@@ -428,11 +418,9 @@ TribeChannel.prototype =
     file.appendRelativePath('bgprocess');
     file.appendRelativePath(bgpath);
 
-    // TRIALM36
-    this.debuglogfile = __LOCATION__.parent.parent.QueryInterface(Ci.nsILocalFile);
-    this.debuglogfile.appendRelativePath('bgprocess');
-    this.debuglogfile.appendRelativePath(this.swift_http_port+'.log'); //safe filename
-
+    // Debug
+    LOG('ARNO Looking for swift in '+file.path+'\n');
+    
     
     // Arno, 2010-06-16: Doesn't work on Ubuntu with /usr/share/xul-ext* install      
     try {
@@ -457,9 +445,6 @@ TribeChannel.prototype =
       args.push('-y');  
       args.push('1024');
       //args.push('-p');
-      // TRIALM36
-      //args.push('-D');
-      //args.push(this.debuglogfile.path);
       args.push('-w');
       // debugging on
       //if (tribeLoggingEnabled && osString != "Darwin")
@@ -469,53 +454,6 @@ TribeChannel.prototype =
       //}
     }
     process.run(false, args, args.length);
-  },
-  sendSwiftLog: function () {
-
-	  // TRIALM36
-	  LOG("HTTP POSTing logfile " + this.debuglogfile.path);
-
-	  /*
-	   * Arno, 2010-12-17: The swift logfile is large, hence we need to 
-	   * compress it before uloading. Using nsIStreamConverter to gzip
-	   * it doesn't appear to work. The gzip-ed data cannot be decompressed
-	   * by the gzip program, in particular, the header appears to be missing
-	   * or damaged. Hence, I pkzip the log file and then POST that data.
-	   */
-      destfile = __LOCATION__.parent.parent.QueryInterface(Ci.nsILocalFile);
-	  destfile.appendRelativePath('bgprocess');
-	  destfile.appendRelativePath(this.swift_http_port+'.zip');
-
-	  var zipWriter = Components.Constructor("@mozilla.org/zipwriter;1", "nsIZipWriter");   
-	  var zipW = new zipWriter();   
-
-	  // TODO: COMPRESSION_BEST?
-	  zipW.open(destfile, 0x04 | 0x08 | 0x20 );   
-	  zipW.addEntryFile(this.swift_root_hash+'.log', Components.interfaces.nsIZipWriter.COMPRESSION_DEFAULT, this.debuglogfile, false);   
-	  zipW.close();  
-
-	  // Open debug file fo reading
-      var fstream = Components.classes["@mozilla.org/network/file-input-stream;1"].createInstance(Components.interfaces.nsIFileInputStream);   
-      fstream.init(destfile, -1, 0, 0);
-      // var fstream_input_stream = fstream.QueryInterface(Components.interfaces.nsIInputStream);
-      var fstream_input_stream = Components.classes["@mozilla.org/binaryinputstream;1"].createInstance(Components.interfaces.nsIBinaryInputStream);   
-      fstream_input_stream.setInputStream(fstream);   
-	  
-
-      // Open a HTTP connection to do a POST
-	  var post_url = "http://url2torrent.p2p-next.org/log/"+escape(this.swift_url)
-	  
-      var lios = Cc["@mozilla.org/network/io-service;1"].getService(Ci.nsIIOService);
-      var log_channel = lios.newChannel(post_url, null, null);
-      var log_httpchan = log_channel.QueryInterface(Components.interfaces.nsIHttpChannel);
-      var log_upchan = log_channel.QueryInterface(Components.interfaces.nsIUploadChannel);
-
-      // Tell connection to upload the PKZIP
-      log_upchan.setUploadStream(fstream_input_stream,'application/octet-stream',-1);
-      log_httpchan.requestMethod = "POST";
-      
-      // Sync open HTTP conn
-      log_channel.open()
   },
 } 
 
