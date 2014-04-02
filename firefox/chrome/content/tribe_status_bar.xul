@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE overlay >
+<overlay id="tswift_status_bar_overlay"
+  xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+
+<script type="application/javascript"
+   src="chrome://tswift/content/tribe_status_bar.js"/>
+
+<!-- Firefox -->
+    <statusbar id="status-bar">
+	    <statusbarpanel 
+	        class="statusbarpanel-iconic-text"
+	        id="tswiftstatusbar"
+	        src="chrome://tswift/skin/swarmplugin_grey.png"
+		    label=""
+		    tooltiptext="SwarmPlayer 3000"
+	    />
+
+
+    </statusbar>
+
+</overlay>

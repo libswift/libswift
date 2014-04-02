@@ -1,0 +1,18 @@
+content     tswift chrome/content/
+skin        tswift wiki skin/wiki/
+
+# Firefox
+overlay	chrome://browser/content/browser.xul chrome://tswift/content/tribe_status_bar.xul
+
+interfaces components/tribeISwarmTransport.xpt
+component {3dfea7b2-52e6-467f-b2c6-19fd6d459bf6} components/SwarmTransport.js
+contract @p2pnext.org/tswift/swarmTransport;1 {3dfea7b2-52e6-467f-b2c6-19fd6d459bf6}
+category JavaScript-global-constructor tswiftTransport @p2pnext.org/tswift/swarmTransport;1
+
+interfaces components/tribeIChannel.xpt
+component {68bfe8e9-c7ec-477d-a26c-2391333a7a42} components/TribeChannel.js
+contract @p2pnext.org/tswift/channel;1 {68bfe8e9-c7ec-477d-a26c-2391333a7a42}
+
+component {bcb8d306-66cf-4358-8473-807981ffe356} components/TribeProtocolHandler.js
+contract @mozilla.org/network/protocol;1?name=tswift {bcb8d306-66cf-4358-8473-807981ffe356}
+
