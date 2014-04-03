@@ -615,7 +615,8 @@ void    Channel::AddHint (struct evbuffer *evb) {
 
     // 4. Ask allowance in blocks of chunks to get pipelining going from serving peer.
     // Arno, 2012-10-30: not HINT_GRANULARITY for LIVE
-    if (hint_out_size_ == 0 || plan_pck >= HINT_GRANULARITY || transfer()->ttype() == LIVE_TRANSFER)
+    //if (hint_out_size_ == 0 || plan_pck >= HINT_GRANULARITY || transfer()->ttype() == LIVE_TRANSFER)
+    if (plan_pck >= HINT_GRANULARITY || transfer()->ttype() == LIVE_TRANSFER)
     {
 		bin_t hint = bin_t::NONE;
         if (transfer()->ttype() == LIVE_TRANSFER)
