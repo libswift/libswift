@@ -267,12 +267,12 @@ public:
     	// TODO: convert playback_pos_ to a bin number
     	uint64_t cid = offbin.toUInt()/2;
     	if (cid > 0)
-	    cid--; // Riccardo assumes playbackpos is already in.
+    	    cid--; // Riccardo assumes playbackpos is already in.
 
     	//fprintf(stderr,"vodpp: pos in K %" PRIu64 " size %" PRIu64 "\n", cid, hashtree()->size_in_chunks() );
 
     	if (cid > hashtree()->size_in_chunks())
-	    return -1;
+    	    return -1;
 
     	playback_pos_ = cid;
     	return 0;

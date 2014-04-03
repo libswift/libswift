@@ -95,7 +95,7 @@ namespace swift {
 #define ENABLE_FALLBACK_TO_LEGACY_PROTO	0
 
 // Arno, 2011-12-22: Enable Riccardo's VodPiecePicker
-#define ENABLE_VOD_PIECEPICKER        0
+#define ENABLE_VOD_PIECEPICKER        1
 
 // Arno, 2013-10-02: Configure which live piecepicker: default or with small-swarms optimization
 #define ENABLE_LIVE_SMALLSWARMOPT_PIECEPICKER      1
