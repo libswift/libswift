@@ -165,7 +165,7 @@ tint    Channel::CwndRateNextSendTime () {
         lprintf("\t\t==== Switch to Keep Alive Control (send_interval_>max(rtt_avg_,TINT_SEC)*4) ==== \n");
         return SwitchSendControl(KEEP_ALIVE_CONTROL);
     }
-    if (data_out_size_<cwnd_) {
+    if (data_out_size_<(int)cwnd_) {
         dprintf("%s #%" PRIu32 " sendctrl send interval %" PRIi64 "us (cwnd %.2f, data_out %" PRIu32 ")\n",
                 tintstr(),id_,send_interval_,cwnd_,data_out_size_);
         return last_data_out_time_ + send_interval_ - timer_delay_;

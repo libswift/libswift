@@ -1349,21 +1349,6 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 
 void Channel::UpdateRTT(int32_t pos, tbqueue data_out, tint owd) {
 
-    assert(pos && !data_out.empty() && owd);
-    assert(pos < data_out.size());
-
-    // Ric: FIXME assuming direct sending of acks
-    tint rtt = NOW-data_out[pos].time;
-
-    // Ric: quickly adapt to new network changes! (with large owd samples the previous rtt values influence
-    if (owd > rtt_avg_)
-       rtt_avg_ = (rtt_avg_*3 + rtt) >> 2;
-    else
-       rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
-    dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
-    assert(data_out[pos].time!=TINT_NEVER);
-    dprintf("%s #%" PRIu32 " rtt:%" PRIu64 ", rtt_avg:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_,rtt, rtt_avg_, dev_avg_);
-
     // one-way delay calculations
     std::pair <tint,tint> delay (owd, NOW);
     owd_current_.push_front(delay);
@@ -1459,6 +1444,18 @@ void    Channel::OnAck (struct evbuffer *evb) {
                 di==data_out_.size() ? (ri==data_out_tmo_.size() ? '?':'R' ) : '-',ackd_pos.str().c_str(),peer_owd);
 
         if (di!=data_out_.size()) {
+            // Ric: FIXME assuming direct sending of acks
+            tint rtt = NOW-data_out_[di].time;
+
+            // Ric: quickly adapt to new network changes! (with large owd samples the previous rtt values influence
+            //if (owd > rtt_avg_)
+            //   rtt_avg_ = (rtt_avg_*3 + rtt) >> 2;
+            //else
+               rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
+            dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
+            assert(data_out_[di].time!=TINT_NEVER);
+            dprintf("%s #%" PRIu32 " rtt:%" PRIu64 ", rtt_avg:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_,rtt, rtt_avg_, dev_avg_);
+
             UpdateRTT(di, data_out_, peer_owd);
             dprintf("%s #%" PRIu32 " setting null %s\n",tintstr(),id_, data_out_[di].bin.str().c_str());
             // early loss detection by packet reordering
@@ -1520,7 +1517,7 @@ void Channel::TimeoutDataOut ( ) {
     // clear retransmit queue of older items
     while (!data_out_tmo_.empty() && (data_out_tmo_.front()==tintbin() || data_out_tmo_.front().time<NOW-MAX_POSSIBLE_RTT)) {
         data_out_tmo_.pop_front();
-        data_out_size_--;
+        //data_out_size_--;
     }
 
     // use the same value to clean the delay samples
