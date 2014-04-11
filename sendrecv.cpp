@@ -769,7 +769,9 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     bin_t tosend = bin_t::NONE;
     bool isretransmit = false;
     tint luft = send_interval_>>4; // may wake up a bit earlier
-    if (data_out_size_<cwnd_ && last_data_out_time_+send_interval_-timer_delay_<=NOW+luft) {
+    // Ric: test
+    //if (data_out_size_<cwnd_ && last_data_out_time_+send_interval_-timer_delay_<=NOW+luft) {
+    if ( (data_out_size_<cwnd_ || cwnd_>0) && last_data_out_time_+send_interval_-timer_delay_<=NOW+luft) {
         tosend = DequeueHint(&isretransmit);
         if (tosend.is_none()) {
             dprintf("%s #%" PRIu32 " sendctrl no idea what data to send\n",tintstr(),id_);

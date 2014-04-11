@@ -165,6 +165,8 @@ tint    Channel::CwndRateNextSendTime () {
         lprintf("\t\t==== Switch to Keep Alive Control (send_interval_>max(rtt_avg_,TINT_SEC)*4) ==== \n");
         return SwitchSendControl(KEEP_ALIVE_CONTROL);
     }
+    // Ric: test
+    /*
     if (data_out_size_<(int)cwnd_) {
         dprintf("%s #%" PRIu32 " sendctrl send interval %" PRIi64 "us (cwnd %.2f, data_out %" PRIu32 ")\n",
                 tintstr(),id_,send_interval_,cwnd_,data_out_size_);
@@ -174,7 +176,20 @@ tint    Channel::CwndRateNextSendTime () {
                 tintstr(),id_,cwnd_,data_out_size_);
         assert(data_out_.front().time!=TINT_NEVER);
         return data_out_.front().time + ack_timeout();
+    }*/
+    // start test
+    if (data_out_size_<(int)cwnd_ || (int)cwnd_ > 1) {
+        dprintf("%s #%" PRIu32 " sendctrl send interval %" PRIi64 "us (cwnd %.2f, data_out %" PRIu32 ")\n",
+                tintstr(),id_,send_interval_,cwnd_,data_out_size_);
+        return last_data_out_time_ + send_interval_ - timer_delay_;
+    } else {
+        dprintf("%s #%" PRIu32 " sendctrl avoid sending (cwnd %.2f, data_out %" PRIu32 ")\n",
+                tintstr(),id_,cwnd_,data_out_size_);
+        assert(data_out_.front().time!=TINT_NEVER);
+        return data_out_.front().time + ack_timeout();
     }
+    // end-test
+
 }
 
 void    Channel::BackOffOnLosses (float ratio) {
