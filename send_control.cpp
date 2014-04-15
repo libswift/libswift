@@ -28,7 +28,14 @@ const char* Channel::SEND_CONTROL_MODES[] = {"keepalive", "pingpong",
 tint    Channel::NextSendTime () {
     TimeoutDataOut(); // precaution to know free cwnd
     switch (send_control_) {
-        case KEEP_ALIVE_CONTROL: return KeepAliveNextSendTime();
+        case KEEP_ALIVE_CONTROL:
+            if (data_out_.size() > 0)
+            {
+                // There is data to be sent. Switch to slowstart to deliver it asap
+                SwitchSendControl(SLOW_START_CONTROL);
+                return SlowStartNextSendTime();
+            }
+            return KeepAliveNextSendTime();
         case PING_PONG_CONTROL:  return PingPongNextSendTime();
         case SLOW_START_CONTROL: return SlowStartNextSendTime();
         case AIMD_CONTROL:       return AimdNextSendTime();
