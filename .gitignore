@@ -1,12 +1,17 @@
+# Build files
 *.o
 *.a
 .sconsign.dblite
-
 /swift
 /dist
 
-# Mac OSX
-.DS_Store
+# Demo result files
+/firefox/demo/*.ogv
+/firefox/demo/*.mbinmap
+/firefox/demo/*.mhash
 
 # Emacs temp files
 *~
+
+# Mac OSX
+.DS_Store
