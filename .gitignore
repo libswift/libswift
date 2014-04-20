@@ -1,0 +1,12 @@
+*.o
+*.a
+.sconsign.dblite
+
+/swift
+/dist
+
+# Mac OSX
+.DS_Store
+
+# Emacs temp files
+*~
