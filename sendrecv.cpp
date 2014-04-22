@@ -776,7 +776,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     tint luft = send_interval_>>4; // may wake up a bit earlier
     // Ric: test
     //if (data_out_size_<cwnd_ && last_data_out_time_+send_interval_-timer_delay_<=NOW+luft) {
-    if ( (data_out_size_<cwnd_ || cwnd_>0) && last_data_out_time_+send_interval_-timer_delay_<=NOW+luft) {
+    if ( (data_out_size_<cwnd_ || cwnd_>0) && last_data_out_time_+send_interval_-reschedule_delay_<=NOW+luft) {
         tosend = DequeueHint(&isretransmit);
         if (tosend.is_none()) {
             dprintf("%s #%" PRIu32 " sendctrl no idea what data to send\n",tintstr(),id_);
@@ -849,11 +849,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     bytes_up_ += r;
     global_bytes_up += r;
 
-    timer_delay_ = last_data_out_time_-next_send_time_+reschedule_delay_;
-    reschedule_delay_ = 0;
-
     dprintf("%s #%" PRIu32 " +data %s\n",tintstr(),id_,tosend.str().c_str());
-    dprintf("%s #%" PRIu32 " timer delay :%" PRIi64 "\n",tintstr(),id_,timer_delay_);
 
     // RATELIMIT
     // ARNOSMPTODO: count overhead bytes too? Move to Send() then.
@@ -2362,25 +2358,24 @@ void Channel::Reschedule () {
     // NOW to be 0, so any calls to Time in between may put things off. Sigh.
     Time();
 
-    int pending_event = 0;
-    // Ric: before rescheduling check if we already have scheduled it in the past
     if (evsend_ptr_ == NULL) {
         dprintf("%s #%" PRIu32 " cannot requeue for %s, closed\n",tintstr(),id_,tintstr(next_send_time_));
         return;
     }
+    struct timeval currtv;
+    //if (evtimer_pending(evsend_ptr_, &currtv)) {
+    //    evtimer_del(evsend_ptr_);
+    //}
 
     dprintf("%s schedule\n",tintstr() );
 
-    struct timeval currtv;
-    if (evtimer_pending(evsend_ptr_, &currtv)) {
-
-        if (next_send_time_<NOW && send_control_ == LEDBAT_CONTROL) {
-            dprintf("%s #%" PRIu32 " Already something scheduled for: %s\n",tintstr(),id_, tintstr(next_send_time_));
-            direct_sending_ = true;
-            reschedule_delay_ = NOW-next_send_time_;
-            dprintf("%s #%" PRIu32 " reschedule delay :%" PRIi64 "\n",tintstr(),id_,reschedule_delay_);
-        }
-        evtimer_del(evsend_ptr_);
+    // Ric: before rescheduling check if we already have scheduled it in the past.
+    // calculate the delay only if the reschedule has been called after a send, ignore reschedules
+    // triggered by something received.
+    if (last_send_time_>next_send_time_ && next_send_time_<NOW && send_control_ == LEDBAT_CONTROL) {
+        dprintf("%s #%" PRIu32 " Already something scheduled for: %s\n",tintstr(),id_, tintstr(next_send_time_));
+        reschedule_delay_ = NOW - next_send_time_;
+        dprintf("%s #%" PRIu32 " reschedule delay :%" PRIi64 "\n",tintstr(),id_,reschedule_delay_);
     }
 
     next_send_time_ = NextSendTime();
@@ -2388,15 +2383,17 @@ void Channel::Reschedule () {
 
         assert(next_send_time_<NOW+TINT_MIN);
         tint duein = next_send_time_-NOW;
-        if (duein <= 0 || direct_sending_) {
+
+        if (duein <= 0) {
             // Arno, 2011-10-18: libevent's timer implementation appears to be
             // really slow, i.e., timers set for 100 usec from now get called
             // at least two times later :-( Hence, for sends after receives
             // perform them directly.
-            // Ric: TODO add comment on direct sending!
+            // Ric: The timer error of libevent can be propagated throughout the
+            // download.. keep track of the delay error!
             dprintf("%s #%" PRIu32 " requeue direct send (%s)\n",tintstr(),id_, duein<=0 ? "duein" : "direct sending");
-            next_send_time_ = NOW;
-            direct_sending_ = false;
+            //next_send_time_ = NOW;
+
             LibeventSendCallback(-1,EV_TIMEOUT,this);
         }
         else
