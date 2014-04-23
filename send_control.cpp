@@ -156,8 +156,8 @@ tint    Channel::PingPongNextSendTime () { // FIXME INFINITE LOOP
 tint    Channel::CwndRateNextSendTime () {
     if (data_in_.time!=TINT_NEVER)
         return NOW; // TODO: delayed ACKs
-    if (last_recv_time_<NOW-rtt_avg_*4) {
-        lprintf("\t\t==== Switch to Keep Alive Control (last_recv_time_<NOW-rtt_avg_*4) ==== \n");
+    if (last_recv_time_<NOW-rtt_avg_*8) {
+        lprintf("\t\t==== Switch to Keep Alive Control (last_recv_time_<NOW-rtt_avg_*8) ==== \n");
         return SwitchSendControl(KEEP_ALIVE_CONTROL);
     }
     send_interval_ = rtt_avg_/cwnd_;
