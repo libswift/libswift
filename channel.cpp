@@ -313,10 +313,11 @@ int Channel::SendTo (evutil_socket_t sock, const Address& addr, struct evbuffer 
         print_error("can't send");
         evbuffer_drain(evb, length); // Arno: behaviour is to pretend the packet got lost
     }
-    else
+    else {
         evbuffer_drain(evb,r);
-    global_dgrams_up++;
-    global_raw_bytes_up+=length;
+        global_dgrams_up++;
+        global_raw_bytes_up+=length;
+    }
     Time();
     return r;
 }

@@ -544,11 +544,11 @@ void    Channel::Send () {
     int r = SendTo(socket_,peer(),evb);
     if (r==-1)
         print_error("swift can't send datagram");
-    else
+    else {
         raw_bytes_up_ += r;
-
-    sent_since_recv_++;
-    dgrams_sent_++;
+        sent_since_recv_++;
+        dgrams_sent_++;
+    }
     evbuffer_free(evb);
     Reschedule();
 }

@@ -923,9 +923,15 @@ void ReportCallback(int fd, short event, void *arg) {
             double up = swift::GetCurrentSpeed(single_td,DDIR_UPLOAD);
             double dw = swift::GetCurrentSpeed(single_td,DDIR_DOWNLOAD);
 
-            fprintf(stderr, "     %" PRIi64 "%%", Complete(single_td)*100/Size(single_td));
-            if (!IsComplete(single_td ))
-                fprintf(stderr, "\tTransfer complete in: %.2f min.", (Size(single_td)-Complete(single_td))/(dw*60));
+            if (Size(single_td)) {
+                fprintf(stderr, "     %" PRIi64 "%%", Complete(single_td)*100/Size(single_td));
+                fprintf(stderr, "\tTransfer complete");
+                if (!IsComplete(single_td ))
+                    fprintf(stderr, "\tin: %.2f min.", (Size(single_td)-Complete(single_td))/(dw*60));
+            }
+            else
+                fprintf(stderr, "\t0%%");
+
             fprintf(stderr, "\n");
 
             if (up/1048576 > 1)
