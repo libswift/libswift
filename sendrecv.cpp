@@ -774,8 +774,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     bin_t tosend = bin_t::NONE;
     bool isretransmit = false;
     tint luft = send_interval_>>4; // may wake up a bit earlier
-    // Ric: test
-    //if (data_out_size_<cwnd_ && last_data_out_time_+send_interval_-timer_delay_<=NOW+luft) {
+
     if ( (data_out_size_<cwnd_ || cwnd_>0) && last_data_out_time_+send_interval_-reschedule_delay_<=NOW+luft) {
         tosend = DequeueHint(&isretransmit);
         if (tosend.is_none()) {
@@ -1449,7 +1448,7 @@ void    Channel::OnAck (struct evbuffer *evb) {
             //if (owd > rtt_avg_)
             //   rtt_avg_ = (rtt_avg_*3 + rtt) >> 2;
             //else
-               rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
+            rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
             dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
             assert(data_out_[di].time!=TINT_NEVER);
             dprintf("%s #%" PRIu32 " rtt:%" PRIu64 ", rtt_avg:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_,rtt, rtt_avg_, dev_avg_);
