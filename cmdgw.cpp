@@ -92,7 +92,7 @@ popt_cont_int_prot_t cmd_gw_cipm=POPT_CONT_INT_PROT_MERKLE;
 std::string cmd_gw_metadir;
 
 
-#define cmd_gw_debug	true
+#define cmd_gw_debug	false
 
 tint cmd_gw_last_open=0;
 
@@ -893,7 +893,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             if (sfs.size() > 0)
                 minsize = sfs[0]->GetSize();
             else if (swift::SeqComplete(td) > 0) // Arno, 2013-01-08: Support small files
-        	minsize = std::min(swift::Size(td),minsize);
+                minsize = std::min(swift::Size(td),minsize);
 
             // Wait for first chunk, so we can handle MULTIFILE, then
             // wait for prebuffering and then send PLAY to user.

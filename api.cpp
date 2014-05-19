@@ -213,28 +213,28 @@ void swift::Close( int td, bool removestate, bool removecontent ) {
 int swift::Find(SwarmID& swarmid, bool activate)
 {
     if (api_debug)
-	fprintf(stderr,"swift::Find %s act %d\n", swarmid.hex().c_str(), (int)activate );
+        fprintf(stderr,"swift::Find %s act %d\n", swarmid.hex().c_str(), (int)activate );
 
     if (swarmid.ttype() == FILE_TRANSFER)
     {
-	SwarmData* swarm = SwarmManager::GetManager().FindSwarm(swarmid.roothash());
-	if (swarm==NULL)
-	    return -1;
-	else
-	{
-	    if (activate)
-		SwarmManager::GetManager().ActivateSwarm(swarm->RootHash());
-	    return swarm->Id();
-	}
+        SwarmData* swarm = SwarmManager::GetManager().FindSwarm(swarmid.roothash());
+        if (swarm==NULL)
+            return -1;
+        else
+        {
+            if (activate)
+            SwarmManager::GetManager().ActivateSwarm(swarm->RootHash());
+            return swarm->Id();
+        }
     }
     else
     {
-	//LIVE
-	LiveTransfer *lt = LiveTransfer::FindBySwarmID(swarmid);
-	if (lt == NULL)
-	    return -1;
-	else
-	    return lt->td();
+        //LIVE
+        LiveTransfer *lt = LiveTransfer::FindBySwarmID(swarmid);
+        if (lt == NULL)
+            return -1;
+        else
+            return lt->td();
     }
 }
 

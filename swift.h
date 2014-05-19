@@ -1190,7 +1190,7 @@ namespace swift {
 
         /** Create Storage from specified path and destination dir if content turns about to be a multi-file.
          * If live_disc_wnd_bytes !=0 then live single-file, wrapping if != POPT_LIVE_DISC_WND_ALL */
-        Storage(std::string ospathname, std::string destdir, int td, uint64_t live_disc_wnd_bytes);
+        Storage(std::string ospathname, std::string destdir, int td, uint64_t live_disc_wnd_bytes, std::string metamfspecospathname="");
         ~Storage();
 
         /** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
@@ -1256,6 +1256,8 @@ namespace swift {
         int         td_; // transfer ID of the *Transfer we're part of.
         ProgressCallback alloc_cb_;
         uint64_t    live_disc_wnd_bytes_;
+
+        std::string meta_mfspec_os_pathname_; // metadata might be located in a different dir
 
         int         WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
         std::pair<int64_t,int64_t> WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);

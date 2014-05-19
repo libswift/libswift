@@ -61,9 +61,6 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
         }
     }
 
-    // MULTIFILE
-    storage_ = new Storage(filename,destdir,td_,0);
-
     std::string hash_filename;
     hash_filename.assign(metaprefix);
     hash_filename.append(".mhash");
@@ -71,6 +68,14 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
     std::string binmap_filename;
     binmap_filename.assign(metaprefix);
     binmap_filename.append(".mbinmap");
+
+    // METADIR MULTIFILE
+    std::string meta_mfspec_filename;
+    meta_mfspec_filename.assign(metaprefix);
+    meta_mfspec_filename.append(".mfspec");
+
+    // MULTIFILE
+    storage_ = new Storage(filename,destdir,td_,0,meta_mfspec_filename);
 
     // Arno, 2013-02-25: Create HashTree even when PROT_NONE to enable
     // automatic size determination via peak hashes.
