@@ -55,6 +55,7 @@ void usage(void)
     fprintf(stderr,"  -s, --statsgw\t[ip:|host:]port to bind HTTP stats listen socket to (no default)\n");
     fprintf(stderr,"  -c, --cmdgw\t[ip:|host:]port to bind CMD listen socket to (no default)\n");
     fprintf(stderr,"  -C, --cmdgwint\tcmdgw report interval in seconds\n");
+    fprintf(stderr,"  -E, --perscmdgw\tmake the cmdgw persistent, the client will close when the cmd socket is closed\n");
     fprintf(stderr,"  -o, --destdir\tdirectory for saving data (default: none)\n");
     fprintf(stderr,"  -u, --uprate\tupload rate limit in KiB/s (default: unlimited)\n");
     fprintf(stderr,"  -y, --downrate\tdownload rate limit in KiB/s (default: unlimited)\n");
@@ -81,9 +82,9 @@ void usage(void)
     fprintf(stderr,"  -I live source address (used with ext tracker)\n");
 }
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
-int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed);
-int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate);
-int OpenSwiftDirectory(std::string dirname, std::string trackerurl, bool force_check_diskvshash, uint32_t chunk_size, bool activate);
+int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed, std::string metadir);
+int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate, std::string metadir);
+int OpenSwiftDirectory(std::string dirname, std::string trackerurl, bool force_check_diskvshash, uint32_t chunk_size, bool activate, std::string metadir);
 // SIGNPEAKTODO replace swarmid with generic swarm ID
 int PrintURL(int td,std::string trackerurl,uint32_t chunk_size,std::string urlfilename);
 void HandleLiveSource(std::string livesource_input, std::string filename, std::string keypairfilename, uint32_t chunk_size, std::string urlfilename);
@@ -102,7 +103,7 @@ void LiveSourceHTTPDownloadChunkCallback(struct evhttp_request *req, void *arg);
 
 // Gateway stuff
 bool InstallHTTPGateway( struct event_base *evbase,Address bindaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf);
-bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr,popt_cont_int_prot_t cipm, uint64_t disc_wnd);
+bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr,popt_cont_int_prot_t cipm, uint64_t disc_wnd, std::string meta_dir);
 bool HTTPIsSending();
 #ifndef SWIFTGTEST
 bool InstallStatsGateway(struct event_base *evbase,Address addr);
@@ -123,7 +124,7 @@ bool httpgw_enabled=false,cmdgw_enabled=false;
 bool do_nat_test = false;
 bool generate_multifile=false;
 
-std::string scan_dirname="";
+std::string scan_dirname="", metadir="";
 uint32_t chunk_size = SWIFT_DEFAULT_CHUNK_SIZE;
 std::string trackerurl;
 
@@ -175,6 +176,7 @@ int utf8main (int argc, char** argv)
         {"source",required_argument, 0, 'i'}, // LIVE
         {"live",no_argument, 0, 'k'}, // LIVE
         {"cmdgwint",required_argument, 0, 'C'}, // SWIFTPROC
+        {"metadir",required_argument, 0, 'n'},  // METADIR
         {"zerostimeout",required_argument, 0, 'T'},  // ZEROSTATE
         {"test",no_argument, 0, 'G'},  // Less command line testing for GTest usage
         {"lcf",required_argument, 0, 'P'}, // LIVECHECKPOINT
@@ -205,7 +207,7 @@ int utf8main (int argc, char** argv)
 
     std::string optargstr;
     int c,n;
-    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:L:pg:s:c:o:u:y:z:w:BNHmM:e:r:ji:kC:1:2:3:T:GW:P:K:S:a:I:", long_options, 0)) ) {
+    while ( -1 != (c = getopt_long (argc, argv, ":h:f:d:l:t:D:L:pg:s:c:o:u:y:z:w:BNHmM:e:r:ji:kC:1:2:3:4:T:GW:P:K:S:a:I:n:", long_options, 0)) ) {
         switch (c) {
             case 'h':
                 optargstr = optarg;
@@ -348,6 +350,11 @@ int utf8main (int argc, char** argv)
                 if (sscanf(optarg,"%" SCNi64 "",&cmdgw_report_interval)!=1)
                     quit("report interval must be int\n");
                 break;
+            case 'n': // METADIR
+                metadir = strdup(optarg); // UNICODE
+                if (metadir.substr(metadir.length()-std::string(FILE_SEP).length()).compare(FILE_SEP))
+                    metadir += FILE_SEP;
+                break;
             case '1': // SWIFTPROCUNICODE
                 // Swift on Windows expects command line arguments as UTF-16.
                 // When swift is run with Python's popen, however, popen
@@ -360,6 +367,11 @@ int utf8main (int argc, char** argv)
                 break;
             case '3': // ZEROSTATE // SWIFTPROCUNICODE
                 zerostatedir = hex2bin(strdup(optarg));
+                break;
+            case '4': // METADIR // SWIFTPROCUNICODE
+                metadir = hex2bin(strdup(optarg));
+                if (metadir.substr(metadir.length()-std::string(FILE_SEP).length()).compare(FILE_SEP))
+                    metadir += FILE_SEP;
                 break;
             case 'G': //
                 gtesting = true;
@@ -375,26 +387,26 @@ int utf8main (int argc, char** argv)
                 keypairfilename = strdup(optarg);
                 break;
             case 'S':
-        	if (!strcmp(optarg,"0"))
-		    swarm_cipm = POPT_CONT_INT_PROT_NONE;
-        	else if (!strcmp(optarg,"1"))
-		    swarm_cipm = POPT_CONT_INT_PROT_MERKLE;
-        	else if (!strcmp(optarg,"2"))
-		    quit("Live content integrity protection via SIGNALL not supported.")
-        	else if (!strcmp(optarg,"3"))
-		    swarm_cipm = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
-        	else
-        	    quit("Live content integrity protection must be 0,1,2,3")
-        	break;
+                if (!strcmp(optarg,"0"))
+                    swarm_cipm = POPT_CONT_INT_PROT_NONE;
+                else if (!strcmp(optarg,"1"))
+                    swarm_cipm = POPT_CONT_INT_PROT_MERKLE;
+                else if (!strcmp(optarg,"2"))
+                    quit("Live content integrity protection via SIGNALL not supported.")
+                else if (!strcmp(optarg,"3"))
+                    swarm_cipm = POPT_CONT_INT_PROT_UNIFIED_MERKLE;
+                else
+                    quit("Live content integrity protection must be 0,1,2,3")
+                break;
             case 'a':
-        	if (!strcmp(optarg,"5"))
-		    livesource_sigalg = POPT_LIVE_SIG_ALG_RSASHA1;
-        	else if (!strcmp(optarg,"13"))
-        	    livesource_sigalg = POPT_LIVE_SIG_ALG_ECDSAP256SHA256;
-        	else if (!strcmp(optarg,"14"))
-        	    livesource_sigalg = POPT_LIVE_SIG_ALG_ECDSAP384SHA384;
-        	else
-        	    quit("Live signature algorithm must be 5, 13 or 14")
+                if (!strcmp(optarg,"5"))
+                    livesource_sigalg = POPT_LIVE_SIG_ALG_RSASHA1;
+                else if (!strcmp(optarg,"13"))
+                    livesource_sigalg = POPT_LIVE_SIG_ALG_ECDSAP256SHA256;
+                else if (!strcmp(optarg,"14"))
+                    livesource_sigalg = POPT_LIVE_SIG_ALG_ECDSAP384SHA384;
+                else
+                    quit("Live signature algorithm must be 5, 13 or 14")
         	break;
             case 'I':
                 srcaddr = Address(optarg);
@@ -487,7 +499,7 @@ int utf8main (int argc, char** argv)
     if (httpgw_enabled)
         InstallHTTPGateway(Channel::evbase,httpaddr,swarm_cipm,livesource_disc_wnd,chunk_size,maxspeed,"",-1,-1);
     if (cmdgw_enabled)
-        InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr,swarm_cipm,livesource_disc_wnd);
+        InstallCmdGateway(Channel::evbase,cmdaddr,httpaddr,swarm_cipm,livesource_disc_wnd,metadir);
 
     // Arno, 2013-01-10: Cannot use while GTesting because statsgw is not part of
     // libswift, but considered part of an app on top.
@@ -500,6 +512,7 @@ int utf8main (int argc, char** argv)
     // ZEROSTATE
     ZeroState *zs = ZeroState::GetInstance();
     zs->SetContentDir(zerostatedir);
+    zs->SetMetaDir(metadir);
     zs->SetConnectTimeout(zerostimeout);
 
     if ((!cmdgw_enabled || gtesting) && livesource_input == "" && zerostatedir == "")
@@ -511,7 +524,7 @@ int utf8main (int argc, char** argv)
             if (filename != "" || !(swarmid == SwarmID::NOSWARMID)) {
 
                 // Single file
-                ret = HandleSwiftSwarm(filename,swarmid,trackerurl,srcaddr,printurl,livestream,urlfilename,maxspeed);
+                ret = HandleSwiftSwarm(filename,swarmid,trackerurl,srcaddr,printurl,livestream,urlfilename,maxspeed,metadir);
             }
             else if (scan_dirname != "")
             {
@@ -524,7 +537,7 @@ int utf8main (int argc, char** argv)
         	// arrive). When started deactivated but no checkpoint or
         	// incomplete, then the swarm will be activated and hashchecked.
         	//
-                ret = OpenSwiftDirectory(scan_dirname,"",false,chunk_size,false); // activate = false
+                ret = OpenSwiftDirectory(scan_dirname,"",false,chunk_size,false,metadir); // activate = false
             }
             else
                 ret = -1;
@@ -538,7 +551,7 @@ int utf8main (int argc, char** argv)
                 quit("Cannot generate multi-file spec")
             else
                 // Calc roothash
-                ret = HandleSwiftSwarm(filename,swarmid,trackerurl,srcaddr,printurl,false,urlfilename,maxspeed);
+                ret = HandleSwiftSwarm(filename,swarmid,trackerurl,srcaddr,printurl,false,urlfilename,maxspeed,metadir);
         }
 
         // For testing
@@ -608,14 +621,14 @@ int utf8main (int argc, char** argv)
 }
 
 
-int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed)
+int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed, std::string metadir)
 {
     if (!(swarmid == SwarmID::NOSWARMID) && filename == "")
     {
-	filename = swarmid.tofilename();
+        filename = swarmid.tofilename();
     }
 
-    single_td = OpenSwiftSwarm(filename,swarmid,trackerurl,srcaddr,false,chunk_size,livestream,true); //activate always
+    single_td = OpenSwiftSwarm(filename,swarmid,trackerurl,srcaddr,false,chunk_size,livestream,true,metadir); //activate always
     if (single_td < 0)
         quit("swift: cannot open swarm with %s",filename.c_str());
     if (printurl)
@@ -645,10 +658,10 @@ int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string tracker
 }
 
 
-int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate)
+int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate, std::string metadir)
 {
     if (!quiet)
-	fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
+        fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
 
     // When called by OpenSwiftDirectory, the swarm may already be open. In
     // that case, swift::Open() cheaply returns the same transfer descriptor.
@@ -656,14 +669,14 @@ int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerur
     // Client mode: regular or live download
     int td = -1;
     if (!livestream)
-        td = swift::Open(filename,swarmid,trackerurl,force_check_diskvshash,swarm_cipm,false,activate,chunk_size);
+        td = swift::Open(filename,swarmid,trackerurl,force_check_diskvshash,swarm_cipm,false,activate,chunk_size,metadir);
     else
         td = swift::LiveOpen(filename,swarmid,trackerurl,srcaddr,swarm_cipm,livesource_disc_wnd,chunk_size);
     return td;
 }
 
 
-int OpenSwiftDirectory(std::string dirname, std::string trackerurl, bool force_check_diskvshash, uint32_t chunk_size, bool activate)
+int OpenSwiftDirectory(std::string dirname, std::string trackerurl, bool force_check_diskvshash, uint32_t chunk_size, bool activate, std::string metadir)
 {
     DirEntry *de = opendir_utf8(dirname);
     if (de == NULL)
@@ -678,7 +691,7 @@ int OpenSwiftDirectory(std::string dirname, std::string trackerurl, bool force_c
             path.append(FILE_SEP);
             path.append(de->filename_);
             SwarmID swarmid = SwarmID::NOSWARMID;
-            int td = OpenSwiftSwarm(path,swarmid,trackerurl,Address(),force_check_diskvshash,chunk_size,false,activate);
+            int td = OpenSwiftSwarm(path,swarmid,trackerurl,Address(),force_check_diskvshash,chunk_size,false,activate,metadir);
             if (td >= 0) // Support case where dir of content has not been pre-hashchecked and checkpointed
                 Checkpoint(td);
         }
@@ -1035,7 +1048,7 @@ void RescanDirCallback(int fd, short event, void *arg) {
     // by running swift separately and then copy content + *.m* to scanned dir,
     // such that a fast restore from checkpoint is done.
     //
-    OpenSwiftDirectory(scan_dirname,trackerurl,false,chunk_size,false); // activate = false
+    OpenSwiftDirectory(scan_dirname,trackerurl,false,chunk_size,false,metadir); // activate = false
 
     CleanSwiftDirectory(scan_dirname);
 

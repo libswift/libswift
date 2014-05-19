@@ -2,7 +2,7 @@
  *  cmdgw.cpp
  *  command gateway for controling swift engine via a TCP connection
  *
- *  Created by Arno Bakker
+ *  Created by Arno Bakker, Riccado Petrocco
  *  Copyright 2010-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
@@ -88,6 +88,8 @@ evutil_socket_t cmd_tunnel_sock=INVALID_SOCKET;
 Address cmd_gw_httpaddr;
 uint64_t cmd_gw_livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
 popt_cont_int_prot_t cmd_gw_cipm=POPT_CONT_INT_PROT_MERKLE;
+// Ric: directory containing the metadata
+std::string cmd_gw_metadir;
 
 
 #define cmd_gw_debug	true
@@ -267,18 +269,18 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 
     SwarmID swarmid = swift::GetSwarmID(req->td);
     if (swarmid == SwarmID::NOSWARMID)
-	return; // Arno: swarm deleted, ignore
+	    return; // Arno: swarm deleted, ignore
 
     uint64_t size = swift::Size(req->td);
     uint64_t complete = 0;
     if (swift::ttype(req->td) == LIVE_TRANSFER)
-	complete = swift::SeqComplete(req->td,swift::GetHookinOffset(req->td));
+        complete = swift::SeqComplete(req->td,swift::GetHookinOffset(req->td));
     else
-	complete = swift::Complete(req->td);
+        complete = swift::Complete(req->td);
     if (size > 0 && size == complete)
         dlstatus = DLSTATUS_SEEDING;
     if (!swift::IsOperational(req->td))
-	    dlstatus = DLSTATUS_STOPPED_ON_ERROR;
+        dlstatus = DLSTATUS_STOPPED_ON_ERROR;
 
     // schaap FIXME: Are those active leechers and seeders, or potential
     // leechers and seeders? In the latter case, get cached values when cached
@@ -314,22 +316,22 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
         oss << "[";
         if (peerchans != NULL)
         {
-	    for (iter=peerchans->begin(); iter!=peerchans->end(); iter++) {
-		Channel *c = *iter;
-		if (c == NULL)
-		    continue;
+            for (iter=peerchans->begin(); iter!=peerchans->end(); iter++) {
+            Channel *c = *iter;
+            if (c == NULL)
+                continue;
 
-		if (iter!=peerchans->begin())
-		    oss << ", ";
-		oss << "{";
-		oss << "\"ip\": \"" << c->peer().ipstr() << "\", ";
-		oss << "\"port\": " << c->peer().port() << ", ";
-		oss << "\"raw_bytes_up\": " << c->raw_bytes_up() << ", ";
-		oss << "\"raw_bytes_down\": " << c->raw_bytes_down() << ", ";
-		oss << "\"bytes_up\": " << c->bytes_up() << ", ";
-		oss << "\"bytes_down\": " << c->bytes_down() << " ";
-		oss << "}";
-	    }
+            if (iter!=peerchans->begin())
+                oss << ", ";
+            oss << "{";
+            oss << "\"ip\": \"" << c->peer().ipstr() << "\", ";
+            oss << "\"port\": " << c->peer().port() << ", ";
+            oss << "\"raw_bytes_up\": " << c->raw_bytes_up() << ", ";
+            oss << "\"raw_bytes_down\": " << c->raw_bytes_down() << ", ";
+            oss << "\"bytes_up\": " << c->bytes_up() << ", ";
+            oss << "\"bytes_down\": " << c->bytes_down() << " ";
+            oss << "}";
+            }
         }
         oss << "], ";
         oss << "\"raw_bytes_up\": " << Channel::global_raw_bytes_up << ", ";
@@ -730,20 +732,42 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         // New START request
         //fprintf(stderr,"cmd: START: new request %i\n",cmd_gw_reqs_count+1);
 
-        // Format: START url destdir\r\n
-        // Arno, 2012-04-13: See if URL followed by storagepath for seeding
+        // Format: START url destdir [metadir]\r\n
+        // Arno, 2012-04-13: See if URL followed by storagepath, and metadir for seeding
         std::string pstr = paramstr;
-        std::string url="",storagepath="";
+        std::string url="",storagepath="", metadir="";
         int sidx = pstr.find(" ");
         if (sidx == std::string::npos)
         {
+            // No storage path or metadir
             url = pstr;
             storagepath = "";
         }
         else
         {
             url = pstr.substr(0,sidx);
-            storagepath = pstr.substr(sidx+1);
+            std::string qstr = pstr.substr(sidx+1);
+            sidx = qstr.find(" ");
+            if (sidx == std::string::npos)
+            {
+                // Only storage path
+                storagepath = qstr;
+            }
+            else
+            {
+                // Storage path and metadir
+                storagepath = qstr.substr(0,sidx);
+                metadir = qstr.substr(sidx+1);
+            }
+        }
+
+        // If no metadir in command, but one is set on swift command line use latter.
+        if (cmd_gw_metadir.compare("") && !metadir.compare(""))
+            metadir = cmd_gw_metadir;
+        if (metadir.length() > 0)
+        {
+            if (metadir.substr(metadir.length()-std::string(FILE_SEP).length()).compare(FILE_SEP))
+                metadir += FILE_SEP;
         }
 
         // Parse URL
@@ -772,7 +796,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         std::string bttrackerurl = puri["et"];
         std::string durstr = puri["cd"];
 
-        dprintf("cmd: START: %s with tracker %s chunksize %i duration %d\n",swarmidhexstr.c_str(),trackerstr.c_str(),sm.chunk_size_,sm.cont_dur_);
+        dprintf("cmd: START: %s with tracker %s chunksize %i duration %d storage %s metadir %s\n",swarmidhexstr.c_str(),trackerstr.c_str(),sm.chunk_size_,sm.cont_dur_,storagepath.c_str(),metadir.c_str());
 
         // Handle tracker
         // External tracker via URL param
@@ -822,7 +846,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
                 filename = swarmidhexstr;
 
             if (durstr != "-1")
-                td = swift::Open(filename,swarmid,trackerurl,false,sm.cont_int_prot_,false,activate,sm.chunk_size_);
+                td = swift::Open(filename,swarmid,trackerurl,false,sm.cont_int_prot_,false,activate,sm.chunk_size_,metadir);
             else
                 td = swift::LiveOpen(filename,swarmid,trackerurl,sm.injector_addr_,sm.cont_int_prot_,sm.live_disc_wnd_,sm.chunk_size_);
             if (td == -1) {
@@ -863,7 +887,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             {
                 dprintf("cmd: START: cannot get storage td %d\n", req->td );
                 CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarmid);
-        	return ERROR_BAD_SWARM;
+                return ERROR_BAD_SWARM;
             }
             storage_files_t sfs = storage->GetStorageFiles();
             if (sfs.size() > 0)
@@ -1084,7 +1108,7 @@ void CmdGwListenErrorCallback(struct evconnlistener *listener, void *ctx)
 }
 
 
-bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr,popt_cont_int_prot_t cipm, uint64_t disc_wnd)
+bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr,popt_cont_int_prot_t cipm, uint64_t disc_wnd, std::string metadir)
 {
     // Allocate libevent listener for cmd connections
     // From http://www.wangafu.net/~nickm/libevent-book/Ref8_listener.html
@@ -1105,6 +1129,7 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
     cmd_gw_httpaddr = httpaddr;
     cmd_gw_cipm=cipm;
     cmd_gw_livesource_disc_wnd = disc_wnd;
+    cmd_gw_metadir = metadir;
 
     cmd_evbuffer = evbuffer_new();
 

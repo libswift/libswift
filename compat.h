@@ -245,8 +245,10 @@ DirEntry *opendir_utf8(std::string pathname);
 // Returns NULL on error, last entry. Automatically does closedir()
 DirEntry *readdir_utf8(DirEntry *prevde);
 
-
+// return directory part of filename or ""
 std::string dirname_utf8(std::string pathname);
+// return non-directory part of filename
+std::string basename_utf8(std::string pathname);
 
 /*
  * Other filename-less functions

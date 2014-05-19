@@ -50,15 +50,15 @@ namespace swift {
 
 SwarmManager SwarmManager::instance_;
 
-SwarmData::SwarmData( const std::string filename, const Sha1Hash& rootHash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, uint32_t chunk_size ) :
+SwarmData::SwarmData( const std::string filename, const Sha1Hash& rootHash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, uint32_t chunk_size, std::string metadir ) :
     id_(-1), rootHash_( rootHash ), active_( false ), latestUse_(0), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
-    filename_( filename ), trackerurl_( trackerurl ), forceCheckDiskVSHash_(force_check_diskvshash), contIntProtMethod_(cipm),  chunkSize_( chunk_size ), zerostate_( zerostate ), cached_(false)
+    filename_( filename ), trackerurl_( trackerurl ), forceCheckDiskVSHash_(force_check_diskvshash), contIntProtMethod_(cipm),  chunkSize_( chunk_size ), zerostate_( zerostate ), cached_(false), metadir_( metadir )
 {
 }
 
 SwarmData::SwarmData( const SwarmData& sd ) : // Arno, 2012-12-05: Note: latestUse not copied
     id_(-1), rootHash_( sd.rootHash_ ), active_( false ), latestUse_(0), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
-    filename_( sd.filename_ ), trackerurl_( sd.trackerurl_ ), forceCheckDiskVSHash_( sd.forceCheckDiskVSHash_ ), contIntProtMethod_(sd.contIntProtMethod_), chunkSize_( sd.chunkSize_ ), zerostate_( sd.zerostate_ ), cached_(false)
+    filename_( sd.filename_ ), trackerurl_( sd.trackerurl_ ), forceCheckDiskVSHash_( sd.forceCheckDiskVSHash_ ), contIntProtMethod_(sd.contIntProtMethod_), chunkSize_(sd.chunkSize_), zerostate_(sd.zerostate_), cached_(false), metadir_(sd.metadir_)
 {
 }
 
@@ -116,6 +116,11 @@ uint32_t SwarmData::ChunkSize() {
 bool SwarmData::IsZeroState() {
     return zerostate_;
 }
+
+std::string SwarmData::Metadir() {
+    return metadir_;
+}
+
 
 void SwarmData::SetMaxSpeed(data_direction_t ddir, double speed) {
     if( speed <= 0 )
@@ -244,12 +249,12 @@ SwarmManager::~SwarmManager() {
 
 #define rootHashToList( rootHash ) (knownSwarms_[rootHash.bits[0]&63])
 
-SwarmData* SwarmManager::AddSwarm( const std::string filename, const Sha1Hash& hash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size)
+SwarmData* SwarmManager::AddSwarm( const std::string filename, const Sha1Hash& hash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size, std::string metadir)
 {
     //fprintf(stderr,"sm: AddSwarm %s hash %s track %s cdisk %d cipm %" PRIu32 " zs %d act %d cs %" PRIu32 "\n", filename.c_str(), hash.hex().c_str(), trackerurl.c_str(), force_check_diskvshash, cipm, zerostate, activate, chunk_size );
     enter( "addswarm( many )" );
     invariant();
-    SwarmData sd( filename, hash, trackerurl, force_check_diskvshash, cipm, zerostate, chunk_size );
+    SwarmData sd( filename, hash, trackerurl, force_check_diskvshash, cipm, zerostate, chunk_size, metadir );
 #if SWARMMANAGER_ASSERT_INVARIANTS
     SwarmData* res = AddSwarm( sd, activate );
     assert( hash == Sha1Hash::ZERO || res == FindSwarm( hash ) );
@@ -271,45 +276,45 @@ SwarmData* SwarmManager::AddSwarm( const SwarmData& swarm, bool activate ) {
     // Arno: create SwarmData from checkpoint
     if (swarm.rootHash_ == Sha1Hash::ZERO && !activate)
     {
-	std::string binmap_filename = swarm.filename_;
-	binmap_filename.append(".mbinmap");
+        std::string binmap_filename = swarm.filename_;
+        binmap_filename.append(".mbinmap");
 
-	// Arno, 2012-01-03: Hack to discover root hash of a file on disk, such that
-	// we don't load it twice.
-	MmapHashTree *ht = new MmapHashTree(true,binmap_filename);
-	//fprintf(stderr,"sm: AddSwarm: File %s may have hash %s\n", swarm.filename_.c_str(), ht->root_hash().hex().c_str() );
+        // Arno, 2012-01-03: Hack to discover root hash of a file on disk, such that
+        // we don't load it twice.
+        MmapHashTree *ht = new MmapHashTree(true,binmap_filename);
+        //fprintf(stderr,"sm: AddSwarm: File %s may have hash %s\n", swarm.filename_.c_str(), ht->root_hash().hex().c_str() );
 
-	std::string hash_filename = swarm.filename_;
-	hash_filename.append(".mhash");
+        std::string hash_filename = swarm.filename_;
+        hash_filename.append(".mhash");
 
-	bool mhash_exists=true;
-	int64_t mhash_size = file_size_by_path_utf8( hash_filename);
-	if (mhash_size <= 0)
-	    mhash_exists = false;
-	// ARNOTODO: sanity check if mhash = Sha1Hash-in-bytes * size-of-tree(ht)
+        bool mhash_exists=true;
+        int64_t mhash_size = file_size_by_path_utf8( hash_filename);
+        if (mhash_size <= 0)
+            mhash_exists = false;
+        // ARNOTODO: sanity check if mhash = Sha1Hash-in-bytes * size-of-tree(ht)
 
-	int64_t content_size = file_size_by_path_utf8(swarm.filename_);
+        int64_t content_size = file_size_by_path_utf8(swarm.filename_);
 
-	if (mhash_exists && content_size >=0 && ht->complete() == content_size)
-	{
-	    //fprintf(stderr,"sm: AddSwarm: Swarm good on disk, let sleep %s\n", swarm.filename_.c_str() );
-	    // Swarm is good on disk, create SwarmData without activation
+        if (mhash_exists && content_size >=0 && ht->complete() == content_size)
+        {
+            //fprintf(stderr,"sm: AddSwarm: Swarm good on disk, let sleep %s\n", swarm.filename_.c_str() );
+            // Swarm is good on disk, create SwarmData without activation
             newSwarm->cached_ = true;
-	    newSwarm->rootHash_ = ht->root_hash();
-	    newSwarm->cachedComplete_ = ht->complete();
-	    newSwarm->cachedSize_ = content_size;
-	    newSwarm->cachedIsComplete_ = true;
-	    newSwarm->cachedOSPathName_ = swarm.filename_;
-	    newSwarm->cachedStorageReady_ = true;
+            newSwarm->rootHash_ = ht->root_hash();
+            newSwarm->cachedComplete_ = ht->complete();
+            newSwarm->cachedSize_ = content_size;
+            newSwarm->cachedIsComplete_ = true;
+            newSwarm->cachedOSPathName_ = swarm.filename_;
+            newSwarm->cachedStorageReady_ = true;
 
-	    // ARNOTODO: REGISTER AT TRACKER!!!!
-	}
-	else
-	{
-	    //fprintf(stderr,"sm: AddSwarm: Swarm incomplete, mhash %d complete %" PRIu64 " content %" PRIi64 "\n", (int)mhash_exists, ht->complete(), content_size );
-	    // Swarm incomplete, can't let sleep
-	    activate = true;
-	}
+            // ARNOTODO: REGISTER AT TRACKER!!!!
+        }
+        else
+        {
+            //fprintf(stderr,"sm: AddSwarm: Swarm incomplete, mhash %d complete %" PRIu64 " content %" PRIi64 "\n", (int)mhash_exists, ht->complete(), content_size );
+            // Swarm incomplete, can't let sleep
+            activate = true;
+        }
     }
 
     if (newSwarm->rootHash_ == Sha1Hash::ZERO) {
@@ -386,7 +391,7 @@ void SwarmManager::BuildSwarm( SwarmData* swarm ) {
     if( swarm->rootHash_ == Sha1Hash::ZERO && file_size_by_path_utf8( swarm->filename_ ) == 0 )
         return;
 
-    swarm->ft_ = new FileTransfer( swarm->id_, swarm->filename_, swarm->rootHash_, swarm->forceCheckDiskVSHash_, swarm->contIntProtMethod_, swarm->chunkSize_, swarm->zerostate_ );
+    swarm->ft_ = new FileTransfer( swarm->id_, swarm->filename_, swarm->rootHash_, swarm->forceCheckDiskVSHash_, swarm->contIntProtMethod_, swarm->chunkSize_, swarm->zerostate_, swarm->metadir_ );
     if( !swarm->ft_ || !swarm->ft_->IsOperational()) { // Arno, 2012-10-01: Check if operational
         exit( "buildswarm (1)" );
         return;

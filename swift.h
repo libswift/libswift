@@ -611,7 +611,7 @@ namespace swift {
 	 *  @param chunk_size	size of chunk to use
 	 *  @param zerostate	whether to serve the hashes + content directly from disk
 	 */
-        FileTransfer(int td, std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO, bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, bool zerostate=false);
+        FileTransfer(int td, std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO, bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, bool zerostate=false, std::string metadir="");
         /**    Close everything. */
         ~FileTransfer();
 
@@ -1278,6 +1278,7 @@ namespace swift {
     	~ZeroState();
     	static ZeroState *GetInstance();
     	void SetContentDir(std::string contentdir);
+        void SetMetaDir(std::string metadir);
     	void SetConnectTimeout(tint timeout);
     	int Find(const Sha1Hash &root_hash);
 
@@ -1288,6 +1289,7 @@ namespace swift {
 
         struct event	evclean_;
         std::string     contentdir_;
+        std::string     metadir_;
 
         /* Arno, 2012-07-20: A very slow peer can keep a transfer alive
           for a long time (3 minute channel close timeout not reached).
@@ -1322,9 +1324,11 @@ namespace swift {
         false, no uncle hashes will be sent and no data will be verified against
         them on receipt. In this mode, checking disk contents against hashes
         no longer works on restarts, unless checkpoints are used.
+        The .mhash and .mbinmap files might be located along with the file, or in
+        a separate directory specified by the metadir parameter.
         */
         // TODO: replace check_netwvshash with full set of protocol options
-    int     Open( std::string filename, SwarmID& swarmid, std::string trackerurl="", bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, bool zerostate=false, bool activate=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     Open( std::string filename, SwarmID& swarmid, std::string trackerurl="", bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, bool zerostate=false, bool activate=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, std::string metadir="");
     /** Get the root hash for the transmission. */
     SwarmID GetSwarmID( int file);
     /** Close a file and a transmission, remove state or content if desired. */

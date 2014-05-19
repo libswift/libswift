@@ -165,7 +165,7 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
         // Arno: no data on disk, or mhash on disk, but no binmap. In latter
         // case recreate binmap by reading content again. Historic optimization
         // of Submit.
-        dprintf("%s hashtree empty or partial recompute\n",tintstr());
+        dprintf("%s hashtree empty or partial recompute m%d b%d\n",tintstr());
         RecoverProgress();
     }
 }

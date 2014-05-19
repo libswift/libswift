@@ -21,7 +21,7 @@ using namespace swift;
 
 // FIXME: separate Bootstrap() and Download(), then Size(), Progress(), SeqProgress()
 
-FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_hash, bool force_check_diskvshash, popt_cont_int_prot_t cipm, uint32_t chunk_size, bool zerostate) :
+FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_hash, bool force_check_diskvshash, popt_cont_int_prot_t cipm, uint32_t chunk_size, bool zerostate, std::string metadir) :
     ContentTransfer(FILE_TRANSFER), availability_(NULL), zerostate_(zerostate)
 {
     td_ = td;
@@ -31,26 +31,45 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
     SetDefaultHandshake(hs);
 
     std::string destdir;
+    std::string metaprefix;
     int ret = file_exists_utf8(filename);
     if (ret == 2 && root_hash != Sha1Hash::ZERO) {
         // Filename is a directory, download root_hash there
         destdir = filename;
         filename = destdir+FILE_SEP+root_hash.hex();
+        if (metadir == "")
+            metaprefix = filename;
+        else
+            metaprefix = metadir+root_hash.hex();
     } else {
         destdir = dirname_utf8(filename);
-        if (destdir == "")
+        if (destdir == "") {
             destdir = ".";
+            if (metadir ==  "")
+                metaprefix = filename;
+            else
+                metaprefix = metadir+filename;
+        }
+        else
+        {
+            // Filename with directory
+            std::string basename = basename_utf8(filename);
+            if (metadir == "")
+                metaprefix = filename;
+            else
+                metaprefix = metadir+basename;
+        }
     }
 
     // MULTIFILE
     storage_ = new Storage(filename,destdir,td_,0);
 
     std::string hash_filename;
-    hash_filename.assign(filename);
+    hash_filename.assign(metaprefix);
     hash_filename.append(".mhash");
 
     std::string binmap_filename;
-    binmap_filename.assign(filename);
+    binmap_filename.assign(metaprefix);
     binmap_filename.append(".mbinmap");
 
     // Arno, 2013-02-25: Create HashTree even when PROT_NONE to enable
@@ -63,8 +82,8 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
         if (ENABLE_VOD_PIECEPICKER) 
             picker_ = new VodPiecePicker(this);
         else 
-            picker_ = new SeqPiecePicker(this);
-			//picker_ = new RFPiecePicker(this);
+            //picker_ = new SeqPiecePicker(this);
+			picker_ = new RFPiecePicker(this);
         picker_->Randomize(rand()&63);
     }
     else
