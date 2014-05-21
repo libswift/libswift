@@ -206,7 +206,7 @@ void LiveTransfer::Initialize(KeyPair &keypair, popt_cont_int_prot_t cipm, uint6
     uint64_t ldwb = hs.live_disc_wnd_;
     if (ldwb != POPT_LIVE_DISC_WND_ALL)
 	ldwb *= chunk_size_;
-    storage_ = new Storage(filename_,destdir,td_,ldwb);
+    storage_ = new Storage(filename_,destdir,td_,ldwb,"");
 
     if (hs.cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
     {
