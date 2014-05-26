@@ -1,6 +1,6 @@
 /*
  *  cmdgw.cpp
- *  command gateway for controling swift engine via a TCP connection
+ *  command gateway for controlling swift engine via a TCP connection
  *
  *  Created by Arno Bakker, Riccado Petrocco
  *  Copyright 2010-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
@@ -78,6 +78,8 @@ typedef enum {
 	CMDGW_TUNNEL_READTUNNEL
 } cmdgw_tunnel_t;
 
+std::vector< uint32_t > tunnel_channels_;
+
 cmdgw_tunnel_t cmd_tunnel_state=CMDGW_TUNNEL_SCAN4CRLF;
 uint32_t       cmd_tunnel_expect=0;
 Address	       cmd_tunnel_dest_addr;
@@ -88,11 +90,12 @@ evutil_socket_t cmd_tunnel_sock=INVALID_SOCKET;
 Address cmd_gw_httpaddr;
 uint64_t cmd_gw_livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
 popt_cont_int_prot_t cmd_gw_cipm=POPT_CONT_INT_PROT_MERKLE;
+
 // Ric: directory containing the metadata
 std::string cmd_gw_metadir;
 
 
-#define cmd_gw_debug	false
+#define cmd_gw_debug	true
 
 tint cmd_gw_last_open=0;
 
@@ -969,7 +972,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
     else if (!strcmp(method,"CHECKPOINT"))
     {
         // CHECKPOINT roothash\r\n
-	char *swarmidhexcstr = paramstr;
+        char *swarmidhexcstr = paramstr;
         std::string swarmidhexstr(swarmidhexcstr);
         SwarmID swarmid(swarmidhexstr);
         CmdGwGotCHECKPOINT(swarmid);
@@ -995,6 +998,42 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         CmdGwCloseConnection(cmdsock);
         // Tell libevent to stop processing events
         event_base_loopexit(Channel::evbase, NULL);
+    }
+    else if (!strcmp(method,"TUNNELSUBSCRIBE"))
+    {
+        uint32_t channel;
+        int n = sscanf(paramstr,"%08x",&channel);
+        if (n != 1)
+            return ERROR_BAD_ARG;
+        if (!channel)
+            return ERROR_BAD_ARG;
+        // check if the channel is allowed (doesn't interfere with normal swift)
+        if (channel < SWIFT_MAX_INCOMING_CONNECTIONS + SWIFT_MAX_OUTGOING_CONNECTIONS)
+            return ERROR_BAD_ARG;
+        // check if the channel is already reserved
+        if (CmdGwTunnelCheckChannel(channel))
+            return ERROR_BAD_ARG;
+
+        tunnel_channels_.push_back(channel);
+        if (cmd_gw_debug)
+            fprintf(stderr,"cmdgw: Subscribed %" PRIu32 " as a new tunneling channel\n", channel );
+    }
+    else if (!strcmp(method,"TUNNELUNSUBSCRIBE"))
+    {
+        uint32_t channel;
+        int n = sscanf(paramstr,"%08x",&channel);
+        if (n != 1)
+            return ERROR_BAD_ARG;
+        if (!channel)
+            return ERROR_BAD_ARG;
+        // check if the channel actually exists
+        if (CmdGwTunnelCheckChannel(channel)) {
+            tunnel_channels_.erase(std::remove(tunnel_channels_.begin(), tunnel_channels_.end(), channel), tunnel_channels_.end());
+            if (cmd_gw_debug)
+                fprintf(stderr,"cmdgw: Unsubscribed channel %" PRIu32 "\n", channel );
+        }
+        else if (cmd_gw_debug)
+            fprintf(stderr,"cmdgw: Unsubscribing channel %" PRIu32 " failed: No such channel subscribed\n", channel );
     }
     else if (!strcmp(method,"TUNNELSEND"))
     {
@@ -1139,6 +1178,15 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
 
 
 // SOCKTUNNEL
+bool swift::CmdGwTunnelCheckChannel(uint32_t channel) {
+    // returns true is the channel is used for tunneling messages through channels
+    for (std::vector<uint32_t>::iterator it = tunnel_channels_.begin(); it != tunnel_channels_.end(); ++it)
+        if (*it == channel)
+            return true;
+    return false;
+}
+
+
 void swift::CmdGwTunnelUDPDataCameIn(Address srcaddr, uint32_t srcchan, struct evbuffer* evb)
 {
     // Message received on UDP socket, forward over TCP conn.

@@ -2244,13 +2244,13 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         {
             if (ct->GetChannels()->size() < SWIFT_MAX_INCOMING_CONNECTIONS)
             {
-        	//fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: create new channel %s\n", addr.str().c_str() );
-        	channel = new Channel(ct, socket, addr);
+                //fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: create new channel %s\n", addr.str().c_str() );
+                channel = new Channel(ct, socket, addr);
             }
             else
             {
                 // Too many connections
-        	StaticSendClose(socket,addr,hishs->peer_channel_id_);
+                StaticSendClose(socket,addr,hishs->peer_channel_id_);
                 return_log ("%s #0 swarm %s too many connections, requested by %s\n",tintstr(),hishs->GetSwarmID().hex().c_str(),addr.str().c_str());
             }
         }
@@ -2258,9 +2258,11 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
 
         channel->OnHandshake(hishs);
 
-    } else if (mych==CMDGW_TUNNEL_DEFAULT_CHANNEL_ID) {
+    // Ric:TODO
+    //} else if (mych==CMDGW_TUNNEL_DEFAULT_CHANNEL_ID) {
+    } else if (CmdGwTunnelCheckChannel(mych)) {
         // SOCKTUNNEL
-        CmdGwTunnelUDPDataCameIn(addr,CMDGW_TUNNEL_DEFAULT_CHANNEL_ID,evb);
+        CmdGwTunnelUDPDataCameIn(addr,mych,evb);
         evbuffer_free(evb);
         return;
     } else { // peer responds to my handshake (and other messages)
