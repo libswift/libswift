@@ -1227,9 +1227,7 @@ void swift::CmdGwTunnelSendUDP(struct evbuffer *evb)
 
     struct evbuffer *sendevbuf = evbuffer_new();
 
-    // Add channel id. Currently always CMDGW_TUNNEL_DEFAULT_CHANNEL_ID=0xffffffff
-    // but we may add a TUNNELSUBSCRIBE command later to allow the allocation
-    // of different channels for different TCP clients.
+    // Add channel id.
     int ret = evbuffer_add_32be(sendevbuf, cmd_tunnel_dest_chanid);
     if (ret < 0)
     {

@@ -44,12 +44,6 @@ struct event Channel::evrecv;
  */
 #define HINT_GRANULARITY    1 // chunks
 
-/** Arno, 2012-03-16: Swift can now tunnel data from CMDGW over UDP to
- * CMDGW at another swift instance. This is the default channel ID on UDP
- * for that traffic (cf. overlay swarm).
- */
-#define CMDGW_TUNNEL_DEFAULT_CHANNEL_ID        0xffffffff
-
 
 
 void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretransmit)
@@ -2258,8 +2252,6 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
 
         channel->OnHandshake(hishs);
 
-    // Ric:TODO
-    //} else if (mych==CMDGW_TUNNEL_DEFAULT_CHANNEL_ID) {
     } else if (CmdGwTunnelCheckChannel(mych)) {
         // SOCKTUNNEL
         CmdGwTunnelUDPDataCameIn(addr,mych,evb);
