@@ -205,11 +205,11 @@ void    Channel::AddLiveSignedMunroHash(struct evbuffer *evb, bin_t munro)
 void    Channel::AddFileUncleHashes (struct evbuffer *evb, bin_t pos) {
     bin_t peak = hashtree()->peak_for(pos);
     binvector bv;
-    //while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
-    //        ack_in_.is_empty(pos.parent()) ) {
+    while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
+            ack_in_.is_empty(pos.parent()) ) {
     // Ric: TODO optimise.. send based on pkt loss statistics
     //      the above is correct but should not happen at the beginning!
-    while (pos!=peak && ack_in_.is_empty(pos.parent()) ) {
+    //while (pos!=peak && ack_in_.is_empty(pos.parent()) ) {
         bin_t uncle = pos.sibling();
         bv.push_back(uncle);
         pos = pos.parent();

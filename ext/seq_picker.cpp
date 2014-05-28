@@ -55,11 +55,9 @@ public:
         //    return bin64_t(0,(hashtree()->size()>>10)-1); // dirty
         }
     retry:      // bite me
-    // Ric: test.. just linear
-        //twist_ &= (hashtree()->peak(0).toUInt()) & ((1<<6)-1);
+        twist_ &= (hashtree()->peak(0).toUInt()) & ((1<<6)-1);
 
-        //bin_t hint = binmap_t::find_complement(ack_hint_out_, offer, twist_);
-        bin_t hint = binmap_t::find_complement(ack_hint_out_, offer, 0);
+        bin_t hint = binmap_t::find_complement(ack_hint_out_, offer, twist_);
 
         if (hint.is_none()) {
             return hint; // TODO: end-game mode

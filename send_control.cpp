@@ -94,14 +94,9 @@ tint    Channel::KeepAliveNextSendTime () {
     mode, the next packet will be pushed further and further into the future, which is
     not what we want. The scheduled time for the next packet should be unchanged
     on reception."
-    ----------------
-    Ric: check if we still needed. Now I perform the check for previously scheduled
-    events in reschedule(). Commented
     */
     if (!reverse_pex_out_.empty())
         return reverse_pex_out_.front().time;
-    //if (NOW < next_send_time_)
-    //    return next_send_time_;
 
     // Arno: Fix that doesn't do exponential growth always, only after sends
     // without following recvs
@@ -276,7 +271,8 @@ tint Channel::LedbatNextSendTime () {
     }
 
     /*Arno, 2012-02-02: Somehow LEDBAT gets stuck at cwnd_ == 1 sometimes
-    // This hack appears to work to get it back on the right track quickly.
+     This hack appears to work to get it back on the right track quickly.
+     * Ric: not really needed.. it should not happen at all!
     if (oldcwnd == 1 && cwnd_ == 1)
        cwnd_count1_++;
     else

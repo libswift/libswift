@@ -56,7 +56,6 @@ Storage::Storage(std::string ospathname, std::string destdir, int td, uint64_t l
             return;
         }
     }
-    dprintf("\n\naooo\n%s\n", filename.c_str());
 
     // File exists. Check first bytes to see if a multifile-spec
     FILE *fp = fopen_utf8(filename.c_str(),"rb");
@@ -76,7 +75,7 @@ Storage::Storage(std::string ospathname, std::string destdir, int td, uint64_t l
         SetBroken();
         return;
     }
-    dprintf("\n\naooo\n%s\n", filename.c_str());
+
     if (!strncmp(readbuf,MULTIFILE_PATHNAME.c_str(),MULTIFILE_PATHNAME.length()))
     {
         // Pathname points to a multi-file spec, assume we're seeding

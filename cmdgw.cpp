@@ -69,9 +69,9 @@ struct evbuffer *cmd_evbuffer = NULL; // Data received on cmd socket : WARNING: 
 /*
  * SOCKTUNNEL
  * We added the ability for a process to tunnel data over swift's UDP socket.
- * The process should send TUNNELSEND commands over the CMD TCP socket and will
- * receive TUNNELRECV commands from swift, containing data received via UDP
- * on channel 0xffffffff.
+ * The process should send TUNNELSUSCRIBE (with a chosen prefix) and TUNNELSEND
+ * commands over the CMD * TCP socket. It will than receive TUNNELRECV commands
+ * from swift.
  */
 typedef enum {
 	CMDGW_TUNNEL_SCAN4CRLF,
@@ -736,7 +736,6 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         //fprintf(stderr,"cmd: START: new request %i\n",cmd_gw_reqs_count+1);
 
         // Format: START url destdir [metadir]\r\n
-        // Arno, 2012-04-13: See if URL followed by storagepath, and metadir for seeding
         std::string pstr = paramstr;
         std::string url="",storagepath="", metadir="";
         int sidx = pstr.find(" ");
@@ -1179,7 +1178,7 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
 
 // SOCKTUNNEL
 bool swift::CmdGwTunnelCheckChannel(uint32_t channel) {
-    // returns true is the channel is used for tunneling messages through channels
+    // returns true is the channel/prefix is used for tunneling messages through channels
     for (std::vector<uint32_t>::iterator it = tunnel_channels_.begin(); it != tunnel_channels_.end(); ++it)
         if (*it == channel)
             return true;

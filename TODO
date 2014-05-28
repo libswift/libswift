@@ -1,14 +1,15 @@
 NEW FIXES:
 * RTT calculation with network burst
 * RTT sender >= owd
+* multiple samples for ledbat calculations
+* flow control
+* state machine changes
 
 OUTDATED:
 
 STATE MACHINE
-* imposed HINTs are terribly broken, resent for the data in flight 
 * check ACK/HAVE redundancy
 * HAVE overuses find_filtered
-* set priorities on ranges
 * small-progress update problem (aka peer nap)
   guarantee size of updates < x% of data, on both ends
 * pex is affected by peer nap
