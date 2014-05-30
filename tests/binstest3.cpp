@@ -19,8 +19,9 @@
 using namespace swift;
 
 
-TEST(BinsTest,FindFiltered) {
-    
+TEST(BinsTest,FindFiltered)
+{
+
     binmap_t data, filter;
     data.set(bin_t(2,0));
     data.set(bin_t(2,2));
@@ -29,13 +30,14 @@ TEST(BinsTest,FindFiltered) {
     filter.reset(bin_t(2,1));
     filter.reset(bin_t(1,4));
     filter.reset(bin_t(0,13));
-    
+
     bin_t x = binmap_t::find_complement(data, filter, bin_t(4,0), 0);
     EXPECT_EQ(bin_t(0,12),x);
-    
+
 }
 
-TEST(BinsTest,FindFiltered1b) {
+TEST(BinsTest,FindFiltered1b)
+{
 
     binmap_t data, filter;
     data.set(bin_t(2,0));
@@ -47,8 +49,8 @@ TEST(BinsTest,FindFiltered1b) {
     filter.reset(bin_t(0,13));
 
     bin_t s = bin_t(3,1);
-    fprintf(stderr,"Searching 0,12 from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Searching 0,12 from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     bin_t x = binmap_t::find_complement(data, filter, s, 0);
     EXPECT_EQ(bin_t(0,12),x);
@@ -56,7 +58,8 @@ TEST(BinsTest,FindFiltered1b) {
 }
 
 
-TEST(BinsTest,FindFiltered1c) {
+TEST(BinsTest,FindFiltered1c)
+{
 
     binmap_t data, filter;
     data.set(bin_t(2,0));
@@ -69,8 +72,8 @@ TEST(BinsTest,FindFiltered1c) {
     //filter.reset(bin_t(0,13));
 
     bin_t s = bin_t(3,1);
-    fprintf(stderr,"Searching 0,12x from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Searching 0,12x from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     bin_t x = binmap_t::find_complement(data, filter, s, 0);
     EXPECT_EQ(bin_t(1,6),x);
@@ -78,33 +81,35 @@ TEST(BinsTest,FindFiltered1c) {
 }
 
 
-TEST(BinsTest,FindFiltered2) {
-    
+TEST(BinsTest,FindFiltered2)
+{
+
     binmap_t data, filter;
-    for(int i=0; i<1024; i+=2)
+    for (int i=0; i<1024; i+=2)
         data.set(bin_t(0,i));
-    for(int j=0; j<1024; j+=2)
+    for (int j=0; j<1024; j+=2)
         filter.set(bin_t(0,j));
 
-    fprintf(stderr,"test: width %d\n", filter.cells_number() );
-    fprintf(stderr,"test: empty %" PRIu64 "\n", filter.find_empty().toUInt() );
+    fprintf(stderr,"test: width %d\n", filter.cells_number());
+    fprintf(stderr,"test: empty %" PRIu64 "\n", filter.find_empty().toUInt());
 
 
     data.reset(bin_t(0,500));
     EXPECT_EQ(bin_t(0,500),binmap_t::find_complement(data, filter, bin_t(10,0), 0).base_left());
     data.set(bin_t(0,500));
     EXPECT_EQ(bin_t::NONE,binmap_t::find_complement(data, filter, bin_t(10,0), 0).base_left());
-    
+
 }
 
 
 // Range is strict subtree
-TEST(BinsTest,FindFiltered3) {
+TEST(BinsTest,FindFiltered3)
+{
 
     binmap_t data, filter;
-    for(int i=0; i<1024; i+=2)
+    for (int i=0; i<1024; i+=2)
         data.set(bin_t(0,i));
-    for(int j=0; j<1024; j+=2)
+    for (int j=0; j<1024; j+=2)
         filter.set(bin_t(0,j));
     data.reset(bin_t(0,500));
     EXPECT_EQ(bin_t(0,500),binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
@@ -115,12 +120,13 @@ TEST(BinsTest,FindFiltered3) {
 
 // 1036 leaf tree
 
-TEST(BinsTest,FindFiltered4) {
+TEST(BinsTest,FindFiltered4)
+{
 
     binmap_t data, filter;
-    for(int i=0; i<1036; i+=2)
+    for (int i=0; i<1036; i+=2)
         data.set(bin_t(0,i));
-    for(int j=0; j<1036; j+=2)
+    for (int j=0; j<1036; j+=2)
         filter.set(bin_t(0,j));
     data.reset(bin_t(0,500));
     EXPECT_EQ(bin_t(0,500),binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
@@ -131,217 +137,224 @@ TEST(BinsTest,FindFiltered4) {
 
 // Make 8 bin hole in 1036 tree
 
-TEST(BinsTest,FindFiltered5) {
+TEST(BinsTest,FindFiltered5)
+{
 
     binmap_t data, filter;
-    for(int i=0; i<1036; i++) //completely full
+    for (int i=0; i<1036; i++) //completely full
         data.set(bin_t(0,i));
-    for(int j=0; j<1036; j++)
+    for (int j=0; j<1036; j++)
         filter.set(bin_t(0,j));
 
     for (int j=496; j<=503; j++)
-    	data.reset(bin_t(0,j));
+        data.reset(bin_t(0,j));
 
-    EXPECT_EQ(bin_t(3,62),binmap_t::find_complement(data, filter, bin_t(9,0), 0) );
+    EXPECT_EQ(bin_t(3,62),binmap_t::find_complement(data, filter, bin_t(9,0), 0));
     EXPECT_EQ(bin_t(0,496),binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
 }
 
 
 // Use simple example tree from RFC
-TEST(BinsTest,FindFiltered6) {
+TEST(BinsTest,FindFiltered6)
+{
 
     binmap_t data, filter;
-    for(int i=0; i<14; i+=2)  //completely full example tree
+    for (int i=0; i<14; i+=2) //completely full example tree
         data.set(bin_t(i));
-    for(int j=0; j<14; j+=2)
+    for (int j=0; j<14; j+=2)
         filter.set(bin_t(j));
 
     for (int j=4; j<=6; j+=2) // reset leaves 4 and 6 (int)
-    	data.reset(bin_t(j));
+        data.reset(bin_t(j));
 
-    EXPECT_EQ(bin_t(1,1),binmap_t::find_complement(data, filter, bin_t(2,0), 0) );
+    EXPECT_EQ(bin_t(1,1),binmap_t::find_complement(data, filter, bin_t(2,0), 0));
     EXPECT_EQ(bin_t(0,2),binmap_t::find_complement(data, filter, bin_t(2,0), 0).base_left());
 }
 
 
 // diff in right tree, range is left tree
-TEST(BinsTest,FindFiltered7) {
+TEST(BinsTest,FindFiltered7)
+{
 
     binmap_t data, filter;
-    for(int i=0; i<14; i+=2)  //completely full example tree
+    for (int i=0; i<14; i+=2) //completely full example tree
         data.set(bin_t(i));
-    data.reset(bin_t(4));	  // clear 4
-    for(int j=0; j<14; j+=2)
+    data.reset(bin_t(4));     // clear 4
+    for (int j=0; j<14; j+=2)
         filter.set(bin_t(j));
     filter.reset(bin_t(4));
 
-    for (int j=8; j<=10; j+=2)	// make diff out of range
-    	data.reset(bin_t(j));
+    for (int j=8; j<=10; j+=2)  // make diff out of range
+        data.reset(bin_t(j));
 
-    EXPECT_EQ(bin_t::NONE,binmap_t::find_complement(data, filter, bin_t(2,0), 0) );
+    EXPECT_EQ(bin_t::NONE,binmap_t::find_complement(data, filter, bin_t(2,0), 0));
     EXPECT_EQ(bin_t::NONE,binmap_t::find_complement(data, filter, bin_t(2,0), 0).base_left());
 }
 
 
 
 // diff in left tree, range is right tree
-TEST(BinsTest,FindFiltered8) {
+TEST(BinsTest,FindFiltered8)
+{
 
     binmap_t data, filter;
-    for(int i=0; i<14; i+=2)  //completely full example tree
+    for (int i=0; i<14; i+=2) //completely full example tree
         data.set(bin_t(i));
-    data.reset(bin_t(4));	  // clear 4
-    for(int j=0; j<14; j+=2)
+    data.reset(bin_t(4));     // clear 4
+    for (int j=0; j<14; j+=2)
         filter.set(bin_t(j));
     filter.reset(bin_t(4));
 
-    for (int j=4; j<=6; j+=2)	// make diff out of range
-    	data.reset(bin_t(j));
+    for (int j=4; j<=6; j+=2)   // make diff out of range
+        data.reset(bin_t(j));
 
-    EXPECT_EQ(bin_t::NONE,binmap_t::find_complement(data, filter, bin_t(2,1), 0) );
+    EXPECT_EQ(bin_t::NONE,binmap_t::find_complement(data, filter, bin_t(2,1), 0));
     EXPECT_EQ(bin_t::NONE,binmap_t::find_complement(data, filter, bin_t(2,1), 0).base_left());
 }
 
 
 // reverse empty/full
-TEST(BinsTest,FindFiltered9) {
+TEST(BinsTest,FindFiltered9)
+{
 
     binmap_t data, filter;
-    for(int i=0; i<14; i+=2)  //completely empty example tree
+    for (int i=0; i<14; i+=2) //completely empty example tree
         data.reset(bin_t(i));
-    data.set(bin_t(4));	  // clear 4
-    for(int j=0; j<14; j+=2)
+    data.set(bin_t(4));   // clear 4
+    for (int j=0; j<14; j+=2)
         filter.reset(bin_t(j));
     filter.set(bin_t(4));
 
-    for (int j=4; j<=6; j+=2)	// make diff out of range
-    	data.set(bin_t(j));
+    for (int j=4; j<=6; j+=2)   // make diff out of range
+        data.set(bin_t(j));
 
-    EXPECT_EQ(bin_t::NONE,binmap_t::find_complement(data, filter, bin_t(2,1), 0) );
+    EXPECT_EQ(bin_t::NONE,binmap_t::find_complement(data, filter, bin_t(2,1), 0));
     EXPECT_EQ(bin_t::NONE,binmap_t::find_complement(data, filter, bin_t(2,1), 0).base_left());
 }
 
 
 // Make 8 bin hole in 999 tree, left subtree
 
-TEST(BinsTest,FindFiltered10) {
+TEST(BinsTest,FindFiltered10)
+{
 
     binmap_t data, filter;
-    for(int i=0; i<999; i++) //completely full
+    for (int i=0; i<999; i++) //completely full
         data.set(bin_t(0,i));
-    for(int j=0; j<999; j++)
+    for (int j=0; j<999; j++)
         filter.set(bin_t(0,j));
 
     for (int j=496; j<=503; j++)
-    	data.reset(bin_t(0,j));
+        data.reset(bin_t(0,j));
 
-    EXPECT_EQ(bin_t(3,62),binmap_t::find_complement(data, filter, bin_t(9,0), 0) );
+    EXPECT_EQ(bin_t(3,62),binmap_t::find_complement(data, filter, bin_t(9,0), 0));
     EXPECT_EQ(bin_t(0,496),binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
 }
 
 
 // Make 8 bin hole in 999 tree, right subtree, does not start a 8-bin substree
-TEST(BinsTest,FindFiltered11) {
+TEST(BinsTest,FindFiltered11)
+{
 
     binmap_t data, filter;
-    for(int i=0; i<999; i++) //completely full
+    for (int i=0; i<999; i++) //completely full
         data.set(bin_t(0,i));
-    for(int j=0; j<999; j++)
+    for (int j=0; j<999; j++)
         filter.set(bin_t(0,j));
 
     for (int j=514; j<=521; j++)
-    	data.reset(bin_t(0,j));
+        data.reset(bin_t(0,j));
 
-    EXPECT_EQ(bin_t(1,257),binmap_t::find_complement(data, filter, bin_t(9,1), 0) );
+    EXPECT_EQ(bin_t(1,257),binmap_t::find_complement(data, filter, bin_t(9,1), 0));
     EXPECT_EQ(bin_t(0,514),binmap_t::find_complement(data, filter, bin_t(9,1), 0).base_left());
 }
 
 // Make 8 bin hole in 999 tree, move hole
-TEST(BinsTest,FindFiltered12) {
+TEST(BinsTest,FindFiltered12)
+{
 
     binmap_t data, filter;
-    for(int i=0; i<999; i++) //completely full
+    for (int i=0; i<999; i++) //completely full
         data.set(bin_t(0,i));
-    for(int j=0; j<999; j++)
+    for (int j=0; j<999; j++)
         filter.set(bin_t(0,j));
 
-    for (int x=0; x<999-8; x++)
-    {
-    	fprintf(stderr,"x%" PRIu32 " ", x);
-    	for (int j=x; j<=x+7; j++)
-    		data.reset(bin_t(0,j));
+    for (int x=0; x<999-8; x++) {
+        fprintf(stderr,"x%" PRIu32 " ", x);
+        for (int j=x; j<=x+7; j++)
+            data.reset(bin_t(0,j));
 
-    	int subtree = (x <= 511) ? 0 : 1;
-    	EXPECT_EQ(bin_t(0,x),binmap_t::find_complement(data, filter, bin_t(9,subtree), 0).base_left());
+        int subtree = (x <= 511) ? 0 : 1;
+        EXPECT_EQ(bin_t(0,x),binmap_t::find_complement(data, filter, bin_t(9,subtree), 0).base_left());
 
-    	// Restore
-    	for (int j=x; j<=x+7; j++) {
-    		data.set(bin_t(0,j));
-    	}
+        // Restore
+        for (int j=x; j<=x+7; j++) {
+            data.set(bin_t(0,j));
+        }
     }
 }
 
 
 // Make 8 bin hole in sparse 999 tree, move hole
-TEST(BinsTest,FindFiltered13) {
+TEST(BinsTest,FindFiltered13)
+{
 
     binmap_t data, filter;
-    for(int i=0; i<999; i+=2) // sparse
+    for (int i=0; i<999; i+=2) // sparse
         data.set(bin_t(0,i));
-    for(int j=0; j<999; j+=2)
+    for (int j=0; j<999; j+=2)
         filter.set(bin_t(0,j));
 
-    for (int x=0; x<999-8; x++)
-    {
-    	fprintf(stderr,"x%" PRIu32 " ", x);
-    	for (int j=x; j<=x+7; j++)
-    		data.reset(bin_t(0,j));
+    for (int x=0; x<999-8; x++) {
+        fprintf(stderr,"x%" PRIu32 " ", x);
+        for (int j=x; j<=x+7; j++)
+            data.reset(bin_t(0,j));
 
-    	int y = (x % 2) ? x+1 : x;
-    	int subtree = (x <= 511) ? 0 : 1;
-    	if (x < 511)
-    		EXPECT_EQ(bin_t(0,y),binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
-    	else if (x == 511) // sparse bitmap 101010101..., so actual diff in next subtree
-    		EXPECT_EQ(bin_t::NONE,binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
-    	else
-    		EXPECT_EQ(bin_t(0,y),binmap_t::find_complement(data, filter, bin_t(9,1), 0).base_left());
+        int y = (x % 2) ? x+1 : x;
+        int subtree = (x <= 511) ? 0 : 1;
+        if (x < 511)
+            EXPECT_EQ(bin_t(0,y),binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
+        else if (x == 511) // sparse bitmap 101010101..., so actual diff in next subtree
+            EXPECT_EQ(bin_t::NONE,binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
+        else
+            EXPECT_EQ(bin_t(0,y),binmap_t::find_complement(data, filter, bin_t(9,1), 0).base_left());
 
 
-        for(int i=0; i<999; i+=2) // sparse
+        for (int i=0; i<999; i+=2) // sparse
             data.set(bin_t(0,i));
     }
 }
 
 
 // Make 8 bin hole in sparse 999 tree, move hole
-TEST(BinsTest,FindFiltered14) {
+TEST(BinsTest,FindFiltered14)
+{
 
     binmap_t data, filter;
-    for(int i=0; i<999; i+=2) // sparse
+    for (int i=0; i<999; i+=2) // sparse
         data.set(bin_t(0,i));
-    for(int j=0; j<999; j+=2)
+    for (int j=0; j<999; j+=2)
         filter.set(bin_t(0,j));
 
     // Add other diff
     filter.set(bin_t(0,995));
 
-    for (int x=0; x<999-8; x++)
-    {
-    	fprintf(stderr,"x%" PRIu32 " ", x);
-    	for (int j=x; j<=x+7; j++)
-    		data.reset(bin_t(0,j));
+    for (int x=0; x<999-8; x++) {
+        fprintf(stderr,"x%" PRIu32 " ", x);
+        for (int j=x; j<=x+7; j++)
+            data.reset(bin_t(0,j));
 
-    	int y = (x % 2) ? x+1 : x;
-    	int subtree = (x <= 511) ? 0 : 1;
-    	if (x < 511)
-    		EXPECT_EQ(bin_t(0,y),binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
-    	else if (x == 511) // sparse bitmap 101010101..., so actual diff in next subtree
-    		EXPECT_EQ(bin_t::NONE,binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
-    	else
-    		EXPECT_EQ(bin_t(0,y),binmap_t::find_complement(data, filter, bin_t(9,1), 0).base_left());
+        int y = (x % 2) ? x+1 : x;
+        int subtree = (x <= 511) ? 0 : 1;
+        if (x < 511)
+            EXPECT_EQ(bin_t(0,y),binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
+        else if (x == 511) // sparse bitmap 101010101..., so actual diff in next subtree
+            EXPECT_EQ(bin_t::NONE,binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
+        else
+            EXPECT_EQ(bin_t(0,y),binmap_t::find_complement(data, filter, bin_t(9,1), 0).base_left());
 
 
-        for(int i=0; i<999; i+=2) // sparse
+        for (int i=0; i<999; i+=2) // sparse
             data.set(bin_t(0,i));
     }
 }
@@ -349,12 +362,13 @@ TEST(BinsTest,FindFiltered14) {
 
 
 // Make holes at 292, problematic in a specific experiment
-TEST(BinsTest,FindFiltered15) {
+TEST(BinsTest,FindFiltered15)
+{
 
     binmap_t data, filter;
-    for(int i=0; i<999; i++) // completely full
+    for (int i=0; i<999; i++) // completely full
         data.set(bin_t(0,i));
-    for(int j=0; j<999; j++)
+    for (int j=0; j<999; j++)
         filter.set(bin_t(0,j));
 
     data.reset(bin_t(292));
@@ -362,109 +376,106 @@ TEST(BinsTest,FindFiltered15) {
     data.reset(bin_t(514));
     data.reset(bin_t(998));
 
-	EXPECT_EQ(bin_t(292),binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
+    EXPECT_EQ(bin_t(292),binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
 }
 
 
 
 // VOD like. Make first hole at 292.
-TEST(BinsTest,FindFiltered16) {
+TEST(BinsTest,FindFiltered16)
+{
 
     binmap_t data, filter;
-    for(int i=0; i<292/2; i++) // prefix full
+    for (int i=0; i<292/2; i++) // prefix full
         data.set(bin_t(0,i));
-    for(int i=147; i<999; i+=21) // postfix sparse
-    {
-    	for (int x=0; x<8; x++)
-    		data.set(bin_t(0,i+x));
+    for (int i=147; i<999; i+=21) { // postfix sparse
+        for (int x=0; x<8; x++)
+            data.set(bin_t(0,i+x));
     }
 
-    for(int j=0; j<999; j++)
+    for (int j=0; j<999; j++)
         filter.set(bin_t(0,j));
 
-	EXPECT_EQ(bin_t(292),binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
+    EXPECT_EQ(bin_t(292),binmap_t::find_complement(data, filter, bin_t(9,0), 0).base_left());
 }
 
 
 // VOD like. Make first hole at 292.
-TEST(BinsTest,FindFiltered17) {
+TEST(BinsTest,FindFiltered17)
+{
 
     binmap_t offer, ack_hint_out;
-    for(int i=0; i<999; i++) // offer completely full
+    for (int i=0; i<999; i++) // offer completely full
         offer.set(bin_t(0,i));
 
-    for(int i=0; i<292/2; i++) // request prefix full
+    for (int i=0; i<292/2; i++) // request prefix full
         ack_hint_out.set(bin_t(0,i));
-    for(int i=147; i<999; i+=21) // request postfix sparse
-    {
-    	for (int x=0; x<8; x++)
-    		ack_hint_out.set(bin_t(0,i+x));
+    for (int i=147; i<999; i+=21) { // request postfix sparse
+        for (int x=0; x<8; x++)
+            ack_hint_out.set(bin_t(0,i+x));
     }
 
-	binmap_t binmap;
+    binmap_t binmap;
 
-	// report the first bin we find
-	int layer = 0;
-	bin_t::uint_t twist = 0;
-	bin_t hint = bin_t::NONE;
-	while (hint.is_none() && layer <10)
-	{
+    // report the first bin we find
+    int layer = 0;
+    bin_t::uint_t twist = 0;
+    bin_t hint = bin_t::NONE;
+    while (hint.is_none() && layer <10) {
         bin_t curr = bin_t(layer++,0);
-		hint = binmap_t::find_complement(ack_hint_out, offer, curr, twist);
-	}
+        hint = binmap_t::find_complement(ack_hint_out, offer, curr, twist);
+    }
 
-	EXPECT_EQ(bin_t(292),hint);
+    EXPECT_EQ(bin_t(292),hint);
 }
 
 
 // VOD like. Make first hole at 292. Twisting + patching holes
-TEST(BinsTest,FindFiltered19) {
+TEST(BinsTest,FindFiltered19)
+{
 
     binmap_t offer, ack_hint_out;
-    for(int i=0; i<999; i++) // offer completely full
+    for (int i=0; i<999; i++) // offer completely full
         offer.set(bin_t(0,i));
 
-    for(int i=0; i<292/2; i++) // request prefix full
+    for (int i=0; i<292/2; i++) // request prefix full
         ack_hint_out.set(bin_t(0,i));
-    for(int i=147; i<999; i+=21) // request postfix sparse
-    {
-    	for (int x=0; x<8; x++)
-    		ack_hint_out.set(bin_t(0,i+x));
+    for (int i=147; i<999; i+=21) { // request postfix sparse
+        for (int x=0; x<8; x++)
+            ack_hint_out.set(bin_t(0,i+x));
     }
 
-	int layer = 0;
-	bin_t::uint_t twist = 0;
-	bin_t hint = bin_t::NONE;
-	while (!hint.contains(bin_t(292)))
-	{
-		twist = rand();
+    int layer = 0;
+    bin_t::uint_t twist = 0;
+    bin_t hint = bin_t::NONE;
+    while (!hint.contains(bin_t(292))) {
+        twist = rand();
 
-		bin_t curr = bin_t(layer,0);
-		if (layer < 10)
-			layer++;
+        bin_t curr = bin_t(layer,0);
+        if (layer < 10)
+            layer++;
 
-		hint = binmap_t::find_complement(ack_hint_out, offer, curr, twist);
+        hint = binmap_t::find_complement(ack_hint_out, offer, curr, twist);
 
-		if (!hint.is_none())
-			fprintf(stderr,"Found alt ");
+        if (!hint.is_none())
+            fprintf(stderr,"Found alt ");
 
-		//patch hole
-		ack_hint_out.set(hint);
-	}
+        //patch hole
+        ack_hint_out.set(hint);
+    }
 
-	EXPECT_EQ(bin_t(292),hint);
+    EXPECT_EQ(bin_t(292),hint);
 }
 
 
 void create_ack_hint_out(binmap_t &ack_hint_out)
 {
-	ack_hint_out.clear();
-    for(int i=0; i<292/2; i++) // request prefix full
+    ack_hint_out.clear();
+    for (int i=0; i<292/2; i++) // request prefix full
         ack_hint_out.set(bin_t(0,i));
-    for(int i=147; i<999; i+=21) // request postfix sparse
-    {
-    	for (int x=0; x<8; x++)
-    		ack_hint_out.set(bin_t(0,i+x));
+    for (int i=147; i<999; i+=21) { // request postfix sparse
+        for (int x=0; x<8; x++)
+            ack_hint_out.set(bin_t(0,i+x));
     }
 }
 
@@ -472,42 +483,41 @@ void create_ack_hint_out(binmap_t &ack_hint_out)
 
 // VOD like. Make first hole at 292. Twisting + patching holes. Stalled
 // at Playbackpos, looking increasingly higher layers.
-TEST(BinsTest,FindFiltered20) {
+TEST(BinsTest,FindFiltered20)
+{
 
     binmap_t offer, ack_hint_out;
-    for(int i=0; i<999; i++) // offer completely full
+    for (int i=0; i<999; i++) // offer completely full
         offer.set(bin_t(0,i));
 
     create_ack_hint_out(ack_hint_out);
 
 
-	int layer = 0;
-	bin_t::uint_t twist = 0;
-	bin_t hint = bin_t::NONE;
+    int layer = 0;
+    bin_t::uint_t twist = 0;
+    bin_t hint = bin_t::NONE;
 
-	for (layer=0; layer<=9; layer++)
-	{
-		fprintf(stderr,"Layer %d\n", layer );
-		while (!hint.contains(bin_t(292)))
-		{
-			twist = rand();
+    for (layer=0; layer<=9; layer++) {
+        fprintf(stderr,"Layer %d\n", layer);
+        while (!hint.contains(bin_t(292))) {
+            twist = rand();
 
-			bin_t curr = bin_t(0,292/2);
-			for (int p=0; p<layer; p++)
-				curr = curr.parent();
+            bin_t curr = bin_t(0,292/2);
+            for (int p=0; p<layer; p++)
+                curr = curr.parent();
 
-			hint = binmap_t::find_complement(ack_hint_out, offer, curr, twist);
+            hint = binmap_t::find_complement(ack_hint_out, offer, curr, twist);
 
-			if (!hint.is_none())
-				fprintf(stderr,"Found alt %s ", hint.str().c_str() );
+            if (!hint.is_none())
+                fprintf(stderr,"Found alt %s ", hint.str().c_str());
 
-			//patch hole
-			ack_hint_out.set(hint);
-		}
-		create_ack_hint_out(ack_hint_out);
-	}
+            //patch hole
+            ack_hint_out.set(hint);
+        }
+        create_ack_hint_out(ack_hint_out);
+    }
 
-	EXPECT_EQ(bin_t(292),hint);
+    EXPECT_EQ(bin_t(292),hint);
 }
 
 
@@ -515,19 +525,19 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
 {
     binmap_t data, filter;
 
-    for(int i=0; i<1024; i+=2)
+    for (int i=0; i<1024; i+=2)
         filter.set(bin_t(0,i));
 
     // Case 1
     bin_t s(1,2);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     s = bin_t(2,1);
-    fprintf(stderr,"Searching 0,6 from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Searching 0,6 from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     bin_t got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,6),got);
@@ -538,12 +548,12 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
     s = bin_t(1,8);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     s = bin_t(2,4);
-    fprintf(stderr,"Searching 0,18 from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Searching 0,18 from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,18),got);
@@ -554,12 +564,12 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
     s = bin_t(1,80);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     s = bin_t(2,40);
-    fprintf(stderr,"Searching 0,162 from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Searching 0,162 from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,162),got);
@@ -570,12 +580,12 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
     s = bin_t(1,84);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     s = bin_t(2,42);
-    fprintf(stderr,"Searching 0,168 from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Searching 0,168 from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,170),got);
@@ -586,12 +596,12 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
     s = bin_t(1,86);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     s = bin_t(2,43);
-    fprintf(stderr,"Searching 0,174 from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Searching 0,174 from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,174),got);
@@ -602,13 +612,13 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
     s = bin_t(1,90);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
 
     s = bin_t(2,45);
-    fprintf(stderr,"Searching 0,182 from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Searching 0,182 from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,182),got);
@@ -619,12 +629,12 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
     s = bin_t(1,92);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     s = bin_t(2,46);
-    fprintf(stderr,"Searching 0,184 from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Searching 0,184 from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,186),got);
@@ -635,12 +645,12 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
     s = bin_t(1,94);
     data.set(s);
 
-    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Setting from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     s = bin_t(2,47);
-    fprintf(stderr,"Searching 0,188 from %s ", s.base_left().str().c_str() );
-    fprintf(stderr,"to %s\n", s.base_right().str().c_str() );
+    fprintf(stderr,"Searching 0,188 from %s ", s.base_left().str().c_str());
+    fprintf(stderr,"to %s\n", s.base_right().str().c_str());
 
     got = binmap_t::find_complement(data, filter, s, twist).base_left();
     EXPECT_EQ(bin_t(0,190),got);
@@ -648,15 +658,17 @@ void DoFindFilteredRiccardo(bin_t::uint_t twist)
 }
 
 
-TEST(BinsTest,FindFilteredRiccardo3) {
+TEST(BinsTest,FindFilteredRiccardo3)
+{
 
-	DoFindFilteredRiccardo(0);
+    DoFindFilteredRiccardo(0);
 }
 
 
-TEST(BinsTest,FindFilteredRiccardo3Twist) {
+TEST(BinsTest,FindFilteredRiccardo3Twist)
+{
 
-	DoFindFilteredRiccardo( rand() );
+    DoFindFilteredRiccardo(rand());
 }
 
 
@@ -664,7 +676,8 @@ TEST(BinsTest,FindFilteredRiccardo3Twist) {
 
 
 
-int main (int argc, char** argv) {
-	testing::InitGoogleTest(&argc, argv);
-	return RUN_ALL_TESTS();
+int main(int argc, char** argv)
+{
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }

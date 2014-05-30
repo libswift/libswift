@@ -26,7 +26,8 @@ LiveTransfer *create_lt()
     return lt;
 }
 
-TEST(TLivePiecePicker,HookinFirst) {
+TEST(TLivePiecePicker,HookinFirst)
+{
 
     LiveTransfer *lt = create_lt();
     ASSERT_NE((LiveTransfer *)NULL,lt);
@@ -42,7 +43,8 @@ TEST(TLivePiecePicker,HookinFirst) {
 }
 
 
-TEST(TLivePiecePicker,ReHookinBitRateTooShort) {
+TEST(TLivePiecePicker,ReHookinBitRateTooShort)
+{
 
     LiveTransfer *lt = create_lt();
     ASSERT_NE((LiveTransfer *)NULL,lt);
@@ -62,12 +64,13 @@ TEST(TLivePiecePicker,ReHookinBitRateTooShort) {
     lpp->AddPeerMunro(munro_bin,munro_tint);
     tint current_tint = lpp->CalculateCurrentPosInTime(munro_bin);
 
-    fprintf(stderr,"test: current time %s\n", tintstr(current_tint) );
+    fprintf(stderr,"test: current time %s\n", tintstr(current_tint));
 }
 
 
 
-TEST(TLivePiecePicker,ReHookinBitRateGood) {
+TEST(TLivePiecePicker,ReHookinBitRateGood)
+{
 
     LiveTransfer *lt = create_lt();
     ASSERT_NE((LiveTransfer *)NULL,lt);
@@ -109,12 +112,13 @@ TEST(TLivePiecePicker,ReHookinBitRateGood) {
     got_current_tint = lpp->CalculateCurrentPosInTime(exp_current_bin);
     ASSERT_EQ(exp_current_tint,got_current_tint);
 
-    fprintf(stderr,"test: current time %s\n", tintstr(got_current_tint) );
+    fprintf(stderr,"test: current time %s\n", tintstr(got_current_tint));
 }
 
 
 
-int main (int argc, char** argv) {
+int main(int argc, char** argv)
+{
 
     swift::LibraryInit();
     testing::InitGoogleTest(&argc, argv);

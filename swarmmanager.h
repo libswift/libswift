@@ -41,10 +41,12 @@
 #include <list>
 #include "hashtree.h"
 
-namespace swift {
+namespace swift
+{
     class SwarmManager;
 
-    class SwarmData {
+    class SwarmData
+    {
     protected:
         int id_;
         Sha1Hash rootHash_;
@@ -71,8 +73,8 @@ namespace swift {
         bool cached_;
         std::string metadir_;
     public:
-        SwarmData( const std::string filename, const Sha1Hash& rootHash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, uint32_t chunk_size, const std::string metadata="" );
-        SwarmData( const SwarmData& sd );
+        SwarmData(const std::string filename, const Sha1Hash& rootHash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, uint32_t chunk_size, const std::string metadata="");
+        SwarmData(const SwarmData& sd);
 
         ~SwarmData();
 
@@ -101,7 +103,8 @@ namespace swift {
         friend class SwarmManager;
     };
 
-    class SwarmManager {
+    class SwarmManager
+    {
     protected:
         SwarmManager();
         ~SwarmManager();
@@ -130,16 +133,16 @@ namespace swift {
         void CheckSwarmsToBeRemoved();
 
         // Looking up swarms by rootHash, internal functions
-        int GetSwarmLocation( const std::vector<SwarmData*>& list, const Sha1Hash& rootHash );
-        SwarmData* GetSwarmData( const Sha1Hash& rootHash );
+        int GetSwarmLocation(const std::vector<SwarmData*>& list, const Sha1Hash& rootHash);
+        SwarmData* GetSwarmData(const Sha1Hash& rootHash);
 
         // Internal activation method
-        SwarmData* ActivateSwarm( SwarmData* swarm );
-        void BuildSwarm( SwarmData* swarm );
+        SwarmData* ActivateSwarm(SwarmData* swarm);
+        void BuildSwarm(SwarmData* swarm);
 
         // Internal method to find the oldest swarm and deactivate it
         bool DeactivateSwarm();
-        void DeactivateSwarm( SwarmData* swarm, int activeLoc );
+        void DeactivateSwarm(SwarmData* swarm, int activeLoc);
 
         // Structures to keep track of active swarms
         int maxActiveSwarms_;
@@ -154,28 +157,29 @@ namespace swift {
         static SwarmManager& GetManager();
 
         // Add and remove swarms
-        SwarmData* AddSwarm( const std::string filename, const Sha1Hash& rootHash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size, std::string metadir );
-        SwarmData* AddSwarm( const SwarmData& swarm, bool activate=true );
-        void RemoveSwarm( const Sha1Hash& rootHash, bool removeState = false, bool removeContent = false );
+        SwarmData* AddSwarm(const std::string filename, const Sha1Hash& rootHash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size, std::string metadir);
+        SwarmData* AddSwarm(const SwarmData& swarm, bool activate=true);
+        void RemoveSwarm(const Sha1Hash& rootHash, bool removeState = false, bool removeContent = false);
 
         // Find a swam, either by id or root hash
-        SwarmData* FindSwarm( int id );
-        SwarmData* FindSwarm( const Sha1Hash& rootHash );
+        SwarmData* FindSwarm(int id);
+        SwarmData* FindSwarm(const Sha1Hash& rootHash);
 
         // Activate a swarm, so it can be used (not active swarms can't be read from/written to)
-        SwarmData* ActivateSwarm( const Sha1Hash& rootHash );
-        void DeactivateSwarm( const Sha1Hash& rootHash );
+        SwarmData* ActivateSwarm(const Sha1Hash& rootHash);
+        void DeactivateSwarm(const Sha1Hash& rootHash);
 
         // Manage maximum of active swarms
         int GetMaximumActiveSwarms();
-        void SetMaximumActiveSwarms( int newMaxActiveSwarms );
+        void SetMaximumActiveSwarms(int newMaxActiveSwarms);
 
         // Arno
         tdlist_t GetTransferDescriptors();
         // Arno: Called periodically to deactivate unused swarms, even if max not reached
         void DeactivateIdleSwarms();
 
-        class Iterator : public std::iterator<std::input_iterator_tag, SwarmData*> {
+        class Iterator : public std::iterator<std::input_iterator_tag, SwarmData*>
+        {
         protected:
             int transfer_;
         public:

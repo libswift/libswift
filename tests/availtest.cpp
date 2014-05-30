@@ -16,7 +16,8 @@
 using namespace swift;
 
 
-TEST(BinsTest,Avail) {
+TEST(BinsTest,Avail)
+{
 
     Availability a = Availability(20);
     binmap_t p1, p2, p3;
@@ -103,7 +104,8 @@ TEST(BinsTest,Avail) {
 }
 
 
-int main (int argc, char** argv) {
+int main(int argc, char** argv)
+{
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

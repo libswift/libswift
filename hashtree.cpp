@@ -23,14 +23,16 @@ using namespace swift;
 
 const Sha1Hash Sha1Hash::ZERO = Sha1Hash();
 
-void SHA1 (const void *data, size_t length, unsigned char *hash) {
+void SHA1(const void *data, size_t length, unsigned char *hash)
+{
     blk_SHA_CTX ctx;
     blk_SHA1_Init(&ctx);
     blk_SHA1_Update(&ctx, data, length);
     blk_SHA1_Final(hash, &ctx);
 }
 
-Sha1Hash::Sha1Hash(const Sha1Hash& left, const Sha1Hash& right) {
+Sha1Hash::Sha1Hash(const Sha1Hash& left, const Sha1Hash& right)
+{
     blk_SHA_CTX ctx;
     blk_SHA1_Init(&ctx);
     blk_SHA1_Update(&ctx, left.bits,SIZE);
@@ -38,20 +40,23 @@ Sha1Hash::Sha1Hash(const Sha1Hash& left, const Sha1Hash& right) {
     blk_SHA1_Final(bits, &ctx);
 }
 
-Sha1Hash::Sha1Hash(const char* data, size_t length) {
+Sha1Hash::Sha1Hash(const char* data, size_t length)
+{
     if (length==-1)
         length = strlen(data);
     SHA1((unsigned char*)data,length,bits);
 }
 
-Sha1Hash::Sha1Hash(const uint8_t* data, size_t length) {
+Sha1Hash::Sha1Hash(const uint8_t* data, size_t length)
+{
     SHA1(data,length,bits);
 }
 
-Sha1Hash::Sha1Hash(bool hex, const char* hash) {
+Sha1Hash::Sha1Hash(bool hex, const char* hash)
+{
     if (hex) {
         int val;
-        for(int i=0; i<SIZE; i++) {
+        for (int i=0; i<SIZE; i++) {
             if (sscanf(hash+i*2, "%2x", &val)!=1) {
                 memset(bits,0,20);
                 return;
@@ -63,9 +68,10 @@ Sha1Hash::Sha1Hash(bool hex, const char* hash) {
         memcpy(bits,hash,SIZE);
 }
 
-std::string    Sha1Hash::hex() const {
+std::string    Sha1Hash::hex() const
+{
     char hex[HASHSZ*2+1];
-    for(int i=0; i<HASHSZ; i++)
+    for (int i=0; i<HASHSZ; i++)
         sprintf(hex+i*2, "%02x", (int)(unsigned char)bits[i]);
     return std::string(hex,HASHSZ*2);
 }
@@ -73,29 +79,27 @@ std::string    Sha1Hash::hex() const {
 
 Sha1Hash & Sha1Hash::operator= (const Sha1Hash & source)
 {
-     if (this != &source)
-     {
-	 memcpy(bits,source.bits,SIZE);
-     }
-     return *this;
- }
+    if (this != &source) {
+        memcpy(bits,source.bits,SIZE);
+    }
+    return *this;
+}
 
 
 
 /**     H a s h   t r e e       */
 
 
-MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool force_check_diskvshash,std::string binmap_filename) :
- HashTree(), root_hash_(root_hash), hashes_(NULL),
- peak_count_(0), hash_fd_(-1), hash_filename_(hash_filename), size_(0), sizec_(0), complete_(0), completec_(0),
- chunk_size_(chunk_size), storage_(storage)
+MmapHashTree::MmapHashTree(Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool force_check_diskvshash,std::string binmap_filename) :
+    HashTree(), root_hash_(root_hash), hashes_(NULL),
+    peak_count_(0), hash_fd_(-1), hash_filename_(hash_filename), size_(0), sizec_(0), complete_(0), completec_(0),
+    chunk_size_(chunk_size), storage_(storage)
 {
     // MULTIFILE
     storage_->SetHashTree(this);
     // If multi-file spec we know the exact size even before getting peaks+last chunk
     int64_t sizefromspec = storage_->GetSizeFromSpec();
-    if (sizefromspec != -1)
-    {
+    if (sizefromspec != -1) {
         set_size(sizefromspec);
         // Resize all files
         (void)storage_->ResizeReserved(sizefromspec);
@@ -104,7 +108,7 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
     // Arno: if user doesn't want to check hashes but no .mhash, check hashes anyway
     bool actually_force_check_diskvshash = force_check_diskvshash;
     bool mhash_exists=true;
-    int64_t mhash_size = file_size_by_path_utf8( hash_filename);
+    int64_t mhash_size = file_size_by_path_utf8(hash_filename);
     if (mhash_size < 0)
         mhash_exists = false;
     // Arno, 2012-07-26: Quick fix against partial downloads without .mhash.
@@ -114,21 +118,20 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
     // hash, revert to a clean state.
     //
     if (root_hash_==Sha1Hash::ZERO && !mhash_exists)
-    	actually_force_check_diskvshash = true;
+        actually_force_check_diskvshash = true;
 
     // Arno: if the remainder of the hashtree state is on disk we can
     // hashcheck very quickly
     bool binmap_exists=true;
-    int res = file_exists_utf8( binmap_filename );
-    if( res <= 0)
+    int res = file_exists_utf8(binmap_filename);
+    if (res <= 0)
         binmap_exists = false;
     if (root_hash_==Sha1Hash::ZERO && !binmap_exists)
-    	actually_force_check_diskvshash = true;
+        actually_force_check_diskvshash = true;
 
     //fprintf(stderr,"hashtree: hashchecking %s file %s destdir %s want %s do %s mhash-on-disk %s binmap-on-disk %s\n", root_hash.hex().c_str(), storage_->GetOSPathName().c_str(), storage_->GetDestDir().c_str(), (force_check_diskvshash ? "yes" : "no"), (actually_force_check_diskvshash? "yes" : "no"), (mhash_exists? "yes" : "no"), (binmap_exists? "yes" : "no") );
     // Arno, 2012-07-27: Sanity check
-    if ((mhash_exists || binmap_exists) && storage_->GetReservedSize() == -1)
-    {
+    if ((mhash_exists || binmap_exists) && storage_->GetReservedSize() == -1) {
         print_error("meta files present but not content");
         SetBroken();
         return;
@@ -152,9 +155,9 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
         dprintf("%s hashtree read from checkpoint\n",tintstr());
         FILE *fp = fopen_utf8(binmap_filename.c_str(),"rb");
         if (!fp) {
-             print_error("hashtree: cannot open .mbinmap file");
-             SetBroken();
-             return;
+            print_error("hashtree: cannot open .mbinmap file");
+            SetBroken();
+            return;
         }
         if (deserialize(fp) < 0) {
             // Try to rebuild hashtree data
@@ -172,24 +175,25 @@ MmapHashTree::MmapHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
 
 
 MmapHashTree::MmapHashTree(bool dummy, std::string binmap_filename) :
-HashTree(), root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), hash_fd_(0),
-hash_filename_(""), filename_(""), size_(0), sizec_(0), complete_(0), completec_(0),
-chunk_size_(0)
+    HashTree(), root_hash_(Sha1Hash::ZERO), hashes_(NULL), peak_count_(0), hash_fd_(0),
+    hash_filename_(""), filename_(""), size_(0), sizec_(0), complete_(0), completec_(0),
+    chunk_size_(0)
 {
     FILE *fp = fopen_utf8(binmap_filename.c_str(),"rb");
     if (!fp) {
-    	SetBroken();
-         return;
+        SetBroken();
+        return;
     }
     if (partial_deserialize(fp) < 0) {
     }
     fclose(fp);
 }
 
-int MmapHashTree::OpenHashFile() {
+int MmapHashTree::OpenHashFile()
+{
     hash_fd_ = open_utf8(hash_filename_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (hash_fd_<0) {
-    	hash_fd_ = -1;
+        hash_fd_ = -1;
         print_error("cannot create/open hash file");
         SetBroken();
     }
@@ -198,7 +202,8 @@ int MmapHashTree::OpenHashFile() {
 
 
 // Reads complete file and constructs hash tree
-void            MmapHashTree::Submit () {
+void            MmapHashTree::Submit()
+{
     size_ = storage_->GetReservedSize();
     sizec_ = (size_ + chunk_size_-1) / chunk_size_;
 
@@ -206,7 +211,7 @@ void            MmapHashTree::Submit () {
 
     peak_count_ = gen_peaks(sizec_,peaks_);
     int hashes_size = Sha1Hash::SIZE*sizec_*2;
-    dprintf("%s hashtree submit resizing hash file to %d\n",tintstr(), hashes_size );
+    dprintf("%s hashtree submit resizing hash file to %d\n",tintstr(), hashes_size);
     if (hashes_size == 0) {
         SetBroken();
         return;
@@ -214,11 +219,11 @@ void            MmapHashTree::Submit () {
 
     // Arno, 2012-09-19: Hash file created only when msgs incoming
     if (hash_fd_ == -1) {
-    	hash_fd_ = OpenHashFile();
-    	if (hash_fd_ < 0)
+        hash_fd_ = OpenHashFile();
+        if (hash_fd_ < 0)
             return;
     }
-  
+
     file_resize(hash_fd_,hashes_size);
     hashes_ = (Sha1Hash*) memory_map(hash_fd_,hashes_size);
     if (!hashes_) {
@@ -241,7 +246,7 @@ void            MmapHashTree::Submit () {
         bin_t pos(0,i);
         hashes_[pos.toUInt()] = Sha1Hash(chunk,rd);
         ack_out_.set(pos);
-        while (pos.is_right()){
+        while (pos.is_right()) {
             pos = pos.parent();
             hashes_[pos.toUInt()] = Sha1Hash(hashes_[pos.left().toUInt()],hashes_[pos.right().toUInt()]);
         }
@@ -254,11 +259,10 @@ void            MmapHashTree::Submit () {
     }
 
     Sha1Hash calcroothash = DeriveRoot();
-    if (root_hash_ != Sha1Hash::ZERO && calcroothash != root_hash_)
-    {
-    	print_error("hash tree calculation error");
-    	SetBroken();
-    	return;
+    if (root_hash_ != Sha1Hash::ZERO && calcroothash != root_hash_) {
+        print_error("hash tree calculation error");
+        SetBroken();
+        return;
     }
     root_hash_ = calcroothash;
 }
@@ -267,7 +271,8 @@ void            MmapHashTree::Submit () {
 /** Basically, simulated receiving every single chunk, except
  for some optimizations.
  Precondition: root hash known */
-void            MmapHashTree::RecoverProgress () {
+void            MmapHashTree::RecoverProgress()
+{
 
     //fprintf(stderr,"hashtree: recover: cs %i\n", chunk_size_);
 
@@ -286,7 +291,7 @@ void            MmapHashTree::RecoverProgress () {
     // complete on disk, hence the .mbinmap file.
     //
     char *buf = new char[chunk_size_];
-    for(int p=0; p<size_in_chunks(); p++) {
+    for (int p=0; p<size_in_chunks(); p++) {
         bin_t pos(0,p);
         if (hashes_[pos.toUInt()]==Sha1Hash::ZERO)
             continue;
@@ -296,7 +301,7 @@ void            MmapHashTree::RecoverProgress () {
         if (rd==(chunk_size_) && !memcmp(buf, zero_chunk, rd) &&
                 hashes_[pos.toUInt()]!=zero_hash) // FIXME // Arno == don't have piece yet?
             continue;
-        if (!OfferHash(pos, Sha1Hash(buf,rd)) )
+        if (!OfferHash(pos, Sha1Hash(buf,rd)))
             continue;
         ack_out_.set(pos);
         completec_++;
@@ -322,7 +327,7 @@ bool MmapHashTree::RecoverPeakHashes()
     // they match to root hash. If so, load hashes into memory.
     bin_t peaks[64];
     int peak_count = gen_peaks(sizek,peaks);
-    for(int i=0; i<peak_count; i++) {
+    for (int i=0; i<peak_count; i++) {
         Sha1Hash peak_hash;
         file_seek(hash_fd_,peaks[i].toUInt()*sizeof(Sha1Hash));
         if (read(hash_fd_,&peak_hash,sizeof(Sha1Hash))!=sizeof(Sha1Hash))
@@ -337,11 +342,11 @@ bool MmapHashTree::RecoverPeakHashes()
 
 int MmapHashTree::serialize(FILE *fp)
 {
-    fprintf_retiffail(fp,"version %i\n", 1 );
-    fprintf_retiffail(fp,"root hash %s\n", root_hash_.hex().c_str() );
-    fprintf_retiffail(fp,"chunk size %" PRIu32 "\n", chunk_size_ );
-    fprintf_retiffail(fp,"complete %" PRIu64 "\n", complete_ );
-    fprintf_retiffail(fp,"completec %" PRIu64 "\n", completec_ );
+    fprintf_retiffail(fp,"version %i\n", 1);
+    fprintf_retiffail(fp,"root hash %s\n", root_hash_.hex().c_str());
+    fprintf_retiffail(fp,"chunk size %" PRIu32 "\n", chunk_size_);
+    fprintf_retiffail(fp,"complete %" PRIu64 "\n", complete_);
+    fprintf_retiffail(fp,"completec %" PRIu64 "\n", completec_);
     return ack_out_.serialize(fp);
 }
 
@@ -349,27 +354,30 @@ int MmapHashTree::serialize(FILE *fp)
 /** Arno: recreate hash tree from .mbinmap file without rereading content.
  * Precondition: root hash known
  */
-int MmapHashTree::deserialize(FILE *fp) {
+int MmapHashTree::deserialize(FILE *fp)
+{
     return internal_deserialize(fp,true);
 }
 
-int MmapHashTree::partial_deserialize(FILE *fp) {
+int MmapHashTree::partial_deserialize(FILE *fp)
+{
     return internal_deserialize(fp,false);
 }
 
 
-int MmapHashTree::internal_deserialize(FILE *fp,bool contentavail) {
+int MmapHashTree::internal_deserialize(FILE *fp,bool contentavail)
+{
 
     char hexhashstr[256];
     uint64_t c,cc;
     uint32_t cs;
     int version;
 
-    fscanf_retiffail(fp,"version %i\n", &version );
+    fscanf_retiffail(fp,"version %i\n", &version);
     fscanf_retiffail(fp,"root hash %s\n", hexhashstr);
     fscanf_retiffail(fp,"chunk size %" PRIu32 "\n", &cs);
-    fscanf_retiffail(fp,"complete %" PRIu64 "\n", &c );
-    fscanf_retiffail(fp,"completec %" PRIu64 "\n", &cc );
+    fscanf_retiffail(fp,"complete %" PRIu64 "\n", &c);
+    fscanf_retiffail(fp,"completec %" PRIu64 "\n", &cc);
 
     if (ack_out_.deserialize(fp) < 0)
         return -1;
@@ -398,7 +406,8 @@ int MmapHashTree::internal_deserialize(FILE *fp,bool contentavail) {
 }
 
 
-bool            MmapHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
+bool            MmapHashTree::OfferPeakHash(bin_t pos, const Sha1Hash& hash)
+{
     dprintf("%s hashtree offer peak %s\n",tintstr(),pos.str().c_str());
 
     // Arno: This code expects peaks to be sent in tree descending order,
@@ -406,8 +415,8 @@ bool            MmapHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
     //assert(!size_);
     if (peak_count_) {
         bin_t last_peak = peaks_[peak_count_-1];
-        if ( pos.layer()>=last_peak.layer() ||
-            pos.base_offset()!=last_peak.base_offset()+last_peak.base_length() )
+        if (pos.layer()>=last_peak.layer() ||
+                pos.base_offset()!=last_peak.base_offset()+last_peak.base_length())
             peak_count_ = 0;
     }
     peaks_[peak_count_] = pos;
@@ -417,7 +426,7 @@ bool            MmapHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
     Sha1Hash mustbe_root = DeriveRoot();
     if (mustbe_root!=root_hash_)
         return false;
-    for(int i=0; i<peak_count_; i++)
+    for (int i=0; i<peak_count_; i++)
         sizec_ += peaks_[i].base_length();
 
     // bingo, we now know the file size (rounded up to a chunk_size() unit)
@@ -430,8 +439,8 @@ bool            MmapHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
     // ARNOTODO: win32: this is pretty slow for ~200 MB already. Perhaps do
     // on-demand sizing for Win32?
     uint64_t cur_size = storage_->GetReservedSize();
-    if ( cur_size<=(sizec_-1)*chunk_size_  || cur_size>sizec_*chunk_size_ ) {
-        dprintf("%s hashtree offerpeak resizing file\n",tintstr() );
+    if (cur_size<=(sizec_-1)*chunk_size_  || cur_size>sizec_*chunk_size_) {
+        dprintf("%s hashtree offerpeak resizing file\n",tintstr());
         if (storage_->ResizeReserved(size_)) {
             print_error("cannot set file size\n");
             size_=0; // remain in the 0-state
@@ -441,20 +450,20 @@ bool            MmapHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
 
     // Arno, 2012-09-19: Hash file created only when msgs incoming
     if (hash_fd_ == -1) {
-    	hash_fd_ = OpenHashFile();
-    	if (hash_fd_ < 0)
+        hash_fd_ = OpenHashFile();
+        if (hash_fd_ < 0)
             return false;
     }
-  
+
     // mmap the hash file into memory
     uint64_t expected_size = sizeof(Sha1Hash)*sizec_*2;
     // Arno, 2011-10-18: on Windows we could optimize this away,
     //CreateFileMapping, see compat.cpp will resize the file for us with
     // the right params.
     //
-    if ( file_size(hash_fd_) != expected_size ) {
-        dprintf("%s hashtree offerpeak resizing hash file\n",tintstr() );
-        file_resize (hash_fd_, expected_size);
+    if (file_size(hash_fd_) != expected_size) {
+        dprintf("%s hashtree offerpeak resizing hash file\n",tintstr());
+        file_resize(hash_fd_, expected_size);
     }
 
     hashes_ = (Sha1Hash*) memory_map(hash_fd_,expected_size);
@@ -464,18 +473,19 @@ bool            MmapHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
         return false;
     }
 
-    for(int i=0; i<peak_count_; i++)
+    for (int i=0; i<peak_count_; i++)
         hashes_[peaks_[i].toUInt()] = peak_hashes_[i];
 
-    dprintf("%s hashtree memory mapped\n",tintstr() );
+    dprintf("%s hashtree memory mapped\n",tintstr());
 
     return true;
 }
 
 
-Sha1Hash        MmapHashTree::DeriveRoot () {
+Sha1Hash        MmapHashTree::DeriveRoot()
+{
 
-    dprintf("%s hashtree deriving root\n",tintstr() );
+    dprintf("%s hashtree deriving root\n",tintstr());
 
     int c = peak_count_-1;
     bin_t p = peaks_[c];
@@ -505,24 +515,26 @@ Sha1Hash        MmapHashTree::DeriveRoot () {
 
 /** For live streaming: appends the data, adjusts the tree.
     @ return the number of fresh (tail) peak hashes */
-int         MmapHashTree::AppendData (char* data, int length) {
+int         MmapHashTree::AppendData(char* data, int length)
+{
     return 0;
 }
 
 
-bin_t         MmapHashTree::peak_for (bin_t pos) const {
+bin_t         MmapHashTree::peak_for(bin_t pos) const
+{
     int pi=0;
     while (pi<peak_count_ && !peaks_[pi].contains(pos))
         pi++;
     return pi==peak_count_ ? bin_t(bin_t::NONE) : peaks_[pi];
 }
 
-bool            MmapHashTree::OfferHash (bin_t pos, const Sha1Hash& hash) {
+bool            MmapHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
+{
     if (!size_)  // only peak hashes are accepted at this point
         return OfferPeakHash(pos,hash);
-    if (hashes_ == NULL)
-    {
-        dprintf("%s hashtree never loaded correctly from disk\n",tintstr() );
+    if (hashes_ == NULL) {
+        dprintf("%s hashtree never loaded correctly from disk\n",tintstr());
         return false;
     }
 
@@ -544,7 +556,7 @@ bool            MmapHashTree::OfferHash (bin_t pos, const Sha1Hash& hash) {
     bin_t p = pos;
     Sha1Hash uphash = hash;
     // Arno: Note well: bin_t(0,p.toUInt()) is to abuse binmap as bitmap.
-    while ( p!=peak && ack_out_.is_empty(p) && is_hash_verified_.is_empty(bin_t(0,p.toUInt())) ) {
+    while (p!=peak && ack_out_.is_empty(p) && is_hash_verified_.is_empty(bin_t(0,p.toUInt()))) {
         hashes_[p.toUInt()] = uphash;
         p = p.parent();
         // Arno: Prevent poisoning the tree with bad values:
@@ -584,7 +596,8 @@ bool            MmapHashTree::OfferHash (bin_t pos, const Sha1Hash& hash) {
 }
 
 
-bool            MmapHashTree::OfferData (bin_t pos, const char* data, size_t length) {
+bool            MmapHashTree::OfferData(bin_t pos, const char* data, size_t length)
+{
     if (!size())
         return false;
     if (!pos.is_base())
@@ -622,19 +635,17 @@ bool            MmapHashTree::OfferData (bin_t pos, const char* data, size_t len
 }
 
 
-uint64_t      MmapHashTree::seq_complete (int64_t offset) {
+uint64_t      MmapHashTree::seq_complete(int64_t offset)
+{
 
     uint64_t seqc = 0;
-    if (offset == 0)
-    {
+    if (offset == 0) {
         uint64_t seqc = ack_out_.find_empty().base_offset();
         if (seqc==sizec_)
             return size_;
         else
             return seqc*chunk_size_;
-    }
-    else
-    {
+    } else {
         // SEEK: Calc sequentially complete bytes from an offset
         bin_t binoff = bin_t(0,(offset - (offset % chunk_size_)) / chunk_size_);
         bin_t nextempty = ack_out_.find_empty(binoff);
@@ -651,12 +662,11 @@ uint64_t      MmapHashTree::seq_complete (int64_t offset) {
 }
 
 
-MmapHashTree::~MmapHashTree () 
+MmapHashTree::~MmapHashTree()
 {
     if (hashes_)
         memory_unmap(hash_fd_, hashes_, sizec_*2*sizeof(Sha1Hash));
-    if (hash_fd_ >= 0) 
-    {
+    if (hash_fd_ >= 0) {
         close(hash_fd_);
     }
 }

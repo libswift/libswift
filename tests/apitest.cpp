@@ -19,7 +19,7 @@
 using namespace swift;
 
 
-#define TESTFILE 	 "rw.dat"
+#define TESTFILE     "rw.dat"
 
 int RemoveTestFile()
 {
@@ -34,10 +34,9 @@ int CreateTestFile(uint64_t size)
     RemoveTestFile();
 
     int f = open(TESTFILE,O_RDWR|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-    if (f < 0)
-    {
-	eprintf("Error opening %s\n",TESTFILE);
-	return -1;
+    if (f < 0) {
+        eprintf("Error opening %s\n",TESTFILE);
+        return -1;
     }
 
     char *buf = new char[size];
@@ -49,7 +48,8 @@ int CreateTestFile(uint64_t size)
     return ret;
 }
 
-TEST(SimpleAPITest,WriteRead) {
+TEST(SimpleAPITest,WriteRead)
+{
 
     RemoveTestFile();
 
@@ -68,43 +68,48 @@ TEST(SimpleAPITest,WriteRead) {
     ret = swift::Read(td,gotblock,512,0);
     ASSERT_EQ(ret,512);
     for (int i=0; i<512; i++)
-	ASSERT_EQ(expblock[i],gotblock[i]);
+        ASSERT_EQ(expblock[i],gotblock[i]);
 
     ret = swift::Read(td,gotblock,512,512);
     ASSERT_EQ(ret,512);
     for (int i=0; i<512; i++)
-	ASSERT_EQ(expblock[512+i],gotblock[i]);
+        ASSERT_EQ(expblock[512+i],gotblock[i]);
 }
 
-TEST(SimpleAPITest,SizeFailUnknownTD) {
+TEST(SimpleAPITest,SizeFailUnknownTD)
+{
 
     uint64_t ret = swift::Size(567);
     ASSERT_EQ(ret,0);
 }
 
 
-TEST(SimpleAPITest,IsCompleteFailUnknownTD) {
+TEST(SimpleAPITest,IsCompleteFailUnknownTD)
+{
 
     bool ret = swift::IsComplete(567);
     ASSERT_EQ(ret,false);
 }
 
 
-TEST(SimpleAPITest,CompleteFailUnknownTD) {
+TEST(SimpleAPITest,CompleteFailUnknownTD)
+{
 
     uint64_t ret = swift::Complete(567);
     ASSERT_EQ(ret,0);
 }
 
 
-TEST(SimpleAPITest,SeqCompleteFailUnknownTD) {
+TEST(SimpleAPITest,SeqCompleteFailUnknownTD)
+{
 
     uint64_t ret = swift::SeqComplete(567);
     ASSERT_EQ(ret,0);
 }
 
 
-TEST(SimpleAPITest,SwarmIDFailUnknownTD) {
+TEST(SimpleAPITest,SwarmIDFailUnknownTD)
+{
 
     SwarmID gotswarmid = swift::GetSwarmID(567);
     SwarmID expswarmid = SwarmID::NOSWARMID;
@@ -238,7 +243,8 @@ TEST(SimpleAPITest,TouchFailUnknownTD)
 }
 
 
-int main (int argc, char** argv) {
+int main(int argc, char** argv)
+{
 
     // Arno: required
     LibraryInit();

@@ -72,22 +72,22 @@
 #define optional_argument  2
 
 struct option {
-        /* name of long option */
-        const char *name;
-        /*
-         * one of no_argument, required_argument, and optional_argument:
-         * whether option takes an argument
-         */
-        int has_arg;
-        /* if not NULL, set *flag to val when option found */
-        int *flag;
-        /* if flag not NULL, value to set *flag to; else return value */
-        int val;
+    /* name of long option */
+    const char *name;
+    /*
+     * one of no_argument, required_argument, and optional_argument:
+     * whether option takes an argument
+     */
+    int has_arg;
+    /* if not NULL, set *flag to val when option found */
+    int *flag;
+    /* if flag not NULL, value to set *flag to; else return value */
+    int val;
 };
 
 __BEGIN_DECLS
 GETOPT_API int getopt_long __P((int, char * const *, const char *,
-    const struct option *, int *));
+                                const struct option *, int *));
 __END_DECLS
 #endif
 
@@ -96,9 +96,9 @@ __END_DECLS
 __BEGIN_DECLS
 
 GETOPT_API extern int   opterr,   /* if error message should be printed */
-                        optind,   /* index into parent argv vector */
-                        optopt,   /* character checked for validity */
-                        optreset; /* reset getopt */
+           optind,   /* index into parent argv vector */
+           optopt,   /* character checked for validity */
+           optreset; /* reset getopt */
 GETOPT_API extern char* optarg;   /* argument associated with option */
 
 /* Original getopt */
@@ -106,5 +106,5 @@ GETOPT_API int getopt __P((int, char * const *, const char *));
 
 __END_DECLS
 #endif
- 
+
 #endif /* !_GETOPT_H_ */

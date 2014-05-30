@@ -49,9 +49,7 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
                 metaprefix = filename;
             else
                 metaprefix = metadir+filename;
-        }
-        else
-        {
+        } else {
             // Filename with directory
             std::string basename = basename_utf8(filename);
             if (metadir == "")
@@ -79,22 +77,19 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
 
     // Arno, 2013-02-25: Create HashTree even when PROT_NONE to enable
     // automatic size determination via peak hashes.
-    if (!zerostate_)
-    {
+    if (!zerostate_) {
         hashtree_ = (HashTree *)new MmapHashTree(storage_,root_hash,chunk_size,hash_filename,force_check_diskvshash,binmap_filename);
         availability_ = new Availability(SWIFT_MAX_OUTGOING_CONNECTIONS);
 
-        if (ENABLE_VOD_PIECEPICKER) 
+        if (ENABLE_VOD_PIECEPICKER)
             picker_ = new VodPiecePicker(this);
-        else 
+        else
             //picker_ = new SeqPiecePicker(this);
-			picker_ = new RFPiecePicker(this);
+            picker_ = new RFPiecePicker(this);
         picker_->Randomize(rand()&63);
-    }
-    else
-    {
-	// ZEROHASH
-	hashtree_ = (HashTree *)new ZeroHashTree(storage_,root_hash,chunk_size,hash_filename,binmap_filename);
+    } else {
+        // ZEROHASH
+        hashtree_ = (HashTree *)new ZeroHashTree(storage_,root_hash,chunk_size,hash_filename,binmap_filename);
     }
 
     UpdateOperational();
@@ -104,19 +99,18 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
 void FileTransfer::UpdateOperational()
 {
     if (!hashtree_->IsOperational() || !storage_->IsOperational())
-	SetBroken();
+        SetBroken();
 
     if (zerostate_ && !hashtree_->is_complete())
-	SetBroken();
+        SetBroken();
 }
 
 
-FileTransfer::~FileTransfer ()
+FileTransfer::~FileTransfer()
 {
     delete hashtree_;
     hashtree_ = NULL;
-    if (!IsZeroState())
-    {
+    if (!IsZeroState()) {
         delete picker_;
         picker_ = NULL;
         delete availability_;

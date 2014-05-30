@@ -27,10 +27,10 @@ using namespace swift;
 /**     0  H a s h   t r e e       */
 
 
-ZeroHashTree::ZeroHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, std::string binmap_filename) :
- HashTree(), root_hash_(root_hash), peak_count_(0), hash_fd_(0),
- size_(0), sizec_(0), complete_(0), completec_(0),
- chunk_size_(chunk_size), storage_(storage)
+ZeroHashTree::ZeroHashTree(Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, std::string binmap_filename) :
+    HashTree(), root_hash_(root_hash), peak_count_(0), hash_fd_(0),
+    size_(0), sizec_(0), complete_(0), completec_(0),
+    chunk_size_(chunk_size), storage_(storage)
 {
     // MULTIFILE
     storage_->SetHashTree(this);
@@ -42,9 +42,8 @@ ZeroHashTree::ZeroHashTree (Storage *storage, const Sha1Hash& root_hash, uint32_
         return;
     }
 
-    if (!RecoverPeakHashes())
-    {
-        dprintf("%s zero hashtree could not recover peak hashes, fatal\n",tintstr() );
+    if (!RecoverPeakHashes()) {
+        dprintf("%s zero hashtree could not recover peak hashes, fatal\n",tintstr());
         SetBroken();
     }
 }
@@ -63,7 +62,7 @@ bool ZeroHashTree::RecoverPeakHashes()
     // they match to root hash. If so, load hashes into memory.
     bin_t peaks[64];
     int peak_count = gen_peaks(sizek,peaks);
-    for(int i=0; i<peak_count; i++) {
+    for (int i=0; i<peak_count; i++) {
         Sha1Hash peak_hash = hash(peaks[i]);
         if (peak_hash == Sha1Hash::ZERO)
             return false;
@@ -79,14 +78,15 @@ bool ZeroHashTree::RecoverPeakHashes()
 }
 
 
-bool            ZeroHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
+bool            ZeroHashTree::OfferPeakHash(bin_t pos, const Sha1Hash& hash)
+{
     dprintf("%s zero hashtree offer peak %s\n",tintstr(),pos.str().c_str());
 
     //assert(!size_);
     if (peak_count_) {
         bin_t last_peak = peaks_[peak_count_-1];
-        if ( pos.layer()>=last_peak.layer() ||
-            pos.base_offset()!=last_peak.base_offset()+last_peak.base_length() )
+        if (pos.layer()>=last_peak.layer() ||
+                pos.base_offset()!=last_peak.base_offset()+last_peak.base_length())
             peak_count_ = 0;
     }
     peaks_[peak_count_] = pos;
@@ -96,7 +96,7 @@ bool            ZeroHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
     Sha1Hash mustbe_root = DeriveRoot();
     if (mustbe_root!=root_hash_)
         return false;
-    for(int i=0; i<peak_count_; i++)
+    for (int i=0; i<peak_count_; i++)
         sizec_ += peaks_[i].base_length();
 
     // bingo, we now know the file size (rounded up to a chunk_size() unit)
@@ -110,9 +110,10 @@ bool            ZeroHashTree::OfferPeakHash (bin_t pos, const Sha1Hash& hash) {
 }
 
 
-Sha1Hash        ZeroHashTree::DeriveRoot () {
+Sha1Hash        ZeroHashTree::DeriveRoot()
+{
 
-    dprintf("%s zero hashtree deriving root\n",tintstr() );
+    dprintf("%s zero hashtree deriving root\n",tintstr());
 
     int c = peak_count_-1;
     bin_t p = peaks_[c];
@@ -136,35 +137,34 @@ Sha1Hash        ZeroHashTree::DeriveRoot () {
     return hash;
 }
 
-const Sha1Hash& ZeroHashTree::peak_hash (int i) const {
-     // switch to peak_hashes_ when caching enabled
+const Sha1Hash& ZeroHashTree::peak_hash(int i) const
+{
+    // switch to peak_hashes_ when caching enabled
     return hash(peak(i));
 }
 
 
-const Sha1Hash& ZeroHashTree::hash (bin_t pos) const
+const Sha1Hash& ZeroHashTree::hash(bin_t pos) const
 {
     // RISKY BUSINESS
     static Sha1Hash hash;
-    
+
     int ret = file_seek(hash_fd_,pos.toUInt()*sizeof(Sha1Hash));
-    if (ret < 0)
-    {
+    if (ret < 0) {
         print_error("reading zero hashtree");
         return Sha1Hash::ZERO;
     }
     ret = read(hash_fd_,&hash,sizeof(Sha1Hash));
     if (ret < 0 || ret !=sizeof(Sha1Hash))
         return Sha1Hash::ZERO;
-    else
-    {
+    else {
         //fprintf(stderr,"read hash %" PRIu64 " %s\n", pos.toUInt(), hash.hex().c_str() );
         return hash;
     }
 }
 
 
-bin_t         ZeroHashTree::peak_for (bin_t pos) const
+bin_t         ZeroHashTree::peak_for(bin_t pos) const
 {
     int pi=0;
     while (pi<peak_count_ && !peaks_[pi].contains(pos))
@@ -172,28 +172,27 @@ bin_t         ZeroHashTree::peak_for (bin_t pos) const
     return pi==peak_count_ ? bin_t(bin_t::NONE) : peaks_[pi];
 }
 
-bool            ZeroHashTree::OfferHash (bin_t pos, const Sha1Hash& hash)
+bool            ZeroHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
 {
     return false;
 }
 
 
-bool            ZeroHashTree::OfferData (bin_t pos, const char* data, size_t length)
+bool            ZeroHashTree::OfferData(bin_t pos, const char* data, size_t length)
 {
     return false;
 }
 
 
-uint64_t      ZeroHashTree::seq_complete (int64_t offset)
+uint64_t      ZeroHashTree::seq_complete(int64_t offset)
 {
     return size_;
 }
 
 
-ZeroHashTree::~ZeroHashTree ()
+ZeroHashTree::~ZeroHashTree()
 {
-    if (hash_fd_ >= 0)
-    {
+    if (hash_fd_ >= 0) {
         close(hash_fd_);
     }
 }

@@ -12,7 +12,7 @@
 using namespace swift;
 
 
-#define  tree_debug	false
+#define  tree_debug false
 
 
 const SigTintTuple SigTintTuple::NOSIGTINT = SigTintTuple();
@@ -30,7 +30,7 @@ Node::Node() : parent_(NULL), leftc_(NULL), rightc_(NULL), b_(bin_t::NONE), h_(S
 Node::~Node()
 {
     if (stptr_ != NULL)
-	delete stptr_;
+        delete stptr_;
 }
 
 void Node::SetParent(Node *parent)
@@ -108,16 +108,16 @@ void Node::SetSigTint(SigTintTuple *stptr)
  */
 
 LiveHashTree::LiveHashTree(Storage *storage, KeyPair &keypair, uint32_t chunk_size,uint32_t nchunks_per_sig) :
-         HashTree(), state_(LHT_STATE_SIGN_EMPTY), root_(NULL), addcursor_(NULL), keypair_(keypair), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
-         chunk_size_(chunk_size), storage_(storage), 
-         source_last_munro_(bin_t::NONE),nchunks_per_sig_(nchunks_per_sig)
+    HashTree(), state_(LHT_STATE_SIGN_EMPTY), root_(NULL), addcursor_(NULL), keypair_(keypair), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
+    chunk_size_(chunk_size), storage_(storage),
+    source_last_munro_(bin_t::NONE),nchunks_per_sig_(nchunks_per_sig)
 {
 }
 
 LiveHashTree::LiveHashTree(Storage *storage, KeyPair &pubkeypair, uint32_t chunk_size) :
-         HashTree(), state_(LHT_STATE_VER_AWAIT_PEAK), root_(NULL), addcursor_(NULL), keypair_(pubkeypair), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
-         chunk_size_(chunk_size), storage_(storage), 
-         source_last_munro_(bin_t::NONE), nchunks_per_sig_(0)
+    HashTree(), state_(LHT_STATE_VER_AWAIT_PEAK), root_(NULL), addcursor_(NULL), keypair_(pubkeypair), peak_count_(0), size_(0), sizec_(0), complete_(0), completec_(0),
+    chunk_size_(chunk_size), storage_(storage),
+    source_last_munro_(bin_t::NONE), nchunks_per_sig_(0)
 {
 }
 
@@ -125,8 +125,7 @@ LiveHashTree::~LiveHashTree()
 {
     if (root_ == NULL)
         return;
-    else
-    {
+    else {
         FreeTree(root_);
     }
 }
@@ -134,13 +133,11 @@ LiveHashTree::~LiveHashTree()
 void LiveHashTree::FreeTree(Node *n)
 {
     if (tree_debug)
-        fprintf(stderr,"umt: FreeTree: %s\n", n->GetBin().str().c_str() );
-    if (n->GetLeft() != NULL)
-    {
+        fprintf(stderr,"umt: FreeTree: %s\n", n->GetBin().str().c_str());
+    if (n->GetLeft() != NULL) {
         FreeTree(n->GetLeft());
     }
-    if (n->GetRight() != NULL)
-    {
+    if (n->GetRight() != NULL) {
         FreeTree(n->GetRight());
     }
     delete n;
@@ -150,12 +147,10 @@ void LiveHashTree::FreeTree(Node *n)
 void LiveHashTree::PruneTree(bin_t pos)
 {
     Node *n = FindNode(pos);
-    if (n != NULL)
-    {
+    if (n != NULL) {
         // Disconnect from parent
         Node *par = n->GetParent();
-        if (par != NULL)
-        {
+        if (par != NULL) {
             if (par->GetLeft() == n)
                 par->SetChildren(NULL,par->GetRight());
             else
@@ -175,12 +170,11 @@ bin_t LiveHashTree::AddData(const char* data, size_t length)
 {
     // Source adds new data
 
-    if (tree_debug)
-    {
+    if (tree_debug) {
         if (addcursor_ == NULL)
             fprintf(stderr,"umt: AddData: addcursor_ NULL\n");
         else
-            fprintf(stderr,"umt: AddData: addcursor_: %s\n", addcursor_->GetBin().str().c_str() );
+            fprintf(stderr,"umt: AddData: addcursor_: %s\n", addcursor_->GetBin().str().c_str());
     }
 
     Sha1Hash hash(data,length);
@@ -189,7 +183,7 @@ bin_t LiveHashTree::AddData(const char* data, size_t length)
     next->SetVerified(true); // Mark node as computed
 
     if (tree_debug)
-        fprintf(stderr,"umt: AddData: set %s hash %s\n", next->GetBin().str().c_str(), next->GetHash().hex().c_str() );
+        fprintf(stderr,"umt: AddData: set %s hash %s\n", next->GetBin().str().c_str(), next->GetHash().hex().c_str());
 
     // Calc new peaks
     size_ += length;
@@ -206,74 +200,65 @@ bin_t LiveHashTree::AddData(const char* data, size_t length)
 
 Node *LiveHashTree::CreateNext()
 {
-    if (addcursor_ == NULL)
-    {
+    if (addcursor_ == NULL) {
         if (tree_debug)
-            fprintf(stderr,"umt: CreateNext: create root\n" );
+            fprintf(stderr,"umt: CreateNext: create root\n");
         root_ = new Node();
         root_->SetBin(bin_t(0,0));
         addcursor_ = root_;
-    }
-    else if (addcursor_->GetBin().is_left())
-    {
+    } else if (addcursor_->GetBin().is_left()) {
         // Left child, create sibling
         Node *newright = new Node();
         newright->SetBin(addcursor_->GetBin().sibling());
 
         if (tree_debug)
-            fprintf(stderr,"umt: CreateNext: create sibling %s\n", newright->GetBin().str().c_str() );
+            fprintf(stderr,"umt: CreateNext: create sibling %s\n", newright->GetBin().str().c_str());
 
         Node *par = addcursor_->GetParent();
-        if (par == NULL)
-        {
+        if (par == NULL) {
             // We was root, create new parent
             par = new Node();
             par->SetBin(bin_t(addcursor_->GetBin().layer()+1,0));
             root_ = par;
 
             if (tree_debug)
-                fprintf(stderr,"umt: CreateNext: create new root %s\n", root_->GetBin().str().c_str() );
+                fprintf(stderr,"umt: CreateNext: create new root %s\n", root_->GetBin().str().c_str());
         }
         par->SetChildren(addcursor_,newright);
         newright->SetParent(par);
         addcursor_->SetParent(par);
         addcursor_ = newright;
-    }
-    else
-    {
+    } else {
         if (tree_debug)
             fprintf(stderr,"umt: CreateNext: create tree\n");
 
         // We right child, need next
         Node *iter = addcursor_;
-        while(true)
-        {
+        while (true) {
             iter = iter->GetParent();
             if (tree_debug)
-                fprintf(stderr,"umt: CreateNext: create tree: check %s\n", iter->GetBin().str().c_str() );
+                fprintf(stderr,"umt: CreateNext: create tree: check %s\n", iter->GetBin().str().c_str());
 
-            if (iter == root_)
-            {
+            if (iter == root_) {
                 // Need new root
                 Node *newroot = new Node();
                 newroot->SetBin(bin_t(iter->GetBin().layer()+1,0));
 
                 if (tree_debug)
-                    fprintf(stderr,"umt: CreateNext: create tree: new root %s\n", newroot->GetBin().str().c_str() );
+                    fprintf(stderr,"umt: CreateNext: create tree: new root %s\n", newroot->GetBin().str().c_str());
 
                 newroot->SetChildren(iter,NULL);
                 root_ = newroot;
                 iter->SetParent(newroot);
                 iter = newroot;
             }
-            if (iter->GetRight() == NULL) // not elsif
-            {
+            if (iter->GetRight() == NULL) { // not elsif
                 // Create new subtree
                 Node *newright = new Node();
                 newright->SetBin(iter->GetBin().right());
 
                 if (tree_debug)
-                    fprintf(stderr,"umt: CreateNext: create tree: new right %s\n", newright->GetBin().str().c_str() );
+                    fprintf(stderr,"umt: CreateNext: create tree: new right %s\n", newright->GetBin().str().c_str());
 
                 iter->SetChildren(iter->GetLeft(),newright);
                 newright->SetParent(iter);
@@ -283,13 +268,12 @@ Node *LiveHashTree::CreateNext()
 
                 iter = newright;
                 Node *newleft = NULL;
-                for (int i=0; i<depth; i++)
-                {
+                for (int i=0; i<depth; i++) {
                     newleft = new Node();
                     newleft->SetBin(iter->GetBin().left());
 
                     if (tree_debug)
-                        fprintf(stderr,"umt: CreateNext: create tree: new left down %s\n", newleft->GetBin().str().c_str() );
+                        fprintf(stderr,"umt: CreateNext: create tree: new left down %s\n", newleft->GetBin().str().c_str());
 
                     iter->SetChildren(newleft,NULL);
                     newleft->SetParent(iter);
@@ -310,23 +294,23 @@ Node *LiveHashTree::CreateNext()
 bin_t LiveHashTree::GetLastMunro()
 {
     if (source_last_munro_ != bin_t::NONE)
-	return source_last_munro_;
+        return source_last_munro_;
     else
-	return GetClientLastMunro();
+        return GetClientLastMunro();
 }
 
 
 bin_t LiveHashTree::GetClientLastMunro()
 {
     if (peak_count_ == 0)
-	return bin_t::NONE;
+        return bin_t::NONE;
 
     bin_t lastpeak = peak_bins_[peak_count_-1];
     int nchunks_per_sign_layer = (int)log2((double)nchunks_per_sig_);
 
     bin_t newmunro = lastpeak;
     while (newmunro.layer() > nchunks_per_sign_layer)
-	newmunro = newmunro.right();
+        newmunro = newmunro.right();
 
     return newmunro;
 }
@@ -338,12 +322,11 @@ BinHashSigTuple LiveHashTree::AddSignedMunro()
     bin_t newmunro = GetClientLastMunro();
 
     if (tree_debug)
-	fprintf(stderr,"umt: AddSignedMunro: %s\n", newmunro.str().c_str() );
+        fprintf(stderr,"umt: AddSignedMunro: %s\n", newmunro.str().c_str());
     Node *n = FindNode(newmunro);
-    if (n == NULL)
-    {
-	fprintf(stderr,"umt: AddSignedMunro: cannot find munro in tree?!\n");
-	return BinHashSigTuple::NOBULL;
+    if (n == NULL) {
+        fprintf(stderr,"umt: AddSignedMunro: cannot find munro in tree?!\n");
+        return BinHashSigTuple::NOBULL;
     }
     ComputeTree(n);
 
@@ -352,7 +335,7 @@ BinHashSigTuple LiveHashTree::AddSignedMunro()
 
     Signature *sig = keypair_.Sign(hash.bytes(),Sha1Hash::SIZE);
     if (sig == NULL)
-	return BinHashSigTuple::NOBULL;
+        return BinHashSigTuple::NOBULL;
 
     SigTintTuple *sigtintptr = new SigTintTuple(*sig,NOW);
 
@@ -368,9 +351,8 @@ BinHashSigTuple LiveHashTree::AddSignedMunro()
 void LiveHashTree::ComputeTree(Node *start)
 {
     if (tree_debug)
-        fprintf(stderr,"umt: ComputeTree: start %s %s\n", start->GetBin().str().c_str(), start->GetVerified() ? "true" : "false" );
-    if (!start->GetVerified())
-    {
+        fprintf(stderr,"umt: ComputeTree: start %s %s\n", start->GetBin().str().c_str(), start->GetVerified() ? "true" : "false");
+    if (!start->GetVerified()) {
         ComputeTree(start->GetLeft());
         ComputeTree(start->GetRight());
         if (!start->GetLeft()->GetVerified())
@@ -415,26 +397,24 @@ Sha1Hash  LiveHashTree::DeriveRoot()
 
 bool LiveHashTree::InitFromCheckpoint(BinHashSigTuple lastmunrotup)
 {
-    fprintf(stderr,"umt: InitFromCheckpoint: %s %s %" PRIi64 " %s\n", lastmunrotup.bin().str().c_str(), lastmunrotup.hash().hex().c_str(), lastmunrotup.sigtint().time(), lastmunrotup.sigtint().sig().hex().c_str() );
+    fprintf(stderr,"umt: InitFromCheckpoint: %s %s %" PRIi64 " %s\n", lastmunrotup.bin().str().c_str(), lastmunrotup.hash().hex().c_str(), lastmunrotup.sigtint().time(), lastmunrotup.sigtint().sig().hex().c_str());
 
     // Build fake tree to hold lastmunrotup
     bin_t fbin = lastmunrotup.bin();
     uint64_t fsize = (fbin.layer_offset()+1) * fbin.base_length();
     bin_t fpeaks[64];
     int fcount = gen_peaks(fsize,fpeaks);
-    for (int i=0; i<fcount; i++)
-    {
-	OfferHash(fpeaks[i],lastmunrotup.hash()); // bad hash
+    for (int i=0; i<fcount; i++) {
+        OfferHash(fpeaks[i],lastmunrotup.hash()); // bad hash
     }
 
     // Add lastmunrotup hash to tree
     OfferHash(lastmunrotup.bin(),lastmunrotup.hash());
 
     // Add lastmunrotup sig to tree
-    if (!OfferSignedMunroHash(lastmunrotup.bin(),lastmunrotup.sigtint()))
-    {
-	fprintf(stderr,"umt: InitFromCheckpoint: failed!\n");
-	return false;
+    if (!OfferSignedMunroHash(lastmunrotup.bin(),lastmunrotup.sigtint())) {
+        fprintf(stderr,"umt: InitFromCheckpoint: failed!\n");
+        return false;
     }
 
     // Create fake right ridge to set addcursor_
@@ -449,16 +429,16 @@ bool LiveHashTree::InitFromCheckpoint(BinHashSigTuple lastmunrotup)
 bin_t LiveHashTree::GetMunro(bin_t pos)
 {
     if (nchunks_per_sig_ == 0)
-	return bin_t::NONE;
+        return bin_t::NONE;
 
     int nchunks_per_sign_layer = (int)log2((double)nchunks_per_sig_);
 
     if (pos.layer() == nchunks_per_sign_layer)
-	return pos;
+        return pos;
 
     bin_t p = pos.base_left();
     for (int i=0; i<nchunks_per_sign_layer; i++)
-	p = p.parent();
+        p = p.parent();
 
     //fprintf(stderr,"umt: GetMunro: %s nchunks %" PRIu32 " layer %d computed %" PRIu32 "\n", pos.str().c_str(), nchunks_per_sig_, nchunks_per_sign_layer, p.layer() );
 
@@ -470,10 +450,10 @@ BinHashSigTuple LiveHashTree::GetSignedMunro(bin_t munro)
 {
     Node *n = FindNode(munro);
     if (n == NULL)
-	return BinHashSigTuple::NOBULL;
+        return BinHashSigTuple::NOBULL;
     SigTintTuple *stptr = n->GetSigTint();
     if (stptr == NULL)
-	return BinHashSigTuple::NOBULL;
+        return BinHashSigTuple::NOBULL;
 
     BinHashSigTuple bhst(munro,n->GetHash(),*stptr);
     return bhst;
@@ -488,24 +468,21 @@ BinHashSigTuple LiveHashTree::GetSignedMunro(bin_t munro)
 bool LiveHashTree::OfferSignedMunroHash(bin_t pos, SigTintTuple &sigtint)
 {
     if (tree_debug)
-        fprintf(stderr,"umt: OfferSignedMunroHash: munro %s\n", pos.str().c_str() );
+        fprintf(stderr,"umt: OfferSignedMunroHash: munro %s\n", pos.str().c_str());
 
-    if (pos != cand_munro_bin_)
-    {
+    if (pos != cand_munro_bin_) {
         // Ignore duplicate (or message mixup)
         if (tree_debug)
-            fprintf(stderr,"umt: OfferSignedMunroHash: message mixup! %s %s\n", pos.str().c_str(), cand_munro_bin_.str().c_str() );
+            fprintf(stderr,"umt: OfferSignedMunroHash: message mixup! %s %s\n", pos.str().c_str(), cand_munro_bin_.str().c_str());
         return false;
     }
 
     // Check if new munro
     int i=0;
-    for (i=0; i<peak_count_; i++) // SUMMITTODO: not really peak anymore
-    {
-        if (pos == peak_bins_[i])
-        {
+    for (i=0; i<peak_count_; i++) { // SUMMITTODO: not really peak anymore
+        if (pos == peak_bins_[i]) {
             if (tree_debug)
-        	fprintf(stderr,"umt: OfferSignedMunroHash: peak known\n");
+                fprintf(stderr,"umt: OfferSignedMunroHash: peak known\n");
             return false;
         }
     }
@@ -515,33 +492,30 @@ bool LiveHashTree::OfferSignedMunroHash(bin_t pos, SigTintTuple &sigtint)
     // MUNROTODO: source RESTART
 
     bool sigok = keypair_.Verify(cand_munro_hash_.bytes(),cand_munro_hash_.SIZE,sigtint.sig());
-    if (!sigok)
-    {
+    if (!sigok) {
         //if (tree_debug)
-            fprintf(stderr,"umt: OfferSignedMunroHash: signature wrong! %s\n", pos.str().c_str() );
-	return false;
+        fprintf(stderr,"umt: OfferSignedMunroHash: signature wrong! %s\n", pos.str().c_str());
+        return false;
     }
 
     // Check if sane
     bin_t oldmunro = GetLastMunro();
-    if (oldmunro != bin_t::NONE && oldmunro.layer_offset()+1 != pos.layer_offset())
-    {
+    if (oldmunro != bin_t::NONE && oldmunro.layer_offset()+1 != pos.layer_offset()) {
         if (tree_debug)
-            fprintf(stderr,"umt: OfferSignedMunroHash: SKIP old munro %s layer off %llu new %llu\n", oldmunro.str().c_str(), oldmunro.layer_offset(), pos.layer_offset() );
+            fprintf(stderr,"umt: OfferSignedMunroHash: SKIP old munro %s layer off %llu new %llu\n", oldmunro.str().c_str(), oldmunro.layer_offset(), pos.layer_offset());
     }
 
     // Bootstrap tree if this is the first
-    if (state_ == LHT_STATE_VER_AWAIT_PEAK)
-    {
-	state_ = LHT_STATE_VER_AWAIT_DATA;
-	// nchunks_per_sig known from trusted source
-	SetNChunksPerSig(cand_munro_bin_.base_length());
+    if (state_ == LHT_STATE_VER_AWAIT_PEAK) {
+        state_ = LHT_STATE_VER_AWAIT_DATA;
+        // nchunks_per_sig known from trusted source
+        SetNChunksPerSig(cand_munro_bin_.base_length());
 
-	// Grow tree such that munro fits in it, and other peers can send
-	// other munros (e.g. older)
-	// NOTE: recursive call, InitFromCheckpoint calls OfferSignedMunroHash
-	InitFromCheckpoint(BinHashSigTuple(cand_munro_bin_,cand_munro_hash_,sigtint));
-	return true;
+        // Grow tree such that munro fits in it, and other peers can send
+        // other munros (e.g. older)
+        // NOTE: recursive call, InitFromCheckpoint calls OfferSignedMunroHash
+        InitFromCheckpoint(BinHashSigTuple(cand_munro_bin_,cand_munro_hash_,sigtint));
+        return true;
     }
 
     sizec_ = (pos.layer_offset()+1) * pos.base_length();
@@ -557,22 +531,19 @@ bool LiveHashTree::OfferSignedMunroHash(bin_t pos, SigTintTuple &sigtint)
     CreateAndVerifyNode(cand_munro_bin_,cand_munro_hash_,true);
 
     Node *n = FindNode(cand_munro_bin_);
-    if (n == NULL)
-    {
+    if (n == NULL) {
         if (tree_debug)
-            fprintf(stderr,"umt: OfferSignedMunroHash: Added verified node, now can't find it?!\n" );
+            fprintf(stderr,"umt: OfferSignedMunroHash: Added verified node, now can't find it?!\n");
         return false;
-    }
-    else
-    {
-	SigTintTuple *stptr = new SigTintTuple(sigtint);
-	n->SetSigTint(stptr);
+    } else {
+        SigTintTuple *stptr = new SigTintTuple(sigtint);
+        n->SetSigTint(stptr);
 
-	// Could recalc root hash here, but never really used. Doing it on-demand
-	// in root_hash() conflicts with const def :-(
-	//root_->SetHash(DeriveRoot());
+        // Could recalc root hash here, but never really used. Doing it on-demand
+        // in root_hash() conflicts with const def :-(
+        //root_->SetHash(DeriveRoot());
 
-	return true; // signal new
+        return true; // signal new
     }
 }
 
@@ -581,62 +552,53 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 {
     // This adds hashes on client side
     if (tree_debug)
-        fprintf(stderr,"umt: OfferHash: %s %s\n", pos.str().c_str(), hash.hex().c_str() );
+        fprintf(stderr,"umt: OfferHash: %s %s\n", pos.str().c_str(), hash.hex().c_str());
 
     // Find or create node
     Node *iter = root_;
     Node *parent = NULL;
-    while (true)
-    {
-        if (tree_debug)
-        {
+    while (true) {
+        if (tree_debug) {
             if (iter == NULL)
                 fprintf(stderr,"umt: OfferHash: iter NULL\n");
             else
-                fprintf(stderr,"umt: OfferHash: iter %s\n", iter->GetBin().str().c_str() );
+                fprintf(stderr,"umt: OfferHash: iter %s\n", iter->GetBin().str().c_str());
         }
 
-        if (iter == NULL)
-        {
+        if (iter == NULL) {
             // Need to create some tree for it
-            if (parent == NULL)
-            {
+            if (parent == NULL) {
                 // No root
                 root_ = new Node();
                 root_->SetBin(pos);
 
                 if (tree_debug)
-                    fprintf(stderr,"umt: OfferHash: new root %s %s\n", root_->GetBin().str().c_str(), hash.hex().c_str() );
+                    fprintf(stderr,"umt: OfferHash: new root %s %s\n", root_->GetBin().str().c_str(), hash.hex().c_str());
 
                 root_->SetHash(hash);
                 root_->SetVerified(verified);
                 return false;
-            }
-            else
-            {
+            } else {
                 // Create left or right tree
-                if (pos.toUInt() < parent->GetBin().toUInt())
-                {
+                if (pos.toUInt() < parent->GetBin().toUInt()) {
                     // Need node on left
                     Node *newleft = new Node();
                     newleft->SetBin(parent->GetBin().left());
 
                     if (tree_debug)
-                        fprintf(stderr,"umt: OfferHash: create left %s\n", newleft->GetBin().str().c_str() );
+                        fprintf(stderr,"umt: OfferHash: create left %s\n", newleft->GetBin().str().c_str());
 
                     newleft->SetParent(parent);
 
                     parent->SetChildren(newleft,parent->GetRight());
                     iter = newleft;
-                }
-                else
-                {
+                } else {
                     // Need new node on right
                     Node *newright = new Node();
                     newright->SetBin(parent->GetBin().right());
 
                     if (tree_debug)
-                        fprintf(stderr,"umt: OfferHash: create right %s\n", newright->GetBin().str().c_str() );
+                        fprintf(stderr,"umt: OfferHash: create right %s\n", newright->GetBin().str().c_str());
 
                     newright->SetParent(parent);
 
@@ -644,15 +606,13 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
                     iter = newright;
                 }
             }
-        }
-        else if (!iter->GetBin().contains(pos))
-        {
+        } else if (!iter->GetBin().contains(pos)) {
             // Offered pos not a child, error or create new root
             Node *newroot = new Node();
             newroot->SetBin(iter->GetBin().parent());
 
             if (tree_debug)
-                fprintf(stderr,"umt: OfferHash: new root no cover %s\n", newroot->GetBin().str().c_str() );
+                fprintf(stderr,"umt: OfferHash: new root no cover %s\n", newroot->GetBin().str().c_str());
 
             if (pos.layer_offset() < iter->GetBin().layer_offset())
                 newroot->SetChildren(NULL,iter);
@@ -666,25 +626,20 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
             continue;
         }
 
-        if (pos.toUInt() == iter->GetBin().toUInt())
-        {
+        if (pos.toUInt() == iter->GetBin().toUInt()) {
             // Found it
             if (tree_debug)
-                fprintf(stderr,"umt: OfferHash: found node %s\n", iter->GetBin().str().c_str() );
+                fprintf(stderr,"umt: OfferHash: found node %s\n", iter->GetBin().str().c_str());
             break;
-        }
-        else if (pos.toUInt() < iter->GetBin().toUInt())
-        {
+        } else if (pos.toUInt() < iter->GetBin().toUInt()) {
             if (tree_debug)
-                fprintf(stderr,"umt: OfferHash: go left\n" );
+                fprintf(stderr,"umt: OfferHash: go left\n");
 
             parent = iter;
             iter = iter->GetLeft();
-        }
-        else
-        {
+        } else {
             if (tree_debug)
-                fprintf(stderr,"umt: OfferHash: go right\n" );
+                fprintf(stderr,"umt: OfferHash: go right\n");
 
             parent = iter;
             iter = iter->GetRight();
@@ -692,17 +647,15 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     }
 
 
-    if (iter == NULL)
-    {
+    if (iter == NULL) {
         if (tree_debug)
-            fprintf(stderr,"umt: OfferHash: internal error, couldn't find or create node\n" );
+            fprintf(stderr,"umt: OfferHash: internal error, couldn't find or create node\n");
         return false;
     }
 
-    if (state_ == LHT_STATE_VER_AWAIT_PEAK)
-    {
+    if (state_ == LHT_STATE_VER_AWAIT_PEAK) {
         if (tree_debug)
-            fprintf(stderr,"umt: OfferHash: No peak yet, can't verify!\n" );
+            fprintf(stderr,"umt: OfferHash: No peak yet, can't verify!\n");
         return false;
     }
 
@@ -712,18 +665,16 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     //
 
     if (tree_debug)
-        fprintf(stderr,"umt: OfferHash: found node %s isverified %d\n",iter->GetBin().str().c_str(),iter->GetVerified() );
+        fprintf(stderr,"umt: OfferHash: found node %s isverified %d\n",iter->GetBin().str().c_str(),iter->GetVerified());
 
     bin_t munro = GetMunro(pos);
     if (munro.is_none())
         return false;
-    if (munro==pos)
-    {
+    if (munro==pos) {
         // Diff from MmapHashTree: store munro here
-        if (verified)
-        {
+        if (verified) {
             if (tree_debug)
-                fprintf(stderr,"umt: OfferHash: setting munro %s %s\n",pos.str().c_str(),hash.hex().c_str() );
+                fprintf(stderr,"umt: OfferHash: setting munro %s %s\n",pos.str().c_str(),hash.hex().c_str());
 
             iter->SetHash(hash);
             iter->SetVerified(verified);
@@ -739,20 +690,20 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
     iter->SetHash(hash);
 
     if (tree_debug)
-        fprintf(stderr,"umt: OfferHash: setting hash %s %s\n",pos.str().c_str(),hash.hex().c_str() );
+        fprintf(stderr,"umt: OfferHash: setting hash %s %s\n",pos.str().c_str(),hash.hex().c_str());
 
     Node *piter = iter;
     Sha1Hash uphash = hash;
 
     if (tree_debug)
-        fprintf(stderr,"umt: OfferHash: verifying %s\n", pos.str().c_str() );
+        fprintf(stderr,"umt: OfferHash: verifying %s\n", pos.str().c_str());
     // Walk to the nearest proven hash
     // Arno, 2013-03-11: Can't use is_empty as we may have verified some hashes
     // under an old peak, but now that the tree has grown this doesn't indicate
     // verified status anymore.
     //
     // while ( piter->GetBin()!=munro && ack_out_.is_empty(piter->GetBin()) && !piter->GetVerified() ) {
-    while ( piter->GetBin()!=munro && !piter->GetVerified() ) {
+    while (piter->GetBin()!=munro && !piter->GetVerified()) {
         piter->SetHash(uphash);
         piter = piter->GetParent();
 
@@ -764,33 +715,30 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
         //
 
         if (tree_debug)
-            fprintf(stderr,"umt: OfferHash: squirrel %s %p %p\n", piter->GetBin().str().c_str(), piter->GetLeft(), piter->GetRight() );
+            fprintf(stderr,"umt: OfferHash: squirrel %s %p %p\n", piter->GetBin().str().c_str(), piter->GetLeft(), piter->GetRight());
 
-        if (piter->GetLeft() == NULL || piter->GetRight() == NULL)
-        {
-            if (tree_debug)
-            {
+        if (piter->GetLeft() == NULL || piter->GetRight() == NULL) {
+            if (tree_debug) {
                 if (piter->GetLeft() == NULL)
-                    fprintf(stderr,"umt: OfferHash: Error! Missing left child of %s\n", piter->GetBin().str().c_str() );
+                    fprintf(stderr,"umt: OfferHash: Error! Missing left child of %s\n", piter->GetBin().str().c_str());
                 if (piter->GetRight() == NULL)
-                    fprintf(stderr,"umt: OfferHash: Error! Missing right child of %s\n", piter->GetBin().str().c_str() );
+                    fprintf(stderr,"umt: OfferHash: Error! Missing right child of %s\n", piter->GetBin().str().c_str());
             }
 
             return false; // tree still incomplete
         }
 
         if (tree_debug)
-            fprintf(stderr,"umt: OfferHash: hashsquirrel %s %s %s\n", piter->GetBin().str().c_str(), piter->GetLeft()->GetHash().hex().c_str(), piter->GetRight()->GetHash().hex().c_str() );
+            fprintf(stderr,"umt: OfferHash: hashsquirrel %s %s %s\n", piter->GetBin().str().c_str(), piter->GetLeft()->GetHash().hex().c_str(), piter->GetRight()->GetHash().hex().c_str());
 
         if (piter->GetLeft()->GetHash() == Sha1Hash::ZERO || piter->GetRight()->GetHash() == Sha1Hash::ZERO)
             break;
         uphash = Sha1Hash(piter->GetLeft()->GetHash(),piter->GetRight()->GetHash());
     }
 
-    if (tree_debug)
-    {
-        fprintf(stderr,"umt: OfferHash: while %d %d %d\n", piter->GetBin()!=munro, ack_out_.is_empty(piter->GetBin()),  !piter->GetVerified() );
-        fprintf(stderr,"umt: OfferHash: %s computed %s truth %s\n", piter->GetBin().str().c_str(), uphash.hex().c_str(), piter->GetHash().hex().c_str() );
+    if (tree_debug) {
+        fprintf(stderr,"umt: OfferHash: while %d %d %d\n", piter->GetBin()!=munro, ack_out_.is_empty(piter->GetBin()),  !piter->GetVerified());
+        fprintf(stderr,"umt: OfferHash: %s computed %s truth %s\n", piter->GetBin().str().c_str(), uphash.hex().c_str(), piter->GetHash().hex().c_str());
     }
 
     if (piter->GetHash() == Sha1Hash::ZERO)
@@ -806,8 +754,7 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
         // Arno, 2013-05-07: uncle path = sibling + uncles
         // Find sibling
         piter = iter;
-        if (piter->GetParent() != NULL)
-        {
+        if (piter->GetParent() != NULL) {
             if (pos.is_left())
                 piter = piter->GetParent()->GetRight();
             else
@@ -857,23 +804,17 @@ bool LiveHashTree::CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool ver
 
 bool LiveHashTree::SetVerifiedIfNot0(Node *piter, bin_t p, int verclass)
 {
-    if (piter == NULL)
-    {
+    if (piter == NULL) {
         if (tree_debug)
-            fprintf(stderr,"umt: OfferHash: SetVerified%" PRIu32 " %s has NULL node!!!\n", verclass, p.str().c_str() );
+            fprintf(stderr,"umt: OfferHash: SetVerified%" PRIu32 " %s has NULL node!!!\n", verclass, p.str().c_str());
         return true; // had success
-    }
-    else
-    {
-        if (piter->GetHash() == Sha1Hash::ZERO)
-        {
+    } else {
+        if (piter->GetHash() == Sha1Hash::ZERO) {
             if (tree_debug)
-                fprintf(stderr,"umt: OfferHash: SetVerified%" PRIu32 " %s has ZERO hash!!!\n", verclass, piter->GetBin().str().c_str() );
-        }
-        else
-        {
+                fprintf(stderr,"umt: OfferHash: SetVerified%" PRIu32 " %s has ZERO hash!!!\n", verclass, piter->GetBin().str().c_str());
+        } else {
             if (tree_debug)
-                fprintf(stderr,"umt: OfferHash: SetVerified%" PRIu32 " %s\n", verclass, piter->GetBin().str().c_str() );
+                fprintf(stderr,"umt: OfferHash: SetVerified%" PRIu32 " %s\n", verclass, piter->GetBin().str().c_str());
             piter->SetVerified(true);
         }
     }
@@ -888,8 +829,7 @@ bool LiveHashTree::SetVerifiedIfNot0(Node *piter, bin_t p, int verclass)
 
 bool LiveHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
 {
-    if (hash == Sha1Hash::ZERO)
-    {
+    if (hash == Sha1Hash::ZERO) {
         if (tree_debug)
             fprintf(stderr,"umt: OfferHash: zero\n");
         return false;
@@ -901,16 +841,13 @@ bool LiveHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
     cand_munro_hash_ = hash;
 
     bin_t munro = GetMunro(pos);
-    if (munro.is_none())
-    {
+    if (munro.is_none()) {
         if (tree_debug)
             fprintf(stderr,"umt: OfferHash: no munro\n");
         return false;
-    }
-    else
-    {
+    } else {
         if (tree_debug)
-            fprintf(stderr,"umt: OfferHash: %s has munro %s\n", pos.str().c_str(), munro.str().c_str() );
+            fprintf(stderr,"umt: OfferHash: %s has munro %s\n", pos.str().c_str(), munro.str().c_str());
         return CreateAndVerifyNode(pos,hash,false);
     }
 }
@@ -918,33 +855,28 @@ bool LiveHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
 
 bool LiveHashTree::OfferData(bin_t pos, const char* data, size_t length)
 {
-    if (state_ == LHT_STATE_VER_AWAIT_PEAK)
-    {
+    if (state_ == LHT_STATE_VER_AWAIT_PEAK) {
         if (tree_debug)
             fprintf(stderr,"umt: OfferData: await munro\n");
         return false;
     }
-    if (!pos.is_base())
-    {
+    if (!pos.is_base()) {
         if (tree_debug)
             fprintf(stderr,"umt: OfferData: not base\n");
         return false;
     }
-    if (length<chunk_size_ && pos!=bin_t(0,sizec_-1))
-    {
+    if (length<chunk_size_ && pos!=bin_t(0,sizec_-1)) {
         if (tree_debug)
             fprintf(stderr,"umt: OfferData: bad len " PRISIZET "\n", length);
         return false;
     }
-    if (ack_out_.is_filled(pos))
-    {
+    if (ack_out_.is_filled(pos)) {
         if (tree_debug)
             fprintf(stderr,"umt: OfferData: already have\n");
         return true; // to set data_in_
     }
     bin_t munro = GetMunro(pos);
-    if (munro.is_none())
-    {
+    if (munro.is_none()) {
         if (tree_debug)
             fprintf(stderr,"umt: OfferData: couldn't find munro\n");
         return false;
@@ -952,7 +884,7 @@ bool LiveHashTree::OfferData(bin_t pos, const char* data, size_t length)
 
     Sha1Hash data_hash(data,length);
     if (tree_debug)
-        fprintf(stderr,"umt: OfferData: %s hash %s\n", pos.str().c_str(), data_hash.hex().c_str() );
+        fprintf(stderr,"umt: OfferData: %s hash %s\n", pos.str().c_str(), data_hash.hex().c_str());
 
     if (!OfferHash(pos, data_hash)) {
         //printf("invalid hash for %s: %s\n",pos.str(bin_name_buf),data_hash.hex().c_str()); // paranoid
@@ -964,7 +896,7 @@ bool LiveHashTree::OfferData(bin_t pos, const char* data, size_t length)
 
     //printf("g %" PRIi64 " %s\n",(uint64_t)pos,hash.hex().c_str());
     if (tree_debug)
-        fprintf(stderr,"umt: OfferData: set ack_out_ %s\n", pos.str().c_str() );
+        fprintf(stderr,"umt: OfferData: set ack_out_ %s\n", pos.str().c_str());
 
     ack_out_.set(pos);
 
@@ -997,8 +929,7 @@ const Sha1Hash& LiveHashTree::peak_hash(int i) const
 
 bin_t LiveHashTree::peak_for(bin_t pos) const
 {
-    for (int i=0; i<peak_count_; i++)
-    {
+    for (int i=0; i<peak_count_; i++) {
         if (peak_bins_[i].contains(pos))
             return peak_bins_[i];
     }
@@ -1011,13 +942,11 @@ const Sha1Hash& LiveHashTree::hash(bin_t pos) const
     Node *n = FindNode(pos);
     if (n == NULL)
         return Sha1Hash::ZERO;
-    else
-    {
-        if (!n->GetVerified())
-        {
+    else {
+        if (!n->GetVerified()) {
             if (tree_debug)
-        	fprintf(stderr,"umt::hash %s not verified SENDING!\n", pos.str().c_str() );
-            dprintf("%s umt::hash %s SENDING unverified!\n", tintstr(), pos.str().c_str() );
+                fprintf(stderr,"umt::hash %s not verified SENDING!\n", pos.str().c_str());
+            dprintf("%s umt::hash %s SENDING unverified!\n", tintstr(), pos.str().c_str());
         }
         return n->GetHash();
     }
@@ -1026,8 +955,7 @@ const Sha1Hash& LiveHashTree::hash(bin_t pos) const
 Node *LiveHashTree::FindNode(bin_t pos) const
 {
     Node *iter = root_;
-    while (true)
-    {
+    while (true) {
         if (iter == NULL)
             return NULL;
         else if (pos.toUInt() == iter->GetBin().toUInt())
@@ -1077,7 +1005,7 @@ bool LiveHashTree::is_complete()
 {
     return false;
 }
-binmap_t *LiveHashTree::ack_out ()
+binmap_t *LiveHashTree::ack_out()
 {
     return &ack_out_;
 }
@@ -1100,8 +1028,7 @@ void LiveHashTree::sane_tree()
 {
     if (root_ == NULL)
         return;
-    else
-    {
+    else {
         sane_node(root_,NULL);
     }
 }
@@ -1111,14 +1038,12 @@ void LiveHashTree::sane_node(Node *n, Node *parent)
 {
     //fprintf(stderr,"umt: Sane: %s\n", n->GetBin().str().c_str() );
     assert(n->GetParent() == parent);
-    if (n->GetLeft() != NULL)
-    {
+    if (n->GetLeft() != NULL) {
         assert(n->GetLeft()->GetParent() == n);
         assert(n->GetLeft()->GetBin() == n->GetBin().left());
         sane_node(n->GetLeft(),n);
     }
-    if (n->GetRight() != NULL)
-    {
+    if (n->GetRight() != NULL) {
         assert(n->GetRight()->GetParent() == n);
         assert(n->GetRight()->GetBin() == n->GetBin().right());
         sane_node(n->GetRight(),n);
