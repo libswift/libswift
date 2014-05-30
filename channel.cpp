@@ -36,6 +36,8 @@ swift::tint Channel::TIMEOUT = TINT_SEC*60;
 channels_t Channel::channels(1);
 std::string Channel::trackerurl;
 FILE* Channel::debug_file = NULL;
+// Only in dev: ledbat log file
+FILE* Channel::debug_ledbat = NULL;
 tint Channel::MIN_PEX_REQUEST_INTERVAL = TINT_SEC;
 
 /*
@@ -47,8 +49,8 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr) :
     peer_(peer_addr), socket_(socket==INVALID_SOCKET?default_socket():socket), // FIXME
     transfer_(transfer), own_id_mentioned_(false),
     ack_in_right_basebin_(bin_t::NONE),
-    data_in_(TINT_NEVER,bin_t::NONE), data_in_dbl_(bin_t::NONE),
-    data_out_cap_(bin_t::ALL),hint_in_size_(0), hint_out_size_(0),
+    data_in_(TINT_NEVER,bin_t::NONE), data_in_dbl_(bin_t::NONE), data_out_size_(0),
+    data_out_cap_(bin_t::ALL),hint_in_size_(0), hint_out_size_(0), hint_queue_out_size_(0),
     // Gertjan fix 996e21e8abfc7d88db3f3f8158f2a2c4fc8a8d3f
     // "Changed PEX rate limiting to per channel limiting"
     pex_requested_(false),  // Ric: init var that wasn't initialiazed
@@ -63,16 +65,15 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr) :
     lastrecvwaskeepalive_(false), lastsendwaskeepalive_(false), // Arno: nap bug fix
     live_have_no_hint_(false), // Arno: live speed opt
     ack_rcvd_recent_(0), ack_not_rcvd_recent_(0), owd_min_bin_(0), owd_min_bin_start_(NOW-LEDBAT_ROLLOVER),
+    owd_cur_(TINT_NEVER), owd_min_(TINT_NEVER),
     dgrams_sent_(0), dgrams_rcvd_(0),
     raw_bytes_up_(0), raw_bytes_down_(0), bytes_up_(0), bytes_down_(0),
     old_movingfwd_bytes_(0),
-    scheduled4del_(false),
-    direct_sending_(false),
+    scheduled4del_(false), reschedule_delay_(0),
     hs_out_(NULL), hs_in_(NULL),
     last_sent_munro_(bin_t::NONE),
     munro_ack_rcvd_(false),
-    rtt_hint_tintbin_(),
-    hint_queue_out_(NULL), hint_queue_out_size_(0)
+    rtt_hint_tintbin_()
 {
     // ARNOTODO: avoid infinitely growing vector
     this->id_ = channels.size();
@@ -155,7 +156,7 @@ HashTree * Channel::hashtree()
 bool Channel::IsComplete() {
 
     if (transfer()->ttype() == LIVE_TRANSFER)
-	return PeerIsSource();
+        return PeerIsSource();
 
     // Check if peak hash bins are filled.
     if (hashtree()->peak_count() == 0)
@@ -312,10 +313,11 @@ int Channel::SendTo (evutil_socket_t sock, const Address& addr, struct evbuffer 
         print_error("can't send");
         evbuffer_drain(evb, length); // Arno: behaviour is to pretend the packet got lost
     }
-    else
+    else {
         evbuffer_drain(evb,r);
-    global_dgrams_up++;
-    global_raw_bytes_up+=length;
+        global_dgrams_up++;
+        global_raw_bytes_up+=length;
+    }
     Time();
     return r;
 }

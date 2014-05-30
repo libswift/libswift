@@ -531,6 +531,17 @@ std::string dirname_utf8(std::string pathname)
 }
 
 
+std::string basename_utf8(std::string pathname)
+{
+    int idx = pathname.rfind(FILE_SEP);
+    if (idx != std::string::npos)
+    {
+        return pathname.substr(idx);
+    }
+    else
+    return pathname;
+}
+
 
 bool    make_socket_nonblocking(evutil_socket_t fd) {
 #ifdef _WIN32
@@ -556,6 +567,11 @@ struct timeval* tint2tv (tint t) {
     tv.tv_usec = t%TINT_SEC;
     tv.tv_sec = t/TINT_SEC;
     return &tv;
+}
+
+tint tv2tint ( struct timeval* tv )
+{
+    return( (int64_t)tv->tv_sec * 1000000 + tv->tv_usec ) ;
 }
 
 

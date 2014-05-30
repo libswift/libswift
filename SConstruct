@@ -165,6 +165,6 @@ Export("libs")
 Export("linkflags")
 Export("DEBUG")
 Export("CODECOVERAGE")
-# Arno: uncomment to build tests
+# Uncomment the following line to build the tests
 #SConscript('tests/SConscript')
 

@@ -1,8 +1,8 @@
 /*
  *  cmdgw.cpp
- *  command gateway for controling swift engine via a TCP connection
+ *  command gateway for controlling swift engine via a TCP connection
  *
- *  Created by Arno Bakker
+ *  Created by Arno Bakker, Riccado Petrocco
  *  Copyright 2010-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
@@ -69,14 +69,16 @@ struct evbuffer *cmd_evbuffer = NULL; // Data received on cmd socket : WARNING: 
 /*
  * SOCKTUNNEL
  * We added the ability for a process to tunnel data over swift's UDP socket.
- * The process should send TUNNELSEND commands over the CMD TCP socket and will
- * receive TUNNELRECV commands from swift, containing data received via UDP
- * on channel 0xffffffff.
+ * The process should send TUNNELSUSCRIBE (with a chosen prefix) and TUNNELSEND
+ * commands over the CMD * TCP socket. It will than receive TUNNELRECV commands
+ * from swift.
  */
 typedef enum {
 	CMDGW_TUNNEL_SCAN4CRLF,
 	CMDGW_TUNNEL_READTUNNEL
 } cmdgw_tunnel_t;
+
+std::vector< uint32_t > tunnel_channels_;
 
 cmdgw_tunnel_t cmd_tunnel_state=CMDGW_TUNNEL_SCAN4CRLF;
 uint32_t       cmd_tunnel_expect=0;
@@ -88,6 +90,9 @@ evutil_socket_t cmd_tunnel_sock=INVALID_SOCKET;
 Address cmd_gw_httpaddr;
 uint64_t cmd_gw_livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
 popt_cont_int_prot_t cmd_gw_cipm=POPT_CONT_INT_PROT_MERKLE;
+
+// Ric: directory containing the metadata
+std::string cmd_gw_metadir;
 
 
 #define cmd_gw_debug	true
@@ -267,18 +272,18 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 
     SwarmID swarmid = swift::GetSwarmID(req->td);
     if (swarmid == SwarmID::NOSWARMID)
-	return; // Arno: swarm deleted, ignore
+	    return; // Arno: swarm deleted, ignore
 
     uint64_t size = swift::Size(req->td);
     uint64_t complete = 0;
     if (swift::ttype(req->td) == LIVE_TRANSFER)
-	complete = swift::SeqComplete(req->td,swift::GetHookinOffset(req->td));
+        complete = swift::SeqComplete(req->td,swift::GetHookinOffset(req->td));
     else
-	complete = swift::Complete(req->td);
+        complete = swift::Complete(req->td);
     if (size > 0 && size == complete)
         dlstatus = DLSTATUS_SEEDING;
     if (!swift::IsOperational(req->td))
-	    dlstatus = DLSTATUS_STOPPED_ON_ERROR;
+        dlstatus = DLSTATUS_STOPPED_ON_ERROR;
 
     // schaap FIXME: Are those active leechers and seeders, or potential
     // leechers and seeders? In the latter case, get cached values when cached
@@ -314,22 +319,22 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
         oss << "[";
         if (peerchans != NULL)
         {
-	    for (iter=peerchans->begin(); iter!=peerchans->end(); iter++) {
-		Channel *c = *iter;
-		if (c == NULL)
-		    continue;
+            for (iter=peerchans->begin(); iter!=peerchans->end(); iter++) {
+            Channel *c = *iter;
+            if (c == NULL)
+                continue;
 
-		if (iter!=peerchans->begin())
-		    oss << ", ";
-		oss << "{";
-		oss << "\"ip\": \"" << c->peer().ipstr() << "\", ";
-		oss << "\"port\": " << c->peer().port() << ", ";
-		oss << "\"raw_bytes_up\": " << c->raw_bytes_up() << ", ";
-		oss << "\"raw_bytes_down\": " << c->raw_bytes_down() << ", ";
-		oss << "\"bytes_up\": " << c->bytes_up() << ", ";
-		oss << "\"bytes_down\": " << c->bytes_down() << " ";
-		oss << "}";
-	    }
+            if (iter!=peerchans->begin())
+                oss << ", ";
+            oss << "{";
+            oss << "\"ip\": \"" << c->peer().ipstr() << "\", ";
+            oss << "\"port\": " << c->peer().port() << ", ";
+            oss << "\"raw_bytes_up\": " << c->raw_bytes_up() << ", ";
+            oss << "\"raw_bytes_down\": " << c->raw_bytes_down() << ", ";
+            oss << "\"bytes_up\": " << c->bytes_up() << ", ";
+            oss << "\"bytes_down\": " << c->bytes_down() << " ";
+            oss << "}";
+            }
         }
         oss << "], ";
         oss << "\"raw_bytes_up\": " << Channel::global_raw_bytes_up << ", ";
@@ -730,20 +735,41 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         // New START request
         //fprintf(stderr,"cmd: START: new request %i\n",cmd_gw_reqs_count+1);
 
-        // Format: START url destdir\r\n
-        // Arno, 2012-04-13: See if URL followed by storagepath for seeding
+        // Format: START url destdir [metadir]\r\n
         std::string pstr = paramstr;
-        std::string url="",storagepath="";
+        std::string url="",storagepath="", metadir="";
         int sidx = pstr.find(" ");
         if (sidx == std::string::npos)
         {
+            // No storage path or metadir
             url = pstr;
             storagepath = "";
         }
         else
         {
             url = pstr.substr(0,sidx);
-            storagepath = pstr.substr(sidx+1);
+            std::string qstr = pstr.substr(sidx+1);
+            sidx = qstr.find(" ");
+            if (sidx == std::string::npos)
+            {
+                // Only storage path
+                storagepath = qstr;
+            }
+            else
+            {
+                // Storage path and metadir
+                storagepath = qstr.substr(0,sidx);
+                metadir = qstr.substr(sidx+1);
+            }
+        }
+
+        // If no metadir in command, but one is set on swift command line use latter.
+        if (cmd_gw_metadir.compare("") && !metadir.compare(""))
+            metadir = cmd_gw_metadir;
+        if (metadir.length() > 0)
+        {
+            if (metadir.substr(metadir.length()-std::string(FILE_SEP).length()).compare(FILE_SEP))
+                metadir += FILE_SEP;
         }
 
         // Parse URL
@@ -772,7 +798,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         std::string bttrackerurl = puri["et"];
         std::string durstr = puri["cd"];
 
-        dprintf("cmd: START: %s with tracker %s chunksize %i duration %d\n",swarmidhexstr.c_str(),trackerstr.c_str(),sm.chunk_size_,sm.cont_dur_);
+        dprintf("cmd: START: %s with tracker %s chunksize %i duration %d storage %s metadir %s\n",swarmidhexstr.c_str(),trackerstr.c_str(),sm.chunk_size_,sm.cont_dur_,storagepath.c_str(),metadir.c_str());
 
         // Handle tracker
         // External tracker via URL param
@@ -822,7 +848,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
                 filename = swarmidhexstr;
 
             if (durstr != "-1")
-                td = swift::Open(filename,swarmid,trackerurl,false,sm.cont_int_prot_,false,activate,sm.chunk_size_);
+                td = swift::Open(filename,swarmid,trackerurl,false,sm.cont_int_prot_,false,activate,sm.chunk_size_,metadir);
             else
                 td = swift::LiveOpen(filename,swarmid,trackerurl,sm.injector_addr_,sm.cont_int_prot_,sm.live_disc_wnd_,sm.chunk_size_);
             if (td == -1) {
@@ -863,13 +889,13 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
             {
                 dprintf("cmd: START: cannot get storage td %d\n", req->td );
                 CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarmid);
-        	return ERROR_BAD_SWARM;
+                return ERROR_BAD_SWARM;
             }
             storage_files_t sfs = storage->GetStorageFiles();
             if (sfs.size() > 0)
                 minsize = sfs[0]->GetSize();
             else if (swift::SeqComplete(td) > 0) // Arno, 2013-01-08: Support small files
-        	minsize = std::min(swift::Size(td),minsize);
+                minsize = std::min(swift::Size(td),minsize);
 
             // Wait for first chunk, so we can handle MULTIFILE, then
             // wait for prebuffering and then send PLAY to user.
@@ -945,7 +971,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
     else if (!strcmp(method,"CHECKPOINT"))
     {
         // CHECKPOINT roothash\r\n
-	char *swarmidhexcstr = paramstr;
+        char *swarmidhexcstr = paramstr;
         std::string swarmidhexstr(swarmidhexcstr);
         SwarmID swarmid(swarmidhexstr);
         CmdGwGotCHECKPOINT(swarmid);
@@ -971,6 +997,42 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         CmdGwCloseConnection(cmdsock);
         // Tell libevent to stop processing events
         event_base_loopexit(Channel::evbase, NULL);
+    }
+    else if (!strcmp(method,"TUNNELSUBSCRIBE"))
+    {
+        uint32_t channel;
+        int n = sscanf(paramstr,"%08x",&channel);
+        if (n != 1)
+            return ERROR_BAD_ARG;
+        if (!channel)
+            return ERROR_BAD_ARG;
+        // check if the channel is allowed (doesn't interfere with normal swift)
+        if (channel < SWIFT_MAX_INCOMING_CONNECTIONS + SWIFT_MAX_OUTGOING_CONNECTIONS)
+            return ERROR_BAD_ARG;
+        // check if the channel is already reserved
+        if (CmdGwTunnelCheckChannel(channel))
+            return ERROR_BAD_ARG;
+
+        tunnel_channels_.push_back(channel);
+        if (cmd_gw_debug)
+            fprintf(stderr,"cmdgw: Subscribed %" PRIu32 " as a new tunneling channel\n", channel );
+    }
+    else if (!strcmp(method,"TUNNELUNSUBSCRIBE"))
+    {
+        uint32_t channel;
+        int n = sscanf(paramstr,"%08x",&channel);
+        if (n != 1)
+            return ERROR_BAD_ARG;
+        if (!channel)
+            return ERROR_BAD_ARG;
+        // check if the channel actually exists
+        if (CmdGwTunnelCheckChannel(channel)) {
+            tunnel_channels_.erase(std::remove(tunnel_channels_.begin(), tunnel_channels_.end(), channel), tunnel_channels_.end());
+            if (cmd_gw_debug)
+                fprintf(stderr,"cmdgw: Unsubscribed channel %" PRIu32 "\n", channel );
+        }
+        else if (cmd_gw_debug)
+            fprintf(stderr,"cmdgw: Unsubscribing channel %" PRIu32 " failed: No such channel subscribed\n", channel );
     }
     else if (!strcmp(method,"TUNNELSEND"))
     {
@@ -1084,7 +1146,7 @@ void CmdGwListenErrorCallback(struct evconnlistener *listener, void *ctx)
 }
 
 
-bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr,popt_cont_int_prot_t cipm, uint64_t disc_wnd)
+bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr,popt_cont_int_prot_t cipm, uint64_t disc_wnd, std::string metadir)
 {
     // Allocate libevent listener for cmd connections
     // From http://www.wangafu.net/~nickm/libevent-book/Ref8_listener.html
@@ -1105,6 +1167,7 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
     cmd_gw_httpaddr = httpaddr;
     cmd_gw_cipm=cipm;
     cmd_gw_livesource_disc_wnd = disc_wnd;
+    cmd_gw_metadir = metadir;
 
     cmd_evbuffer = evbuffer_new();
 
@@ -1114,6 +1177,15 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
 
 
 // SOCKTUNNEL
+bool swift::CmdGwTunnelCheckChannel(uint32_t channel) {
+    // returns true is the channel/prefix is used for tunneling messages through channels
+    for (std::vector<uint32_t>::iterator it = tunnel_channels_.begin(); it != tunnel_channels_.end(); ++it)
+        if (*it == channel)
+            return true;
+    return false;
+}
+
+
 void swift::CmdGwTunnelUDPDataCameIn(Address srcaddr, uint32_t srcchan, struct evbuffer* evb)
 {
     // Message received on UDP socket, forward over TCP conn.
@@ -1154,9 +1226,7 @@ void swift::CmdGwTunnelSendUDP(struct evbuffer *evb)
 
     struct evbuffer *sendevbuf = evbuffer_new();
 
-    // Add channel id. Currently always CMDGW_TUNNEL_DEFAULT_CHANNEL_ID=0xffffffff
-    // but we may add a TUNNELSUBSCRIBE command later to allow the allocation
-    // of different channels for different TCP clients.
+    // Add channel id.
     int ret = evbuffer_add_32be(sendevbuf, cmd_tunnel_dest_chanid);
     if (ret < 0)
     {

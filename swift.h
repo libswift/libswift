@@ -154,81 +154,81 @@ namespace swift {
 
     struct SwarmID  {
       public:
-	SwarmID() : empty_(true) {}
-	SwarmID(const Sha1Hash &roothash) { ttype_ = FILE_TRANSFER; roothash_ = roothash; empty_=false;}
-	SwarmID(const SwarmPubKey &spubkey) { ttype_ = LIVE_TRANSFER; spubkey_ = spubkey; empty_=false;}
-	SwarmID(std::string hexstr);
-	SwarmID(uint8_t *data,uint16_t datalength);
-	~SwarmID();
-	bool    operator == (const SwarmID& b) const;
-	SwarmID & operator = (const SwarmID &source);
-	/** Returns the type of transfer, FILE_TRANSFER or LIVE_TRANSFER */
+        SwarmID() : empty_(true) {}
+        SwarmID(const Sha1Hash &roothash) { ttype_ = FILE_TRANSFER; roothash_ = roothash; empty_=false;}
+        SwarmID(const SwarmPubKey &spubkey) { ttype_ = LIVE_TRANSFER; spubkey_ = spubkey; empty_=false;}
+        SwarmID(std::string hexstr);
+        SwarmID(uint8_t *data,uint16_t datalength);
+        ~SwarmID();
+        bool    operator == (const SwarmID& b) const;
+        SwarmID & operator = (const SwarmID &source);
+        /** Returns the type of transfer, FILE_TRANSFER or LIVE_TRANSFER */
         transfer_t      ttype() { return ttype_; }
         const Sha1Hash	&roothash() const { return roothash_; }
-	const SwarmPubKey &spubkey() const { return spubkey_; }
-	std::string     hex() const;
-	std::string     tofilename() const;
-	void		SetRootHash(const Sha1Hash &roothash) { ttype_ = FILE_TRANSFER; roothash_ = roothash; empty_=false;}
+        const SwarmPubKey &spubkey() const { return spubkey_; }
+        std::string     hex() const;
+        std::string     tofilename() const;
+        void		SetRootHash(const Sha1Hash &roothash) { ttype_ = FILE_TRANSFER; roothash_ = roothash; empty_=false;}
 
-	const static SwarmID NOSWARMID;
+        const static SwarmID NOSWARMID;
 
       protected:
-	bool		empty_; // if NOSWARMID
-	transfer_t	ttype_;
-	Sha1Hash	roothash_;
-	SwarmPubKey	spubkey_;
+        bool		empty_; // if NOSWARMID
+        transfer_t	ttype_;
+        Sha1Hash	roothash_;
+        SwarmPubKey	spubkey_;
     };
 
 
 
 /** IPv4/6 address, just a nice wrapping around struct sockaddr_storage. */
     struct Address {
-	struct sockaddr_storage  addr;
-	Address();
-	Address(const char* ip, uint16_t port);
-	/**IPv4 address as "ip:port" or IPv6 address as "[ip]:port" following
-	 * RFC2732, or just port in which case the address is set to in6addr_any */
-	Address(const char* ip_port);
-	Address(uint32_t ipv4addr, uint16_t port);
-	Address(const struct sockaddr_storage& address) : addr(address) {}
-	Address(struct in6_addr ipv6addr, uint16_t port);
+        struct sockaddr_storage  addr;
+        Address();
+        Address(const char* ip, uint16_t port);
+        /**IPv4 address as "ip:port" or IPv6 address as "[ip]:port" following
+         * RFC2732, or just port in which case the address is set to in6addr_any */
+        Address(const char* ip_port);
+        Address(uint32_t ipv4addr, uint16_t port);
+        Address(const struct sockaddr_storage& address) : addr(address) {}
+        Address(struct in6_addr ipv6addr, uint16_t port);
 
-	void set_ip   (const char* ip_str, int family);
-	void set_port (uint16_t port);
-	void set_port (const char* port_str);
-	void set_ipv4 (uint32_t ipv4);
-	void set_ipv4 (const char* ipv4_str);
-	void set_ipv6 (const char* ip_str);
-	void set_ipv6 (struct in6_addr &ipv6);
-	void clear ();
-	uint32_t ipv4() const;
-	struct in6_addr ipv6() const;
-	uint16_t port () const;
-	operator sockaddr_storage () const {return addr;}
-	bool operator == (const Address& b) const;
-	std::string str () const;
-	std::string ipstr (bool includeport=false) const;
-	bool operator != (const Address& b) const { return !(*this==b); }
-	bool is_private() const;
-	int get_family() const { return addr.ss_family; }
-	socklen_t get_family_sockaddr_length() const;
+        void set_ip   (const char* ip_str, int family);
+        void set_port (uint16_t port);
+        void set_port (const char* port_str);
+        void set_ipv4 (uint32_t ipv4);
+        void set_ipv4 (const char* ipv4_str);
+        void set_ipv6 (const char* ip_str);
+        void set_ipv6 (struct in6_addr &ipv6);
+        void clear ();
+        uint32_t ipv4() const;
+        struct in6_addr ipv6() const;
+        uint16_t port () const;
+        operator sockaddr_storage () const {return addr;}
+        bool operator == (const Address& b) const;
+        std::string str () const;
+        std::string ipstr (bool includeport=false) const;
+        bool operator != (const Address& b) const { return !(*this==b); }
+        bool is_private() const;
+        int get_family() const { return addr.ss_family; }
+        socklen_t get_family_sockaddr_length() const;
     };
 
 
 // Arno, 2011-10-03: Use libevent callback functions, no on_error?
 #define sockcb_t        event_callback_fn
     struct sckrwecb_t {
-	sckrwecb_t (evutil_socket_t s=0, sockcb_t mr=NULL, sockcb_t mw=NULL,
-		sockcb_t oe=NULL) :
-	    sock(s), may_read(mr), may_write(mw), on_error(oe) {}
-	evutil_socket_t sock;
-	sockcb_t   may_read;
-	sockcb_t   may_write;
-	sockcb_t   on_error;
+        sckrwecb_t (evutil_socket_t s=0, sockcb_t mr=NULL, sockcb_t mw=NULL,
+            sockcb_t oe=NULL) :
+            sock(s), may_read(mr), may_write(mw), on_error(oe) {}
+        evutil_socket_t sock;
+        sockcb_t   may_read;
+        sockcb_t   may_write;
+        sockcb_t   on_error;
 	};
 
 	struct now_t  {
-	static tint now;
+        static tint now;
     };
 
 #define NOW now_t::now
@@ -362,68 +362,68 @@ namespace swift {
 
     class Handshake
     {
-      public:
-#if ENABLE_IETF_PPSP_VERSION == 1
-	Handshake() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), live_sig_alg_(DEFAULT_LIVE_SIG_ALG), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
-#else
-	Handshake() : version_(VER_SWIFT_LEGACY), min_version_(VER_SWIFT_LEGACY), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), live_sig_alg_(DEFAULT_LIVE_SIG_ALG), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
-#endif
-	Handshake(Handshake &c)
-	{
-	    version_ = c.version_;
-	    min_version_ = c.min_version_;
-	    cont_int_prot_ = c.cont_int_prot_;
-	    merkle_func_ = c.merkle_func_;
-	    live_sig_alg_ = c.live_sig_alg_;
-	    chunk_addr_ = c.chunk_addr_;
-	    live_disc_wnd_ = c.live_disc_wnd_;
-            if (c.swarm_id_ptr_ == NULL)
-                swarm_id_ptr_ = NULL;
-            else
-                swarm_id_ptr_ = new SwarmID(*(c.swarm_id_ptr_));
+          public:
+        #if ENABLE_IETF_PPSP_VERSION == 1
+        Handshake() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), live_sig_alg_(DEFAULT_LIVE_SIG_ALG), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
+        #else
+        Handshake() : version_(VER_SWIFT_LEGACY), min_version_(VER_SWIFT_LEGACY), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), live_sig_alg_(DEFAULT_LIVE_SIG_ALG), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
+        #endif
+        Handshake(Handshake &c)
+        {
+            version_ = c.version_;
+            min_version_ = c.min_version_;
+            cont_int_prot_ = c.cont_int_prot_;
+            merkle_func_ = c.merkle_func_;
+            live_sig_alg_ = c.live_sig_alg_;
+            chunk_addr_ = c.chunk_addr_;
+            live_disc_wnd_ = c.live_disc_wnd_;
+                if (c.swarm_id_ptr_ == NULL)
+                    swarm_id_ptr_ = NULL;
+                else
+                    swarm_id_ptr_ = new SwarmID(*(c.swarm_id_ptr_));
 
-	}
-	~Handshake() { ReleaseSwarmID(); }
-	void SetSwarmID(SwarmID &swarmid) { swarm_id_ptr_ = new SwarmID(swarmid); }
-	SwarmID GetSwarmID() { return (swarm_id_ptr_ == NULL) ? SwarmID::NOSWARMID : *swarm_id_ptr_; }
-	void ReleaseSwarmID() { if (swarm_id_ptr_ != NULL) delete swarm_id_ptr_; swarm_id_ptr_ = NULL; }
-	bool IsSupported()
-	{
-	    if (cont_int_prot_ == POPT_CONT_INT_PROT_SIGNALL)
-		return false; // PPSPTODO
-	    else if (merkle_func_ >= POPT_MERKLE_HASH_FUNC_SHA224)
-		return false; // PPSPTODO
-	    else if (chunk_addr_ == POPT_CHUNK_ADDR_BYTE64 || chunk_addr_ == POPT_CHUNK_ADDR_BIN64 || chunk_addr_ == POPT_CHUNK_ADDR_CHUNK64)
-		return false; // PPSPTODO
-	    else if (!(live_sig_alg_ == POPT_LIVE_SIG_ALG_RSASHA1 || live_sig_alg_ == POPT_LIVE_SIG_ALG_ECDSAP256SHA256 || live_sig_alg_ == POPT_LIVE_SIG_ALG_ECDSAP384SHA384))
-		return false; // PPSPTODO
-	    return true;
-	}
-	void ResetToLegacy()
-	{
-	    // Do not reset peer_channel_id
-	    version_ = VER_SWIFT_LEGACY;
-	    min_version_ = VER_SWIFT_LEGACY;
-	    cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
-	    merkle_func_ = POPT_MERKLE_HASH_FUNC_SHA1;
-	    live_sig_alg_ = POPT_LIVE_SIG_ALG_PRIVATEDNS;
-	    chunk_addr_ = POPT_CHUNK_ADDR_BIN32;
-	    live_disc_wnd_ = (uint32_t)POPT_LIVE_DISC_WND_ALL;
-	}
+        }
+        ~Handshake() { ReleaseSwarmID(); }
+        void SetSwarmID(SwarmID &swarmid) { swarm_id_ptr_ = new SwarmID(swarmid); }
+        SwarmID GetSwarmID() { return (swarm_id_ptr_ == NULL) ? SwarmID::NOSWARMID : *swarm_id_ptr_; }
+        void ReleaseSwarmID() { if (swarm_id_ptr_ != NULL) delete swarm_id_ptr_; swarm_id_ptr_ = NULL; }
+        bool IsSupported()
+        {
+            if (cont_int_prot_ == POPT_CONT_INT_PROT_SIGNALL)
+            return false; // PPSPTODO
+            else if (merkle_func_ >= POPT_MERKLE_HASH_FUNC_SHA224)
+            return false; // PPSPTODO
+            else if (chunk_addr_ == POPT_CHUNK_ADDR_BYTE64 || chunk_addr_ == POPT_CHUNK_ADDR_BIN64 || chunk_addr_ == POPT_CHUNK_ADDR_CHUNK64)
+            return false; // PPSPTODO
+            else if (!(live_sig_alg_ == POPT_LIVE_SIG_ALG_RSASHA1 || live_sig_alg_ == POPT_LIVE_SIG_ALG_ECDSAP256SHA256 || live_sig_alg_ == POPT_LIVE_SIG_ALG_ECDSAP384SHA384))
+            return false; // PPSPTODO
+            return true;
+        }
+        void ResetToLegacy()
+        {
+            // Do not reset peer_channel_id
+            version_ = VER_SWIFT_LEGACY;
+            min_version_ = VER_SWIFT_LEGACY;
+            cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
+            merkle_func_ = POPT_MERKLE_HASH_FUNC_SHA1;
+            live_sig_alg_ = POPT_LIVE_SIG_ALG_PRIVATEDNS;
+            chunk_addr_ = POPT_CHUNK_ADDR_BIN32;
+            live_disc_wnd_ = (uint32_t)POPT_LIVE_DISC_WND_ALL;
+        }
 
-	/**    Peer channel id; zero if we are trying to open a channel. */
-	uint32_t    		peer_channel_id_;
-	popt_version_t   	version_;
-	popt_version_t   	min_version_;
-	popt_cont_int_prot_t  	cont_int_prot_;
-	popt_merkle_func_t	merkle_func_;
-	popt_live_sig_alg_t	live_sig_alg_;
-	popt_chunk_addr_t	chunk_addr_;
-	uint64_t		live_disc_wnd_;
-      protected:
-	/** Dynamically allocated such that we can deallocate it and
-	 * save some bytes per channel */
-	SwarmID 		*swarm_id_ptr_;
+        /**    Peer channel id; zero if we are trying to open a channel. */
+        uint32_t    		peer_channel_id_;
+        popt_version_t   	version_;
+        popt_version_t   	min_version_;
+        popt_cont_int_prot_t  	cont_int_prot_;
+        popt_merkle_func_t	merkle_func_;
+        popt_live_sig_alg_t	live_sig_alg_;
+        popt_chunk_addr_t	chunk_addr_;
+        uint64_t		live_disc_wnd_;
+          protected:
+        /** Dynamically allocated such that we can deallocate it and
+         * save some bytes per channel */
+        SwarmID 		*swarm_id_ptr_;
     };
 
     /** Arno, 2013-09-25: Currently just used for URI processing.
@@ -611,7 +611,7 @@ namespace swift {
 	 *  @param chunk_size	size of chunk to use
 	 *  @param zerostate	whether to serve the hashes + content directly from disk
 	 */
-        FileTransfer(int td, std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO, bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, bool zerostate=false);
+        FileTransfer(int td, std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO, bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, bool zerostate=false, std::string metadir="");
         /**    Close everything. */
         ~FileTransfer();
 
@@ -921,6 +921,8 @@ namespace swift {
         static tint MAX_POSSIBLE_RTT;
         static tint MIN_PEX_REQUEST_INTERVAL;
         static FILE* debug_file;
+        // Only in devel: file used to debug LEDBAT
+        static FILE* debug_ledbat;
 
         const std::string id_string () const;
         /** A channel is "established" if had already sent and received packets. */
@@ -1000,9 +1002,10 @@ namespace swift {
         bin_t       data_in_dbl_;
         /** The history of data sent and still unacknowledged. */
         tbqueue     data_out_;
+        uint32_t    data_out_size_; // pkts not acknowledged
         /** Timeouted data (potentially to be retransmitted). */
         tbqueue     data_out_tmo_;
-        bin_t       data_out_cap_;
+        bin_t       data_out_cap_; // Ric: maybe we should remove it.. creates problems if lost
         /** Index in the history array. */
         binmap_t    have_out_;
         /**    Transmit schedule: in most cases filled with the peer's hints */
@@ -1060,6 +1063,8 @@ namespace swift {
         tint        owd_min_bins_[10];
         int         owd_min_bin_;
         tint        owd_min_bin_start_;
+        tint        owd_cur_;
+        tint        owd_min_;
         /** LEDBAT current delay list should be > 4 && == RTT */
         ttqueue     owd_current_;
         /** Stats */
@@ -1076,7 +1081,8 @@ namespace swift {
          * May not be equal to peer_. 2PEERSBEHINDSAMENAT */
         Address     recv_peer_;
 
-        bool        direct_sending_;
+        // keep memory of previous delays
+        tint        reschedule_delay_;
 
         // PPSP
         /** Handshake I sent to peer. swarmid not set. */
@@ -1100,6 +1106,7 @@ namespace swift {
         void        CleanHintOut(bin_t pos);
         void        Reschedule();
         void        UpdateDIP(bin_t pos); // RETRANSMIT
+        void        UpdateRTT(int32_t pos, tbqueue data_out, tint owd);
 
         bin_t       DequeueHintOut(uint64_t size);
 
@@ -1183,7 +1190,7 @@ namespace swift {
 
         /** Create Storage from specified path and destination dir if content turns about to be a multi-file.
          * If live_disc_wnd_bytes !=0 then live single-file, wrapping if != POPT_LIVE_DISC_WND_ALL */
-        Storage(std::string ospathname, std::string destdir, int td, uint64_t live_disc_wnd_bytes);
+        Storage(std::string ospathname, std::string destdir, int td, uint64_t live_disc_wnd_bytes, std::string metamfspecospathname="");
         ~Storage();
 
         /** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
@@ -1250,6 +1257,8 @@ namespace swift {
         ProgressCallback alloc_cb_;
         uint64_t    live_disc_wnd_bytes_;
 
+        std::string meta_mfspec_os_pathname_; // metadata might be located in a different dir
+
         int         WriteSpecPart(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
         std::pair<int64_t,int64_t> WriteBuffer(StorageFile *sf, const void *buf, size_t nbyte, int64_t offset);
         StorageFile * FindStorageFile(int64_t offset);
@@ -1271,6 +1280,7 @@ namespace swift {
     	~ZeroState();
     	static ZeroState *GetInstance();
     	void SetContentDir(std::string contentdir);
+        void SetMetaDir(std::string metadir);
     	void SetConnectTimeout(tint timeout);
     	int Find(const Sha1Hash &root_hash);
 
@@ -1281,6 +1291,7 @@ namespace swift {
 
         struct event	evclean_;
         std::string     contentdir_;
+        std::string     metadir_;
 
         /* Arno, 2012-07-20: A very slow peer can keep a transfer alive
           for a long time (3 minute channel close timeout not reached).
@@ -1315,9 +1326,11 @@ namespace swift {
         false, no uncle hashes will be sent and no data will be verified against
         them on receipt. In this mode, checking disk contents against hashes
         no longer works on restarts, unless checkpoints are used.
+        The .mhash and .mbinmap files might be located along with the file, or in
+        a separate directory specified by the metadir parameter.
         */
         // TODO: replace check_netwvshash with full set of protocol options
-    int     Open( std::string filename, SwarmID& swarmid, std::string trackerurl="", bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, bool zerostate=false, bool activate=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     Open( std::string filename, SwarmID& swarmid, std::string trackerurl="", bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, bool zerostate=false, bool activate=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, std::string metadir="");
     /** Get the root hash for the transmission. */
     SwarmID GetSwarmID( int file);
     /** Close a file and a transmission, remove state or content if desired. */
@@ -1426,6 +1439,7 @@ namespace swift {
     const char* tintstr(tint t=0);
 
     // SOCKTUNNEL
+    bool CmdGwTunnelCheckChannel(uint32_t tunnel_id); // messages prefixed with tunnel id will be forwarded
     void CmdGwTunnelUDPDataCameIn(Address srcaddr, uint32_t srcchan, struct evbuffer* evb);
     void CmdGwTunnelSendUDP(struct evbuffer *evb); // for friendship with Channel
 
@@ -1436,6 +1450,8 @@ namespace swift {
 #ifndef SWIFT_MUTE
 #define dprintf(...) do { if (Channel::debug_file) fprintf(Channel::debug_file,__VA_ARGS__); } while (0)
 #define dflush() fflush(Channel::debug_file)
+#define lprintf(...) do { if (Channel::debug_ledbat) fprintf(Channel::debug_ledbat,__VA_ARGS__); } while (0)
+#define lflush() fflush(Channel::debug_ledbat)
 #else
 #define dprintf(...) do {} while(0)
 #define dflush() do {} while(0)

@@ -173,19 +173,19 @@ void    swift::Shutdown()
  */
 
 
-int swift::Open( std::string filename, SwarmID& swarmid, std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size)
+int swift::Open( std::string filename, SwarmID& swarmid, std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size, std::string metadir)
 {
     if (api_debug)
-	fprintf(stderr,"swift::Open %s id %s track %s cdisk %d cipm %" PRIu32 " zs %d act %d cs %" PRIu32 "\n", filename.c_str(), swarmid.hex().c_str(), trackerurl.c_str(), force_check_diskvshash, cipm, zerostate, activate, chunk_size );
+        fprintf(stderr,"swift::Open %s id %s track %s cdisk %d cipm %" PRIu32 " zs %d act %d cs %" PRIu32 "\n", filename.c_str(), swarmid.hex().c_str(), trackerurl.c_str(), force_check_diskvshash, cipm, zerostate, activate, chunk_size );
 
     if (swarmid.ttype() != FILE_TRANSFER)
 	return -1;
 
-    SwarmData* swarm = SwarmManager::GetManager().AddSwarm( filename, swarmid.roothash(), trackerurl, force_check_diskvshash, cipm, zerostate, activate, chunk_size );
+    SwarmData* swarm = SwarmManager::GetManager().AddSwarm( filename, swarmid.roothash(), trackerurl, force_check_diskvshash, cipm, zerostate, activate, chunk_size, metadir );
     if (swarm == NULL)
-	return -1;
+        return -1;
     else
-	return swarm->Id();
+        return swarm->Id();
 }
 
 
@@ -213,28 +213,28 @@ void swift::Close( int td, bool removestate, bool removecontent ) {
 int swift::Find(SwarmID& swarmid, bool activate)
 {
     if (api_debug)
-	fprintf(stderr,"swift::Find %s act %d\n", swarmid.hex().c_str(), (int)activate );
+        fprintf(stderr,"swift::Find %s act %d\n", swarmid.hex().c_str(), (int)activate );
 
     if (swarmid.ttype() == FILE_TRANSFER)
     {
-	SwarmData* swarm = SwarmManager::GetManager().FindSwarm(swarmid.roothash());
-	if (swarm==NULL)
-	    return -1;
-	else
-	{
-	    if (activate)
-		SwarmManager::GetManager().ActivateSwarm(swarm->RootHash());
-	    return swarm->Id();
-	}
+        SwarmData* swarm = SwarmManager::GetManager().FindSwarm(swarmid.roothash());
+        if (swarm==NULL)
+            return -1;
+        else
+        {
+            if (activate)
+            SwarmManager::GetManager().ActivateSwarm(swarm->RootHash());
+            return swarm->Id();
+        }
     }
     else
     {
-	//LIVE
-	LiveTransfer *lt = LiveTransfer::FindBySwarmID(swarmid);
-	if (lt == NULL)
-	    return -1;
-	else
-	    return lt->td();
+        //LIVE
+        LiveTransfer *lt = LiveTransfer::FindBySwarmID(swarmid);
+        if (lt == NULL)
+            return -1;
+        else
+            return lt->td();
     }
 }
 

@@ -1192,7 +1192,7 @@ void HttpGwNewRequestCallback (struct evhttp_request *evreq, void *arg) {
     // Handle LIVE
     bool live=false;
     if (swarmidhexstr.length() > Sha1Hash::SIZE*2)
-	live = true;
+        live = true;
 
     bool dashrestart=false;
     if (dashrangestr.length() > 0 && dashrangestr[0] == '0')

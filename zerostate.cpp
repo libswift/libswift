@@ -22,7 +22,7 @@ ZeroState * ZeroState::__singleton = NULL;
 
 #define CLEANUP_INTERVAL			30	// seconds
 
-ZeroState::ZeroState() : contentdir_("."), connect_timeout_(TINT_NEVER)
+ZeroState::ZeroState() : contentdir_("."), metadir_(""), connect_timeout_(TINT_NEVER)
 {
     if (__singleton == NULL)
     {
@@ -139,11 +139,19 @@ void ZeroState::SetContentDir(std::string contentdir)
     contentdir_ = contentdir;
 }
 
+
+void ZeroState::SetMetaDir(std::string metadir)
+{
+    metadir_ = metadir;
+}
+
+
 void ZeroState::SetConnectTimeout(tint timeout)
 {
     //fprintf(stderr,"ZeroState: SetConnectTimeout: %" PRIi64 "\n", timeout/TINT_SEC );
     connect_timeout_ = timeout;
 }
+
 
 int ZeroState::Find(const Sha1Hash &root_hash)
 {
@@ -151,7 +159,11 @@ int ZeroState::Find(const Sha1Hash &root_hash)
 
     //std::string file_name = "content.avi";
     std::string file_name = contentdir_+FILE_SEP+root_hash.hex();
-    uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE;
+    std::string meta_prefix = "";
+    if (metadir_ == "")
+        meta_prefix = file_name;
+    else
+        meta_prefix = metadir_+FILE_SEP+root_hash.hex();
 
     dprintf("%s #0 zero find %s from %s\n",tintstr(),file_name.c_str(), getcwd_utf8().c_str() );
 
@@ -159,18 +171,18 @@ int ZeroState::Find(const Sha1Hash &root_hash)
     int ret = file_exists_utf8(reqfilename);
     if (ret < 0 || ret == 0 || ret == 2)
         return -1;
-    reqfilename = file_name+".mbinmap";
+    reqfilename = meta_prefix+".mbinmap";
     ret = file_exists_utf8(reqfilename);
     if (ret < 0 || ret == 0 || ret == 2)
         return -1;
-    reqfilename = file_name+".mhash";
+    reqfilename = meta_prefix+".mhash";
     ret = file_exists_utf8(reqfilename);
     if (ret < 0 || ret == 0 || ret == 2)
         return -1;
 
     // Open as ZeroState
     SwarmID swarmid(root_hash);
-    return swift::Open(file_name, swarmid, "", false, POPT_CONT_INT_PROT_MERKLE, true);
+    return swift::Open(file_name, swarmid, "", false, POPT_CONT_INT_PROT_MERKLE, true, true, SWIFT_DEFAULT_CHUNK_SIZE, metadir_);
 }
 
 

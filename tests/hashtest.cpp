@@ -36,7 +36,8 @@ TEST(Sha1HashTest,OfferDataTest) {
     fprintf(stderr,"BEFORE STREQ hash\n");
     EXPECT_STREQ(rooth123,roothash123.hex().c_str());
     fprintf(stderr,"BEFORE swift::Open\n");
-    int td = swift::Open("123", SwarmID(roothash123));
+    SwarmID swarmid(roothash123);
+    int td = swift::Open("123", swarmid);
     fprintf(stderr,"BEFORE Storage\n");
     Storage storage("123", ".", td, 0);
     fprintf(stderr,"BEFORE MmapHashTree\n");
@@ -84,7 +85,8 @@ TEST(Sha1HashTest,OfferDataTest2) {
     Sha1Hash roothash456(Sha1Hash(true,hash456a),Sha1Hash(true,hash456b));
     unlink("456");
     EXPECT_STREQ(rooth456,roothash456.hex().c_str());
-    int td = swift::Open("456", SwarmID(roothash456));
+    SwarmID swarmid(roothash456);
+    int td = swift::Open("123", swarmid);
     Storage storage("456", ".", td, POPT_LIVE_DISC_WND_ALL);
     MmapHashTree tree(&storage,roothash456,1024,"456.mhash",false,"456.mbinmap");
     tree.OfferHash(bin_t(1,0),roothash456);

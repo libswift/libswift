@@ -58,6 +58,7 @@ public:
         twist_ &= (hashtree()->peak(0).toUInt()) & ((1<<6)-1);
 
         bin_t hint = binmap_t::find_complement(ack_hint_out_, offer, twist_);
+
         if (hint.is_none()) {
             return hint; // TODO: end-game mode
         }

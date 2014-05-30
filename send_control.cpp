@@ -71,10 +71,14 @@ tint    Channel::SwitchSendControl (send_control_t control_mode) {
 }
 
 tint    Channel::KeepAliveNextSendTime () {
-    if (sent_since_recv_>=3 && last_recv_time_<NOW-3*MAX_SEND_INTERVAL)
+    if (sent_since_recv_>=3 && last_recv_time_<NOW-3*MAX_SEND_INTERVAL) {
+        lprintf("\t\t==== Switch to Close Control ==== \n");
         return SwitchSendControl(CLOSE_CONTROL);
-    if (ack_rcvd_recent_)
+    }
+    if (ack_rcvd_recent_) {
+        lprintf("\t\t==== Switch to Slow Start Control ==== \n");
         return SwitchSendControl(SLOW_START_CONTROL);
+    }
     if (data_in_.time!=TINT_NEVER)
         return NOW;
 
@@ -93,8 +97,6 @@ tint    Channel::KeepAliveNextSendTime () {
     */
     if (!reverse_pex_out_.empty())
         return reverse_pex_out_.front().time;
-    if (NOW < next_send_time_)
-        return next_send_time_;
 
     // Arno: Fix that doesn't do exponential growth always, only after sends
     // without following recvs
@@ -129,10 +131,14 @@ tint    Channel::KeepAliveNextSendTime () {
 
 tint    Channel::PingPongNextSendTime () { // FIXME INFINITE LOOP
     //fprintf(stderr,"PING: dgrams %d ackrec %d dataintime %" PRIi64 " lastrecv %" PRIi64 " lastsend %" PRIi64 "\n", dgrams_sent_, ack_rcvd_recent_, data_in_.time, last_recv_time_, last_send_time_);
-    if (dgrams_sent_>=10)
+    if (dgrams_sent_>=10) {
+        lprintf("\t\t==== Switch to Keep Alive Control (dgrams_sent_>=10) ==== \n");
         return SwitchSendControl(KEEP_ALIVE_CONTROL);
-    if (ack_rcvd_recent_)
+    }
+    if (ack_rcvd_recent_) {
+        lprintf("\t\t==== Switch to Slow Start Control ==== \n");
         return SwitchSendControl(SLOW_START_CONTROL);
+    }
     if (data_in_.time!=TINT_NEVER)
         return NOW;
     if (last_recv_time_>last_send_time_)
@@ -145,23 +151,44 @@ tint    Channel::PingPongNextSendTime () { // FIXME INFINITE LOOP
 tint    Channel::CwndRateNextSendTime () {
     if (data_in_.time!=TINT_NEVER)
         return NOW; // TODO: delayed ACKs
-    if (last_recv_time_<NOW-rtt_avg_*4)
+    if (last_recv_time_<NOW-rtt_avg_*8) {
+        lprintf("\t\t==== Switch to Keep Alive Control (last_recv_time_<NOW-rtt_avg_*8) ==== \n");
         return SwitchSendControl(KEEP_ALIVE_CONTROL);
+    }
     send_interval_ = rtt_avg_/cwnd_;
-    if (send_interval_>max(rtt_avg_,TINT_SEC)*4)
+    if (send_interval_>max(rtt_avg_,TINT_SEC)*4) {
+        lprintf("\t\t==== Switch to Keep Alive Control (send_interval_>max(rtt_avg_,TINT_SEC)*4) ==== \n");
         return SwitchSendControl(KEEP_ALIVE_CONTROL);
-    if (data_out_.size()<cwnd_) {
-        dprintf("%s #%" PRIu32 " sendctrl next in %" PRIi64 "us (cwnd %.2f, data_out " PRISIZET ")\n",
-                tintstr(),id_,send_interval_,cwnd_,data_out_.size());
-        return last_data_out_time_ + send_interval_;
+    }
+    // Ric: test
+    /*
+    if (data_out_size_<(int)cwnd_) {
+        dprintf("%s #%" PRIu32 " sendctrl send interval %" PRIi64 "us (cwnd %.2f, data_out %" PRIu32 ")\n",
+                tintstr(),id_,send_interval_,cwnd_,data_out_size_);
+        return last_data_out_time_ + send_interval_ - timer_delay_;
     } else {
+        dprintf("%s #%" PRIu32 " sendctrl avoid sending (cwnd %.2f, data_out %" PRIu32 ")\n",
+                tintstr(),id_,cwnd_,data_out_size_);
+        assert(data_out_.front().time!=TINT_NEVER);
+        return data_out_.front().time + ack_timeout();
+    }*/
+    // start test
+    if (data_out_size_<(int)cwnd_ || cwnd_ >= 1) {
+        dprintf("%s #%" PRIu32 " sendctrl send interval %" PRIi64 "us (cwnd %.2f, data_out %" PRIu32 ")\n",
+                tintstr(),id_,send_interval_,cwnd_,data_out_size_);
+        return last_data_out_time_ + send_interval_ - reschedule_delay_;
+    } else {
+        dprintf("%s #%" PRIu32 " sendctrl avoid sending (cwnd %.2f, data_out %" PRIu32 ")\n",
+                tintstr(),id_,cwnd_,data_out_size_);
         assert(data_out_.front().time!=TINT_NEVER);
         return data_out_.front().time + ack_timeout();
     }
+    // end-test
+
 }
 
 void    Channel::BackOffOnLosses (float ratio) {
-    ack_rcvd_recent_ = 0;
+    //ack_rcvd_recent_ = 0;
     ack_not_rcvd_recent_ =  0;
     if (last_loss_time_<NOW-rtt_avg_) {
         cwnd_ *= ratio;
@@ -173,10 +200,13 @@ void    Channel::BackOffOnLosses (float ratio) {
 tint    Channel::SlowStartNextSendTime () {
     if (ack_not_rcvd_recent_) {
         BackOffOnLosses();
+        lprintf("\t\t==== Switch to LEDBAT Control (1) ==== \n");
         return SwitchSendControl(LEDBAT_CONTROL);//AIMD_CONTROL);
     }
-    if (rtt_avg_/cwnd_<TINT_SEC/10)
+    if (rtt_avg_/cwnd_<TINT_SEC/10) {
+        lprintf("\t\t==== Switch to LEDBAT Control (2) ==== \n");
         return SwitchSendControl(LEDBAT_CONTROL);//AIMD_CONTROL);
+    }
     cwnd_+=ack_rcvd_recent_;
     ack_rcvd_recent_=0;
     return CwndRateNextSendTime();
@@ -196,47 +226,53 @@ tint    Channel::AimdNextSendTime () {
 }
 
 tint Channel::LedbatNextSendTime () {
-    float oldcwnd = cwnd_;
+    //float oldcwnd = cwnd_;
 
-    tint owd_cur(TINT_NEVER), owd_min(TINT_NEVER);
+    if (ack_rcvd_recent_) {
 
-    // Ric: TODO for the moment we only use one sample!!
-    for(int i=0; i<10; i++) {
-        if (owd_min>owd_min_bins_[i])
-            owd_min = owd_min_bins_[i];
+        //tint owd_cur(TINT_NEVER), owd_min(TINT_NEVER);
+        // reset the min value
+        owd_min_ = TINT_NEVER;
+
+        // Ric: TODO for the moment we only use one sample!!
+        for(int i=0; i<10; i++) {
+            if (owd_min_>owd_min_bins_[i])
+                owd_min_ = owd_min_bins_[i];
+        }
+
+        // We may apply a filter over the elements.. as suggested in the rfc
+        ttqueue::iterator it = owd_current_.begin();
+        int32_t count = 0;
+        tint total = 0;
+        tint timeout = NOW - rtt_avg_;
+        // use the acks received during the last rtt, or at least 4 values
+        while (it != owd_current_.end() && (it->second > timeout || count < 4) ) {
+            total += it->first;
+            count++;
+            it++;
+        }
+        owd_cur_ = total/count;
+
+        dprintf("%s #%" PRIu32 " sendctrl using %" PRIi32 " samples from the last rtt value [%" PRIi64 "], current owd: %" PRIi64 "\n",
+                tintstr(),id_,count, rtt_avg_, owd_cur_);
+
+        if (ack_not_rcvd_recent_)
+            BackOffOnLosses(0.8);
+
+        ack_rcvd_recent_ = 0;
+
+        tint queueing_delay = owd_cur_ - owd_min_;
+        tint off_target = LEDBAT_TARGET - queueing_delay;
+        cwnd_ += LEDBAT_GAIN * off_target / cwnd_;
+        if (cwnd_<1)
+            cwnd_ = 1;
+        if (owd_cur_==TINT_NEVER || owd_min_==TINT_NEVER)
+            cwnd_ = 1;
     }
-
-    // We may apply a filter over the elements.. as suggested in the rfc
-    ttqueue::iterator it = owd_current_.begin();
-    int32_t count = 0;
-    tint total = 0;
-    tint timeout = NOW - rtt_avg_;
-    // use the acks received during the last rtt, or at least 4 values
-    while (it != owd_current_.end() && (it->second > timeout || count < 4) ) {
-        total += it->first;
-        count++;
-        it++;
-    }
-    owd_cur = total/count;
-
-    dprintf("%s #%" PRIu32 " sendctrl using %" PRIi32 " samples from the last rtt value (%" PRIi64 ")\n",
-            tintstr(),id_,count, rtt_avg_);
-
-    if (ack_not_rcvd_recent_)
-        BackOffOnLosses(0.8);
-
-    ack_rcvd_recent_ = 0;
-
-    tint queueing_delay = owd_cur - owd_min;
-    tint off_target = LEDBAT_TARGET - queueing_delay;
-    cwnd_ += LEDBAT_GAIN * off_target / cwnd_;
-    if (cwnd_<1) 
-        cwnd_ = 1;
-    if (owd_cur==TINT_NEVER || owd_min==TINT_NEVER) 
-        cwnd_ = 1;
 
     /*Arno, 2012-02-02: Somehow LEDBAT gets stuck at cwnd_ == 1 sometimes
-    // This hack appears to work to get it back on the right track quickly.
+     This hack appears to work to get it back on the right track quickly.
+     * Ric: not really needed.. it should not happen at all!
     if (oldcwnd == 1 && cwnd_ == 1)
        cwnd_count1_++;
     else
@@ -251,8 +287,7 @@ tint Channel::LedbatNextSendTime () {
         }
     }*/
 
-    dprintf("%s #%" PRIu32 " sendctrl ledbat %" PRIi64 "-%" PRIi64 " => %3.2f\n",
-            tintstr(),id_,owd_cur,owd_min,cwnd_);
+
     return CwndRateNextSendTime();
 }
 

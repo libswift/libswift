@@ -21,7 +21,8 @@ LiveTransfer *create_lt()
     popt_cont_int_prot_t cipm = POPT_CONT_INT_PROT_NONE;
     uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL;
     uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE;
-    LiveTransfer *lt = new LiveTransfer(filename,swarmid,Address(),cipm,disc_wnd,chunk_size);
+    Address addr = Address();
+    LiveTransfer *lt = new LiveTransfer(filename,swarmid,addr,cipm,disc_wnd,chunk_size);
     return lt;
 }
 

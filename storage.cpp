@@ -22,31 +22,43 @@ using namespace swift;
 const std::string Storage::MULTIFILE_PATHNAME = "META-INF-multifilespec.txt";
 const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 
-Storage::Storage(std::string ospathname, std::string destdir, int td, uint64_t live_disc_wnd_bytes) :
+#define DEBUGSTORAGE     0
+
+
+Storage::Storage(std::string ospathname, std::string destdir, int td, uint64_t live_disc_wnd_bytes, std::string metamfspecospathname) :
 	Operational(),
 	state_(STOR_STATE_INIT),
         os_pathname_(ospathname), destdir_(destdir), ht_(NULL), spec_size_(0),
         single_fd_(-1), reserved_size_(-1), total_size_from_spec_(-1), last_sf_(NULL),
-        td_(td), alloc_cb_(NULL), live_disc_wnd_bytes_(live_disc_wnd_bytes)
+        td_(td), alloc_cb_(NULL), live_disc_wnd_bytes_(live_disc_wnd_bytes), meta_mfspec_os_pathname_(metamfspecospathname)
 {
     // SIGNPEAK
     if (live_disc_wnd_bytes > 0 && live_disc_wnd_bytes != POPT_LIVE_DISC_WND_ALL)
     {
-	state_ = STOR_STATE_SINGLE_LIVE_WRAP;
+        state_ = STOR_STATE_SINGLE_LIVE_WRAP;
         (void)OpenSingleFile();
         return;
     }
 
+    std::string filename = os_pathname_;
+
     int64_t fsize = file_size_by_path_utf8(ospathname.c_str());
     if (fsize < 0 && errno == ENOENT)
     {
-        // File does not exist, assume we're a client and all will be revealed
-        // (single file, multi-spec) when chunks come in.
-        return;
+        // check if the metafile exists somewhere else
+        filename = meta_mfspec_os_pathname_;
+
+        fsize = file_size_by_path_utf8(metamfspecospathname.c_str());
+        if (fsize < 0 && errno == ENOENT)
+        {
+            // File does not exist, assume we're a client and all will be revealed
+            // (single file, multi-spec) when chunks come in.
+            return;
+        }
     }
 
     // File exists. Check first bytes to see if a multifile-spec
-    FILE *fp = fopen_utf8(ospathname.c_str(),"rb");
+    FILE *fp = fopen_utf8(filename.c_str(),"rb");
     if (!fp)
     {
         dprintf("%s %s storage: File exists, but error opening\n", tintstr(), roothashhex().c_str() );
@@ -67,15 +79,15 @@ Storage::Storage(std::string ospathname, std::string destdir, int td, uint64_t l
     if (!strncmp(readbuf,MULTIFILE_PATHNAME.c_str(),MULTIFILE_PATHNAME.length()))
     {
         // Pathname points to a multi-file spec, assume we're seeding
-	// Arno, 2013-03-06: Not correct for a spec that doesn't fit in chunk 0,
-	// should attempt to parse spec, if good then _COMPLETE otherwise wait
-	// for chunks 1,2... and reparse.
-	//
+        // Arno, 2013-03-06: Not correct for a spec that doesn't fit in chunk 0,
+        // should attempt to parse spec, if good then _COMPLETE otherwise wait
+        // for chunks 1,2... and reparse.
+        //
         state_ = STOR_STATE_MFSPEC_COMPLETE;
 
         dprintf("%s %s storage: Found multifile-spec, will seed it.\n", tintstr(), roothashhex().c_str() );
 
-        StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,fsize,ospathname);
+        StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,fsize,filename);
         sfs_.push_back(sf);
         if (ParseSpec(sf) < 0)
         {
@@ -111,8 +123,8 @@ Storage::~Storage()
 
 ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 {
-    dprintf("%s %s storage: Write: fd %d nbyte " PRISIZET " off %" PRIi64 " state %" PRIi32 "\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
-    //fprintf(stderr,"%s %s storage: Write: fd %d nbyte %d off %" PRIi64 " state %d\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
+    if (DEBUGSTORAGE)
+        dprintf("%s %s storage: Write: fd %d nbyte " PRISIZET " off %" PRIi64 " state %" PRIi32 "\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
 
     if (state_ == STOR_STATE_SINGLE_FILE)
     {
@@ -122,13 +134,15 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
     {
 	int64_t newoff = offset % live_disc_wnd_bytes_;
 
-	dprintf("%s %d ?data writing disk %" PRIi64 " window %" PRIu64 "\n",tintstr(), 0, newoff, live_disc_wnd_bytes_ );
+	if (DEBUGSTORAGE)
+	    dprintf("%s %d ?data writing disk %" PRIi64 " window %" PRIu64 "\n",tintstr(), 0, newoff, live_disc_wnd_bytes_ );
 
 	if (newoff+nbyte > live_disc_wnd_bytes_)
 	{
 	    // Writing more than window
 	    size_t firstbyte = live_disc_wnd_bytes_ - newoff;
-	    dprintf("%s %d ?data writing disk %" PRIi64 " firstbyte " PRISIZET "\n",tintstr(), 0, newoff, firstbyte );
+	    if (DEBUGSTORAGE)
+	        dprintf("%s %d ?data writing disk %" PRIi64 " firstbyte " PRISIZET "\n",tintstr(), 0, newoff, firstbyte );
 	    int ret = pwrite(single_fd_, buf, firstbyte, newoff);
 	    if (ret < 0)
 		return ret;
@@ -149,7 +163,8 @@ ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
             //return -1;
         }
 
-        dprintf("%s %s storage: Write: chunk 0\n", tintstr(), roothashhex().c_str() );
+        if (DEBUGSTORAGE)
+            dprintf("%s %s storage: Write: chunk 0\n", tintstr(), roothashhex().c_str() );
 
         // Check for multifile spec. If present, multifile, otherwise single
         if (!strncmp((const char *)buf,MULTIFILE_PATHNAME.c_str(),strlen(MULTIFILE_PATHNAME.c_str())))

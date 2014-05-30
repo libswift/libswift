@@ -44,12 +44,6 @@ struct event Channel::evrecv;
  */
 #define HINT_GRANULARITY    1 // chunks
 
-/** Arno, 2012-03-16: Swift can now tunnel data from CMDGW over UDP to
- * CMDGW at another swift instance. This is the default channel ID on UDP
- * for that traffic (cf. overlay swarm).
- */
-#define CMDGW_TUNNEL_DEFAULT_CHANNEL_ID        0xffffffff
-
 
 
 void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretransmit)
@@ -62,90 +56,90 @@ void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretra
     //
     if (transfer()->ttype() == FILE_TRANSFER)
     {
-	// Arno, 2013-02-25: Need to send peak bins always (also CIPM None)
-	// to cold clients to communicate tree size
-	if (ack_in_.is_empty() && hashtree() != NULL && hashtree()->peak_count() > 0)
-	{
-	    AddUnsignedPeakHashes(evb);
-	}
+        // Arno, 2013-02-25: Need to send peak bins always (also CIPM None)
+        // to cold clients to communicate tree size
+        if (ack_in_.is_empty() && hashtree() != NULL && hashtree()->peak_count() > 0)
+        {
+            AddUnsignedPeakHashes(evb);
+        }
 
         if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE)
         {
-	    if (pos != bin_t::NONE)
-	        AddFileUncleHashes(evb,pos);
+            if (pos != bin_t::NONE)
+                AddFileUncleHashes(evb,pos);
         }
     }
     else
     {
-	// LIVE
-	if (PeerIsSource())
-	    return;
+        // LIVE
+        if (PeerIsSource())
+            return;
 
-	// See if there is a first, or new signed munro to send
-	bin_t munro = bin_t::NONE;
-	if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
-	{
-	    // No content integrity protection, so just report current pos as
-	    // source pos == munro
-	    LivePiecePicker *lpp = (LivePiecePicker *)transfer()->picker();
-	    if (lpp == NULL)
-	    {
-		// I am source
-		LiveTransfer *lt = (LiveTransfer *)transfer();
-		munro = lt->GetSourceCurrentPos();
-	    }
-	    else
-		munro = lpp->GetCurrentPos();
-	}
-	else //POPT_CONT_INT_PROT_UNIFIED_MERKLE
-	{
-	    LiveHashTree *umt = (LiveHashTree *)hashtree();
-	    if (pos == bin_t::NONE)
-	    {
-		// Initially send last signed munro
-		munro = umt->GetLastMunro();
-	    }
-	    else
-	    {
-		// After, send munro required for pos
-		munro = umt->GetMunro(pos);
-		if (munro == bin_t::NONE)
-		    return;
-	    }
-	}
+        // See if there is a first, or new signed munro to send
+        bin_t munro = bin_t::NONE;
+        if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_NONE)
+        {
+            // No content integrity protection, so just report current pos as
+            // source pos == munro
+            LivePiecePicker *lpp = (LivePiecePicker *)transfer()->picker();
+            if (lpp == NULL)
+            {
+                // I am source
+                LiveTransfer *lt = (LiveTransfer *)transfer();
+                munro = lt->GetSourceCurrentPos();
+            }
+            else
+            munro = lpp->GetCurrentPos();
+        }
+        else //POPT_CONT_INT_PROT_UNIFIED_MERKLE
+        {
+            LiveHashTree *umt = (LiveHashTree *)hashtree();
+            if (pos == bin_t::NONE)
+            {
+                // Initially send last signed munro
+                munro = umt->GetLastMunro();
+            }
+            else
+            {
+                // After, send munro required for pos
+                munro = umt->GetMunro(pos);
+                if (munro == bin_t::NONE)
+                return;
+            }
+        }
 
-	if (pos == bin_t::NONE)
-	{
-	    // Initially send last signed munro
-	    dprintf("%s #%" PRIu32 " last munro %s\n",tintstr(),id_,munro.str().c_str() );
-	    bool ahead=false;
-	    if (ack_in_right_basebin_ != bin_t::NONE)
-	    {
-		if (ack_in_right_basebin_ > munro.base_right())
-		    ahead = true;
-	    }
-	    // Don't send when peer has chunks in range, or when it's downloading from us (e.g. chunks earlier than munro)
-	    if (munro != bin_t::NONE && ack_in_.is_empty(munro) && !munro_ack_rcvd_ && !ahead)
-	    {
-		AddLiveSignedMunroHash(evb,munro);
-		last_sent_munro_ = munro;
-	    }
-	}
-	else
-	{
-	    // After, send munro required for pos
-	    // Don't repeat if same and not retransmit
-	    bool diff = (munro != last_sent_munro_);
-	    last_sent_munro_ = munro;
+        if (pos == bin_t::NONE)
+        {
+            // Initially send last signed munro
+            dprintf("%s #%" PRIu32 " last munro %s\n",tintstr(),id_,munro.str().c_str() );
+            bool ahead=false;
+            if (ack_in_right_basebin_ != bin_t::NONE)
+            {
+                if (ack_in_right_basebin_ > munro.base_right())
+                    ahead = true;
+            }
+            // Don't send when peer has chunks in range, or when it's downloading from us (e.g. chunks earlier than munro)
+            if (munro != bin_t::NONE && ack_in_.is_empty(munro) && !munro_ack_rcvd_ && !ahead)
+            {
+                AddLiveSignedMunroHash(evb,munro);
+                last_sent_munro_ = munro;
+            }
+        }
+        else
+        {
+            // After, send munro required for pos
+            // Don't repeat if same and not retransmit
+            bool diff = (munro != last_sent_munro_);
+            last_sent_munro_ = munro;
 
-	    dprintf("%s #%" PRIu32 " munro for %s is %s\n",tintstr(),id_,pos.str().c_str(), munro.str().c_str());
+            dprintf("%s #%" PRIu32 " munro for %s is %s\n",tintstr(),id_,pos.str().c_str(), munro.str().c_str());
 
-	    if (isretransmit || diff)
-		AddLiveSignedMunroHash(evb,munro);
+            if (isretransmit || diff)
+                AddLiveSignedMunroHash(evb,munro);
 
             if (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)
-	        AddLiveUncleHashes(evb,pos,munro,isretransmit);
-	}
+                AddLiveUncleHashes(evb,pos,munro,isretransmit);
+        }
     }
 }
 
@@ -210,11 +204,11 @@ void    Channel::AddLiveSignedMunroHash(struct evbuffer *evb, bin_t munro)
 
 void    Channel::AddFileUncleHashes (struct evbuffer *evb, bin_t pos) {
     bin_t peak = hashtree()->peak_for(pos);
-    // Ric: TODO check (remove data_out_cap??)
-    //      For the moment lets keep the old behaviour
     binvector bv;
     while (pos!=peak && ((NOW&3)==3 || !pos.parent().contains(data_out_cap_)) &&
             ack_in_.is_empty(pos.parent()) ) {
+    // Ric: TODO optimise.. send based on pkt loss statistics
+    //      the above is correct but should not happen at the beginning!
     //while (pos!=peak && ack_in_.is_empty(pos.parent()) ) {
         bin_t uncle = pos.sibling();
         bv.push_back(uncle);
@@ -333,7 +327,7 @@ bin_t        Channel::DequeueHint (bool *retransmitptr) {
         }
     }
     
-    dprintf("%s #%" PRIu32 " dequeue empty %d\n",tintstr(),id_, (int)hint_in_.empty() );
+    //dprintf("%s #%" PRIu32 " dequeue empty %d\n",tintstr(),id_, (int)hint_in_.empty() );
 
     while (!hint_in_.empty() && send.is_none()) {
         bin_t hint = hint_in_.front().bin;
@@ -467,6 +461,33 @@ void    Channel::Send () {
 
     dprintf("%s #%" PRIu32 " Send called \n",tintstr(),id_);
 
+    // Ledbat log
+    // Time - PingPong - SlowStart - CC - KeepAlive - Close - CCwindow - Loss
+    if (id_==1)
+    switch (send_control_) {
+        case KEEP_ALIVE_CONTROL:
+            lprintf("%lu \t %d \t %d \t %d \t %li \t %d \t %d \t %d \t %li \t %li\n", NOW-open_time_, 0, 0, 0, NOW-last_send_time_, 0, 0, 0, dip_avg_, hint_out_size_);
+            break;
+        case PING_PONG_CONTROL:
+            lprintf("%lu \t %li \t %d \t %d \t %d \t %d \t %d \t %d \n", NOW-open_time_, NOW-last_send_time_, 0, 0, 0, 0, 0, 0);
+            break;
+        case SLOW_START_CONTROL:
+            lprintf("%lu \t %d \t %li \t %d \t %d \t %d \t %d \t %d \n", NOW-open_time_, 0, NOW-last_send_time_, 0, 0, 0, 0, 0);
+            break;
+        case AIMD_CONTROL:
+            lprintf("%lu \t %d \t %d \t %li \t %d \t %d \t %d \t %.2f \n", NOW-open_time_, 0, 0, NOW-last_send_time_, 0, 0, 0, cwnd_);
+            break;
+        case LEDBAT_CONTROL:
+            lprintf("%lu \t %d \t %d \t %li \t %d \t %d \t %d \t %.2f \t %li\n", NOW-open_time_, 0, 0, NOW-last_send_time_, 0, 0, 0, cwnd_, hint_in_size_);
+            break;
+        case CLOSE_CONTROL:
+            lprintf("%lu \t %d \t %d \t %d \t %d \t %li \t %d \t %d \n", NOW-open_time_, 0, 0, 0, 0, NOW-last_send_time_, 0, 0);
+            break;
+        default:
+            assert(false);
+            break;
+    }
+
     struct evbuffer *evb = evbuffer_new();
     uint32_t pcid = 0;
     if (hs_in_ != NULL)
@@ -508,18 +529,20 @@ void    Channel::Send () {
     if (evbuffer_get_length(evb)==4) {// only the channel id; bare keep-alive
         data = bin_t::ALL;
     }
+
     dprintf("%s #%" PRIu32 " sent %ib %s:%x\n",
-            tintstr(),id_,(int)evbuffer_get_length(evb),peer().str().c_str(),
-            pcid);
+                tintstr(),id_,(int)evbuffer_get_length(evb),peer().str().c_str(),
+                pcid);
+    last_send_time_ = NOW;
 
     int r = SendTo(socket_,peer(),evb);
     if (r==-1)
         print_error("swift can't send datagram");
-    else
+    else {
         raw_bytes_up_ += r;
-    last_send_time_ = NOW;
-    sent_since_recv_++;
-    dgrams_sent_++;
+        sent_since_recv_++;
+        dgrams_sent_++;
+    }
     evbuffer_free(evb);
     Reschedule();
 }
@@ -544,7 +567,7 @@ void    Channel::AddHint (struct evbuffer *evb) {
         return;
 
     // 1. Calc max of what we are allowed to request, uncongested bandwidth wise
-    tint plan_for = max(TINT_SEC*HINT_TIME,rtt_avg_*4);
+    tint plan_for = max(TINT_SEC*HINT_TIME,rtt_avg_<<2);
     tint timed_out = NOW - plan_for*2;
 
     std::deque<bin_t> tbc;
@@ -622,7 +645,8 @@ void    Channel::AddHint (struct evbuffer *evb) {
         if (transfer()->ttype() == LIVE_TRANSFER)
             hint = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2,id_);
 		else {
-	        hint = DequeueHintOut(plan_pck);
+            //fprintf(stderr, "want %d\tplan %d\n", want, plan_pck);
+            hint = DequeueHintOut(plan_pck);
 
             if (hint.is_none()) {
                 bin_t res = transfer()->picker()->Pick(ack_in_,plan_pck,NOW+plan_for*2,id_);
@@ -632,7 +656,6 @@ void    Channel::AddHint (struct evbuffer *evb) {
                     hint = DequeueHintOut(plan_pck);
                 }
             }
-
 		}
 
         if (!hint.is_none()) {
@@ -676,8 +699,8 @@ void    Channel::AddHint (struct evbuffer *evb) {
             // RTTFIX
             if (rtt_hint_tintbin_.bin == bin_t::NONE)
             {
-        	rtt_hint_tintbin_.bin = hint.base_left();
-        	rtt_hint_tintbin_.time = NOW;
+                rtt_hint_tintbin_.bin = hint.base_left();
+                rtt_hint_tintbin_.time = NOW;
             }
 
             return;
@@ -745,17 +768,19 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
     bin_t tosend = bin_t::NONE;
     bool isretransmit = false;
     tint luft = send_interval_>>4; // may wake up a bit earlier
-    if (data_out_.size()<cwnd_ &&
-            last_data_out_time_+send_interval_<=NOW+luft) {
+
+    if ( (data_out_size_<cwnd_ || cwnd_>0) && last_data_out_time_+send_interval_-reschedule_delay_<=NOW+luft) {
         tosend = DequeueHint(&isretransmit);
         if (tosend.is_none()) {
             dprintf("%s #%" PRIu32 " sendctrl no idea what data to send\n",tintstr(),id_);
-            if (send_control_!=KEEP_ALIVE_CONTROL && send_control_!=CLOSE_CONTROL)
+            if (send_control_!=KEEP_ALIVE_CONTROL && send_control_!=CLOSE_CONTROL) {
+                lprintf("\t\t==== Switch to Keep Alive Control (nothing to send) ==== \n");
                 SwitchSendControl(KEEP_ALIVE_CONTROL);
+            }
         }
     } else
         dprintf("%s #%" PRIu32 " sendctrl wait cwnd %f data_out %i next %s\n",
-                tintstr(),id_,cwnd_,(int)data_out_.size(),tintstr(last_data_out_time_+send_interval_));
+                tintstr(),id_,cwnd_,data_out_size_,tintstr(last_data_out_time_+send_interval_));
 
     // Add required hashes. Also for initial peaks and munros
     // Note this is called always, not just when there are requests pending.
@@ -790,7 +815,8 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
         return bin_t::NONE;
     }
 
-    dprintf("%s #%" PRIu32 " ?data reading swarm %llu\n",tintstr(),id_, tosend.base_offset()*transfer()->chunk_size() );
+    if (DEBUGTRAFFIC)
+        dprintf("%s #%" PRIu32 " ?data reading swarm %llu\n",tintstr(),id_, tosend.base_offset()*transfer()->chunk_size() );
 
     ssize_t r = transfer()->GetStorage()->Read((char *)vec.iov_base,
              transfer()->chunk_size(),tosend.base_offset()*transfer()->chunk_size());
@@ -812,6 +838,7 @@ bin_t        Channel::AddData (struct evbuffer *evb) {
 
     last_data_out_time_ = NOW;
     data_out_.push_back(tosend);
+    data_out_size_++;
     bytes_up_ += r;
     global_bytes_up += r;
 
@@ -1144,10 +1171,13 @@ void    Channel::CleanHintOut (bin_t pos) {
         hi++;
     if (hi==hint_out_.size())
         return; // something not hinted or hinted in far past
+
+    // Ric: TODO allow reordering of arriving pkts
     while (hi--) { // removing likely snubbed hints
-            bin_t hint = hint_out_.front().bin;
+        bin_t hint = hint_out_.front().bin;
         hint_out_size_ -= hint.base_length();
         hint_out_.pop_front();
+        dprintf("%s #%" PRIu32 " Clean outstanding hint %s\n",tintstr(),id_,hint.str().c_str());
 #if ENABLE_CANCEL == 1
         // Ric: add to the cancel queue
         cancel_out_.push_back(hint);
@@ -1182,12 +1212,13 @@ bin_t    Channel::DequeueHintOut(uint64_t size) {
 	// TODO check... the seconds should depend on previous speed of the peer
 	while (hint_queue_out_.size() && hint_queue_out_.front().time<NOW-TINT_SEC*HINT_TIME*3/2) { // FIXME sec
 		hint_queue_out_size_ -= hint_queue_out_.front().bin.base_length();
+		dprintf("%s #%" PRIu32 " Removing queued hint:%s\n",tintstr(),id_, hint_queue_out_.front().bin.str().c_str());
 		hint_queue_out_.pop_front();
 	}
 
 	if (!hint_queue_out_size_){
 	    if (DEBUGTRAFFIC)
-	            fprintf(stderr, " ..refill\n");
+            fprintf(stderr, " ..refill\n");
 		return bin_t::NONE;
 	}
 
@@ -1202,7 +1233,7 @@ bin_t    Channel::DequeueHintOut(uint64_t size) {
 	hint_queue_out_.pop_front();
 	hint_queue_out_size_ -= res.base_length();
 	if (DEBUGTRAFFIC)
-	        fprintf(stderr, " sending %s [%llu]\n",res.str().c_str(),res.base_length());
+        fprintf(stderr, " sending %s [%llu]\n",res.str().c_str(),res.base_length());
 	return res;
 
 }
@@ -1286,7 +1317,7 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
     data_in_.bin = pos;
     // Ric: the time of the ack is the owd.
     if (peer_time!=TINT_NEVER)
-	data_in_.time = NOW - peer_time;
+        data_in_.time = NOW - peer_time;
 
     UpdateDIP(pos);
     CleanHintOut(pos);
@@ -1307,6 +1338,24 @@ bin_t Channel::OnData (struct evbuffer *evb) {  // TODO: HAVE NONE for corrupted
 }
 
 
+void Channel::UpdateRTT(int32_t pos, tbqueue data_out, tint owd) {
+
+    // one-way delay calculations
+    std::pair <tint,tint> delay (owd, NOW);
+    owd_current_.push_front(delay);
+
+    if ( owd_min_bin_start_+ LEDBAT_ROLLOVER < NOW ) {
+        owd_min_bin_start_ = NOW;
+        owd_min_bin_ = owd_min_bin_ == 9 ? 0 : owd_min_bin_ + 1;
+        owd_min_bins_[owd_min_bin_] = owd;
+    }
+    else if (owd_min_bins_[owd_min_bin_]>owd)
+       owd_min_bins_[owd_min_bin_] = owd;
+
+    ack_rcvd_recent_++;
+
+}
+
 void Channel::UpdateDIP(bin_t pos)
 {
     if (!pos.is_none()) {
@@ -1321,16 +1370,24 @@ void Channel::UpdateDIP(bin_t pos)
     /* Arno: in a true client/server scenario the initial RTT is used to set
      * rtt_avg_ and it is never updated. If that gets a bad sample this can
      * kill performance. Simple workaround against too high values.
+     * Ric: we need to prevent also against burst in the network link.
+     * It also happens that RTT is too small
      */
-    if (rtt_hint_tintbin_.bin == pos) {
-	tint diff = NOW - rtt_hint_tintbin_.time;
-	// Conservative: only adjust rtt_avg_ if 2x smaller
-	if (diff < rtt_avg_/2 && IsComplete())
-	{
-	    fprintf(stderr,"%s #%" PRIu32 " rtt adjust %" PRIi64 " -> %" PRIi64 "\n",tintstr(),id_,rtt_avg_,diff);
-	    rtt_avg_ = diff;
-	}
-	rtt_hint_tintbin_.bin = bin_t::NONE;
+    if (rtt_hint_tintbin_.bin == pos && IsComplete()) {
+        tint diff = NOW - rtt_hint_tintbin_.time;
+        // Conservative: only adjust rtt_avg_ if 2x smaller
+        if (diff < rtt_avg_>>1)
+        {
+            dprintf("%s #%" PRIu32 " rtt adjust %" PRIi64 " -> %" PRIi64 "\n",tintstr(),id_,rtt_avg_,diff);
+            rtt_avg_ = diff;
+        }
+        // Ric: check if our values are wrong!
+        tint owd = data_in_.time;
+        if (owd != TINT_NEVER && owd<<2 > rtt_avg_) {
+            dprintf("%s #%" PRIu32 " rtt adjust %" PRIi64 " -> %" PRIi64 "\n",tintstr(),id_,rtt_avg_,diff);
+            rtt_avg_ = owd<<2;
+        }
+        rtt_hint_tintbin_.bin = bin_t::NONE;
     }
 }
 
@@ -1371,73 +1428,88 @@ void    Channel::OnAck (struct evbuffer *evb) {
             di++;
         // FUTURE: delayed acks
         // rule out retransmits
+        // Ric: by ruling out retransmits we screw up ledbat calculations
         while (ri<data_out_tmo_.size() && !ackd_pos.contains(data_out_tmo_[ri].bin) )
             ri++;
         dprintf("%s #%" PRIu32 " %cack %s owd:%" PRIi64 "\n",tintstr(),id_,
-                di==data_out_.size()?'?':'-',ackd_pos.str().c_str(),peer_owd);
+                di==data_out_.size() ? (ri==data_out_tmo_.size() ? '?':'R' ) : '-',ackd_pos.str().c_str(),peer_owd);
 
-        if (di!=data_out_.size() && ri==data_out_tmo_.size()) { // not a retransmit
-            // round trip time calculations
-            // Ric: TODO delayed acks?
-            assert(data_out_[di].time!=TINT_NEVER);
-
+        if (di!=data_out_.size()) {
+            // Ric: FIXME assuming direct sending of acks
             tint rtt = NOW-data_out_[di].time;
+
+            // Ric: quickly adapt to new network changes! (with large owd samples the previous rtt values influence
+            //if (owd > rtt_avg_)
+            //   rtt_avg_ = (rtt_avg_*3 + rtt) >> 2;
+            //else
             rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
             dev_avg_ = ( dev_avg_*3 + tintabs(rtt-rtt_avg_) ) >> 2;
+            assert(data_out_[di].time!=TINT_NEVER);
+            dprintf("%s #%" PRIu32 " rtt:%" PRIu64 ", rtt_avg:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_,rtt, rtt_avg_, dev_avg_);
 
-            // one-way delay calculations
-            std::pair <tint,tint> owd (peer_owd, NOW);
-            owd_current_.push_front(owd);
-
-            if ( owd_min_bin_start_+ LEDBAT_ROLLOVER < NOW ) {
-                owd_min_bin_start_ = NOW;
-                owd_min_bin_ = owd_min_bin_ == 9 ? 0 : owd_min_bin_ + 1;
-                owd_min_bins_[owd_min_bin_] = peer_owd;
-            }
-            else if (owd_min_bins_[owd_min_bin_]>peer_owd)
-                owd_min_bins_[owd_min_bin_] = peer_owd;
-
-            ack_rcvd_recent_++;
-
+            UpdateRTT(di, data_out_, peer_owd);
+            dprintf("%s #%" PRIu32 " setting null %s\n",tintstr(),id_, data_out_[di].bin.str().c_str());
             // early loss detection by packet reordering
+            /* TODO do we really need it?
             for (int re=0; re<di-MAX_REORDERING; re++) {
-                if (data_out_[re]==tintbin())
-                    continue;
-                ack_not_rcvd_recent_++;
-                data_out_tmo_.push_back(data_out_[re].bin);
-                dprintf("%s #%" PRIu32 " Rdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
-                data_out_cap_ = bin_t::ALL;
-                data_out_[re] = tintbin();
-            }
-        }
-        if (di!=data_out_.size())
+               if (data_out_[re]==tintbin())
+                   continue;
+               ack_not_rcvd_recent_++;
+               data_out_size_--;
+               data_out_tmo_.push_back(data_out_[re].bin);
+               dprintf("%s #%" PRIu32 " Rdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
+               data_out_cap_ = bin_t::ALL;
+               data_out_[re] = tintbin();
+            }*/
+            data_out_size_--;
             data_out_[di]=tintbin();
+        }
+        else if (ri!=data_out_tmo_.size()) {
+            UpdateRTT(ri, data_out_tmo_, peer_owd);
+            data_out_tmo_[ri]=tintbin();
+        }
+
     }
 
     // clear zeroed items
-    while (!data_out_.empty() && ( data_out_.front()==tintbin() ||
-            ack_in_.is_filled(data_out_.front().bin) ) )
+    // TODO: do we really need it?
+    /*while (!data_out_.empty() && ( data_out_.front()==tintbin() ||
+            ack_in_.is_filled(data_out_.front().bin) ) ) {
+        dprintf("%s #%" PRIu32 " removing %s\n",tintstr(),id_, data_out_.front().bin.str().c_str());
         data_out_.pop_front();
-    assert(data_out_.empty() || data_out_.front().time!=TINT_NEVER);
+    }
+    while (!data_out_tmo_.empty() && ( data_out_tmo_.front()==tintbin() ||
+            ack_in_.is_filled(data_out_tmo_.front().bin) ) )
+        data_out_tmo_.pop_front();
+    assert(data_out_.empty() || data_out_.front().time!=TINT_NEVER);*/
 }
 
 
 void Channel::TimeoutDataOut ( ) {
     // losses: timeouted packets
+    // Ric: aggressively timeout only if in active transmission (using cc like LEDBAT)
     tint timeout = NOW - ack_timeout();
+    if (send_control_!=LEDBAT_CONTROL)
+        timeout -= ack_timeout()<<1;
+
     while (!data_out_.empty() &&
         ( data_out_.front().time<timeout || data_out_.front()==tintbin() ) ) {
         if (data_out_.front()!=tintbin() && ack_in_.is_empty(data_out_.front().bin)) {
             ack_not_rcvd_recent_++;
             data_out_cap_ = bin_t::ALL;
-            data_out_tmo_.push_back(data_out_.front().bin);
+            // Ric: keep the original timing... otherwise calculations are wrong once
+            //      we get the ack back
+            data_out_tmo_.push_back(data_out_.front());
+            data_out_size_--;
             dprintf("%s #%" PRIu32 " Tdata %s\n",tintstr(),id_,data_out_.front().bin.str().c_str());
         }
         data_out_.pop_front();
     }
     // clear retransmit queue of older items
-    while (!data_out_tmo_.empty() && data_out_tmo_.front().time<NOW-MAX_POSSIBLE_RTT)
+    while (!data_out_tmo_.empty() && (data_out_tmo_.front()==tintbin() || data_out_tmo_.front().time<NOW-MAX_POSSIBLE_RTT)) {
         data_out_tmo_.pop_front();
+        //data_out_size_--;
+    }
 
     // use the same value to clean the delay samples
     while ( owd_current_.size() > 4 && owd_current_.back().second < timeout) {
@@ -2166,13 +2238,13 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
         {
             if (ct->GetChannels()->size() < SWIFT_MAX_INCOMING_CONNECTIONS)
             {
-        	//fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: create new channel %s\n", addr.str().c_str() );
-        	channel = new Channel(ct, socket, addr);
+                //fprintf(stderr,"Channel::RecvDatagram: HANDSHAKE: create new channel %s\n", addr.str().c_str() );
+                channel = new Channel(ct, socket, addr);
             }
             else
             {
                 // Too many connections
-        	StaticSendClose(socket,addr,hishs->peer_channel_id_);
+                StaticSendClose(socket,addr,hishs->peer_channel_id_);
                 return_log ("%s #0 swarm %s too many connections, requested by %s\n",tintstr(),hishs->GetSwarmID().hex().c_str(),addr.str().c_str());
             }
         }
@@ -2180,9 +2252,9 @@ void    Channel::RecvDatagram (evutil_socket_t socket) {
 
         channel->OnHandshake(hishs);
 
-    } else if (mych==CMDGW_TUNNEL_DEFAULT_CHANNEL_ID) {
+    } else if (CmdGwTunnelCheckChannel(mych)) {
         // SOCKTUNNEL
-        CmdGwTunnelUDPDataCameIn(addr,CMDGW_TUNNEL_DEFAULT_CHANNEL_ID,evb);
+        CmdGwTunnelUDPDataCameIn(addr,mych,evb);
         evbuffer_free(evb);
         return;
     } else { // peer responds to my handshake (and other messages)
@@ -2247,6 +2319,7 @@ void Channel::Close(close_send_t closesend) {
 
     dprintf("%s #%" PRIu32 " closing channel\n",tintstr(),id_ );
 
+    lprintf("\t\t==== Switch to Close Control ==== \n");
     this->SwitchSendControl(CLOSE_CONTROL);
 
     if (closesend == CLOSE_SEND || (closesend == CLOSE_SEND_IF_ESTABLISHED && is_established()))
@@ -2277,32 +2350,50 @@ void Channel::Reschedule () {
     // Arno: CAREFUL: direct send depends on diff between next_send_time_ and
     // NOW to be 0, so any calls to Time in between may put things off. Sigh.
     Time();
+
+    if (evsend_ptr_ == NULL) {
+        dprintf("%s #%" PRIu32 " cannot requeue for %s, closed\n",tintstr(),id_,tintstr(next_send_time_));
+        return;
+    }
+    struct timeval currtv;
+    //if (evtimer_pending(evsend_ptr_, &currtv)) {
+    //    evtimer_del(evsend_ptr_);
+    //}
+
     dprintf("%s schedule\n",tintstr() );
+
+    // Ric: before rescheduling check if we already have scheduled it in the past.
+    // calculate the delay only if the reschedule has been called after a send, ignore reschedules
+    // triggered by something received.
+    if (last_send_time_>next_send_time_ && next_send_time_<NOW && send_control_ == LEDBAT_CONTROL) {
+        dprintf("%s #%" PRIu32 " Already something scheduled for: %s\n",tintstr(),id_, tintstr(next_send_time_));
+        reschedule_delay_ = NOW - next_send_time_;
+        dprintf("%s #%" PRIu32 " reschedule delay :%" PRIi64 "\n",tintstr(),id_,reschedule_delay_);
+    }
 
     next_send_time_ = NextSendTime();
     if (next_send_time_!=TINT_NEVER) {
 
         assert(next_send_time_<NOW+TINT_MIN);
         tint duein = next_send_time_-NOW;
-        if (duein <= 0 && !direct_sending_) {
+
+        if (duein <= 0) {
             // Arno, 2011-10-18: libevent's timer implementation appears to be
             // really slow, i.e., timers set for 100 usec from now get called
             // at least two times later :-( Hence, for sends after receives
             // perform them directly.
-            dprintf("%s #%" PRIu32 " requeue direct send\n",tintstr(),id_);
-            direct_sending_ = true;
+            // Ric: The timer error of libevent can be propagated throughout the
+            // download.. keep track of the delay error!
+            dprintf("%s #%" PRIu32 " requeue direct send (%s)\n",tintstr(),id_, duein<=0 ? "duein" : "direct sending");
+            //next_send_time_ = NOW;
+
             LibeventSendCallback(-1,EV_TIMEOUT,this);
-            direct_sending_ = false;
         }
         else
         {
-            if (evsend_ptr_ != NULL) {
-                struct timeval duetv = *tint2tv(duein);
-                evtimer_add(evsend_ptr_,&duetv);
-                dprintf("%s #%" PRIu32 " requeue for %s in %" PRIi64 "\n",tintstr(),id_,tintstr(next_send_time_), duein);
-            }
-            else
-                dprintf("%s #%" PRIu32 " cannot requeue for %s, closed\n",tintstr(),id_,tintstr(next_send_time_));
+            struct timeval duetv = *tint2tv(duein);
+            evtimer_add(evsend_ptr_,&duetv);
+            dprintf("%s #%" PRIu32 " requeue for %s in %" PRIi64 "\n",tintstr(),id_,tintstr(next_send_time_), duein);
         }
     } else {
         // SAFECLOSE
