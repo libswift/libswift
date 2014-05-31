@@ -45,9 +45,11 @@ typedef enum {
 
 
 static int ParseBencodedPeers(struct evbuffer *evb, std::string key, peeraddrs_t *peerlist);
-static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startevbp, std::string key, bencoded_type_t valuetype, char **valueptr);
+static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startevbp, std::string key,
+                              bencoded_type_t valuetype, char **valueptr);
 
-ExternalTrackerClient::ExternalTrackerClient(std::string url) : url_(url), report_last_time_(0), report_interval_(BT_INITIAL_REPORT_INTERVAL), reported_complete_(false)
+ExternalTrackerClient::ExternalTrackerClient(std::string url) : url_(url), report_last_time_(0),
+    report_interval_(BT_INITIAL_REPORT_INTERVAL), reported_complete_(false)
 {
     // Create PeerID
     peerid_ = new uint8_t[BT_PEER_ID_LENGTH];
@@ -338,7 +340,8 @@ int ExternalTrackerClient::HTTPConnect(std::string query,ExtTrackCallbackRecord 
     //fprintf(stderr,"exttrack: HTTPConnect: Composed fullpath %s\n", fullpath );
 
     // Create HTTP client
-    struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, evhttp_uri_get_host(evu), evhttp_uri_get_port(evu));
+    struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, evhttp_uri_get_host(evu),
+                                   evhttp_uri_get_port(evu));
     struct evhttp_request *req = evhttp_request_new(ExternalTrackerClientHTTPResponseCallback, (void *)callbackrec);
 
     // Make request to server
@@ -394,7 +397,8 @@ static int ParseBencodedPeers(struct evbuffer *evb, std::string key, peeraddrs_t
 
 
 /** Failure reported, extract string from bencoded dictionary */
-static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startevbp, std::string key, bencoded_type_t valuetype, char **valueptr)
+static int ParseBencodedValue(struct evbuffer *evb, struct evbuffer_ptr &startevbp, std::string key,
+                              bencoded_type_t valuetype, char **valueptr)
 {
     //fprintf(stderr,"exttrack: Callback: key %s starts at " PRISIZET "\n", key.c_str(), startevbp.pos );
 

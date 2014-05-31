@@ -90,7 +90,8 @@ Sha1Hash & Sha1Hash::operator= (const Sha1Hash & source)
 /**     H a s h   t r e e       */
 
 
-MmapHashTree::MmapHashTree(Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename, bool force_check_diskvshash,std::string binmap_filename) :
+MmapHashTree::MmapHashTree(Storage *storage, const Sha1Hash& root_hash, uint32_t chunk_size, std::string hash_filename,
+                           bool force_check_diskvshash,std::string binmap_filename) :
     HashTree(), root_hash_(root_hash), hashes_(NULL),
     peak_count_(0), hash_fd_(-1), hash_filename_(hash_filename), size_(0), sizec_(0), complete_(0), completec_(0),
     chunk_size_(chunk_size), storage_(storage)

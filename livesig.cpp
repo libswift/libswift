@@ -55,7 +55,8 @@ static EVP_MD_CTX *opensslrsa_createctx();
 static void opensslrsa_destroyctx(EVP_MD_CTX *evp_md_ctx);
 static int opensslrsa_adddata(EVP_MD_CTX *evp_md_ctx, unsigned char *data, unsigned int datalength);
 static int opensslrsa_sign(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, struct evbuffer *evb);
-static int opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned char *sigdata, unsigned int siglen);
+static int opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned char *sigdata,
+                              unsigned int siglen);
 static EVP_PKEY *opensslrsa_generate(uint16_t keysize, int exp, simple_openssl_callback_t callback);
 static int opensslrsa_todns(struct evbuffer *evb,EVP_PKEY *pkey);
 static EVP_PKEY *opensslrsa_fromdns(struct evbuffer *evb);
@@ -68,7 +69,8 @@ static int opensslecdsa_adddata(EVP_MD_CTX *evp_md_ctx, unsigned char *data, uns
 static int BN_bn2bin_fixed(BIGNUM *bn, unsigned char *buf, int size);
 #endif
 static int opensslecdsa_sign(popt_live_sig_alg_t alg,EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, struct evbuffer *evb);
-static int opensslecdsa_verify(popt_live_sig_alg_t alg,EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, unsigned char *sigdata, unsigned int gotsiglen);
+static int opensslecdsa_verify(popt_live_sig_alg_t alg,EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, unsigned char *sigdata,
+                               unsigned int gotsiglen);
 static EVP_PKEY *opensslecdsa_generate(popt_live_sig_alg_t alg,simple_openssl_callback_t callback);
 static int opensslecdsa_todns(struct evbuffer *evb,EVP_PKEY *pkey);
 static EVP_PKEY *opensslecdsa_fromdns(popt_live_sig_alg_t alg,struct evbuffer *evb);
@@ -576,7 +578,8 @@ static int opensslrsa_sign(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, struct evbuff
 }
 
 
-static int opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned char *sigdata, unsigned int siglen)
+static int opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned char *sigdata,
+                              unsigned int siglen)
 {
     int status = 0;
     RSA *rsa;
@@ -856,7 +859,8 @@ static int opensslecdsa_sign(popt_live_sig_alg_t alg,EVP_PKEY *pkey, EVP_MD_CTX 
     return 1;
 }
 
-static int opensslecdsa_verify(popt_live_sig_alg_t alg,EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, unsigned char *sigdata, unsigned int gotsiglen)
+static int opensslecdsa_verify(popt_live_sig_alg_t alg,EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, unsigned char *sigdata,
+                               unsigned int gotsiglen)
 {
     int status;
     unsigned char *cp = sigdata;
@@ -1088,7 +1092,8 @@ static int opensslrsa_sign(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, struct evbuff
 {
     return 0;
 }
-static int opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned char *sigdata, unsigned int siglen)
+static int opensslrsa_verify2(EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, int maxbits, unsigned char *sigdata,
+                              unsigned int siglen)
 {
     return 0;
 }
@@ -1130,7 +1135,8 @@ static int opensslecdsa_sign(popt_live_sig_alg_t alg,EVP_PKEY *pkey, EVP_MD_CTX 
 {
     return 0;
 }
-static int opensslecdsa_verify(popt_live_sig_alg_t alg,EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, unsigned char *sigdata, unsigned int gotsiglen)
+static int opensslecdsa_verify(popt_live_sig_alg_t alg,EVP_PKEY *pkey, EVP_MD_CTX *evp_md_ctx, unsigned char *sigdata,
+                               unsigned int gotsiglen)
 {
     return 0;
 }

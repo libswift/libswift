@@ -71,7 +71,8 @@ std::vector<LiveTransfer*> LiveTransfer::liveswarms;
 #define TRANSFER_DESCR_LIVE_OFFSET  4000000
 
 /** A constructor for a live source. */
-LiveTransfer::LiveTransfer(std::string filename, KeyPair &keypair, std::string checkpoint_filename, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t nchunks_per_sign, uint32_t chunk_size) :
+LiveTransfer::LiveTransfer(std::string filename, KeyPair &keypair, std::string checkpoint_filename,
+                           popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t nchunks_per_sign, uint32_t chunk_size) :
     ContentTransfer(LIVE_TRANSFER), ack_out_right_basebin_(bin_t::NONE),
     chunk_size_(chunk_size), am_source_(true),
     filename_(filename), last_chunkid_(0), offset_(0),
@@ -131,7 +132,8 @@ LiveTransfer::LiveTransfer(std::string filename, KeyPair &keypair, std::string c
 
 
 /** A constructor for live client. */
-LiveTransfer::LiveTransfer(std::string filename, SwarmID &swarmid, Address &srcaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size) :
+LiveTransfer::LiveTransfer(std::string filename, SwarmID &swarmid, Address &srcaddr, popt_cont_int_prot_t cipm,
+                           uint64_t disc_wnd, uint32_t chunk_size) :
     ContentTransfer(LIVE_TRANSFER), chunk_size_(chunk_size), am_source_(false),
     filename_(filename), last_chunkid_(0), offset_(0),
     chunks_since_sign_(0),
@@ -494,7 +496,8 @@ int LiveTransfer::WriteCheckpoint(BinHashSigTuple &munrotup)
     // FORMAT: (layer,layeroff) munrohash-in-hex timestamp munrosig-in-hex\n
     char tscstr[256];
     sprintf(tscstr,"%" PRIi64 "",munrotup.sigtint().time());
-    std::string s = munrotup.bin().str()+" "+munrotup.hash().hex()+" "+std::string(tscstr)+" "+munrotup.sigtint().sig().hex()+"\n";
+    std::string s = munrotup.bin().str()+" "+munrotup.hash().hex()+" "+std::string(tscstr)+" "
+                    +munrotup.sigtint().sig().hex()+"\n";
     char *cstr = new char[strlen(s.c_str())+1];
 
     strcpy(cstr,s.c_str());

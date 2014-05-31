@@ -21,7 +21,8 @@ using namespace swift;
 
 // FIXME: separate Bootstrap() and Download(), then Size(), Progress(), SeqProgress()
 
-FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_hash, bool force_check_diskvshash, popt_cont_int_prot_t cipm, uint32_t chunk_size, bool zerostate, std::string metadir) :
+FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_hash, bool force_check_diskvshash,
+                           popt_cont_int_prot_t cipm, uint32_t chunk_size, bool zerostate, std::string metadir) :
     ContentTransfer(FILE_TRANSFER), availability_(NULL), zerostate_(zerostate)
 {
     td_ = td;
@@ -78,7 +79,8 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
     // Arno, 2013-02-25: Create HashTree even when PROT_NONE to enable
     // automatic size determination via peak hashes.
     if (!zerostate_) {
-        hashtree_ = (HashTree *)new MmapHashTree(storage_,root_hash,chunk_size,hash_filename,force_check_diskvshash,binmap_filename);
+        hashtree_ = (HashTree *)new MmapHashTree(storage_,root_hash,chunk_size,hash_filename,force_check_diskvshash,
+                    binmap_filename);
         availability_ = new Availability(SWIFT_MAX_OUTGOING_CONNECTIONS);
 
         if (ENABLE_VOD_PIECEPICKER)

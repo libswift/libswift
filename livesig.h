@@ -107,7 +107,8 @@ namespace swift
         }
 
         /** Create a new key pair, calling callback as the key is generated */
-        static KeyPair *Generate(popt_live_sig_alg_t alg, uint16_t keysize=SWIFT_RSA_DEFAULT_KEYSIZE, simple_openssl_callback_t callback=NULL);
+        static KeyPair *Generate(popt_live_sig_alg_t alg, uint16_t keysize=SWIFT_RSA_DEFAULT_KEYSIZE,
+                                 simple_openssl_callback_t callback=NULL);
 
         /** For testing */
         EVP_PKEY       *GetEVP() {

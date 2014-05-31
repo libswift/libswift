@@ -82,12 +82,16 @@ void usage(void)
     fprintf(stderr,"  -I live source address (used with ext tracker)\n");
 }
 #define quit(...) {fprintf(stderr,__VA_ARGS__); exit(1); }
-int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed, std::string metadir);
-int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate, std::string metadir);
-int OpenSwiftDirectory(std::string dirname, std::string trackerurl, bool force_check_diskvshash, uint32_t chunk_size, bool activate, std::string metadir);
+int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool printurl,
+                     bool livestream, std::string urlfilename, double *maxspeed, std::string metadir);
+int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr,
+                   bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate, std::string metadir);
+int OpenSwiftDirectory(std::string dirname, std::string trackerurl, bool force_check_diskvshash, uint32_t chunk_size,
+                       bool activate, std::string metadir);
 // SIGNPEAKTODO replace swarmid with generic swarm ID
 int PrintURL(int td,std::string trackerurl,uint32_t chunk_size,std::string urlfilename);
-void HandleLiveSource(std::string livesource_input, std::string filename, std::string keypairfilename, uint32_t chunk_size, std::string urlfilename);
+void HandleLiveSource(std::string livesource_input, std::string filename, std::string keypairfilename,
+                      uint32_t chunk_size, std::string urlfilename);
 void AttemptCheckpoint();
 
 void ReportCallback(int fd, short event, void *arg);
@@ -102,8 +106,10 @@ void LiveSourceHTTPResponseCallback(struct evhttp_request *req, void *arg);
 void LiveSourceHTTPDownloadChunkCallback(struct evhttp_request *req, void *arg);
 
 // Gateway stuff
-bool InstallHTTPGateway(struct event_base *evbase,Address bindaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf);
-bool InstallCmdGateway(struct event_base *evbase,Address cmdaddr,Address httpaddr,popt_cont_int_prot_t cipm, uint64_t disc_wnd, std::string meta_dir);
+bool InstallHTTPGateway(struct event_base *evbase,Address bindaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd,
+                        uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf);
+bool InstallCmdGateway(struct event_base *evbase,Address cmdaddr,Address httpaddr,popt_cont_int_prot_t cipm,
+                       uint64_t disc_wnd, std::string meta_dir);
 bool HTTPIsSending();
 #ifndef SWIFTGTEST
 bool InstallStatsGateway(struct event_base *evbase,Address addr);
@@ -206,7 +212,8 @@ int utf8main(int argc, char** argv)
 
     std::string optargstr;
     int c,n;
-    while (-1 != (c = getopt_long(argc, argv, ":h:f:d:l:t:D:L:pg:s:c:o:u:y:z:w:BNHmM:e:r:ji:kC:1:2:3:4:T:GW:P:K:S:a:I:n:", long_options, 0))) {
+    while (-1 != (c = getopt_long(argc, argv, ":h:f:d:l:t:D:L:pg:s:c:o:u:y:z:w:BNHmM:e:r:ji:kC:1:2:3:4:T:GW:P:K:S:a:I:n:",
+                                  long_options, 0))) {
         switch (c) {
         case 'h':
             optargstr = optarg;
@@ -609,13 +616,15 @@ int utf8main(int argc, char** argv)
 }
 
 
-int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool printurl, bool livestream, std::string urlfilename, double *maxspeed, std::string metadir)
+int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool printurl,
+                     bool livestream, std::string urlfilename, double *maxspeed, std::string metadir)
 {
     if (!(swarmid == SwarmID::NOSWARMID) && filename == "") {
         filename = swarmid.tofilename();
     }
 
-    single_td = OpenSwiftSwarm(filename,swarmid,trackerurl,srcaddr,false,chunk_size,livestream,true,metadir); //activate always
+    single_td = OpenSwiftSwarm(filename,swarmid,trackerurl,srcaddr,false,chunk_size,livestream,true,
+                               metadir); //activate always
     if (single_td < 0)
         quit("swift: cannot open swarm with %s",filename.c_str());
     if (printurl) {
@@ -642,7 +651,8 @@ int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string tracker
 }
 
 
-int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr, bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate, std::string metadir)
+int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr,
+                   bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate, std::string metadir)
 {
     if (!quiet)
         fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
@@ -660,14 +670,16 @@ int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerur
 }
 
 
-int OpenSwiftDirectory(std::string dirname, std::string trackerurl, bool force_check_diskvshash, uint32_t chunk_size, bool activate, std::string metadir)
+int OpenSwiftDirectory(std::string dirname, std::string trackerurl, bool force_check_diskvshash, uint32_t chunk_size,
+                       bool activate, std::string metadir)
 {
     DirEntry *de = opendir_utf8(dirname);
     if (de == NULL)
         return -1;
 
     while (1) {
-        if (!(de->isdir_ || de->filename_.rfind(".mhash") != std::string::npos || de->filename_.rfind(".mbinmap") != std::string::npos)) {
+        if (!(de->isdir_ || de->filename_.rfind(".mhash") != std::string::npos
+                || de->filename_.rfind(".mbinmap") != std::string::npos)) {
             // Not dir, or metafile
             std::string path = dirname;
             path.append(FILE_SEP);
@@ -760,7 +772,8 @@ void OpenSSLGenerateCallback(int p)
 }
 
 
-void HandleLiveSource(std::string livesource_input, std::string filename, std::string keypairfilename, uint32_t chunk_size, std::string urlfilename)
+void HandleLiveSource(std::string livesource_input, std::string filename, std::string keypairfilename,
+                      uint32_t chunk_size, std::string urlfilename)
 {
     // LIVE
     // Server mode: read from http source or pipe or file
@@ -819,7 +832,8 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
             filename = "storage.dat";
 
         // Create swarm
-        livesource_lt = swift::LiveCreate(filename,*keypairptr,livesource_checkpoint_filename,swarm_cipm,livesource_disc_wnd,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,chunk_size); // SIGNPEAKTODO
+        livesource_lt = swift::LiveCreate(filename,*keypairptr,livesource_checkpoint_filename,swarm_cipm,livesource_disc_wnd,
+                                          SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,chunk_size); // SIGNPEAKTODO
 
         // Periodically create chunks by reading from source
         evtimer_assign(&evlivesource, Channel::evbase, LiveSourceFileTimerCallback, NULL);
@@ -847,7 +861,8 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
         fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str());
 
         // Create swarm
-        livesource_lt = swift::LiveCreate(filename,*keypairptr,livesource_checkpoint_filename,swarm_cipm,livesource_disc_wnd,SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,chunk_size); // SIGNPEAKTODO
+        livesource_lt = swift::LiveCreate(filename,*keypairptr,livesource_checkpoint_filename,swarm_cipm,livesource_disc_wnd,
+                                          SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,chunk_size); // SIGNPEAKTODO
 
         // Create HTTP client
         struct evhttp_connection *cn = evhttp_connection_base_new(Channel::evbase, NULL, httpservname.c_str(), httpport);
@@ -871,7 +886,8 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
 
 void AttemptCheckpoint()
 {
-    if (swift::ttype(single_td) == FILE_TRANSFER && file_enable_checkpoint && !file_checkpointed && swift::IsComplete(single_td)) {
+    if (swift::ttype(single_td) == FILE_TRANSFER && file_enable_checkpoint && !file_checkpointed
+            && swift::IsComplete(single_td)) {
         std::string binmap_filename = swift::GetOSPathName(single_td);
         binmap_filename.append(".mbinmap");
         fprintf(stderr,"swift: Complete, checkpointing %s\n", binmap_filename.c_str());
@@ -1174,7 +1190,8 @@ void LiveSourceHTTPDownloadChunkCallback(struct evhttp_request *req, void *arg)
 void LiveSourceAttemptCreate()
 {
     if (evbuffer_get_length(livesource_evb) > livesource_lt->chunk_size()) {
-        size_t nchunklen = livesource_lt->chunk_size() * (size_t)(evbuffer_get_length(livesource_evb)/livesource_lt->chunk_size());
+        size_t nchunklen = livesource_lt->chunk_size() * (size_t)(evbuffer_get_length(
+                               livesource_evb)/livesource_lt->chunk_size());
         uint8_t *chunks = evbuffer_pullup(livesource_evb, nchunklen);
         int nwrite = swift::LiveWrite(livesource_lt, chunks, nchunklen);
         if (nwrite < -1)

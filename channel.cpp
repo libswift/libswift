@@ -430,7 +430,8 @@ bool Channel::is_established()
 bool Channel::PeerIsSource()
 {
     LiveTransfer *lt = (LiveTransfer *)transfer_;
-    return (lt->GetSourceAddress() != Address() && (peer_ == lt->GetSourceAddress() || recv_peer_ == lt->GetSourceAddress()));
+    return (lt->GetSourceAddress() != Address() && (peer_ == lt->GetSourceAddress()
+            || recv_peer_ == lt->GetSourceAddress()));
 }
 
 

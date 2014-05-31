@@ -253,7 +253,8 @@ void CmdGwSendINFOHashChecking(evutil_socket_t cmdsock, SwarmID &swarmid)
     // Send INFO DLSTATUS_HASHCHECKING message.
 
     char cmd[MAX_CMD_MESSAGE];
-    sprintf(cmd,"INFO %s %d %" PRIi64 "/%" PRIi64 " %lf %lf %" PRIu32 " %" PRIu32 "\r\n",swarmid.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,0.0,0,0);
+    sprintf(cmd,"INFO %s %d %" PRIi64 "/%" PRIi64 " %lf %lf %" PRIu32 " %" PRIu32 "\r\n",swarmid.hex().c_str(),
+            DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,0.0,0,0);
 
     //fprintf(stderr,"cmd: SendINFO: %s", cmd);
     send(cmdsock,cmd,strlen(cmd),0);
@@ -290,7 +291,8 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
     double ulspeed = swift::GetCurrentSpeed(req->td,DDIR_UPLOAD);
 
     char cmd[MAX_CMD_MESSAGE];
-    sprintf(cmd,"INFO %s %d %" PRIu64 "/%" PRIu64 " %lf %lf %" PRIu32 " %" PRIu32 "\r\n",swarmid.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds);
+    sprintf(cmd,"INFO %s %d %" PRIu64 "/%" PRIu64 " %lf %lf %" PRIu32 " %" PRIu32 "\r\n",swarmid.hex().c_str(),dlstatus,
+            complete,size,dlspeed,ulspeed,numleech,numseeds);
 
     send(req->cmdsock,cmd,strlen(cmd),0);
 
@@ -625,7 +627,8 @@ void CmdGwProcessData(evutil_socket_t cmdsock)
         // size bytes, i.e., cmd_tunnel_expect bytes.
 
         if (cmd_gw_debug)
-            fprintf(stderr,"cmdgw: procTCPdata: tunnel state, got " PRISIZET ", want %d\n", evbuffer_get_length(cmd_evbuffer), cmd_tunnel_expect);
+            fprintf(stderr,"cmdgw: procTCPdata: tunnel state, got " PRISIZET ", want %d\n", evbuffer_get_length(cmd_evbuffer),
+                    cmd_tunnel_expect);
 
         if (evbuffer_get_length(cmd_evbuffer) >= cmd_tunnel_expect) {
             // We have all the tunneled data
@@ -762,7 +765,8 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         std::string bttrackerurl = puri["et"];
         std::string durstr = puri["cd"];
 
-        dprintf("cmd: START: %s with tracker %s chunksize %i duration %d storage %s metadir %s\n",swarmidhexstr.c_str(),trackerstr.c_str(),sm.chunk_size_,sm.cont_dur_,storagepath.c_str(),metadir.c_str());
+        dprintf("cmd: START: %s with tracker %s chunksize %i duration %d storage %s metadir %s\n",swarmidhexstr.c_str(),
+                trackerstr.c_str(),sm.chunk_size_,sm.cont_dur_,storagepath.c_str(),metadir.c_str());
 
         // Handle tracker
         // External tracker via URL param
@@ -1077,7 +1081,8 @@ void CmdGwListenErrorCallback(struct evconnlistener *listener, void *ctx)
 }
 
 
-bool InstallCmdGateway(struct event_base *evbase,Address cmdaddr,Address httpaddr,popt_cont_int_prot_t cipm, uint64_t disc_wnd, std::string metadir)
+bool InstallCmdGateway(struct event_base *evbase,Address cmdaddr,Address httpaddr,popt_cont_int_prot_t cipm,
+                       uint64_t disc_wnd, std::string metadir)
 {
     // Allocate libevent listener for cmd connections
     // From http://www.wangafu.net/~nickm/libevent-book/Ref8_listener.html
@@ -1123,7 +1128,8 @@ void swift::CmdGwTunnelUDPDataCameIn(Address srcaddr, uint32_t srcchan, struct e
     // Message received on UDP socket, forward over TCP conn.
 
     if (cmd_gw_debug)
-        fprintf(stderr,"cmdgw: TunnelUDPData:DataCameIn " PRISIZET " bytes from %s/%08x\n", evbuffer_get_length(evb), srcaddr.str().c_str(), srcchan);
+        fprintf(stderr,"cmdgw: TunnelUDPData:DataCameIn " PRISIZET " bytes from %s/%08x\n", evbuffer_get_length(evb),
+                srcaddr.str().c_str(), srcchan);
 
     /*
      *  Format:

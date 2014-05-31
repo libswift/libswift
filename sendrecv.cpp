@@ -430,7 +430,8 @@ void    Channel::Send()
     if (id_==1)
         switch (send_control_) {
         case KEEP_ALIVE_CONTROL:
-            lprintf("%lu \t %d \t %d \t %d \t %li \t %d \t %d \t %d \t %li \t %li\n", NOW-open_time_, 0, 0, 0, NOW-last_send_time_, 0, 0, 0, dip_avg_, hint_out_size_);
+            lprintf("%lu \t %d \t %d \t %d \t %li \t %d \t %d \t %d \t %li \t %li\n", NOW-open_time_, 0, 0, 0, NOW-last_send_time_,
+                    0, 0, 0, dip_avg_, hint_out_size_);
             break;
         case PING_PONG_CONTROL:
             lprintf("%lu \t %li \t %d \t %d \t %d \t %d \t %d \t %d \n", NOW-open_time_, NOW-last_send_time_, 0, 0, 0, 0, 0, 0);
@@ -439,10 +440,12 @@ void    Channel::Send()
             lprintf("%lu \t %d \t %li \t %d \t %d \t %d \t %d \t %d \n", NOW-open_time_, 0, NOW-last_send_time_, 0, 0, 0, 0, 0);
             break;
         case AIMD_CONTROL:
-            lprintf("%lu \t %d \t %d \t %li \t %d \t %d \t %d \t %.2f \n", NOW-open_time_, 0, 0, NOW-last_send_time_, 0, 0, 0, cwnd_);
+            lprintf("%lu \t %d \t %d \t %li \t %d \t %d \t %d \t %.2f \n", NOW-open_time_, 0, 0, NOW-last_send_time_, 0, 0, 0,
+                    cwnd_);
             break;
         case LEDBAT_CONTROL:
-            lprintf("%lu \t %d \t %d \t %li \t %d \t %d \t %d \t %.2f \t %li\n", NOW-open_time_, 0, 0, NOW-last_send_time_, 0, 0, 0, cwnd_, hint_in_size_);
+            lprintf("%lu \t %d \t %d \t %li \t %d \t %d \t %d \t %.2f \t %li\n", NOW-open_time_, 0, 0, NOW-last_send_time_, 0, 0, 0,
+                    cwnd_, hint_in_size_);
             break;
         case CLOSE_CONTROL:
             lprintf("%lu \t %d \t %d \t %d \t %d \t %li \t %d \t %d \n", NOW-open_time_, 0, 0, 0, 0, NOW-last_send_time_, 0, 0);
@@ -589,11 +592,14 @@ void    Channel::AddHint(struct evbuffer *evb)
         rate_allowed_hints = max(0,rate_hints_limit-(int)rough_global_hint_out_size);
 
         if (DEBUGTRAFFIC)
-            fprintf(stderr,"hint c%" PRIu32 ": rate_hints_limit %d rallow %d globout %" PRIu64 "\n", id(), rate_hints_limit, rate_allowed_hints, rough_global_hint_out_size);
+            fprintf(stderr,"hint c%" PRIu32 ": rate_hints_limit %d rallow %d globout %" PRIu64 "\n", id(), rate_hints_limit,
+                    rate_allowed_hints, rough_global_hint_out_size);
 
     }
     if (DEBUGTRAFFIC)
-        fprintf(stderr,"hint c%" PRIu32 ": %lf want %d qallow %d rallow %d chanout %" PRIu64 " globout %" PRIu64 "\n", id(), transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, queue_allowed_hints, rate_allowed_hints, hint_out_size_, rough_global_hint_out_size);
+        fprintf(stderr,"hint c%" PRIu32 ": %lf want %d qallow %d rallow %d chanout %" PRIu64 " globout %" PRIu64 "\n", id(),
+                transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, queue_allowed_hints, rate_allowed_hints, hint_out_size_,
+                rough_global_hint_out_size);
 
     // 3. Take the smallest allowance from rate and queue limit
     uint64_t plan_pck = (uint64_t)min(rate_allowed_hints,queue_allowed_hints);
@@ -626,7 +632,8 @@ void    Channel::AddHint(struct evbuffer *evb)
             evbuffer_add_8(evb, SWIFT_REQUEST);
             evbuffer_add_chunkaddr(evb,hint,hs_out_->chunk_addr_);
             dprintf("%s #%" PRIu32 " +hint %s [%" PRIi64 "]\n",tintstr(),id_,hint.str().c_str(),hint_out_size_);
-            dprintf("%s #%" PRIu32 " +hint base %s width %d\n",tintstr(),id_,hint.base_left().str().c_str(), (int)hint.base_length());
+            dprintf("%s #%" PRIu32 " +hint base %s width %d\n",tintstr(),id_,hint.base_left().str().c_str(),
+                    (int)hint.base_length());
             //fprintf(stderr,"send c%d: HINTLEN %i\n", id(), hint.base_length());
             //fprintf(stderr,"HL %i ", hint.base_length());
 
@@ -700,7 +707,8 @@ void    Channel::AddCancel(struct evbuffer *evb)
 
 
     // Arno, 2013-01-15: take into account chunk addressing scheme
-    while (SWIFT_MAX_NONDATA_DGRAM_SIZE-evbuffer_get_length(evb) >= 1+ChunkAddrSize(hs_out_->chunk_addr_) && !cancel_out_.empty()) {
+    while (SWIFT_MAX_NONDATA_DGRAM_SIZE-evbuffer_get_length(evb) >= 1+ChunkAddrSize(hs_out_->chunk_addr_)
+            && !cancel_out_.empty()) {
         bin_t cancel = cancel_out_.front();
         cancel_out_.pop_front();
         evbuffer_add_8(evb, SWIFT_CANCEL);
@@ -820,7 +828,8 @@ void Channel::SendIfTooBig(struct evbuffer *evb)
     // Arno, 2013-05-14: Don't work if this is first msg, as peer_channel_id
     // will be unknown. Then just continue adding to the first datagram and
     // hope for the best.
-    if (is_established() && transfer()->chunk_size() == SWIFT_DEFAULT_CHUNK_SIZE && evbuffer_get_length(evb) > SWIFT_MAX_NONDATA_DGRAM_SIZE) {
+    if (is_established() && transfer()->chunk_size() == SWIFT_DEFAULT_CHUNK_SIZE
+            && evbuffer_get_length(evb) > SWIFT_MAX_NONDATA_DGRAM_SIZE) {
 
         dprintf("%s #%" PRIu32 " fsent %ib %s:%x\n",
                 tintstr(),id_,(int)evbuffer_get_length(evb),peer().str().c_str(),
@@ -1088,7 +1097,8 @@ void   Channel::CloseOnError()
  */
 void    Channel::OnHash(struct evbuffer *evb)
 {
-    if (hs_in_->cont_int_prot_ != POPT_CONT_INT_PROT_MERKLE && hs_in_->cont_int_prot_ != POPT_CONT_INT_PROT_UNIFIED_MERKLE) {
+    if (hs_in_->cont_int_prot_ != POPT_CONT_INT_PROT_MERKLE
+            && hs_in_->cont_int_prot_ != POPT_CONT_INT_PROT_UNIFIED_MERKLE) {
         dprintf("%s #%" PRIu32 " ?hash but no integrity prot\n",tintstr(),id_);
         return;
     }
@@ -1105,7 +1115,8 @@ void    Channel::OnHash(struct evbuffer *evb)
     Sha1Hash hash = evbuffer_remove_hash(evb);
 
     dprintf("%s #%" PRIu32 " -hash %s\n",tintstr(),id_,pos.str().c_str());
-    if (hashtree() != NULL && (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)) {
+    if (hashtree() != NULL && (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE
+                               || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)) {
         if (transfer()->ttype() == LIVE_TRANSFER) {
             // Don't accept hashes from others as source
             LiveTransfer *lt = (LiveTransfer *)transfer();
@@ -1164,7 +1175,8 @@ bin_t    Channel::DequeueHintOut(uint64_t size)
 {
 
     if (DEBUGTRAFFIC)
-        fprintf(stderr, "%s #%" PRIu32 " Dequeue hint out size (%" PRIu64 ") [%" PRIu64 " are req] ",tintstr(),id_, hint_queue_out_size_, size);
+        fprintf(stderr, "%s #%" PRIu32 " Dequeue hint out size (%" PRIu64 ") [%" PRIu64 " are req] ",tintstr(),id_,
+                hint_queue_out_size_, size);
     // TODO check... the seconds should depend on previous speed of the peer
     while (hint_queue_out_.size() && hint_queue_out_.front().time<NOW-TINT_SEC*HINT_TIME*3/2) { // FIXME sec
         hint_queue_out_size_ -= hint_queue_out_.front().bin.base_length();
@@ -1213,11 +1225,14 @@ bin_t Channel::OnData(struct evbuffer *evb)     // TODO: HAVE NONE for corrupted
 
     // Arno: Assuming DATA last message in datagram
     if (evbuffer_get_length(evb) > transfer()->chunk_size()) {
-        dprintf("%s #%" PRIu32 " !data chunk size mismatch %s: exp %" PRIu32 " got " PRISIZET "\n",tintstr(),id_,pos.str().c_str(), transfer()->chunk_size(), evbuffer_get_length(evb));
-        fprintf(stderr,"WARNING: chunk size mismatch: exp %" PRIu32 " got " PRISIZET "\n",transfer()->chunk_size(), evbuffer_get_length(evb));
+        dprintf("%s #%" PRIu32 " !data chunk size mismatch %s: exp %" PRIu32 " got " PRISIZET "\n",tintstr(),id_,
+                pos.str().c_str(), transfer()->chunk_size(), evbuffer_get_length(evb));
+        fprintf(stderr,"WARNING: chunk size mismatch: exp %" PRIu32 " got " PRISIZET "\n",transfer()->chunk_size(),
+                evbuffer_get_length(evb));
     }
 
-    int length = (evbuffer_get_length(evb) < transfer()->chunk_size()) ? evbuffer_get_length(evb) : transfer()->chunk_size();
+    int length = (evbuffer_get_length(evb) < transfer()->chunk_size()) ? evbuffer_get_length(
+                     evb) : transfer()->chunk_size();
     if (!transfer()->ack_out()->is_empty(pos)) {
         // Arno, 2012-01-24: print message for duplicate
         dprintf("%s #%" PRIu32 " Ddata %s\n",tintstr(),id_,pos.str().c_str());
@@ -1235,7 +1250,8 @@ bin_t Channel::OnData(struct evbuffer *evb)     // TODO: HAVE NONE for corrupted
     //fprintf(stderr,"OnData: Got chunk %d / %" PRIi64 "\n", length, swift::SeqComplete(transfer()->fd()) );
 
     // SIGNPEAK
-    if (hashtree() != NULL && (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)) {
+    if (hashtree() != NULL && (hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_MERKLE
+                               || hs_in_->cont_int_prot_ == POPT_CONT_INT_PROT_UNIFIED_MERKLE)) {
         // Check integrity
         if (!hashtree()->OfferData(pos, (char*)data, length)) {
             evbuffer_drain(evb, length);
@@ -1366,7 +1382,8 @@ void    Channel::OnAck(struct evbuffer *evb)
         // FIXME FIXME: wrap around here
         if (ackd_pos.is_none()) // safety catch
             return; // likely, broken chunk/ insufficient hashes
-        if (transfer()->ttype() == FILE_TRANSFER && hashtree() != NULL && hashtree()->size() && ackd_pos.base_offset()>=hashtree()->size_in_chunks()) {
+        if (transfer()->ttype() == FILE_TRANSFER && hashtree() != NULL && hashtree()->size()
+                && ackd_pos.base_offset()>=hashtree()->size_in_chunks()) {
             eprintf("invalid ack: %s\n",ackd_pos.str().c_str());
             return;
         }
@@ -1397,7 +1414,8 @@ void    Channel::OnAck(struct evbuffer *evb)
             rtt_avg_ = (rtt_avg_*7 + rtt) >> 3;
             dev_avg_ = (dev_avg_*3 + tintabs(rtt-rtt_avg_)) >> 2;
             assert(data_out_[di].time!=TINT_NEVER);
-            dprintf("%s #%" PRIu32 " rtt:%" PRIu64 ", rtt_avg:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_,rtt, rtt_avg_, dev_avg_);
+            dprintf("%s #%" PRIu32 " rtt:%" PRIu64 ", rtt_avg:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_,rtt, rtt_avg_,
+                    dev_avg_);
 
             UpdateRTT(di, data_out_, peer_owd);
             dprintf("%s #%" PRIu32 " setting null %s\n",tintstr(),id_, data_out_[di].bin.str().c_str());
@@ -1458,7 +1476,8 @@ void Channel::TimeoutDataOut()
         data_out_.pop_front();
     }
     // clear retransmit queue of older items
-    while (!data_out_tmo_.empty() && (data_out_tmo_.front()==tintbin() || data_out_tmo_.front().time<NOW-MAX_POSSIBLE_RTT)) {
+    while (!data_out_tmo_.empty() && (data_out_tmo_.front()==tintbin()
+                                      || data_out_tmo_.front().time<NOW-MAX_POSSIBLE_RTT)) {
         data_out_tmo_.pop_front();
         //data_out_size_--;
     }
@@ -1533,7 +1552,8 @@ void Channel::OnHaveLive(bin_t ackd_pos)
                         bin_t cpos = *iter;
                         ack_in_.reset(cpos);
                     }
-                    dprintf("%s #%" PRIu32 " have window %s %s\n",tintstr(),id_,firstbasepos.str().c_str(),ack_in_right_basebin_.str().c_str());
+                    dprintf("%s #%" PRIu32 " have window %s %s\n",tintstr(),id_,firstbasepos.str().c_str(),
+                            ack_in_right_basebin_.str().c_str());
                 }
             }
         }
@@ -1579,7 +1599,8 @@ void    Channel::OnHint(struct evbuffer *evb)
 /*
  * Read full HANDSHAKE message from evb outside of a Channel context.
  */
-Handshake *Channel::StaticOnHandshake(Address &addr, uint32_t cid, bool ver_known, popt_version_t ver, struct evbuffer *evb)
+Handshake *Channel::StaticOnHandshake(Address &addr, uint32_t cid, bool ver_known, popt_version_t ver,
+                                      struct evbuffer *evb)
 {
     dprintf("StaticOnHandshake: %s id %" PRIu32 " known %d ver %d\n", addr.str().c_str(), cid, (int)ver_known, ver);
 
@@ -1604,7 +1625,8 @@ Handshake *Channel::StaticOnHandshake(Address &addr, uint32_t cid, bool ver_know
         if (cid == 0) {
             // He is initiating. Initiating handshake has SWIFT_HASH + root hash, reply doesn't
             if (evbuffer_get_length(evb)<4+1+4+Sha1Hash::SIZE) {
-                dprintf("%s #0 incorrect size %i initial handshake packet %s\n", tintstr(),(int)evbuffer_get_length(evb),addr.str().c_str());
+                dprintf("%s #0 incorrect size %i initial handshake packet %s\n", tintstr(),(int)evbuffer_get_length(evb),
+                        addr.str().c_str());
                 delete hs;
                 return NULL;
             }
@@ -1727,7 +1749,8 @@ void Channel::OnHandshake(Handshake *hishs)
         delete hishs;
         return;
     } else
-        dprintf("%s #%" PRIu32 " -hs %x %s opened as channel %" PRIu32 "\n",tintstr(),id_,hishs->peer_channel_id_,(hishs->version_ == VER_SWIFT_LEGACY) ? "swift" : "ppsp", id_);
+        dprintf("%s #%" PRIu32 " -hs %x %s opened as channel %" PRIu32 "\n",tintstr(),id_,hishs->peer_channel_id_,
+                (hishs->version_ == VER_SWIFT_LEGACY) ? "swift" : "ppsp", id_);
 
     if (!hishs->IsSupported()) {
         dprintf("%s #%" PRIu32 " -hs unsupported\n",tintstr(),id_);
@@ -2119,7 +2142,8 @@ void    Channel::RecvDatagram(evutil_socket_t socket)
         ContentTransfer *ct = swift::GetActivatedTransfer(td);
         if (ct == NULL) {
             StaticSendClose(socket,addr,hishs->peer_channel_id_);
-            return_log("%s #0 swarm %s known, couldn't be activated; requested by %s\n", tintstr(), hishs->GetSwarmID().hex().c_str(), addr.str().c_str());
+            return_log("%s #0 swarm %s known, couldn't be activated; requested by %s\n", tintstr(),
+                       hishs->GetSwarmID().hex().c_str(), addr.str().c_str());
         } else if (!ct->IsOperational()) {
             // Activated, but broken
             StaticSendClose(socket,addr,hishs->peer_channel_id_);
@@ -2160,7 +2184,8 @@ void    Channel::RecvDatagram(evutil_socket_t socket)
             } else {
                 // Too many connections
                 StaticSendClose(socket,addr,hishs->peer_channel_id_);
-                return_log("%s #0 swarm %s too many connections, requested by %s\n",tintstr(),hishs->GetSwarmID().hex().c_str(),addr.str().c_str());
+                return_log("%s #0 swarm %s too many connections, requested by %s\n",tintstr(),hishs->GetSwarmID().hex().c_str(),
+                           addr.str().c_str());
             }
         }
         //fprintf(stderr,"CHANNEL INCOMING DEF hass %s is id %d\n",hishs->GetSwarmID().hex().c_str(),channel->id());
@@ -2246,7 +2271,8 @@ void Channel::Close(close_send_t closesend)
     //LIVE
     if (transfer()->ttype() == FILE_TRANSFER) {
         FileTransfer *ft = (FileTransfer *)transfer();
-        if (!ft->IsZeroState() && ft->availability() != NULL) { // availability() is NULL when this is called from ContentTransfer/CloseChannels()
+        if (!ft->IsZeroState()
+                && ft->availability() != NULL) { // availability() is NULL when this is called from ContentTransfer/CloseChannels()
             // Ric: remove its binmap from the availability
             ft->availability()->removeBinmap(id_, ack_in_);
         }

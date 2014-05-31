@@ -51,15 +51,21 @@ namespace swift
 
     SwarmManager SwarmManager::instance_;
 
-    SwarmData::SwarmData(const std::string filename, const Sha1Hash& rootHash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, uint32_t chunk_size, std::string metadir) :
-        id_(-1), rootHash_(rootHash), active_(false), latestUse_(0), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
-        filename_(filename), trackerurl_(trackerurl), forceCheckDiskVSHash_(force_check_diskvshash), contIntProtMethod_(cipm),  chunkSize_(chunk_size), zerostate_(zerostate), cached_(false), metadir_(metadir)
+    SwarmData::SwarmData(const std::string filename, const Sha1Hash& rootHash, const std::string trackerurl,
+                         bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, uint32_t chunk_size, std::string metadir) :
+        id_(-1), rootHash_(rootHash), active_(false), latestUse_(0), stateToBeRemoved_(false), contentToBeRemoved_(false),
+        ft_(NULL),
+        filename_(filename), trackerurl_(trackerurl), forceCheckDiskVSHash_(force_check_diskvshash), contIntProtMethod_(cipm),
+        chunkSize_(chunk_size), zerostate_(zerostate), cached_(false), metadir_(metadir)
     {
     }
 
     SwarmData::SwarmData(const SwarmData& sd) :   // Arno, 2012-12-05: Note: latestUse not copied
-        id_(-1), rootHash_(sd.rootHash_), active_(false), latestUse_(0), stateToBeRemoved_(false), contentToBeRemoved_(false), ft_(NULL),
-        filename_(sd.filename_), trackerurl_(sd.trackerurl_), forceCheckDiskVSHash_(sd.forceCheckDiskVSHash_), contIntProtMethod_(sd.contIntProtMethod_), chunkSize_(sd.chunkSize_), zerostate_(sd.zerostate_), cached_(false), metadir_(sd.metadir_)
+        id_(-1), rootHash_(sd.rootHash_), active_(false), latestUse_(0), stateToBeRemoved_(false), contentToBeRemoved_(false),
+        ft_(NULL),
+        filename_(sd.filename_), trackerurl_(sd.trackerurl_), forceCheckDiskVSHash_(sd.forceCheckDiskVSHash_),
+        contIntProtMethod_(sd.contIntProtMethod_), chunkSize_(sd.chunkSize_), zerostate_(sd.zerostate_), cached_(false),
+        metadir_(sd.metadir_)
     {
     }
 
@@ -162,7 +168,8 @@ namespace swift
             assert(!cached_);
             ft_->RemoveProgressCallback(cb);
         } else if (cached_) {
-            for (std::list< std::pair<ProgressCallback, uint8_t> >::iterator iter = cachedCallbacks_.begin(); iter != cachedCallbacks_.end(); iter++) {
+            for (std::list< std::pair<ProgressCallback, uint8_t> >::iterator iter = cachedCallbacks_.begin();
+                    iter != cachedCallbacks_.end(); iter++) {
                 if ((*iter).first == cb) {
                     cachedCallbacks_.erase(iter);
                     break;
@@ -261,7 +268,9 @@ namespace swift
 
 #define rootHashToList( rootHash ) (knownSwarms_[rootHash.bits[0]&63])
 
-    SwarmData* SwarmManager::AddSwarm(const std::string filename, const Sha1Hash& hash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size, std::string metadir)
+    SwarmData* SwarmManager::AddSwarm(const std::string filename, const Sha1Hash& hash, const std::string trackerurl,
+                                      bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size,
+                                      std::string metadir)
     {
         //fprintf(stderr,"sm: AddSwarm %s hash %s track %s cdisk %d cipm %" PRIu32 " zs %d act %d cs %" PRIu32 "\n", filename.c_str(), hash.hex().c_str(), trackerurl.c_str(), force_check_diskvshash, cipm, zerostate, activate, chunk_size );
         enter("addswarm( many )");
@@ -397,7 +406,8 @@ namespace swift
         if (swarm->rootHash_ == Sha1Hash::ZERO && file_size_by_path_utf8(swarm->filename_) == 0)
             return;
 
-        swarm->ft_ = new FileTransfer(swarm->id_, swarm->filename_, swarm->rootHash_, swarm->forceCheckDiskVSHash_, swarm->contIntProtMethod_, swarm->chunkSize_, swarm->zerostate_, swarm->metadir_);
+        swarm->ft_ = new FileTransfer(swarm->id_, swarm->filename_, swarm->rootHash_, swarm->forceCheckDiskVSHash_,
+                                      swarm->contIntProtMethod_, swarm->chunkSize_, swarm->zerostate_, swarm->metadir_);
         if (!swarm->ft_ || !swarm->ft_->IsOperational()) { // Arno, 2012-10-01: Check if operational
             exit("buildswarm (1)");
             return;
@@ -409,7 +419,8 @@ namespace swift
             swarm->cached_ = false;
             swarm->SetMaxSpeed(DDIR_DOWNLOAD, swarm->cachedMaxSpeeds_[DDIR_DOWNLOAD]);
             swarm->SetMaxSpeed(DDIR_UPLOAD, swarm->cachedMaxSpeeds_[DDIR_UPLOAD]);
-            for (std::list< std::pair<ProgressCallback, uint8_t> >::iterator iter = swarm->cachedCallbacks_.begin(); iter != swarm->cachedCallbacks_.end(); iter++)
+            for (std::list< std::pair<ProgressCallback, uint8_t> >::iterator iter = swarm->cachedCallbacks_.begin();
+                    iter != swarm->cachedCallbacks_.end(); iter++)
                 swarm->AddProgressCallback((*iter).first, (*iter).second);
             swarm->cachedStorageFilenames_.clear();
             swarm->cachedCallbacks_.clear();

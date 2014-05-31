@@ -35,7 +35,8 @@ void MovingAverageSpeed::AddPoint(uint64_t amount)
     }
 
     tint t = usec_time();
-    speed_ = (speed_ * ((double)(t_end_ - t_start_)/((double)TINT_SEC)) + (double)amount) / ((t - t_start_)/((double)TINT_SEC) + 0.0001);
+    speed_ = (speed_ * ((double)(t_end_ - t_start_)/((double)TINT_SEC)) + (double)amount) / ((t - t_start_)/((
+                 double)TINT_SEC) + 0.0001);
     t_end_ = t;
     if (t_start_ < t - speed_interval_)
         t_start_ = t - speed_interval_;

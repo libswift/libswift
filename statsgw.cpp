@@ -201,7 +201,9 @@ void StatsGetSpeedCallback(struct evhttp_request *evreq)
     int cupspeed = (int)(contentupspeed/1024.0);
 
     char speedstr[1024];
-    sprintf(speedstr,"{\"downspeed\": %d, \"success\": \"true\", \"upspeed\": %d, \"cdownspeed\": %d, \"cupspeed\": %d, \"nleech\": %d, \"nseed\": %d}", dspeed, uspeed, cdownspeed, cupspeed, nleech, nseed);
+    sprintf(speedstr,
+            "{\"downspeed\": %d, \"success\": \"true\", \"upspeed\": %d, \"cdownspeed\": %d, \"cupspeed\": %d, \"nleech\": %d, \"nseed\": %d}",
+            dspeed, uspeed, cdownspeed, cupspeed, nleech, nseed);
 
     char contlenstr[1024];
     sprintf(contlenstr,PRISIZET,strlen(speedstr));

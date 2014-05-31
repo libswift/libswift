@@ -27,7 +27,8 @@ using namespace swift;
 #define ASYNC_POLL_INTERVAL (100*TINT_MSEC)
 
 // httpgw.cpp functions
-bool InstallHTTPGateway(struct event_base *evbase,Address bindaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf);
+bool InstallHTTPGateway(struct event_base *evbase,Address bindaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd,
+                        uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf);
 
 bool HTTPIsSending();
 std::string HttpGwGetProgressString(SwarmID &swarmid);
@@ -104,7 +105,8 @@ intstringmap_t      asyncResMap;    // protected by mutex
 
 
 
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Init(JNIEnv * env, jobject obj, jstring jlistenaddr, jstring jhttpgwaddr)
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Init(JNIEnv * env, jobject obj,
+        jstring jlistenaddr, jstring jhttpgwaddr)
 {
 
     dprintf("NativeLib::Init called\n");
@@ -164,7 +166,8 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Init(JNI
         // Playback via HTTP GW: Client should contact 127.0.0.1:8082/roothash-in-hex and
         // that will call swift::(Live)Open to start the actual download
         // 32 K steps and no minimal prebuf for Android
-        bool ret = InstallHTTPGateway(Channel::evbase,httpgwaddr,POPT_CONT_INT_PROT_MERKLE, DEFAULT_MOBILE_LIVE_DISC_WND_BYTES, chunk_size, maxspeed, "/sdcard/swift/", 32*1024, 0);
+        bool ret = InstallHTTPGateway(Channel::evbase,httpgwaddr,POPT_CONT_INT_PROT_MERKLE, DEFAULT_MOBILE_LIVE_DISC_WND_BYTES,
+                                      chunk_size, maxspeed, "/sdcard/swift/", 32*1024, 0);
         if (ret == false)
             errorstr = "cannot start HTTP gateway";
     }
@@ -271,7 +274,8 @@ void AsyncSetResult(int callid, std::string result)
 }
 
 
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetResult(JNIEnv *env, jobject obj, jint jcallid)
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetResult(JNIEnv *env, jobject obj,
+        jint jcallid)
 {
     int callid = (int)jcallid;
 
@@ -305,7 +309,8 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGet
 
 
 
-JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncOpen(JNIEnv * env, jobject obj, jstring jswarmid, jstring jtracker, jstring jfilename)
+JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncOpen(JNIEnv * env, jobject obj,
+        jstring jswarmid, jstring jtracker, jstring jfilename)
 {
     dprintf("NativeLib::Open called\n");
 
@@ -369,7 +374,8 @@ void LibeventOpenCallback(int fd, short event, void *arg)
 
 
 
-JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncClose(JNIEnv * env, jobject obj, jstring jswarmid, jboolean jremovestate, jboolean jremovecontent)
+JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncClose(JNIEnv * env, jobject obj,
+        jstring jswarmid, jboolean jremovestate, jboolean jremovecontent)
 {
     dprintf("NativeLib::Close called\n");
 
@@ -419,7 +425,8 @@ void LibeventCloseCallback(int fd, short event, void *arg)
 
 
 
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_hashCheckOffline(JNIEnv *env, jobject obj, jstring jfilename)
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_hashCheckOffline(JNIEnv *env, jobject obj,
+        jstring jfilename)
 {
     dprintf("NativeLib::hashCheckOffline called\n");
 
@@ -444,7 +451,8 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_hashChec
 
 
 
-JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_SetTracker(JNIEnv * env, jobject obj, jstring jtracker)
+JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_SetTracker(JNIEnv * env, jobject obj,
+        jstring jtracker)
 {
     if (!enginestarted)
         return; // "Engine not yet initialized";
@@ -464,7 +472,8 @@ JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_SetTracker(
 
 
 
-JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetHTTPProgress(JNIEnv * env, jobject obj, jstring jswarmid)
+JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetHTTPProgress(JNIEnv * env, jobject obj,
+        jstring jswarmid)
 {
     if (!enginestarted)
         return -1;  // "Engine not yet initialized"
@@ -501,7 +510,8 @@ void LibeventGetHTTPProgressCallback(int fd, short event, void *arg)
 
 
 
-JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetStats(JNIEnv * env, jobject obj, jstring jswarmid)
+JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetStats(JNIEnv * env, jobject obj,
+        jstring jswarmid)
 {
     if (!enginestarted)
         return -1;  // "Engine not yet initialized"
@@ -542,7 +552,8 @@ void LibeventGetStatsCallback(int fd, short event, void *arg)
 /*
  * Create live swarm
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_LiveCreate(JNIEnv *env, jobject obj, jstring jswarmid)
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_LiveCreate(JNIEnv *env, jobject obj,
+        jstring jswarmid)
 {
     if (!enginestarted)
         return env->NewStringUTF("Engine not yet initialized");
@@ -582,7 +593,8 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_LiveCrea
  * Add data to live swarm, to be turned into chunks when >=chunk_size has been
  * added. Thread-safe because swift::LiveWrite uses an evtimer
  */
-JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_LiveAdd(JNIEnv *env, jobject obj, jstring jswarmid, jbyteArray dataArray, jint dataOffset, jint dataLength)
+JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_LiveAdd(JNIEnv *env, jobject obj,
+        jstring jswarmid, jbyteArray dataArray, jint dataOffset, jint dataLength)
 {
     if (!enginestarted)
         return env->NewStringUTF("Engine not yet initialized");
@@ -634,7 +646,8 @@ void LibeventLiveAddCallback(int fd, short event, void *arg)
 
     if (evbuffer_get_length(livesource_evb) > livesource_lt->chunk_size()) {
         // Sufficient data to create a chunk, perhaps even multiple
-        size_t nchunklen = livesource_lt->chunk_size() * (size_t)(evbuffer_get_length(livesource_evb)/livesource_lt->chunk_size());
+        size_t nchunklen = livesource_lt->chunk_size() * (size_t)(evbuffer_get_length(
+                               livesource_evb)/livesource_lt->chunk_size());
         uint8_t *chunks = evbuffer_pullup(livesource_evb, nchunklen);
 
         int nwrite = swift::LiveWrite(livesource_lt, chunks, nchunklen);

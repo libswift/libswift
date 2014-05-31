@@ -137,7 +137,8 @@ void Availability::addBinmap(binmap_t * binmap)
 void Availability::set(uint32_t channel_id, binmap_t& binmap, bin_t target)
 {
     if (DEBUGAVAILABILITY)
-        fprintf(stderr, "%s #%" PRIu32 " Availability -> setting %s (%llu)\n",tintstr(),channel_id,target.str().c_str(),target.toUInt());
+        fprintf(stderr, "%s #%" PRIu32 " Availability -> setting %s (%llu)\n",tintstr(),channel_id,target.str().c_str(),
+                target.toUInt());
 
     if (false)
         for (int i=0; i<connections_; i++)
@@ -243,7 +244,8 @@ void Availability::removeBin(bin_t bin, int idx)
     }
 
     if (DEBUGAVAILABILITY)
-        fprintf(stderr, "Availability: search bin %s [%llu] on rarity %d [%s] ", bin.str().c_str(), bin.toUInt(), idx,  rarity_[idx]->is_empty()?"empty":"full");
+        fprintf(stderr, "Availability: search bin %s [%llu] on rarity %d [%s] ", bin.str().c_str(), bin.toUInt(), idx,
+                rarity_[idx]->is_empty()?"empty":"full");
     // if the bin is full at this rarity level, set it to empty
     // and propagate the info to higher idx of the array
     // (idx = availability of content)

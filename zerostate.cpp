@@ -173,7 +173,8 @@ int ZeroState::Find(const Sha1Hash &root_hash)
 
     // Open as ZeroState
     SwarmID swarmid(root_hash);
-    return swift::Open(file_name, swarmid, "", false, POPT_CONT_INT_PROT_MERKLE, true, true, SWIFT_DEFAULT_CHUNK_SIZE, metadir_);
+    return swift::Open(file_name, swarmid, "", false, POPT_CONT_INT_PROT_MERKLE, true, true, SWIFT_DEFAULT_CHUNK_SIZE,
+                       metadir_);
 }
 
 

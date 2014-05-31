@@ -397,9 +397,13 @@ namespace swift
     {
     public:
 #if ENABLE_IETF_PPSP_VERSION == 1
-        Handshake() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), live_sig_alg_(DEFAULT_LIVE_SIG_ALG), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
+        Handshake() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1),
+            live_sig_alg_(DEFAULT_LIVE_SIG_ALG), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL),
+            swarm_id_ptr_(NULL) {}
 #else
-        Handshake() : version_(VER_SWIFT_LEGACY), min_version_(VER_SWIFT_LEGACY), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1), live_sig_alg_(DEFAULT_LIVE_SIG_ALG), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), swarm_id_ptr_(NULL) {}
+        Handshake() : version_(VER_SWIFT_LEGACY), min_version_(VER_SWIFT_LEGACY), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1),
+            live_sig_alg_(DEFAULT_LIVE_SIG_ALG), chunk_addr_(POPT_CHUNK_ADDR_BIN32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL),
+            swarm_id_ptr_(NULL) {}
 #endif
         Handshake(Handshake &c) {
             version_ = c.version_;
@@ -433,9 +437,11 @@ namespace swift
                 return false; // PPSPTODO
             else if (merkle_func_ >= POPT_MERKLE_HASH_FUNC_SHA224)
                 return false; // PPSPTODO
-            else if (chunk_addr_ == POPT_CHUNK_ADDR_BYTE64 || chunk_addr_ == POPT_CHUNK_ADDR_BIN64 || chunk_addr_ == POPT_CHUNK_ADDR_CHUNK64)
+            else if (chunk_addr_ == POPT_CHUNK_ADDR_BYTE64 || chunk_addr_ == POPT_CHUNK_ADDR_BIN64
+                     || chunk_addr_ == POPT_CHUNK_ADDR_CHUNK64)
                 return false; // PPSPTODO
-            else if (!(live_sig_alg_ == POPT_LIVE_SIG_ALG_RSASHA1 || live_sig_alg_ == POPT_LIVE_SIG_ALG_ECDSAP256SHA256 || live_sig_alg_ == POPT_LIVE_SIG_ALG_ECDSAP384SHA384))
+            else if (!(live_sig_alg_ == POPT_LIVE_SIG_ALG_RSASHA1 || live_sig_alg_ == POPT_LIVE_SIG_ALG_ECDSAP256SHA256
+                       || live_sig_alg_ == POPT_LIVE_SIG_ALG_ECDSAP384SHA384))
                 return false; // PPSPTODO
             return true;
         }
@@ -471,7 +477,10 @@ namespace swift
     class SwarmMeta
     {
     public:
-        SwarmMeta() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), cont_int_prot_(POPT_CONT_INT_PROT_MERKLE), merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1),  live_sig_alg_(DEFAULT_LIVE_SIG_ALG), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32), live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), injector_addr_(), chunk_size_(SWIFT_DEFAULT_CHUNK_SIZE), cont_dur_(0), cont_len_(0), ext_tracker_url_(""), mime_type_("") {
+        SwarmMeta() : version_(VER_PPSPP_v1), min_version_(VER_PPSPP_v1), cont_int_prot_(POPT_CONT_INT_PROT_MERKLE),
+            merkle_func_(POPT_MERKLE_HASH_FUNC_SHA1),  live_sig_alg_(DEFAULT_LIVE_SIG_ALG), chunk_addr_(POPT_CHUNK_ADDR_CHUNK32),
+            live_disc_wnd_(POPT_LIVE_DISC_WND_ALL), injector_addr_(), chunk_size_(SWIFT_DEFAULT_CHUNK_SIZE), cont_dur_(0),
+            cont_len_(0), ext_tracker_url_(""), mime_type_("") {
         }
         popt_version_t      version_;
         popt_version_t      min_version_;
@@ -677,7 +686,9 @@ namespace swift
          *  @param chunk_size size of chunk to use
          *  @param zerostate  whether to serve the hashes + content directly from disk
          */
-        FileTransfer(int td, std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO, bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, bool zerostate=false, std::string metadir="");
+        FileTransfer(int td, std::string file_name, const Sha1Hash& root_hash=Sha1Hash::ZERO, bool force_check_diskvshash=true,
+                     popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, bool zerostate=false,
+                     std::string metadir="");
         /**    Close everything. */
         ~FileTransfer();
 
@@ -728,10 +739,13 @@ namespace swift
     public:
 
         /** A constructor for a live source. */
-        LiveTransfer(std::string filename, KeyPair &keypair, std::string checkpoint_filename, popt_cont_int_prot_t cipm, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+        LiveTransfer(std::string filename, KeyPair &keypair, std::string checkpoint_filename, popt_cont_int_prot_t cipm,
+                     uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN,
+                     uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
         /** A constructor for live client. */
-        LiveTransfer(std::string filename, SwarmID &swarmid, Address &srcaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+        LiveTransfer(std::string filename, SwarmID &swarmid, Address &srcaddr, popt_cont_int_prot_t cipm,
+                     uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
         /**  Close everything. */
         ~LiveTransfer();
@@ -918,7 +932,8 @@ namespace swift
         static const char* SEND_CONTROL_MODES[];
 
         static tint     epoch, start;
-        static uint64_t global_dgrams_up, global_dgrams_down, global_raw_bytes_up, global_raw_bytes_down, global_bytes_up, global_bytes_down;
+        static uint64_t global_dgrams_up, global_dgrams_down, global_raw_bytes_up, global_raw_bytes_down, global_bytes_up,
+               global_bytes_down;
         static void     CloseChannelByAddress(const Address &addr);
 
         // SOCKMGMT
@@ -970,7 +985,8 @@ namespace swift
         void        OnHash(struct evbuffer *evb);
         void        OnPexAdd(struct evbuffer *evb, int family);
         void        OnPexAddCert(struct evbuffer *evb);
-        static Handshake *StaticOnHandshake(Address &addr, uint32_t cid, bool ver_known, popt_version_t ver, struct evbuffer *evb);
+        static Handshake *StaticOnHandshake(Address &addr, uint32_t cid, bool ver_known, popt_version_t ver,
+                                            struct evbuffer *evb);
         void        OnHandshake(Handshake *hishs);
         void        OnCancel(struct evbuffer *evb); // PPSP
         void        OnChoke(struct evbuffer *evb);
@@ -1150,7 +1166,8 @@ namespace swift
         tint        last_pex_request_time_;
         tint        next_pex_request_time_;
         bool        pex_request_outstanding_;
-        tbqueue     reverse_pex_out_;        // Arno, 2011-10-03: should really be a queue of (tint,channel id(= uint32_t)) pairs.
+        tbqueue
+        reverse_pex_out_;        // Arno, 2011-10-03: should really be a queue of (tint,channel id(= uint32_t)) pairs.
         int         useless_pex_count_;
         /** Smoothed averages for RTT, RTT deviation and data interarrival periods. */
         tint        rtt_avg_, dev_avg_, dip_avg_;
@@ -1333,7 +1350,8 @@ namespace swift
 
         /** Create Storage from specified path and destination dir if content turns about to be a multi-file.
          * If live_disc_wnd_bytes !=0 then live single-file, wrapping if != POPT_LIVE_DISC_WND_ALL */
-        Storage(std::string ospathname, std::string destdir, int td, uint64_t live_disc_wnd_bytes, std::string metamfspecospathname="");
+        Storage(std::string ospathname, std::string destdir, int td, uint64_t live_disc_wnd_bytes,
+                std::string metamfspecospathname="");
         ~Storage();
 
         /** UNIX pread approximation. Does change file pointer. Thread-safe if no concurrent writes */
@@ -1490,7 +1508,9 @@ namespace swift
         a separate directory specified by the metadir parameter.
         */
     // TODO: replace check_netwvshash with full set of protocol options
-    int     Open(std::string filename, SwarmID& swarmid, std::string trackerurl="", bool force_check_diskvshash=true, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, bool zerostate=false, bool activate=true, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, std::string metadir="");
+    int     Open(std::string filename, SwarmID& swarmid, std::string trackerurl="", bool force_check_diskvshash=true,
+                 popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_MERKLE, bool zerostate=false, bool activate=true,
+                 uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE, std::string metadir="");
     /** Get the root hash for the transmission. */
     SwarmID GetSwarmID(int file);
     /** Close a file and a transmission, remove state or content if desired. */
@@ -1532,11 +1552,14 @@ namespace swift
 
     // LIVE
     /** To create a live stream as source */
-    LiveTransfer *LiveCreate(std::string filename, KeyPair &keypair, std::string checkpoint_filename, popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_UNIFIED_MERKLE, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    LiveTransfer *LiveCreate(std::string filename, KeyPair &keypair, std::string checkpoint_filename,
+                             popt_cont_int_prot_t cipm=POPT_CONT_INT_PROT_UNIFIED_MERKLE, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL,
+                             uint32_t nchunks_per_sign=SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
     /** To add chunks to a live stream as source */
     int     LiveWrite(LiveTransfer *lt, const void *buf, size_t nbyte);
     /** To open a live stream as peer */
-    int     LiveOpen(std::string filename, SwarmID &swarmid, std::string trackerurl, Address &srcaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
+    int     LiveOpen(std::string filename, SwarmID &swarmid, std::string trackerurl, Address &srcaddr,
+                     popt_cont_int_prot_t cipm, uint64_t disc_wnd=POPT_LIVE_DISC_WND_ALL, uint32_t chunk_size=SWIFT_DEFAULT_CHUNK_SIZE);
 
     /** Register a callback for when the download of another pow(2,agg) chunks
         is finished. So agg = 0 = 2^0 = 1, means every chunk. */

@@ -214,7 +214,8 @@ public:
 
     /** Returns estimated bitrate */
     double CalculateBitrate() {
-        if (hookin_tint_ == last_munro_tint_ || (hookin_tint_+(LIVE_PP_MIN_BITRATE_MEASUREMENT_INTERVAL*TINT_SEC)) > last_munro_tint_) {
+        if (hookin_tint_ == last_munro_tint_
+                || (hookin_tint_+(LIVE_PP_MIN_BITRATE_MEASUREMENT_INTERVAL*TINT_SEC)) > last_munro_tint_) {
             // No info to calc bitrate on, or too short interval
             return 0.0;
         }
@@ -333,7 +334,8 @@ class SharingLivePiecePicker : public SimpleLivePiecePicker
 
 public:
 
-    SharingLivePiecePicker(LiveTransfer* trans_to_pick_from) : SimpleLivePiecePicker(trans_to_pick_from), same_curbin_count_(0) {
+    SharingLivePiecePicker(LiveTransfer* trans_to_pick_from) : SimpleLivePiecePicker(trans_to_pick_from),
+        same_curbin_count_(0) {
     }
 
     virtual ~SharingLivePiecePicker() {}

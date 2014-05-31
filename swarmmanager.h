@@ -73,7 +73,9 @@ namespace swift
         bool cached_;
         std::string metadir_;
     public:
-        SwarmData(const std::string filename, const Sha1Hash& rootHash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, uint32_t chunk_size, const std::string metadata="");
+        SwarmData(const std::string filename, const Sha1Hash& rootHash, const std::string trackerurl,
+                  bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, uint32_t chunk_size,
+                  const std::string metadata="");
         SwarmData(const SwarmData& sd);
 
         ~SwarmData();
@@ -157,7 +159,9 @@ namespace swift
         static SwarmManager& GetManager();
 
         // Add and remove swarms
-        SwarmData* AddSwarm(const std::string filename, const Sha1Hash& rootHash, const std::string trackerurl, bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size, std::string metadir);
+        SwarmData* AddSwarm(const std::string filename, const Sha1Hash& rootHash, const std::string trackerurl,
+                            bool force_check_diskvshash, popt_cont_int_prot_t cipm, bool zerostate, bool activate, uint32_t chunk_size,
+                            std::string metadir);
         SwarmData* AddSwarm(const SwarmData& swarm, bool activate=true);
         void RemoveSwarm(const Sha1Hash& rootHash, bool removeState = false, bool removeContent = false);
 

@@ -261,7 +261,9 @@ void HttpGwWrite(struct evhttp_request *evreq)
 
     int64_t want = std::min(avail,(int64_t)req->tosend);
 
-    dprintf("%s @%d http write: avail %" PRIi64 " want %" PRIi64 " relcomp %" PRIu64 " offset %" PRIu64 " start %" PRIu64 " end %" PRIu64 " tosend %" PRIu64 "\n",tintstr(),req->id, avail, want, relcomplete, req->offset, req->startoff, req->endoff, req->tosend);
+    dprintf("%s @%d http write: avail %" PRIi64 " want %" PRIi64 " relcomp %" PRIu64 " offset %" PRIu64 " start %" PRIu64
+            " end %" PRIu64 " tosend %" PRIu64 "\n",tintstr(),req->id, avail, want, relcomplete, req->offset, req->startoff,
+            req->endoff, req->tosend);
 
     struct evhttp_connection *evconn = evhttp_request_get_connection(req->sinkevreq);
     struct bufferevent* buffy = evhttp_connection_get_bufferevent(evconn);
@@ -493,13 +495,16 @@ void HttpGwSwiftPrebufferProgressCallback(int td, bin_t bin)
 
     // ARNOSMPTODO: bitrate-dependent prebuffering?
 
-    dprintf("%s T%i http prebuf progress: startoff %" PRIu64 " endoff %" PRIu64 "\n",tintstr(),td, req->startoff, req->endoff);
+    dprintf("%s T%i http prebuf progress: startoff %" PRIu64 " endoff %" PRIu64 "\n",tintstr(),td, req->startoff,
+            req->endoff);
 
     int64_t wantsize = std::min(req->endoff+1-req->startoff,(uint64_t)HTTPGW_MIN_PREBUF_BYTES);
 
-    dprintf("%s T%i http prebuf progress: want %" PRIi64 " got %" PRIi64 "\n",tintstr(),td, wantsize, swift::SeqComplete(req->td,req->startoff));
+    dprintf("%s T%i http prebuf progress: want %" PRIi64 " got %" PRIi64 "\n",tintstr(),td, wantsize,
+            swift::SeqComplete(req->td,req->startoff));
     if (http_debug)
-        fprintf(stderr,"httpgw: %s T%i http prebuf progress: want %" PRIi64 " got %" PRIi64 "\n",tintstr(),td, wantsize, swift::SeqComplete(req->td,req->startoff));
+        fprintf(stderr,"httpgw: %s T%i http prebuf progress: want %" PRIi64 " got %" PRIi64 "\n",tintstr(),td, wantsize,
+                swift::SeqComplete(req->td,req->startoff));
 
     if (swift::SeqComplete(req->td,req->startoff) < wantsize) {
         // wait for more data
@@ -571,7 +576,8 @@ bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
         }
 
 
-        dprintf("%s @%i http get: range request first %s %" PRIi64 "\n", tintstr(),req->id, seek.substr(0,idx).c_str(), req->rangefirst);
+        dprintf("%s @%i http get: range request first %s %" PRIi64 "\n", tintstr(),req->id, seek.substr(0,idx).c_str(),
+                req->rangefirst);
 
         if (idx == seek.length()-1)
             req->rangelast = -1;
@@ -580,7 +586,8 @@ bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
             std::istringstream(seek.substr(idx+1)) >> req->rangelast;
         }
 
-        dprintf("%s @%i http get: range request last %s %" PRIi64 "\n", tintstr(),req->id, seek.substr(idx+1).c_str(), req->rangelast);
+        dprintf("%s @%i http get: range request last %s %" PRIi64 "\n", tintstr(),req->id, seek.substr(idx+1).c_str(),
+                req->rangelast);
 
         // Check sanity of range request
         if (filesize == -1) {
@@ -613,7 +620,8 @@ bool HttpGwParseContentRangeHeader(http_gw_t *req,uint64_t filesize)
         evhttp_send_error(req->sinkevreq,416,"Malformed range specification");
         req->replied = true;
 
-        dprintf("%s @%i http get: ERROR 416 invalid range %" PRIi64 "-%" PRIi64 "\n",tintstr(),req->id,req->rangefirst,req->rangelast);
+        dprintf("%s @%i http get: ERROR 416 invalid range %" PRIi64 "-%" PRIi64 "\n",tintstr(),req->id,req->rangefirst,
+                req->rangelast);
         return false;
     }
 
@@ -806,7 +814,8 @@ void HttpGwFirstProgressCallback(int td, bin_t bin)
         // Seek to multifile/range start
         int ret = swift::Seek(req->td,req->startoff,SEEK_SET);
         if (ret < 0) {
-            evhttp_send_error(req->sinkevreq,500,"Internal error: Cannot seek to file start in range request or multi-file content.");
+            evhttp_send_error(req->sinkevreq,500,
+                              "Internal error: Cannot seek to file start in range request or multi-file content.");
             req->replied = true;
             dprintf("%s @%i http get: ERROR 500 cannot seek to %" PRIu64 "\n",tintstr(),req->id, req->startoff);
             return;
@@ -1120,7 +1129,9 @@ void HttpGwNewRequestCallback(struct evhttp_request *evreq, void *arg)
     if (contentrangecstr == NULL)
         contentrangecstr = "";
 
-    dprintf("%s @%i http get: demands %s mf %s dur %s track %s mime %s range %s dr %s\n",tintstr(),http_gw_reqs_open+1,swarmidhexstr.c_str(),mfstr.c_str(),durstr.c_str(), trackerurl.c_str(), mimetype.c_str(), contentrangecstr, dashrangestr.c_str());
+    dprintf("%s @%i http get: demands %s mf %s dur %s track %s mime %s range %s dr %s\n",tintstr(),http_gw_reqs_open+1,
+            swarmidhexstr.c_str(),mfstr.c_str(),durstr.c_str(), trackerurl.c_str(), mimetype.c_str(), contentrangecstr,
+            dashrangestr.c_str());
 
     // Handle LIVE
     bool live=false;
@@ -1254,7 +1265,8 @@ void HttpGwNewRequestCallback(struct evhttp_request *evreq, void *arg)
     }
 }
 
-bool InstallHTTPGateway(struct event_base *evbase,Address bindaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd, uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf)
+bool InstallHTTPGateway(struct event_base *evbase,Address bindaddr, popt_cont_int_prot_t cipm, uint64_t disc_wnd,
+                        uint32_t chunk_size, double *maxspeed, std::string storage_dir, int32_t vod_step, int32_t min_prebuf)
 {
 
     // Arno, 2013-07-04: libevent will get a SIGPIPE writing to socket

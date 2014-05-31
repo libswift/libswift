@@ -96,7 +96,8 @@ TEST(TLivePiecePicker,ReHookinBitRateGood)
     fprintf(stderr,"test: Verify bitrate\n");
     double gotbitrate = lpp->CalculateBitrate();
 
-    double expbytes = ((ntrees*SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN)+SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN-1)*SWIFT_DEFAULT_CHUNK_SIZE;
+    double expbytes = ((ntrees*SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN)+SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN-1)
+                      *SWIFT_DEFAULT_CHUNK_SIZE;
     double expbitrate = expbytes / ntrees;
     ASSERT_EQ(expbitrate,gotbitrate);
 

@@ -153,7 +153,8 @@ void ContentTransfer::LibeventGlobalCleanCallback(int fd, short event, void *arg
 
         // Some external trackers need periodic reports
         if (ct->ext_tracker_client_ != NULL) {
-            tint report_time = ct->ext_tracker_client_->GetReportLastTime() + (TINT_SEC*ct->ext_tracker_client_->GetReportInterval());
+            tint report_time = ct->ext_tracker_client_->GetReportLastTime() +
+                               (TINT_SEC*ct->ext_tracker_client_->GetReportInterval());
             if (NOW > report_time) {
                 fprintf(stderr,"content: periodic ConnectToTracker\n");
                 ct->ConnectToTracker();
@@ -205,7 +206,8 @@ static void global_bttracker_callback(int td, std::string status, uint32_t inter
 
     if (status == "") {
         // Success
-        dprintf("%s F%d content contact tracker: ext OK int %" PRIu32 " npeers " PRISIZET "\n",tintstr(),td,interval,peerlist.size());
+        dprintf("%s F%d content contact tracker: ext OK int %" PRIu32 " npeers " PRISIZET "\n",tintstr(),td,interval,
+                peerlist.size());
 
         // Record reporting interval
         ExternalTrackerClient *bttrackclient = ct->GetExternalTrackerClient();

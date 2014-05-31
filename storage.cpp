@@ -25,7 +25,8 @@ const std::string Storage::MULTIFILE_PATHNAME_FILE_SEP = "/";
 #define DEBUGSTORAGE     0
 
 
-Storage::Storage(std::string ospathname, std::string destdir, int td, uint64_t live_disc_wnd_bytes, std::string metamfspecospathname) :
+Storage::Storage(std::string ospathname, std::string destdir, int td, uint64_t live_disc_wnd_bytes,
+                 std::string metamfspecospathname) :
     Operational(),
     state_(STOR_STATE_INIT),
     os_pathname_(ospathname), destdir_(destdir), ht_(NULL), spec_size_(0),
@@ -114,7 +115,8 @@ Storage::~Storage()
 ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 {
     if (DEBUGSTORAGE)
-        dprintf("%s %s storage: Write: fd %d nbyte " PRISIZET " off %" PRIi64 " state %" PRIi32 "\n", tintstr(), roothashhex().c_str(), single_fd_, nbyte,offset,state_);
+        dprintf("%s %s storage: Write: fd %d nbyte " PRISIZET " off %" PRIi64 " state %" PRIi32 "\n", tintstr(),
+                roothashhex().c_str(), single_fd_, nbyte,offset,state_);
 
     if (state_ == STOR_STATE_SINGLE_FILE) {
         return pwrite(single_fd_, buf, nbyte, offset);
@@ -384,7 +386,8 @@ int Storage::ParseSpec(StorageFile *sf)
     storage_files_t::iterator iter;
     for (iter = sfs_.begin(); iter < sfs_.end(); iter++) {
         StorageFile *sf = *iter;
-        dprintf("%s %s storage: parsespec: Got %s start %" PRIi64 " size %" PRIi64 "\n", tintstr(), roothashhex().c_str(), sf->GetSpecPathName().c_str(), sf->GetStart(), sf->GetSize());
+        dprintf("%s %s storage: parsespec: Got %s start %" PRIi64 " size %" PRIi64 "\n", tintstr(), roothashhex().c_str(),
+                sf->GetSpecPathName().c_str(), sf->GetStart(), sf->GetSize());
     }
 
     fclose(fp);
@@ -506,7 +509,8 @@ int64_t Storage::GetReservedSize()
 
         int64_t fsize = file_size_by_path_utf8(sf->GetOSPathName().c_str());
         if (fsize < 0) {
-            dprintf("%s %s storage: getdisksize: cannot stat file %s\n", tintstr(), roothashhex().c_str(), sf->GetOSPathName().c_str());
+            dprintf("%s %s storage: getdisksize: cannot stat file %s\n", tintstr(), roothashhex().c_str(),
+                    sf->GetOSPathName().c_str());
             return fsize;
         } else
             totaldisksize += fsize;
@@ -655,7 +659,8 @@ StorageFile::StorageFile(std::string specpath, int64_t start, int64_t size, std:
     fd_ = open_utf8(os_pathname_.c_str(),OPENFLAGS,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
     if (fd_<0) {
         //print_error("storage: file: Could not open");
-        dprintf("%s %s storage: file: Could not open %s\n", tintstr(), "0000000000000000000000000000000000000000", os_pathname_.c_str());
+        dprintf("%s %s storage: file: Could not open %s\n", tintstr(), "0000000000000000000000000000000000000000",
+                os_pathname_.c_str());
         SetBroken();
         return;
     }

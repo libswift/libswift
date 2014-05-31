@@ -70,7 +70,8 @@ public:
 
     bin_t pickUrgent(binmap_t& offer, uint64_t max_width, uint64_t size) {
 
-        bin_t curr = bin_t((playback_pos_+1)<<1); // the base bin will be indexed by the double of the value (bin(4) == bin(0,2))
+        bin_t curr = bin_t((playback_pos_+1)
+                           <<1); // the base bin will be indexed by the double of the value (bin(4) == bin(0,2))
         bin_t hint = bin_t::NONE;
         uint64_t examined = 0;
         binmap_t binmap;

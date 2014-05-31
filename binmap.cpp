@@ -348,7 +348,8 @@ bool binmap_t::extend_root()
 {
     assert(!root_bin_.is_all());
 
-    if (!cell_[ROOT_REF].is_left_ref_ && !cell_[ROOT_REF].is_right_ref_ && cell_[ROOT_REF].left_.bitmap_ == cell_[ROOT_REF].right_.bitmap_) {
+    if (!cell_[ROOT_REF].is_left_ref_ && !cell_[ROOT_REF].is_right_ref_
+            && cell_[ROOT_REF].left_.bitmap_ == cell_[ROOT_REF].right_.bitmap_) {
         /* Setup the root cell */
         cell_[ROOT_REF].right_.bitmap_ = BITMAP_EMPTY;
 
@@ -947,7 +948,8 @@ bin_t binmap_t::find_complement(const binmap_t& destination, const binmap_t& sou
 
     if (destination.is_empty()) {
         const cell_t& cell = source.cell_[ROOT_REF];
-        if (!cell.is_left_ref_ && !cell.is_right_ref_ && cell.left_.bitmap_ == BITMAP_FILLED && cell.right_.bitmap_ == BITMAP_FILLED) {
+        if (!cell.is_left_ref_ && !cell.is_right_ref_ && cell.left_.bitmap_ == BITMAP_FILLED
+                && cell.right_.bitmap_ == BITMAP_FILLED) {
             return source.root_bin_;
         }
         return _find_complement(source.root_bin_, BITMAP_EMPTY, ROOT_REF, source, twist);
@@ -968,7 +970,8 @@ bin_t binmap_t::find_complement(const binmap_t& destination, const binmap_t& sou
         if (destination.cell_[dref].left_.bitmap_ != BITMAP_FILLED) {
             if (destination.cell_[dref].left_.bitmap_ == BITMAP_EMPTY) {
                 const cell_t& cell = source.cell_[ROOT_REF];
-                if (!cell.is_left_ref_ && !cell.is_right_ref_ && cell.left_.bitmap_ == BITMAP_FILLED && cell.right_.bitmap_ == BITMAP_FILLED) {
+                if (!cell.is_left_ref_ && !cell.is_right_ref_ && cell.left_.bitmap_ == BITMAP_FILLED
+                        && cell.right_.bitmap_ == BITMAP_FILLED) {
                     return source.root_bin_;
                 }
             }
@@ -990,7 +993,8 @@ bin_t binmap_t::find_complement(const binmap_t& destination, const binmap_t& sou
             if (is_left) {
                 if (b.left() == destination.root_bin_) {
                     if (sc.is_left_ref_) {
-                        const bin_t res = binmap_t::_find_complement(destination.root_bin_, ROOT_REF, destination, sc.left_.ref_, source, twist);
+                        const bin_t res = binmap_t::_find_complement(destination.root_bin_, ROOT_REF, destination, sc.left_.ref_, source,
+                                          twist);
                         if (!res.is_none()) {
                             return res;
                         }
@@ -1115,10 +1119,12 @@ bin_t binmap_t::find_match(const binmap_t& destination, const binmap_t& source, 
 
             // check if the dest range is filled
             const cell_t& dcell = destination.cell_[dref];
-            if (!dcell.is_left_ref_ && !dcell.is_right_ref_ && dcell.left_.bitmap_ == BITMAP_FILLED && dcell.right_.bitmap_ == BITMAP_FILLED) {
+            if (!dcell.is_left_ref_ && !dcell.is_right_ref_ && dcell.left_.bitmap_ == BITMAP_FILLED
+                    && dcell.right_.bitmap_ == BITMAP_FILLED) {
                 if (is_sref) {
                     const cell_t& scell = source.cell_[sref];
-                    if (!scell.is_left_ref_ && !scell.is_right_ref_ && scell.left_.bitmap_ == BITMAP_FILLED && scell.right_.bitmap_ == BITMAP_FILLED) {
+                    if (!scell.is_left_ref_ && !scell.is_right_ref_ && scell.left_.bitmap_ == BITMAP_FILLED
+                            && scell.right_.bitmap_ == BITMAP_FILLED) {
                         return range;
                     } else {
                         return _find_complement(range, BITMAP_EMPTY, sref, source, twist);
@@ -1157,7 +1163,8 @@ bin_t binmap_t::find_match(const binmap_t& destination, const binmap_t& source, 
 
                 if (dbitmap == BITMAP_FILLED) {
                     const cell_t& cell = source.cell_[sref];
-                    if (!cell.is_left_ref_ && !cell.is_right_ref_ && cell.left_.bitmap_ == BITMAP_FILLED && cell.right_.bitmap_ == BITMAP_FILLED) {
+                    if (!cell.is_left_ref_ && !cell.is_right_ref_ && cell.left_.bitmap_ == BITMAP_FILLED
+                            && cell.right_.bitmap_ == BITMAP_FILLED) {
                         return range;
                     }
                 }
@@ -1295,7 +1302,8 @@ bin_t binmap_t::find_match(const binmap_t& destination, const binmap_t& source, 
 }
 
 
-bin_t binmap_t::find_complement(const binmap_t& destination, const binmap_t& source, bin_t range, const bin_t::uint_t twist)
+bin_t binmap_t::find_complement(const binmap_t& destination, const binmap_t& source, bin_t range,
+                                const bin_t::uint_t twist)
 {
     ref_t sref = ROOT_REF;
     bitmap_t sbitmap = BITMAP_EMPTY;
@@ -1337,7 +1345,8 @@ bin_t binmap_t::find_complement(const binmap_t& destination, const binmap_t& sou
     if (destination.is_empty()) {
         if (is_sref) {
             const cell_t& cell = source.cell_[sref];
-            if (!cell.is_left_ref_ && !cell.is_right_ref_ && cell.left_.bitmap_ == BITMAP_FILLED && cell.right_.bitmap_ == BITMAP_FILLED) {
+            if (!cell.is_left_ref_ && !cell.is_right_ref_ && cell.left_.bitmap_ == BITMAP_FILLED
+                    && cell.right_.bitmap_ == BITMAP_FILLED) {
                 return range;
             } else {
                 return _find_complement(range, BITMAP_EMPTY, sref, source, twist);
@@ -1374,7 +1383,8 @@ bin_t binmap_t::find_complement(const binmap_t& destination, const binmap_t& sou
             } else if (is_sref) {
                 if (dbitmap == BITMAP_EMPTY) {
                     const cell_t& cell = source.cell_[sref];
-                    if (!cell.is_left_ref_ && !cell.is_right_ref_ && cell.left_.bitmap_ == BITMAP_FILLED && cell.right_.bitmap_ == BITMAP_FILLED) {
+                    if (!cell.is_left_ref_ && !cell.is_right_ref_ && cell.left_.bitmap_ == BITMAP_FILLED
+                            && cell.right_.bitmap_ == BITMAP_FILLED) {
                         return range;
                     }
                 }
@@ -1409,7 +1419,8 @@ bin_t binmap_t::find_complement(const binmap_t& destination, const binmap_t& sou
                 if (is_left) {
                     if (b.left() == destination.root_bin_) {
                         if (sc.is_left_ref_) {
-                            const bin_t res = binmap_t::_find_complement(destination.root_bin_, ROOT_REF, destination, sc.left_.ref_, source, twist);
+                            const bin_t res = binmap_t::_find_complement(destination.root_bin_, ROOT_REF, destination, sc.left_.ref_, source,
+                                              twist);
                             if (!res.is_none()) {
                                 return res;
                             }
@@ -1490,7 +1501,8 @@ bin_t binmap_t::find_complement(const binmap_t& destination, const binmap_t& sou
 
 
 
-bin_t binmap_t::_find_complement(const bin_t& bin, const ref_t dref, const binmap_t& destination, const ref_t sref, const binmap_t& source, const bin_t::uint_t twist, bool match)
+bin_t binmap_t::_find_complement(const bin_t& bin, const ref_t dref, const binmap_t& destination, const ref_t sref,
+                                 const binmap_t& source, const bin_t::uint_t twist, bool match)
 {
     /* check weather we are looking for a match */
     bitmap_t bitmap_filled = match ? BITMAP_EMPTY : BITMAP_FILLED;
@@ -1563,7 +1575,8 @@ bin_t binmap_t::_find_complement(const bin_t& bin, const ref_t dref, const binma
     return bin_t::NONE;
 }
 
-bin_t binmap_t::_find_complement(const bin_t& bin, const bitmap_t dbitmap, const ref_t sref, const binmap_t& source, const bin_t::uint_t twist, bool match)
+bin_t binmap_t::_find_complement(const bin_t& bin, const bitmap_t dbitmap, const ref_t sref, const binmap_t& source,
+                                 const bin_t::uint_t twist, bool match)
 {
 
     assert(dbitmap != BITMAP_EMPTY || sref != ROOT_REF ||
@@ -1602,7 +1615,8 @@ bin_t binmap_t::_find_complement(const bin_t& bin, const bitmap_t dbitmap, const
 }
 
 
-bin_t binmap_t::_find_complement(const bin_t& bin, const ref_t dref, const binmap_t& destination, const bitmap_t sbitmap, const bin_t::uint_t twist, bool match)
+bin_t binmap_t::_find_complement(const bin_t& bin, const ref_t dref, const binmap_t& destination,
+                                 const bitmap_t sbitmap, const bin_t::uint_t twist, bool match)
 {
 
     /* Initialization */
@@ -1637,7 +1651,8 @@ bin_t binmap_t::_find_complement(const bin_t& bin, const ref_t dref, const binma
 }
 
 
-bin_t binmap_t::_find_complement(const bin_t& bin, const bitmap_t dbitmap, const bitmap_t sbitmap, bin_t::uint_t twist, bool match)
+bin_t binmap_t::_find_complement(const bin_t& bin, const bitmap_t dbitmap, const bitmap_t sbitmap, bin_t::uint_t twist,
+                                 bool match)
 {
     bitmap_t bitmap;
     /* check weather we want a match */
@@ -1834,7 +1849,8 @@ void binmap_t::status() const
     }
 
     printf("size: %" PRIu32 " bytes\n", static_cast<unsigned int>(total_size()));
-    printf("cells number: %" PRIu32 " (of %" PRIu32 ")\n", static_cast<unsigned int>(allocated_cells_number_), static_cast<unsigned int>(cells_number_));
+    printf("cells number: %" PRIu32 " (of %" PRIu32 ")\n", static_cast<unsigned int>(allocated_cells_number_),
+           static_cast<unsigned int>(cells_number_));
     printf("root bin: %llu\n", static_cast<unsigned long long>(root_bin_.toUInt()));
 }
 
