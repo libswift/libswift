@@ -11,15 +11,21 @@
 namespace swift
 {
 
-class Operational
-{
-   public:
-	  Operational(bool working=true) { working_ = working; }
-	  bool IsOperational() { return working_; }
-	  void SetBroken() { working_ = false; }
-   protected:
-	  bool	working_;
-};
+    class Operational
+    {
+    public:
+        Operational(bool working=true) {
+            working_ = working;
+        }
+        bool IsOperational() {
+            return working_;
+        }
+        void SetBroken() {
+            working_ = false;
+        }
+    protected:
+        bool  working_;
+    };
 
 
 };

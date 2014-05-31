@@ -62,11 +62,11 @@
  */
 
 #if defined(__i386__) || defined(__x86_64__)
-  #define setW(x, val) (*(volatile unsigned int *)&W(x) = (val))
+#define setW(x, val) (*(volatile unsigned int *)&W(x) = (val))
 #elif defined(__GNUC__) && defined(__arm__)
-  #define setW(x, val) do { W(x) = (val); __asm__("":::"memory"); } while (0)
+#define setW(x, val) do { W(x) = (val); __asm__("":::"memory"); } while (0)
 #else
-  #define setW(x, val) (W(x) = (val))
+#define setW(x, val) (W(x) = (val))
 #endif
 
 /*
@@ -133,16 +133,16 @@ static void blk_SHA1_Block(blk_SHA_CTX *ctx, const unsigned int *data)
     E = ctx->H[4];
 
     /* Round 1 - iterations 0-16 take their input from 'data' */
-    T_0_15( 0, A, B, C, D, E);
-    T_0_15( 1, E, A, B, C, D);
-    T_0_15( 2, D, E, A, B, C);
-    T_0_15( 3, C, D, E, A, B);
-    T_0_15( 4, B, C, D, E, A);
-    T_0_15( 5, A, B, C, D, E);
-    T_0_15( 6, E, A, B, C, D);
-    T_0_15( 7, D, E, A, B, C);
-    T_0_15( 8, C, D, E, A, B);
-    T_0_15( 9, B, C, D, E, A);
+    T_0_15(0, A, B, C, D, E);
+    T_0_15(1, E, A, B, C, D);
+    T_0_15(2, D, E, A, B, C);
+    T_0_15(3, C, D, E, A, B);
+    T_0_15(4, B, C, D, E, A);
+    T_0_15(5, A, B, C, D, E);
+    T_0_15(6, E, A, B, C, D);
+    T_0_15(7, D, E, A, B, C);
+    T_0_15(8, C, D, E, A, B);
+    T_0_15(9, B, C, D, E, A);
     T_0_15(10, A, B, C, D, E);
     T_0_15(11, E, A, B, C, D);
     T_0_15(12, D, E, A, B, C);

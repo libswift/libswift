@@ -13,13 +13,13 @@
 #include <cstdlib>      // std::rand, std::srand
 
 
-#define DUMMY_DEFAULT_SIG_LENGTH	20
+#define DUMMY_DEFAULT_SIG_LENGTH    20
 
 
 using namespace swift;
 
 /** List of chunks */
-typedef std::vector<char *>	  clist_t;
+typedef std::vector<char *>   clist_t;
 
 /** Hash tree of a clist, used as ground truth to set peak and test other
  * hashes in LiveHashTree. */
@@ -32,7 +32,7 @@ typedef enum {
     PICK_RANDOM,
 } pickpolicy_t;
 
-typedef std::vector<int>  	pickorder_t;
+typedef std::vector<int>    pickorder_t;
 
 
 /*
@@ -48,13 +48,12 @@ LiveHashTree *CreateSourceTree()
 
 void do_add_data(LiveHashTree *umt, int nchunks)
 {
-    for (int i=0; i<nchunks; i++)
-    {
-	char data[1024];
-	memset(data,i%255,1024);
+    for (int i=0; i<nchunks; i++) {
+        char data[1024];
+        memset(data,i%255,1024);
 
-	umt->AddData(data,1024);
-	umt->sane_tree();
+        umt->AddData(data,1024);
+        umt->sane_tree();
     }
 }
 
@@ -121,89 +120,83 @@ void do_download(LiveHashTree *umt, int nchunks, int nchunkspersig, hmap_t &trut
 {
     bin_t peak_bins_[64];
     int peak_count = gen_peaks(nchunks,peak_bins_);
-    fprintf(stderr,"test: peak count %d\n", peak_count );
+    fprintf(stderr,"test: peak count %d\n", peak_count);
 
     // Send munros
     int nmunros = (nchunks + nchunkspersig-1)/nchunkspersig;
     int nchunkspersiglayer = (int)log2((double)nchunkspersig);
-    fprintf(stderr,"test: nchunks %d munro count %d layer %d\n", nchunks, nmunros, nchunkspersiglayer );
+    fprintf(stderr,"test: nchunks %d munro count %d layer %d\n", nchunks, nmunros, nchunkspersiglayer);
 
     fprintf(stderr,"test: Sending Munros\n");
-    for (int i=0; i<nmunros; i++)
-    {
-	bin_t munrobin(nchunkspersiglayer,i);
-	Sha1Hash munrohash = truthhashmap[munrobin];
-	umt->OfferHash(munrobin,munrohash);
+    for (int i=0; i<nmunros; i++) {
+        bin_t munrobin(nchunkspersiglayer,i);
+        Sha1Hash munrohash = truthhashmap[munrobin];
+        umt->OfferHash(munrobin,munrohash);
 
-	// Sign on the fly
-	Signature *sig = umt->GetKeyPair()->Sign(munrohash.bytes(),Sha1Hash::SIZE);
-	SigTintTuple sigtint(*sig, NOW);
+        // Sign on the fly
+        Signature *sig = umt->GetKeyPair()->Sign(munrohash.bytes(),Sha1Hash::SIZE);
+        SigTintTuple sigtint(*sig, NOW);
 
-	fprintf(stderr,"test: Sending munro %s\n", munrobin.str().c_str() );
+        fprintf(stderr,"test: Sending munro %s\n", munrobin.str().c_str());
 
-	bool verified = umt->OfferSignedMunroHash(munrobin,sigtint);
-	ASSERT_TRUE(verified);
-	umt->sane_tree();
+        bool verified = umt->OfferSignedMunroHash(munrobin,sigtint);
+        ASSERT_TRUE(verified);
+        umt->sane_tree();
     }
 
     // Verify munros in tree
-    for (int i=0; i<nmunros; i++)
-    {
-	bin_t munrobin(nchunkspersiglayer,i);
-	Node *n = umt->FindNode(munrobin);
-	Sha1Hash munrohash = truthhashmap[munrobin];
-	ASSERT_EQ(n->GetHash(),munrohash);
-	ASSERT_TRUE(n->GetVerified());
+    for (int i=0; i<nmunros; i++) {
+        bin_t munrobin(nchunkspersiglayer,i);
+        Node *n = umt->FindNode(munrobin);
+        Sha1Hash munrohash = truthhashmap[munrobin];
+        ASSERT_EQ(n->GetHash(),munrohash);
+        ASSERT_TRUE(n->GetVerified());
     }
 
     // Simulate download of chunks in pickorder
     pickorder_t::iterator citer;
-    for (citer=pickorder.begin(); citer != pickorder.end(); citer++)
-    {
-	int r = *citer;
-	fprintf(stderr,"test: \nAdd %" PRIu32 "\n", r);
+    for (citer=pickorder.begin(); citer != pickorder.end(); citer++) {
+        int r = *citer;
+        fprintf(stderr,"test: \nAdd %" PRIu32 "\n", r);
 
-	bin_t orig(0,r);
-	bin_t pos = orig;
+        bin_t orig(0,r);
+        bin_t pos = orig;
 
-	bin_t munro = umt->GetMunro(pos);
-	fprintf(stderr,"test: Add: %" PRIu32 " munro %s\n", r, munro.str().c_str() );
+        bin_t munro = umt->GetMunro(pos);
+        fprintf(stderr,"test: Add: %" PRIu32 " munro %s\n", r, munro.str().c_str());
 
-	// Sending uncles
-	binvector bv;
-	while (pos!=munro)
-	{
-	    bin_t uncle = pos.sibling();
-	    bv.push_back(uncle);
-	    pos = pos.parent();
-	}
-	binvector::reverse_iterator iter;
-	for (iter=bv.rbegin(); iter != bv.rend(); iter++)
-	{
-	    bin_t uncle = *iter;
-	    fprintf(stderr,"test: Add %" PRIu32 " uncle %s\n", r, uncle.str().c_str() );
-	    umt->OfferHash(uncle,truthhashmap[uncle]);
-	    umt->sane_tree();
-	}
+        // Sending uncles
+        binvector bv;
+        while (pos!=munro) {
+            bin_t uncle = pos.sibling();
+            bv.push_back(uncle);
+            pos = pos.parent();
+        }
+        binvector::reverse_iterator iter;
+        for (iter=bv.rbegin(); iter != bv.rend(); iter++) {
+            bin_t uncle = *iter;
+            fprintf(stderr,"test: Add %" PRIu32 " uncle %s\n", r, uncle.str().c_str());
+            umt->OfferHash(uncle,truthhashmap[uncle]);
+            umt->sane_tree();
+        }
 
-	// Sending actual chunk
-	fprintf(stderr,"test: Add %" PRIu32 " orig %s\n", r, orig.str().c_str() );
-	ASSERT_TRUE(umt->OfferHash(orig,truthhashmap[orig]));
-	umt->sane_tree();
+        // Sending actual chunk
+        fprintf(stderr,"test: Add %" PRIu32 " orig %s\n", r, orig.str().c_str());
+        ASSERT_TRUE(umt->OfferHash(orig,truthhashmap[orig]));
+        umt->sane_tree();
 
-	// Verify uncles in tree
-	for (iter=bv.rbegin(); iter != bv.rend(); iter++)
-	{
-	    bin_t uncle = *iter;
-	    fprintf(stderr,"test: Add %" PRIu32 " check verified %s\n", r, uncle.str().c_str() );
-	    Node *n = umt->FindNode(uncle);
-	    ASSERT_EQ(n->GetHash(),truthhashmap[uncle]);
-	    ASSERT_TRUE(n->GetVerified());
-	}
+        // Verify uncles in tree
+        for (iter=bv.rbegin(); iter != bv.rend(); iter++) {
+            bin_t uncle = *iter;
+            fprintf(stderr,"test: Add %" PRIu32 " check verified %s\n", r, uncle.str().c_str());
+            Node *n = umt->FindNode(uncle);
+            ASSERT_EQ(n->GetHash(),truthhashmap[uncle]);
+            ASSERT_TRUE(n->GetVerified());
+        }
 
-	Node *n = umt->FindNode(orig);
-	ASSERT_EQ(n->GetHash(),truthhashmap[orig]);
-	ASSERT_TRUE(n->GetVerified());
+        Node *n = umt->FindNode(orig);
+        ASSERT_EQ(n->GetHash(),truthhashmap[orig]);
+        ASSERT_TRUE(n->GetVerified());
     }
 }
 
@@ -218,48 +211,43 @@ LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy,int s
     fprintf(stderr,"\ntest: prepare_do_download(%d)\n", nchunks);
 
     // Create chunks
-    clist_t	clist;
-    for (int i=0; i<nchunks; i++)
-    {
-	char *data = new char[1024];
-	memset(data,i%255,1024);
-	clist.push_back(data);
+    clist_t clist;
+    for (int i=0; i<nchunks; i++) {
+        char *data = new char[1024];
+        memset(data,i%255,1024);
+        clist.push_back(data);
     }
 
     // Create leaves
     hmap_t truthhashmap;
-    for (int i=0; i<nchunks; i++)
-    {
-	truthhashmap[bin_t(0,i)] = Sha1Hash(clist[i],1024);
-	fprintf(stderr,"test: Hash leaf %s\n", bin_t(0,i).str().c_str() );
+    for (int i=0; i<nchunks; i++) {
+        truthhashmap[bin_t(0,i)] = Sha1Hash(clist[i],1024);
+        fprintf(stderr,"test: Hash leaf %s\n", bin_t(0,i).str().c_str());
 
     }
 
     // Pad with zero hashes
     int height = ceil(log2((double)nchunks));
 
-    fprintf(stderr,"test: Hash height %d\n", height );
+    fprintf(stderr,"test: Hash height %d\n", height);
 
     int width = pow(2.0,height);
-    for (int i=nchunks; i<width; i++)
-    {
-	truthhashmap[bin_t(0,i)] = Sha1Hash::ZERO;
-	fprintf(stderr,"test: Hash empty %s\n", bin_t(0,i).str().c_str() );
+    for (int i=nchunks; i<width; i++) {
+        truthhashmap[bin_t(0,i)] = Sha1Hash::ZERO;
+        fprintf(stderr,"test: Hash empty %s\n", bin_t(0,i).str().c_str());
     }
 
     // Calc hashtree
-    for (int h=1; h<height+1; h++)
-    {
-	int step = pow(2.0,h);
-	int npairs = width/step;
-	for (int i=0; i<npairs; i++)
-	{
-	    bin_t b(h,i);
-	    Sha1Hash parhash(truthhashmap[b.left()],truthhashmap[b.right()]);
-	    truthhashmap[b] = parhash;
+    for (int h=1; h<height+1; h++) {
+        int step = pow(2.0,h);
+        int npairs = width/step;
+        for (int i=0; i<npairs; i++) {
+            bin_t b(h,i);
+            Sha1Hash parhash(truthhashmap[b.left()],truthhashmap[b.right()]);
+            truthhashmap[b] = parhash;
 
-	    fprintf(stderr,"test: Hash parent %s\n", b.str().c_str() );
-	}
+            fprintf(stderr,"test: Hash parent %s\n", b.str().c_str());
+        }
     }
 
 
@@ -276,18 +264,16 @@ LiveHashTree *prepare_do_download(int nchunks,pickpolicy_t piecepickpolicy,int s
         pickvector.push_back(i);
 
     if (piecepickpolicy == PICK_REVERSE)
-	std::reverse(pickvector.begin(),pickvector.end());
-    else if (piecepickpolicy == PICK_RANDOM)
-    {
-	std::srand ( unsigned ( std::time(0) ) );
-	std::random_shuffle( pickvector.begin(), pickvector.end() );
+        std::reverse(pickvector.begin(),pickvector.end());
+    else if (piecepickpolicy == PICK_RANDOM) {
+        std::srand(unsigned(std::time(0)));
+        std::random_shuffle(pickvector.begin(), pickvector.end());
     }
 
     do_download(umt,nchunks,nchunkspersig,truthhashmap,pickvector);
 
-    for (int i=0; i<nchunks; i++)
-    {
-	delete clist[i];
+    for (int i=0; i<nchunks; i++) {
+        delete clist[i];
     }
 
     return umt;
@@ -327,30 +313,27 @@ TEST(LiveTreeTest,Download14)
 
 TEST(LiveTreeTest,DownloadIter)
 {
-    for (int i=0; i<18; i+=2)
-    {
-	fprintf(stderr,"test: test: DownloadIter %d\n", i );
-	LiveHashTree *umt = prepare_do_download(i,PICK_INORDER);
-	delete umt;
+    for (int i=0; i<18; i+=2) {
+        fprintf(stderr,"test: test: DownloadIter %d\n", i);
+        LiveHashTree *umt = prepare_do_download(i,PICK_INORDER);
+        delete umt;
     }
 }
 
 TEST(LiveTreeTest,DownloadIterReverse)
 {
-    for (int i=0; i<18; i+=2)
-    {
-	LiveHashTree *umt = prepare_do_download(i,PICK_REVERSE);
-	delete umt;
+    for (int i=0; i<18; i+=2) {
+        LiveHashTree *umt = prepare_do_download(i,PICK_REVERSE);
+        delete umt;
     }
 }
 
 
 TEST(LiveTreeTest,DownloadIterRandom)
 {
-    for (int i=0; i<18; i+=2)
-    {
-	LiveHashTree *umt = prepare_do_download(i,PICK_RANDOM);
-	delete umt;
+    for (int i=0; i<18; i+=2) {
+        LiveHashTree *umt = prepare_do_download(i,PICK_RANDOM);
+        delete umt;
     }
 }
 
@@ -389,7 +372,8 @@ TEST(LiveTreeTest,Download600Start489SigPer32)
     LiveHashTree *umt = prepare_do_download(600,PICK_INORDER,489,32);
 }
 
-int main (int argc, char** argv) {
+int main(int argc, char** argv)
+{
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

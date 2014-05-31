@@ -18,14 +18,20 @@ G_MODULE_EXPORT const gchar version[] = VERSION;
 /* Start the functions we need for the plugin stuff */
 
 G_MODULE_EXPORT void
-plugin_register (void)
+plugin_register(void)
 {
-  {extern void proto_register_swift (void); proto_register_swift ();}
+    {
+        extern void proto_register_swift(void);
+        proto_register_swift();
+    }
 }
 
 G_MODULE_EXPORT void
 plugin_reg_handoff(void)
 {
-  {extern void proto_reg_handoff_swift (void); proto_reg_handoff_swift ();}
+    {
+        extern void proto_reg_handoff_swift(void);
+        proto_reg_handoff_swift();
+    }
 }
 #endif

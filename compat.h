@@ -79,8 +79,8 @@ typedef unsigned __int64 uint64_t;
 #endif
 
 #ifdef _WIN32
-#define strcasecmp	   stricmp
-#define strtok_r	   strtok_s
+#define strcasecmp     stricmp
+#define strtok_r       strtok_s
 #endif
 #ifndef S_IRUSR
 #define S_IRUSR _S_IREAD
@@ -105,7 +105,7 @@ typedef void* setsockoptptr_t;
 // libevent2 assumes WIN32 is defined
 #ifdef _WIN32
 #ifndef WIN32
-#define WIN32	_WIN32
+#define WIN32   _WIN32
 #endif
 #endif
 #include <event2/util.h>
@@ -115,12 +115,12 @@ typedef void* setsockoptptr_t;
 #endif
 
 #ifndef LONG_MAX
-#define LONG_MAX	numeric_limits<int>::max()
+#define LONG_MAX    numeric_limits<int>::max()
 #endif
 
 #ifndef log2
 // log2 is C99 which is not fully supported by MS VS
-#define log2(x)		(log(x)/log(2.0))
+#define log2(x)     (log(x)/log(2.0))
 #endif
 
 
@@ -131,20 +131,20 @@ typedef void* setsockoptptr_t;
 
 #ifdef _WIN32
 #if SIZE_MAX > UINT_MAX
-#define PRISIZET	"%llu"
+#define PRISIZET    "%llu"
 #else
-#define PRISIZET	"%u"
+#define PRISIZET    "%u"
 #endif
 #else
 #define PRISIZET    "%zu"
 #endif
 
 #ifdef _WIN32
-#define ssize_t		SSIZE_T
+#define ssize_t     SSIZE_T
 #endif
 
 #ifdef _WIN32
-#define mode_t		int
+#define mode_t      int
 #endif
 
 
@@ -160,13 +160,14 @@ typedef void* setsockoptptr_t;
 #ifdef _WIN32
 #define FILE_SEP          "\\"
 #else
-#define FILE_SEP	  "/"
+#define FILE_SEP      "/"
 #endif
 
-namespace swift {
+namespace swift
+{
 
-/** tint is the time integer type; microsecond-precise. */
-typedef int64_t tint;
+    /** tint is the time integer type; microsecond-precise. */
+    typedef int64_t tint;
 #define TINT_HOUR ((swift::tint)1000000*60*60)
 #define TINT_MIN ((swift::tint)1000000*60)
 #define TINT_SEC ((swift::tint)1000000)
@@ -175,131 +176,130 @@ typedef int64_t tint;
 #define TINT_NEVER ((swift::tint)0x3fffffffffffffffLL)
 
 #ifdef _WIN32
-#define tintabs	_abs64
+#define tintabs _abs64
 #else
-#define tintabs	::abs
+#define tintabs ::abs
 #endif
 
 
-/*
- * UNICODE
- *
- * All filenames, etc. are stored internally as UTF-8 encoded std::strings
- * which are converted when used to UTF-16 (Windows) or the locale (UNIX).
- */
+    /*
+     * UNICODE
+     *
+     * All filenames, etc. are stored internally as UTF-8 encoded std::strings
+     * which are converted when used to UTF-16 (Windows) or the locale (UNIX).
+     */
 
 // Return UTF-16 representation of utf8str. Caller must free returned value.
-wchar_t* utf8to16(std::string utf8str);
-std::string utf16to8(wchar_t* utf16str);
+    wchar_t* utf8to16(std::string utf8str);
+    std::string utf16to8(wchar_t* utf16str);
 
 // open with filename in UTF-8
-int open_utf8(const char *pathname, int flags, mode_t mode);
+    int open_utf8(const char *pathname, int flags, mode_t mode);
 
 // fopen with filename in UTF-8
-FILE *fopen_utf8(const char *filename, const char *mode);
+    FILE *fopen_utf8(const char *filename, const char *mode);
 
 // Returns OS temporary directory in UTF-8 encoding
-std::string gettmpdir_utf8(void);
+    std::string gettmpdir_utf8(void);
 
 // Changes current working dir to dirname in UTF-8
-int chdir_utf8(std::string dirname);
+    int chdir_utf8(std::string dirname);
 
 // Returns current working directory in UTF-8.
-std::string getcwd_utf8(void);
+    std::string getcwd_utf8(void);
 
 // Returns the 64-bit size of a filename in UTF-8.
-int64_t file_size_by_path_utf8(std::string pathname);
+    int64_t file_size_by_path_utf8(std::string pathname);
 
-/* Returns -1 on error, 0 on non-existence, 1 on existence and being a non-dir, 2 on existence and being a dir */
-int file_exists_utf8(std::string pathname);
+    /* Returns -1 on error, 0 on non-existence, 1 on existence and being a non-dir, 2 on existence and being a dir */
+    int file_exists_utf8(std::string pathname);
 
 // mkdir with filename in UTF-8
-int mkdir_utf8(std::string dirname);
+    int mkdir_utf8(std::string dirname);
 
 // remove with filename in UTF-8
-int remove_utf8(std::string pathname);
+    int remove_utf8(std::string pathname);
 
 // opendir() + readdir() UTF-8 versions
-class DirEntry
-{
-  public:
+    class DirEntry
+    {
+    public:
 #ifdef _WIN32
         DirEntry(std::string filename, bool isdir) : filename_(filename), isdir_(isdir), hFind_(0) {}
 #else
-	DirEntry(std::string filename, bool isdir) : filename_(filename), isdir_(isdir), dirp_(NULL) {}
+        DirEntry(std::string filename, bool isdir) : filename_(filename), isdir_(isdir), dirp_(NULL) {}
 #endif
-	std::string filename_;
-	bool isdir_;
+        std::string filename_;
+        bool isdir_;
 
 #ifdef _WIN32
-	HANDLE hFind_;
+        HANDLE hFind_;
 #else
-	DIR *dirp_;
-	std::string basename_;
+        DIR *dirp_;
+        std::string basename_;
 #endif
-};
+    };
 
 // Returns NULL on error.
-DirEntry *opendir_utf8(std::string pathname);
+    DirEntry *opendir_utf8(std::string pathname);
 
 // Returns NULL on error, last entry. Automatically does closedir()
-DirEntry *readdir_utf8(DirEntry *prevde);
+    DirEntry *readdir_utf8(DirEntry *prevde);
 
 // return directory part of filename or ""
-std::string dirname_utf8(std::string pathname);
+    std::string dirname_utf8(std::string pathname);
 // return non-directory part of filename
-std::string basename_utf8(std::string pathname);
+    std::string basename_utf8(std::string pathname);
 
-/*
- * Other filename-less functions
- */
+    /*
+     * Other filename-less functions
+     */
 
-int64_t  file_size (int fd);
+    int64_t file_size(int fd);
 
-int     file_seek (int fd, int64_t offset);
+    int file_seek(int fd, int64_t offset);
 
-int     file_resize (int fd, int64_t new_size);
+    int file_resize(int fd, int64_t new_size);
 
-void*   memory_map (int fd, size_t size=0);
-void    memory_unmap (int fd, void*, size_t size);
+    void* memory_map(int fd, size_t size=0);
+    void memory_unmap(int fd, void*, size_t size);
 
-void    print_error (const char* msg);
+    void print_error(const char* msg);
 
 #ifdef _WIN32
 
-/** UNIX pread approximation. Does change file pointer. Is not thread-safe */
-size_t  pread(int fildes, void *buf, size_t nbyte, __int64 offset); // off_t not 64-bit dynamically on Win32
+    /** UNIX pread approximation. Does change file pointer. Is not thread-safe */
+    size_t pread(int fildes, void *buf, size_t nbyte, __int64 offset); // off_t not 64-bit dynamically on Win32
 
-/** UNIX pwrite approximation. Does change file pointer. Is not thread-safe */
-size_t  pwrite(int fildes, const void *buf, size_t nbyte, __int64 offset);
+    /** UNIX pwrite approximation. Does change file pointer. Is not thread-safe */
+    size_t pwrite(int fildes, const void *buf, size_t nbyte, __int64 offset);
 
-int     inet_aton(const char *cp, struct in_addr *inp);
+    int inet_aton(const char *cp, struct in_addr *inp);
 
 #endif
 
-tint    usec_time ();
+    tint usec_time();
 
-bool    make_socket_nonblocking(evutil_socket_t s);
+    bool make_socket_nonblocking(evutil_socket_t s);
 
-bool    close_socket (evutil_socket_t sock);
+    bool close_socket(evutil_socket_t sock);
 
-struct timeval* tint2tv (tint t);
+    struct timeval* tint2tv(tint t);
 
 
-int inline stringreplace(std::string& source, const std::string& find, const std::string& replace)
-{
-    int num=0;
-    std::string::size_type fLen = find.size();
-    std::string::size_type rLen = replace.size();
-    for (std::string::size_type pos=0; (pos=source.find(find, pos))!=std::string::npos; pos+=rLen)
+    int inline stringreplace(std::string& source, const std::string& find, const std::string& replace)
     {
-        num++;
-        source.replace(pos, fLen, replace);
+        int num=0;
+        std::string::size_type fLen = find.size();
+        std::string::size_type rLen = replace.size();
+        for (std::string::size_type pos=0; (pos=source.find(find, pos))!=std::string::npos; pos+=rLen) {
+            num++;
+            source.replace(pos, fLen, replace);
+        }
+        return num;
     }
-    return num;
-}
 
-std::string hex2bin(std::string input);
+    std::string hex2bin(std::string input);
 
 };
 

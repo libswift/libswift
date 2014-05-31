@@ -6,259 +6,266 @@
 #include "compat.h"
 #include "serialize.h"
 
-namespace swift {
-
-/**
- * Binmap class
- */
-class binmap_t : Serializable {
-public:
-    /** Type of bitmap */
-    typedef int32_t bitmap_t;
-    /** Type of reference */
-    typedef uint32_t ref_t;
-
+namespace swift
+{
 
     /**
-     * Constructor
+     * Binmap class
      */
-    binmap_t();
+    class binmap_t : Serializable
+    {
+    public:
+        /** Type of bitmap */
+        typedef int32_t bitmap_t;
+        /** Type of reference */
+        typedef uint32_t ref_t;
 
 
-    /**
-     * Destructor
-     */
-    virtual ~binmap_t();
+        /**
+         * Constructor
+         */
+        binmap_t();
 
 
-    /**
-     * Set the bin
-     */
-    void set(const bin_t& bin);
+        /**
+         * Destructor
+         */
+        virtual ~binmap_t();
 
 
-    /**
-     * Reset the bin
-     */
-    void reset(const bin_t& bin);
+        /**
+         * Set the bin
+         */
+        void set(const bin_t& bin);
 
 
-    /**
-     * Empty all bins
-     */
-    void clear();
+        /**
+         * Reset the bin
+         */
+        void reset(const bin_t& bin);
 
 
-    /**
-     * Ric: Fill all bins, size is given by the source's root
-     */
-    void fill(const binmap_t& source);
+        /**
+         * Empty all bins
+         */
+        void clear();
 
-    /**
-     * Ric: Empty all bins, size is given by the length of the content
-     */
-    void empty(const int size);
 
-    /**
-     * Whether binmap is empty
-     */
-    bool is_empty() const;
+        /**
+         * Ric: Fill all bins, size is given by the source's root
+         */
+        void fill(const binmap_t& source);
 
+        /**
+         * Ric: Empty all bins, size is given by the length of the content
+         */
+        void empty(const int size);
 
-    /**
-     * Whether binmap is filled
-     */
-    bool is_filled() const;
+        /**
+         * Whether binmap is empty
+         */
+        bool is_empty() const;
 
 
-    /**
-     * Whether range/bin is empty
-     */
-    bool is_empty(const bin_t& bin) const;
+        /**
+         * Whether binmap is filled
+         */
+        bool is_filled() const;
 
 
-    /**
-     * Whether range/bin is filled
-     */
-    bool is_filled(const bin_t& bin) const;
+        /**
+         * Whether range/bin is empty
+         */
+        bool is_empty(const bin_t& bin) const;
 
 
-    /**
-     * Return the topmost solid bin which covers the specified bin
-     */
-    bin_t cover(const bin_t& bin) const;
+        /**
+         * Whether range/bin is filled
+         */
+        bool is_filled(const bin_t& bin) const;
 
 
-    /**
-     * Find first empty bin
-     */
-    bin_t find_empty() const;
+        /**
+         * Return the topmost solid bin which covers the specified bin
+         */
+        bin_t cover(const bin_t& bin) const;
 
 
-    /**
-     * Find first filled bin
-     */
-    bin_t find_filled() const;
+        /**
+         * Find first empty bin
+         */
+        bin_t find_empty() const;
 
-    /**
-     * Arno: Find first empty bin right of start (start inclusive)
-     */
-    bin_t find_empty(bin_t start) const;
 
-    /**
-     * Get number of allocated cells
-     */
-    size_t cells_number() const;
+        /**
+         * Find first filled bin
+         */
+        bin_t find_filled() const;
 
+        /**
+         * Arno: Find first empty bin right of start (start inclusive)
+         */
+        bin_t find_empty(bin_t start) const;
 
-    /**
-     * Get total size of the binmap (Arno: =number of bytes it occupies in memory)
-     */
-    size_t total_size() const;
+        /**
+         * Get number of allocated cells
+         */
+        size_t cells_number() const;
 
 
-    /**
-     * Echo the binmap status to stdout
-     */
-    void status() const;
+        /**
+         * Get total size of the binmap (Arno: =number of bytes it occupies in memory)
+         */
+        size_t total_size() const;
 
 
-    /**
-     * Find first additional bin in source
-     */
-    static bin_t find_complement(const binmap_t& destination, const binmap_t& source, const bin_t::uint_t twist);
+        /**
+         * Echo the binmap status to stdout
+         */
+        void status() const;
 
 
-    /**
-     * Find first additional bin of the source inside specified range
-     */
-    static bin_t find_complement(const binmap_t& destination, const binmap_t& source, bin_t range, const bin_t::uint_t twist);
+        /**
+         * Find first additional bin in source
+         */
+        static bin_t find_complement(const binmap_t& destination, const binmap_t& source, const bin_t::uint_t twist);
 
 
-    /**
-	 * Find matching bin of the source inside specified range
-	 */
-	static bin_t find_match(const binmap_t& destination, const binmap_t& source, bin_t range, const bin_t::uint_t twist);
+        /**
+         * Find first additional bin of the source inside specified range
+         */
+        static bin_t find_complement(const binmap_t& destination, const binmap_t& source, bin_t range,
+                                     const bin_t::uint_t twist);
 
 
-    /**
-     * Copy one binmap to another
-     */
-    static void copy(binmap_t& destination, const binmap_t& source);
+        /**
+         * Find matching bin of the source inside specified range
+         */
+        static bin_t find_match(const binmap_t& destination, const binmap_t& source, bin_t range, const bin_t::uint_t twist);
 
 
-    /**
-     * Copy a range from one binmap to another binmap
-     */
-    static void copy(binmap_t& destination, const binmap_t& source, const bin_t& range);
+        /**
+         * Copy one binmap to another
+         */
+        static void copy(binmap_t& destination, const binmap_t& source);
 
 
-    // Arno, 2011-10-20: Persistent storage
-    int serialize(FILE *fp);
-    int deserialize(FILE *fp);
-private:
-    #pragma pack(push, 1)
+        /**
+         * Copy a range from one binmap to another binmap
+         */
+        static void copy(binmap_t& destination, const binmap_t& source, const bin_t& range);
 
-    /**
-     * Structure of cell halves
-     */
-    typedef struct {
-        union {
-            bitmap_t bitmap_;
-            ref_t ref_;
-        };
-    } half_t;
 
-    /**
-     * Structure of cells
-     */
-    typedef union {
-        struct {
-            half_t left_;
-            half_t right_;
-            bool is_left_ref_ : 1;
-            bool is_right_ref_ : 1;
-            bool is_free_ : 1;
-        };
-        ref_t free_next_;
-    } cell_t;
+        // Arno, 2011-10-20: Persistent storage
+        int serialize(FILE *fp);
+        int deserialize(FILE *fp);
+    private:
+#pragma pack(push, 1)
 
-    #pragma pack(pop)
+        /**
+         * Structure of cell halves
+         */
+        typedef struct {
+            union {
+                bitmap_t bitmap_;
+                ref_t ref_;
+            };
+        } half_t;
 
-private:
+        /**
+         * Structure of cells
+         */
+        typedef union {
+            struct {
+                half_t left_;
+                half_t right_;
+                bool is_left_ref_ : 1;
+                bool is_right_ref_ : 1;
+                bool is_free_ : 1;
+            };
+            ref_t free_next_;
+        } cell_t;
 
-    /** Allocates one cell (dirty allocation) */
-    ref_t _alloc_cell();
+#pragma pack(pop)
 
-    /** Allocates one cell */
-    ref_t alloc_cell();
+    private:
 
-    /** Reserve cells allocation capacity */
-    bool reserve_cells(size_t count);
+        /** Allocates one cell (dirty allocation) */
+        ref_t _alloc_cell();
 
-    /** Releases the cell */
-    void free_cell(ref_t cell);
+        /** Allocates one cell */
+        ref_t alloc_cell();
 
-    /** Extend root */
-    bool extend_root();
+        /** Reserve cells allocation capacity */
+        bool reserve_cells(size_t count);
 
-    /** Pack a trace of cells */
-    void pack_cells(ref_t* cells);
+        /** Releases the cell */
+        void free_cell(ref_t cell);
 
+        /** Extend root */
+        bool extend_root();
 
-    /** Pointer to the list of blocks */
-    cell_t* cell_;
+        /** Pack a trace of cells */
+        void pack_cells(ref_t* cells);
 
-    /** Number of available cells */
-    size_t cells_number_;
 
-    /** Number of allocated cells */
-    size_t allocated_cells_number_;
+        /** Pointer to the list of blocks */
+        cell_t* cell_;
 
-    /** Front of the free cell list */
-    ref_t free_top_;
+        /** Number of available cells */
+        size_t cells_number_;
 
-    /** The root bin */
-    bin_t root_bin_;
+        /** Number of allocated cells */
+        size_t allocated_cells_number_;
 
+        /** Front of the free cell list */
+        ref_t free_top_;
 
-    /** Trace the bin */
-    void trace(ref_t* ref, bin_t* bin, const bin_t& target) const;
+        /** The root bin */
+        bin_t root_bin_;
 
-    /** Trace the bin */
-    void trace(ref_t* ref, bin_t* bin, ref_t** history, const bin_t& target) const;
 
+        /** Trace the bin */
+        void trace(ref_t* ref, bin_t* bin, const bin_t& target) const;
 
-    /** Sets low layer bitmap */
-    void _set__low_layer_bitmap(const bin_t& bin, const bitmap_t bitmap);
+        /** Trace the bin */
+        void trace(ref_t* ref, bin_t* bin, ref_t** history, const bin_t& target) const;
 
-    /** Sets high layer bitmap */
-    void _set__high_layer_bitmap(const bin_t& bin, const bitmap_t bitmap);
 
+        /** Sets low layer bitmap */
+        void _set__low_layer_bitmap(const bin_t& bin, const bitmap_t bitmap);
 
-    /** Clone binmap cells to another binmap */
-    static void copy(binmap_t& destination, const ref_t dref, const binmap_t& source, const ref_t sref);
+        /** Sets high layer bitmap */
+        void _set__high_layer_bitmap(const bin_t& bin, const bitmap_t bitmap);
 
-    static void _copy__range(binmap_t& destination, const binmap_t& source, const ref_t sref, const bin_t sbin);
 
+        /** Clone binmap cells to another binmap */
+        static void copy(binmap_t& destination, const ref_t dref, const binmap_t& source, const ref_t sref);
 
-    /** Find first additional bin in source */
-    static bin_t _find_complement(const bin_t& bin, const ref_t dref, const binmap_t& destination, const ref_t sref, const binmap_t& source, const bin_t::uint_t twist, bool match=false);
-    static bin_t _find_complement(const bin_t& bin, const bitmap_t dbitmap, const ref_t sref, const binmap_t& source, const bin_t::uint_t twist, bool match=false);
-    static bin_t _find_complement(const bin_t& bin, const ref_t dref, const binmap_t& destination, const bitmap_t sbitmap, const bin_t::uint_t twist, bool match=false);
-    static bin_t _find_complement(const bin_t& bin, const bitmap_t dbitmap, const bitmap_t sbitmap, const bin_t::uint_t twist, bool match=false);
+        static void _copy__range(binmap_t& destination, const binmap_t& source, const ref_t sref, const bin_t sbin);
 
 
-    /* Disabled */
-    binmap_t& operator = (const binmap_t&);
+        /** Find first additional bin in source */
+        static bin_t _find_complement(const bin_t& bin, const ref_t dref, const binmap_t& destination, const ref_t sref,
+                                      const binmap_t& source, const bin_t::uint_t twist, bool match=false);
+        static bin_t _find_complement(const bin_t& bin, const bitmap_t dbitmap, const ref_t sref, const binmap_t& source,
+                                      const bin_t::uint_t twist, bool match=false);
+        static bin_t _find_complement(const bin_t& bin, const ref_t dref, const binmap_t& destination, const bitmap_t sbitmap,
+                                      const bin_t::uint_t twist, bool match=false);
+        static bin_t _find_complement(const bin_t& bin, const bitmap_t dbitmap, const bitmap_t sbitmap,
+                                      const bin_t::uint_t twist, bool match=false);
 
-    /* Disabled */
-    binmap_t(const binmap_t&);
 
-    // Arno, 2011-10-20: Persistent storage
-    int write_cell(FILE *fp,cell_t c);
-    int read_cell(FILE *fp,cell_t *c);
-};
+        /* Disabled */
+        binmap_t& operator = (const binmap_t&);
+
+        /* Disabled */
+        binmap_t(const binmap_t&);
+
+        // Arno, 2011-10-20: Persistent storage
+        int write_cell(FILE *fp,cell_t c);
+        int read_cell(FILE *fp,cell_t *c);
+    };
 
 } // namespace end
 

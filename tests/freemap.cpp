@@ -14,12 +14,13 @@
 using namespace swift;
 
 #ifdef _MSC_VER
-	#define RANDOM  rand
+#define RANDOM  rand
 #else
-	#define RANDOM	random
+#define RANDOM  random
 #endif
 
-uint8_t rand_norm (uint8_t lim) {
+uint8_t rand_norm(uint8_t lim)
+{
     long rnd = RANDOM() & ((1<<lim)-1);
     uint8_t bits = 0;
     while (rnd) {
@@ -29,7 +30,8 @@ uint8_t rand_norm (uint8_t lim) {
     return bits;
 }
 
-TEST(FreemapTest,Freemap) {
+TEST(FreemapTest,Freemap)
+{
     binmap_t space;
     const bin_t top(30,0);
     space.reset(top);
@@ -38,8 +40,8 @@ TEST(FreemapTest,Freemap) {
     ts_t to_free;
     for (int t=0; t<1000000; t++) {
 
-    	if ((t % 1000) == 0)
-    		printf(".");
+        if ((t % 1000) == 0)
+            printf(".");
 
         if (t<500000 || t>504000) {
             uint8_t lr = rand_norm(28);
@@ -52,7 +54,7 @@ TEST(FreemapTest,Freemap) {
             long dealloc_time = 1<<rand_norm(22);
 #ifdef SHOWPUTPUT
             printf("alloc 2**%i starting at %" PRIi64 " for %li ticks\n",
-                (int)lr,alloc.toUInt(),dealloc_time);
+                   (int)lr,alloc.toUInt(),dealloc_time);
 #endif
             dealloc_time += t;
             to_free.insert(timebin_t(dealloc_time,alloc));
@@ -64,24 +66,25 @@ TEST(FreemapTest,Freemap) {
             space.reset(freebin);
 #ifdef SHOWOUTPUT
             printf("freed at %" PRIi64 "\n",
-                freebin.toUInt());
+                   freebin.toUInt());
 #endif
-       }
+        }
         // log: space taken, gaps, binmap cells, tree cells
         int cells = space.cells_number();
 
 #ifdef SHOWOUTPUT
         printf("time %i cells used %i blocks %i\n",
-                t,cells,(int)to_free.size());
+               t,cells,(int)to_free.size());
 #endif
         //space.dump("space");
     }
-    for(ts_t::iterator i=to_free.begin(); i!=to_free.end(); i++)
+    for (ts_t::iterator i=to_free.begin(); i!=to_free.end(); i++)
         space.reset(i->second);
     EXPECT_TRUE(space.is_empty(top));
 }
 
-int main (int argc, char** argv) {
-	testing::InitGoogleTest(&argc, argv);
-	return RUN_ALL_TESTS();
+int main(int argc, char** argv)
+{
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }
