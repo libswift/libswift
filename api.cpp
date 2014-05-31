@@ -73,7 +73,7 @@ SwarmID & SwarmID::operator= (const SwarmID & source)
 }
 
 
-bool    SwarmID::operator == (const SwarmID& b) const
+bool SwarmID::operator == (const SwarmID& b) const
 {
     if (empty_ && b.empty_)
         return true;
@@ -129,7 +129,7 @@ void StartLibraryCleanup()
  * Global Operations
  */
 
-int     swift::Listen(Address addr)
+int swift::Listen(Address addr)
 {
     if (api_debug)
         fprintf(stderr,"swift::Listen addr %s\n", addr.str().c_str());
@@ -147,7 +147,7 @@ int     swift::Listen(Address addr)
 }
 
 
-void    swift::Shutdown()
+void swift::Shutdown()
 {
     if (api_debug)
         fprintf(stderr,"swift::Shutdown");
@@ -290,7 +290,7 @@ ssize_t swift::Write(int td, const void *buf, size_t nbyte, int64_t offset)
 
 
 
-void     swift::SetTracker(std::string trackerurl)
+void swift::SetTracker(std::string trackerurl)
 {
     Channel::trackerurl = trackerurl;
 }
@@ -835,7 +835,7 @@ int swift::LiveOpen(std::string filename, SwarmID &swarmid, std::string trackeru
 }
 
 
-uint64_t  swift::GetHookinOffset(int td)
+uint64_t swift::GetHookinOffset(int td)
 {
     if (api_debug)
         fprintf(stderr,"swift::GetHookinOffset td %d\n", td);

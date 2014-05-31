@@ -338,7 +338,7 @@ Channel *ContentTransfer::RandomChannel(Channel *notc)
 
 
 // RATELIMIT
-void      ContentTransfer::OnRecvData(int n)
+void ContentTransfer::OnRecvData(int n)
 {
     speeddwcount_++;
     uint32_t speed = cur_speed_[DDIR_DOWNLOAD].GetSpeedNeutral();
@@ -349,7 +349,7 @@ void      ContentTransfer::OnRecvData(int n)
     }
 }
 
-void      ContentTransfer::OnSendData(int n)
+void ContentTransfer::OnSendData(int n)
 {
     speedupcount_++;
     uint32_t speed = cur_speed_[DDIR_UPLOAD].GetSpeedNeutral();
@@ -361,13 +361,13 @@ void      ContentTransfer::OnSendData(int n)
 }
 
 
-void      ContentTransfer::OnRecvNoData()
+void ContentTransfer::OnRecvNoData()
 {
     // AddPoint(0) everytime we don't AddData gives bad speed measurement
     cur_speed_[DDIR_DOWNLOAD].AddPoint((uint64_t)0);
 }
 
-void      ContentTransfer::OnSendNoData()
+void ContentTransfer::OnSendNoData()
 {
     // AddPoint(0) everytime we don't SendData gives bad speed measurement
     cur_speed_[DDIR_UPLOAD].AddPoint((uint64_t)0);
@@ -375,13 +375,13 @@ void      ContentTransfer::OnSendNoData()
 
 
 
-double      ContentTransfer::GetCurrentSpeed(data_direction_t ddir)
+double ContentTransfer::GetCurrentSpeed(data_direction_t ddir)
 {
     return cur_speed_[ddir].GetSpeedNeutral();
 }
 
 
-void      ContentTransfer::SetMaxSpeed(data_direction_t ddir, double m)
+void ContentTransfer::SetMaxSpeed(data_direction_t ddir, double m)
 {
     max_speed_[ddir] = m;
     // Arno, 2012-01-04: Be optimistic, forget history.
@@ -389,13 +389,13 @@ void      ContentTransfer::SetMaxSpeed(data_direction_t ddir, double m)
 }
 
 
-double      ContentTransfer::GetMaxSpeed(data_direction_t ddir)
+double ContentTransfer::GetMaxSpeed(data_direction_t ddir)
 {
     return max_speed_[ddir];
 }
 
 //STATS
-uint32_t   ContentTransfer::GetNumLeechers()
+uint32_t ContentTransfer::GetNumLeechers()
 {
     uint32_t count = 0;
     channels_t::iterator iter;
@@ -409,7 +409,7 @@ uint32_t   ContentTransfer::GetNumLeechers()
 }
 
 
-uint32_t   ContentTransfer::GetNumSeeders()
+uint32_t ContentTransfer::GetNumSeeders()
 {
     uint32_t count = 0;
     channels_t::iterator iter;

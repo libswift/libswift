@@ -18,7 +18,7 @@
 namespace swift
 {
 
-    typedef     std::vector< std::pair<uint32_t, binmap_t*> >   WaitingPeers;
+    typedef std::vector< std::pair<uint32_t, binmap_t*> > WaitingPeers;
 
     class Availability
     {

@@ -255,34 +255,34 @@ namespace swift
      * Other filename-less functions
      */
 
-    int64_t  file_size(int fd);
+    int64_t file_size(int fd);
 
-    int     file_seek(int fd, int64_t offset);
+    int file_seek(int fd, int64_t offset);
 
-    int     file_resize(int fd, int64_t new_size);
+    int file_resize(int fd, int64_t new_size);
 
-    void*   memory_map(int fd, size_t size=0);
-    void    memory_unmap(int fd, void*, size_t size);
+    void* memory_map(int fd, size_t size=0);
+    void memory_unmap(int fd, void*, size_t size);
 
-    void    print_error(const char* msg);
+    void print_error(const char* msg);
 
 #ifdef _WIN32
 
     /** UNIX pread approximation. Does change file pointer. Is not thread-safe */
-    size_t  pread(int fildes, void *buf, size_t nbyte, __int64 offset); // off_t not 64-bit dynamically on Win32
+    size_t pread(int fildes, void *buf, size_t nbyte, __int64 offset); // off_t not 64-bit dynamically on Win32
 
     /** UNIX pwrite approximation. Does change file pointer. Is not thread-safe */
-    size_t  pwrite(int fildes, const void *buf, size_t nbyte, __int64 offset);
+    size_t pwrite(int fildes, const void *buf, size_t nbyte, __int64 offset);
 
-    int     inet_aton(const char *cp, struct in_addr *inp);
+    int inet_aton(const char *cp, struct in_addr *inp);
 
 #endif
 
-    tint    usec_time();
+    tint usec_time();
 
-    bool    make_socket_nonblocking(evutil_socket_t s);
+    bool make_socket_nonblocking(evutil_socket_t s);
 
-    bool    close_socket(evutil_socket_t sock);
+    bool close_socket(evutil_socket_t sock);
 
     struct timeval* tint2tv(tint t);
 

@@ -68,7 +68,7 @@ Sha1Hash::Sha1Hash(bool hex, const char* hash)
         memcpy(bits,hash,SIZE);
 }
 
-std::string    Sha1Hash::hex() const
+std::string Sha1Hash::hex() const
 {
     char hex[HASHSZ*2+1];
     for (int i=0; i<HASHSZ; i++)
@@ -203,7 +203,7 @@ int MmapHashTree::OpenHashFile()
 
 
 // Reads complete file and constructs hash tree
-void            MmapHashTree::Submit()
+void MmapHashTree::Submit()
 {
     size_ = storage_->GetReservedSize();
     sizec_ = (size_ + chunk_size_-1) / chunk_size_;
@@ -272,7 +272,7 @@ void            MmapHashTree::Submit()
 /** Basically, simulated receiving every single chunk, except
  for some optimizations.
  Precondition: root hash known */
-void            MmapHashTree::RecoverProgress()
+void MmapHashTree::RecoverProgress()
 {
 
     //fprintf(stderr,"hashtree: recover: cs %i\n", chunk_size_);
@@ -407,7 +407,7 @@ int MmapHashTree::internal_deserialize(FILE *fp,bool contentavail)
 }
 
 
-bool            MmapHashTree::OfferPeakHash(bin_t pos, const Sha1Hash& hash)
+bool MmapHashTree::OfferPeakHash(bin_t pos, const Sha1Hash& hash)
 {
     dprintf("%s hashtree offer peak %s\n",tintstr(),pos.str().c_str());
 
@@ -483,7 +483,7 @@ bool            MmapHashTree::OfferPeakHash(bin_t pos, const Sha1Hash& hash)
 }
 
 
-Sha1Hash        MmapHashTree::DeriveRoot()
+Sha1Hash MmapHashTree::DeriveRoot()
 {
 
     dprintf("%s hashtree deriving root\n",tintstr());
@@ -516,13 +516,13 @@ Sha1Hash        MmapHashTree::DeriveRoot()
 
 /** For live streaming: appends the data, adjusts the tree.
     @ return the number of fresh (tail) peak hashes */
-int         MmapHashTree::AppendData(char* data, int length)
+int MmapHashTree::AppendData(char* data, int length)
 {
     return 0;
 }
 
 
-bin_t         MmapHashTree::peak_for(bin_t pos) const
+bin_t MmapHashTree::peak_for(bin_t pos) const
 {
     int pi=0;
     while (pi<peak_count_ && !peaks_[pi].contains(pos))
@@ -530,7 +530,7 @@ bin_t         MmapHashTree::peak_for(bin_t pos) const
     return pi==peak_count_ ? bin_t(bin_t::NONE) : peaks_[pi];
 }
 
-bool            MmapHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
+bool MmapHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
 {
     if (!size_)  // only peak hashes are accepted at this point
         return OfferPeakHash(pos,hash);
@@ -597,7 +597,7 @@ bool            MmapHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
 }
 
 
-bool            MmapHashTree::OfferData(bin_t pos, const char* data, size_t length)
+bool MmapHashTree::OfferData(bin_t pos, const char* data, size_t length)
 {
     if (!size())
         return false;
@@ -636,7 +636,7 @@ bool            MmapHashTree::OfferData(bin_t pos, const char* data, size_t leng
 }
 
 
-uint64_t      MmapHashTree::seq_complete(int64_t offset)
+uint64_t MmapHashTree::seq_complete(int64_t offset)
 {
 
     uint64_t seqc = 0;

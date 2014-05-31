@@ -29,6 +29,7 @@ class SimpleLivePiecePicker : public LivePiecePicker
 {
 
 protected:
+
     binmap_t        ack_hint_out_;  // Legacy, not sure why copy used.
     tbqueue         hint_out_;      // Chunks picked
     LiveTransfer*   transfer_;      // Pointer to container

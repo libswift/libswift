@@ -79,7 +79,7 @@ bool ZeroHashTree::RecoverPeakHashes()
 }
 
 
-bool            ZeroHashTree::OfferPeakHash(bin_t pos, const Sha1Hash& hash)
+bool ZeroHashTree::OfferPeakHash(bin_t pos, const Sha1Hash& hash)
 {
     dprintf("%s zero hashtree offer peak %s\n",tintstr(),pos.str().c_str());
 
@@ -111,7 +111,7 @@ bool            ZeroHashTree::OfferPeakHash(bin_t pos, const Sha1Hash& hash)
 }
 
 
-Sha1Hash        ZeroHashTree::DeriveRoot()
+Sha1Hash ZeroHashTree::DeriveRoot()
 {
 
     dprintf("%s zero hashtree deriving root\n",tintstr());
@@ -165,7 +165,7 @@ const Sha1Hash& ZeroHashTree::hash(bin_t pos) const
 }
 
 
-bin_t         ZeroHashTree::peak_for(bin_t pos) const
+bin_t ZeroHashTree::peak_for(bin_t pos) const
 {
     int pi=0;
     while (pi<peak_count_ && !peaks_[pi].contains(pos))
@@ -173,19 +173,19 @@ bin_t         ZeroHashTree::peak_for(bin_t pos) const
     return pi==peak_count_ ? bin_t(bin_t::NONE) : peaks_[pi];
 }
 
-bool            ZeroHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
+bool ZeroHashTree::OfferHash(bin_t pos, const Sha1Hash& hash)
 {
     return false;
 }
 
 
-bool            ZeroHashTree::OfferData(bin_t pos, const char* data, size_t length)
+bool ZeroHashTree::OfferData(bin_t pos, const char* data, size_t length)
 {
     return false;
 }
 
 
-uint64_t      ZeroHashTree::seq_complete(int64_t offset)
+uint64_t ZeroHashTree::seq_complete(int64_t offset)
 {
     return size_;
 }

@@ -46,7 +46,7 @@ struct event Channel::evrecv;
 
 
 
-void    Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretransmit)
+void Channel::AddRequiredHashes(struct evbuffer *evb, bin_t pos, bool isretransmit)
 {
     // We're either seeder or know what content integrity protection method
     // is because seeder told us, so hs_out_ is guiding here so we can
@@ -139,7 +139,7 @@ void Channel::AddUnsignedPeakHashes(struct evbuffer *evb)
 
 
 // SIGNPEAK
-void    Channel::AddLiveSignedMunroHash(struct evbuffer *evb, bin_t munro)
+void Channel::AddLiveSignedMunroHash(struct evbuffer *evb, bin_t munro)
 {
     BinHashSigTuple bhst = BinHashSigTuple::NOBULL;
     if (hs_out_->cont_int_prot_ == POPT_CONT_INT_PROT_NONE) {
@@ -179,7 +179,7 @@ void    Channel::AddLiveSignedMunroHash(struct evbuffer *evb, bin_t munro)
 
 
 
-void    Channel::AddFileUncleHashes(struct evbuffer *evb, bin_t pos)
+void Channel::AddFileUncleHashes(struct evbuffer *evb, bin_t pos)
 {
     bin_t peak = hashtree()->peak_for(pos);
     binvector bv;
@@ -206,7 +206,7 @@ void    Channel::AddFileUncleHashes(struct evbuffer *evb, bin_t pos)
 }
 
 //SIGNPEAK
-void    Channel::AddLiveUncleHashes(struct evbuffer *evb, bin_t pos, bin_t munro, bool isretransmit)
+void Channel::AddLiveUncleHashes(struct evbuffer *evb, bin_t pos, bin_t munro, bool isretransmit)
 {
     binvector bv;
     if (isretransmit) {
@@ -251,7 +251,7 @@ void    Channel::AddLiveUncleHashes(struct evbuffer *evb, bin_t pos, bin_t munro
 
 
 
-bin_t    Channel::ImposeHint()
+bin_t Channel::ImposeHint()
 {
     uint64_t twist = hs_in_->peer_channel_id_;  // got no hints, send something randomly
 
@@ -266,7 +266,7 @@ bin_t    Channel::ImposeHint()
 }
 
 
-bin_t        Channel::DequeueHint(bool *retransmitptr)
+bin_t Channel::DequeueHint(bool *retransmitptr)
 {
     bin_t send = bin_t::NONE;
 
@@ -326,7 +326,7 @@ bin_t        Channel::DequeueHint(bool *retransmitptr)
 }
 
 
-void    Channel::AddHandshake(struct evbuffer *evb)
+void Channel::AddHandshake(struct evbuffer *evb)
 {
     // If peer not responding, try legacy swift protocol
 #if ENABLE_FALLBACK_TO_LEGACY_PROTO == 1
@@ -420,7 +420,7 @@ void    Channel::AddHandshake(struct evbuffer *evb)
 }
 
 
-void    Channel::Send()
+void Channel::Send()
 {
 
     dprintf("%s #%" PRIu32 " Send called \n",tintstr(),id_);
@@ -513,7 +513,7 @@ void    Channel::Send()
     Reschedule();
 }
 
-void    Channel::AddHint(struct evbuffer *evb)
+void Channel::AddHint(struct evbuffer *evb)
 {
 
     // LIVE source
@@ -699,7 +699,7 @@ static int ChunkAddrSize(popt_chunk_addr_t ca)
     return 0;
 }
 
-void    Channel::AddCancel(struct evbuffer *evb)
+void Channel::AddCancel(struct evbuffer *evb)
 {
 
     // SIGNPEAKTODO
@@ -842,7 +842,7 @@ void Channel::SendIfTooBig(struct evbuffer *evb)
 }
 
 
-void    Channel::AddAck(struct evbuffer *evb)
+void Channel::AddAck(struct evbuffer *evb)
 {
     if (data_in_==tintbin())
         //if (data_in_.bin==bin64_t::NONE)
@@ -894,7 +894,7 @@ void    Channel::AddAck(struct evbuffer *evb)
 }
 
 
-void    Channel::AddHave(struct evbuffer *evb)
+void Channel::AddHave(struct evbuffer *evb)
 {
     if (!data_in_dbl_.is_none()) { // TODO: do redundancy better
         evbuffer_add_8(evb, SWIFT_HAVE);
@@ -1085,7 +1085,7 @@ void    Channel::Recv(struct evbuffer *evb)
 }
 
 
-void   Channel::CloseOnError()
+void Channel::CloseOnError()
 {
     Close(CLOSE_SEND_IF_ESTABLISHED);
 }
@@ -1095,7 +1095,7 @@ void   Channel::CloseOnError()
  * Arno: FAXME: HASH+DATA should be handled as a transaction: only when the
  * hashes check out should they be stored in the hashtree, otherwise revert.
  */
-void    Channel::OnHash(struct evbuffer *evb)
+void Channel::OnHash(struct evbuffer *evb)
 {
     if (hs_in_->cont_int_prot_ != POPT_CONT_INT_PROT_MERKLE
             && hs_in_->cont_int_prot_ != POPT_CONT_INT_PROT_UNIFIED_MERKLE) {
@@ -1130,7 +1130,7 @@ void    Channel::OnHash(struct evbuffer *evb)
 }
 
 
-void    Channel::CleanHintOut(bin_t pos)
+void Channel::CleanHintOut(bin_t pos)
 {
     int hi = 0;
     while (hi<hint_out_.size() && !hint_out_[hi].bin.contains(pos))
@@ -1171,7 +1171,7 @@ void    Channel::CleanHintOut(bin_t pos)
     hint_out_.pop_front();
 }
 
-bin_t    Channel::DequeueHintOut(uint64_t size)
+bin_t Channel::DequeueHintOut(uint64_t size)
 {
 
     if (DEBUGTRAFFIC)
@@ -1360,7 +1360,7 @@ void Channel::UpdateDIP(bin_t pos)
 }
 
 
-void    Channel::OnAck(struct evbuffer *evb)
+void Channel::OnAck(struct evbuffer *evb)
 {
 
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
@@ -1569,7 +1569,7 @@ void Channel::OnHaveLive(bin_t ackd_pos)
 }
 
 
-void    Channel::OnHint(struct evbuffer *evb)
+void Channel::OnHint(struct evbuffer *evb)
 {
 
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
@@ -1785,7 +1785,7 @@ void Channel::OnHandshake(Handshake *hishs)
 }
 
 
-void    Channel::OnCancel(struct evbuffer *evb)
+void Channel::OnCancel(struct evbuffer *evb)
 {
 
     binvector bv = evbuffer_remove_chunkaddr(evb,hs_in_->chunk_addr_);
@@ -1980,7 +1980,7 @@ void Channel::OnSignedHash(struct evbuffer *evb)
  * Sending messages
  */
 
-void    Channel::AddPex(struct evbuffer *evb)
+void Channel::AddPex(struct evbuffer *evb)
 {
     // Gertjan fix: Reverse PEX
     // PEX messages sent to facilitate NAT/FW puncturing get priority
@@ -2102,7 +2102,7 @@ void Channel::LibeventReceiveCallback(evutil_socket_t fd, short event, void *arg
     event_add(&evrecv, NULL);
 }
 
-void    Channel::RecvDatagram(evutil_socket_t socket)
+void Channel::RecvDatagram(evutil_socket_t socket)
 {
     struct evbuffer *evb = evbuffer_new();
     Address addr;

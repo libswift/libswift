@@ -153,9 +153,9 @@ namespace swift
         ~LiveHashTree();
 
         /** Called when a chunk is added */
-        bin_t          AddData(const char* data, size_t length);
-        bin_t          GetMunro(bin_t pos);
-        bin_t          GetLastMunro();
+        bin_t       AddData(const char* data, size_t length);
+        bin_t       GetMunro(bin_t pos);
+        bin_t       GetLastMunro();
         /** Called after N chunks have been added, following -06. Returns new munro */
         BinHashSigTuple AddSignedMunro();
 
@@ -163,17 +163,17 @@ namespace swift
         BinHashSigTuple GetSignedMunro(bin_t munro); // LIVECHECKPOINT
 
         /** Live NCHUNKS_PER_SIG  */
-        void       SetNChunksPerSig(uint32_t nchunks_per_sig) {
+        void        SetNChunksPerSig(uint32_t nchunks_per_sig) {
             nchunks_per_sig_=nchunks_per_sig;
         }
-        uint32_t       GetNChunksPerSig() {
+        uint32_t    GetNChunksPerSig() {
             return nchunks_per_sig_;
         }
 
         /** Remove subtree rooted at pos */
-        void           PruneTree(bin_t pos);
+        void        PruneTree(bin_t pos);
 
-        bool           OfferSignedMunroHash(bin_t pos, SigTintTuple &sigtint);
+        bool        OfferSignedMunroHash(bin_t pos, SigTintTuple &sigtint);
 
         /** Add node to the hashtree */
         bool CreateAndVerifyNode(bin_t pos, const Sha1Hash &hash, bool verified);
@@ -184,7 +184,7 @@ namespace swift
         bool InitFromCheckpoint(BinHashSigTuple lastmunrotup);
 
         /** Returns size of signature on the wire */
-        uint16_t       GetSigSizeInBytes();
+        uint16_t    GetSigSizeInBytes();
 
         /** For Testing */
         KeyPair *      GetKeyPair() {
@@ -218,13 +218,13 @@ namespace swift
         void            set_size(uint64_t);
 
         /** Find node for bin. (unprotected for testing) */
-        Node *      FindNode(bin_t pos) const;
+        Node *          FindNode(bin_t pos) const;
 
     protected:
         lht_state_t     state_;
-        Node        *root_;
+        Node            *root_;
         /** Live source: Right-most base layer node */
-        Node        *addcursor_;
+        Node            *addcursor_;
 
         KeyPair         keypair_;
 
@@ -260,15 +260,15 @@ namespace swift
         /** Create a new leaf Node next to the current latest leaf (pointed to by
          * addcursor_). This may involve creating a new root and subtree to
          * accommodate it. */
-        Node *      CreateNext();
+        Node *          CreateNext();
         /** Find the Node in the tree for the given bin. */
-        void        ComputeTree(Node *start);
+        void            ComputeTree(Node *start);
         /** Deallocate a node. */
-        void        FreeTree(Node *n);
+        void            FreeTree(Node *n);
         /** Calculate root hash of current tree (unused). */
         Sha1Hash        DeriveRoot();
 
-        bin_t          GetClientLastMunro();
+        bin_t           GetClientLastMunro();
 
     };
 

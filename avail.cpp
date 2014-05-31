@@ -283,40 +283,6 @@ void Availability::removeBin(bin_t bin, int idx)
     return;
 }
 
-/*void Availability::setSize(uint64_t size)
-{
-    if (size && !size_)
-    {
-        // TODO can be optimized (bithacks)
-        uint64_t r = 0;
-        uint64_t s = size;
-
-        // check if the binmap is not complete
-        if (s & (s-1))
-        {
-            while (s >>= 1)
-            {
-                r++;
-            }
-            s = 1<<(r+1);
-        }
-        // consider higher layers
-        s += s-1;
-        size_ = s;
-
-        // Initialize with the binmaps we already received
-        for(WaitingPeers::iterator vpci = waiting_peers_.begin(); vpci != waiting_peers_.end(); ++vpci)
-        {
-            setWaitingBinmap(vpci->second);
-        }
-
-        if (DEBUGAVAILABILITY)
-        {
-            dprintf("%s #1 Availability -> setting size in chunk %" PRIu64 " \t avail size %" PRIu64 "\n",tintstr(), size, s);
-        }
-    }
-}*/
-
 bin_t Availability::getRarest(const bin_t range, int width)
 {
     // TODO

@@ -217,7 +217,6 @@ public:
 
         } while (retry);
 
-
         if (hint.is_none()) {
             // TODO, control if we want: check for missing hints (before playback pos.)
             hint = binmap_t::find_complement(ack_hint_out_, offer, twist_);

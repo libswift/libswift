@@ -26,7 +26,7 @@ const char* Channel::SEND_CONTROL_MODES[] = {"keepalive", "pingpong",
                                             };
 
 
-tint    Channel::NextSendTime()
+tint Channel::NextSendTime()
 {
     TimeoutDataOut(); // precaution to know free cwnd
     switch (send_control_) {
@@ -48,7 +48,7 @@ tint    Channel::NextSendTime()
     }
 }
 
-tint    Channel::SwitchSendControl(send_control_t control_mode)
+tint Channel::SwitchSendControl(send_control_t control_mode)
 {
     dprintf("%s #%" PRIu32 " sendctrl switch %s->%s\n",tintstr(),id(),
             SEND_CONTROL_MODES[send_control_],SEND_CONTROL_MODES[control_mode]);
@@ -81,7 +81,7 @@ tint    Channel::SwitchSendControl(send_control_t control_mode)
     return NextSendTime();
 }
 
-tint    Channel::KeepAliveNextSendTime()
+tint Channel::KeepAliveNextSendTime()
 {
     if (sent_since_recv_>=3 && last_recv_time_<NOW-3*MAX_SEND_INTERVAL) {
         lprintf("\t\t==== Switch to Close Control ==== \n");
@@ -133,7 +133,7 @@ tint    Channel::KeepAliveNextSendTime()
     return last_send_time_ + send_interval_;
 }
 
-tint    Channel::PingPongNextSendTime()    // FIXME INFINITE LOOP
+tint Channel::PingPongNextSendTime()    // FIXME INFINITE LOOP
 {
     //fprintf(stderr,"PING: dgrams %d ackrec %d dataintime %" PRIi64 " lastrecv %" PRIi64 " lastsend %" PRIi64 "\n", dgrams_sent_, ack_rcvd_recent_, data_in_.time, last_recv_time_, last_send_time_);
     if (dgrams_sent_>=10) {
@@ -153,7 +153,7 @@ tint    Channel::PingPongNextSendTime()    // FIXME INFINITE LOOP
     return last_send_time_ + ack_timeout(); // timeout
 }
 
-tint    Channel::CwndRateNextSendTime()
+tint Channel::CwndRateNextSendTime()
 {
     if (data_in_.time!=TINT_NEVER)
         return NOW; // TODO: delayed ACKs
@@ -193,7 +193,7 @@ tint    Channel::CwndRateNextSendTime()
 
 }
 
-void    Channel::BackOffOnLosses(float ratio)
+void Channel::BackOffOnLosses(float ratio)
 {
     //ack_rcvd_recent_ = 0;
     ack_not_rcvd_recent_ =  0;
@@ -204,7 +204,7 @@ void    Channel::BackOffOnLosses(float ratio)
     }
 }
 
-tint    Channel::SlowStartNextSendTime()
+tint Channel::SlowStartNextSendTime()
 {
     if (ack_not_rcvd_recent_) {
         BackOffOnLosses();
@@ -220,7 +220,7 @@ tint    Channel::SlowStartNextSendTime()
     return CwndRateNextSendTime();
 }
 
-tint    Channel::AimdNextSendTime()
+tint Channel::AimdNextSendTime()
 {
     if (ack_not_rcvd_recent_)
         BackOffOnLosses();

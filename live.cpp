@@ -268,7 +268,7 @@ tdlist_t LiveTransfer::GetTransferDescriptors()
 
 
 
-uint64_t      LiveTransfer::SeqComplete()
+uint64_t LiveTransfer::SeqComplete()
 {
 
     if (am_source_) {
@@ -286,7 +286,7 @@ uint64_t      LiveTransfer::SeqComplete()
 }
 
 
-uint64_t      LiveTransfer::GetHookinOffset()
+uint64_t LiveTransfer::GetHookinOffset()
 {
 
     bin_t hpos = ((LivePiecePicker *)picker())->GetHookinPos();
@@ -636,6 +636,4 @@ void Channel::LiveSend()
     //fprintf(stderr,"live: LiveSend: next %" PRIi64 "\n", next_send_time_ );
     evtimer_add(evsendlive_ptr_,tint2tv(next_send_time_));
 }
-
-
 

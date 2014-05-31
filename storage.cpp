@@ -112,7 +112,7 @@ Storage::~Storage()
 }
 
 
-ssize_t  Storage::Write(const void *buf, size_t nbyte, int64_t offset)
+ssize_t Storage::Write(const void *buf, size_t nbyte, int64_t offset)
 {
     if (DEBUGSTORAGE)
         dprintf("%s %s storage: Write: fd %d nbyte " PRISIZET " off %" PRIi64 " state %" PRIi32 "\n", tintstr(),
@@ -428,7 +428,7 @@ int Storage::OpenSingleFile()
 
 
 
-ssize_t  Storage::Read(void *buf, size_t nbyte, int64_t offset)
+ssize_t Storage::Read(void *buf, size_t nbyte, int64_t offset)
 {
     //dprintf("%s %s storage: Read: nbyte " PRISIZET " off %" PRIi64 "\n", tintstr(), roothashhex().c_str(), nbyte, offset );
 
