@@ -288,6 +288,8 @@ bin_t Channel::DequeueHint(bool *retransmitptr)
             send = tb.bin;
             dprintf("%s #%" PRIu32 " dequeuing timed-out %s\n",tintstr(),id_, send.str().c_str());
             *retransmitptr = true;
+            if (!send.is_base())
+                dprintf("%s #%" PRIu32 " Error: retransmit, %s, if not a base bin!\n",tintstr(),id_, send.str().c_str());
             break;
         }
     }
@@ -310,17 +312,22 @@ bin_t Channel::DequeueHint(bool *retransmitptr)
         tint time = hint_in_.front().time;
         hint_in_size_ -= hint_in_.front().bin.base_length();
         hint_in_.pop_front();
+
+        if (time < min(NOW-TINT_SEC*3/2, NOW-rtt_avg_<<2)) {
+            dprintf("%s #%" PRIu32 " Don't serve: hint %s is too old\n",tintstr(),id_, send.str().c_str());
+            continue;
+        }
+
         while (!hint.is_base()) { // FIXME optimize; possible attack
             hint_in_.push_front(tintbin(time,hint.right()));
             hint_in_size_ += hint_in_.front().bin.base_length();
             hint = hint.left();
         }
-        //if (time < NOW-TINT_SEC*3/2 )
-        //    continue;  bad idea
+
         if (!ack_in_.is_filled(hint))
             send = hint;
         else
-            dprintf("%s #%" PRIu32 " filled!\n",tintstr(),id_,hint.str().c_str());
+            dprintf("%s #%" PRIu32 " hint %s is already been acknowledged\n",tintstr(),id_,hint.str().c_str());
     }
 
     dprintf("%s #%" PRIu32 " dequeued %s [%" PRIu64 "]\n",tintstr(),id_,send.str().c_str(),hint_in_size_);
@@ -1309,7 +1316,7 @@ bin_t Channel::OnData(struct evbuffer *evb)     // TODO: HAVE NONE for corrupted
 }
 
 
-void Channel::UpdateRTT(int32_t pos, tbqueue data_out, tint owd)
+void Channel::UpdateRTT(tint owd)
 {
 
     // one-way delay calculations
@@ -1402,6 +1409,7 @@ void Channel::OnAck(struct evbuffer *evb)
         // Ric: by ruling out retransmits we screw up ledbat calculations
         while (ri<data_out_tmo_.size() && !ackd_pos.contains(data_out_tmo_[ri].bin))
             ri++;
+
         dprintf("%s #%" PRIu32 " %cack %s owd:%" PRIi64 "\n",tintstr(),id_,
                 di==data_out_.size() ? (ri==data_out_tmo_.size() ? '?':'R') : '-',ackd_pos.str().c_str(),peer_owd);
 
@@ -1419,7 +1427,7 @@ void Channel::OnAck(struct evbuffer *evb)
             dprintf("%s #%" PRIu32 " rtt:%" PRIu64 ", rtt_avg:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_,rtt, rtt_avg_,
                     dev_avg_);
 
-            UpdateRTT(di, data_out_, peer_owd);
+            UpdateRTT(peer_owd);
             dprintf("%s #%" PRIu32 " setting null %s\n",tintstr(),id_, data_out_[di].bin.str().c_str());
             // early loss detection by packet reordering
             /* TODO do we really need it?
@@ -1436,7 +1444,7 @@ void Channel::OnAck(struct evbuffer *evb)
             data_out_size_--;
             data_out_[di]=tintbin();
         } else if (ri!=data_out_tmo_.size()) {
-            UpdateRTT(ri, data_out_tmo_, peer_owd);
+            UpdateRTT(peer_owd);
             data_out_tmo_[ri]=tintbin();
         }
 

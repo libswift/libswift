@@ -1154,7 +1154,7 @@ namespace swift
         tbqueue     data_out_;
         uint32_t    data_out_size_; // pkts not acknowledged
         /** Timeouted data (potentially to be retransmitted). */
-        tbqueue     data_out_tmo_;
+        tbqueue     data_out_tmo_; // it contains only leaf bins
         bin_t       data_out_cap_; // Ric: maybe we should remove it.. creates problems if lost
         /** Index in the history array. */
         binmap_t    have_out_;
@@ -1259,7 +1259,7 @@ namespace swift
         void        CleanHintOut(bin_t pos);
         void        Reschedule();
         void        UpdateDIP(bin_t pos); // RETRANSMIT
-        void        UpdateRTT(int32_t pos, tbqueue data_out, tint owd);
+        void        UpdateRTT(tint owd);
 
         bin_t       DequeueHintOut(uint64_t size);
 
