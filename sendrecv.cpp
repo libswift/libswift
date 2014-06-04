@@ -319,6 +319,8 @@ bin_t Channel::DequeueHint(bool *retransmitptr)
         //    continue;  bad idea
         if (!ack_in_.is_filled(hint))
             send = hint;
+        else
+            dprintf("%s #%" PRIu32 " filled!\n",tintstr(),id_,hint.str().c_str());
     }
 
     dprintf("%s #%" PRIu32 " dequeued %s [%" PRIu64 "]\n",tintstr(),id_,send.str().c_str(),hint_in_size_);

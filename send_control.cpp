@@ -48,16 +48,18 @@ tint Channel::NextSendTime()
     }
 }
 
-tint Channel::SwitchSendControl(send_control_t control_mode)
+tint Channel::SwitchSendControl(send_control_t control_mode, send_control_reason_t reason)
 {
     dprintf("%s #%" PRIu32 " sendctrl switch %s->%s\n",tintstr(),id(),
             SEND_CONTROL_MODES[send_control_],SEND_CONTROL_MODES[control_mode]);
     switch (control_mode) {
     case KEEP_ALIVE_CONTROL:
         send_interval_ = rtt_avg_; //max(TINT_SEC/10,rtt_avg_);
-        dev_avg_ = max(TINT_SEC,rtt_avg_);
-        data_out_cap_ = bin_t::ALL;
-        cwnd_ = 1;
+        if (reason != NOTHING_TO_SEND && data_out_.size() == 0) {
+            cwnd_ = 1;
+            dev_avg_ = max(TINT_SEC,rtt_avg_);
+            data_out_cap_ = bin_t::ALL;
+        }
         break;
     case PING_PONG_CONTROL:
         dev_avg_ = max(TINT_SEC,rtt_avg_);
@@ -87,7 +89,7 @@ tint Channel::KeepAliveNextSendTime()
         lprintf("\t\t==== Switch to Close Control ==== \n");
         return SwitchSendControl(CLOSE_CONTROL);
     }
-    if (ack_rcvd_recent_) {
+    if (ack_rcvd_recent_ && hint_in_size_) {
         lprintf("\t\t==== Switch to Slow Start Control ==== \n");
         return SwitchSendControl(SLOW_START_CONTROL);
     }
@@ -236,11 +238,9 @@ tint Channel::AimdNextSendTime()
 
 tint Channel::LedbatNextSendTime()
 {
-    //float oldcwnd = cwnd_;
 
     if (ack_rcvd_recent_) {
 
-        //tint owd_cur(TINT_NEVER), owd_min(TINT_NEVER);
         // reset the min value
         owd_min_ = TINT_NEVER;
 
@@ -280,24 +280,6 @@ tint Channel::LedbatNextSendTime()
         if (owd_cur_==TINT_NEVER || owd_min_==TINT_NEVER)
             cwnd_ = 1;
     }
-
-    /*Arno, 2012-02-02: Somehow LEDBAT gets stuck at cwnd_ == 1 sometimes
-     This hack appears to work to get it back on the right track quickly.
-     * Ric: not really needed.. it should not happen at all!
-    if (oldcwnd == 1 && cwnd_ == 1)
-       cwnd_count1_++;
-    else
-       cwnd_count1_ = 0;
-    if (cwnd_count1_ > 10)
-    {
-        dprintf("%s #%" PRIu32 " sendctrl ledbat stuck, reset\n",tintstr(),id() );
-        cwnd_count1_ = 0;
-        for(int i=0; i<4; i++) {
-            owd_min_bins_[i] = TINT_NEVER;
-            owd_current_[i] = TINT_NEVER;
-        }
-    }*/
-
 
     return CwndRateNextSendTime();
 }

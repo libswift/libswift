@@ -447,29 +447,29 @@ namespace swift
         }
         void ResetToLegacy() {
             // Do not reset peer_channel_id
-            version_ = VER_SWIFT_LEGACY;
-            min_version_ = VER_SWIFT_LEGACY;
+            version_ =       VER_SWIFT_LEGACY;
+            min_version_ =   VER_SWIFT_LEGACY;
             cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
-            merkle_func_ = POPT_MERKLE_HASH_FUNC_SHA1;
-            live_sig_alg_ = POPT_LIVE_SIG_ALG_PRIVATEDNS;
-            chunk_addr_ = POPT_CHUNK_ADDR_BIN32;
+            merkle_func_ =   POPT_MERKLE_HASH_FUNC_SHA1;
+            live_sig_alg_ =  POPT_LIVE_SIG_ALG_PRIVATEDNS;
+            chunk_addr_ =    POPT_CHUNK_ADDR_BIN32;
             live_disc_wnd_ = (uint32_t)POPT_LIVE_DISC_WND_ALL;
-            live_sig_alg_ = DEFAULT_LIVE_SIG_ALG;
+            live_sig_alg_ =  DEFAULT_LIVE_SIG_ALG;
         }
 
         /**    Peer channel id; zero if we are trying to open a channel. */
-        uint32_t            peer_channel_id_;
-        popt_version_t      version_;
-        popt_version_t      min_version_;
-        popt_cont_int_prot_t    cont_int_prot_;
-        popt_merkle_func_t  merkle_func_;
-        popt_live_sig_alg_t live_sig_alg_;
-        popt_chunk_addr_t   chunk_addr_;
-        uint64_t        live_disc_wnd_;
+        uint32_t             peer_channel_id_;
+        popt_version_t       version_;
+        popt_version_t       min_version_;
+        popt_cont_int_prot_t cont_int_prot_;
+        popt_merkle_func_t   merkle_func_;
+        popt_live_sig_alg_t  live_sig_alg_;
+        popt_chunk_addr_t    chunk_addr_;
+        uint64_t             live_disc_wnd_;
     protected:
         /** Dynamically allocated such that we can deallocate it and
          * save some bytes per channel */
-        SwarmID         *swarm_id_ptr_;
+        SwarmID              *swarm_id_ptr_;
     };
 
     /** Arno, 2013-09-25: Currently just used for URI processing.
@@ -924,6 +924,15 @@ namespace swift
             CLOSE_CONTROL
         } send_control_t;
 
+
+        typedef enum {
+            NONE,
+            NOTHING_TO_SEND,
+            NOTHIG_RECEIVED,
+            PING_PONG_NO_RESPONSE,
+            LONG_SEND_INTERVAL
+        } send_control_reason_t;
+
 #define DGRAM_MAX_SOCK_OPEN 128
         static int sock_count;
         static sckrwecb_t sock_open[DGRAM_MAX_SOCK_OPEN];
@@ -1009,7 +1018,7 @@ namespace swift
         void        OnPexReq(void);
         void        AddPexReq(struct evbuffer *evb);
         void        BackOffOnLosses(float ratio=0.5);
-        tint        SwitchSendControl(send_control_t control_mode);
+        tint        SwitchSendControl(send_control_t control_mode, send_control_reason_t reason = NONE);
         tint        NextSendTime();
         tint        KeepAliveNextSendTime();
         tint        PingPongNextSendTime();
