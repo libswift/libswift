@@ -454,6 +454,7 @@ namespace swift
             live_sig_alg_ = POPT_LIVE_SIG_ALG_PRIVATEDNS;
             chunk_addr_ = POPT_CHUNK_ADDR_BIN32;
             live_disc_wnd_ = (uint32_t)POPT_LIVE_DISC_WND_ALL;
+            live_sig_alg_ = DEFAULT_LIVE_SIG_ALG;
         }
 
         /**    Peer channel id; zero if we are trying to open a channel. */
