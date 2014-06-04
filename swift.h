@@ -93,7 +93,7 @@ namespace swift
 #define ENABLE_IETF_PPSP_VERSION      1
 
 // Whether to try legacy protocol when PPSP handshakes don't result in response
-#define ENABLE_FALLBACK_TO_LEGACY_PROTO 0
+#define ENABLE_FALLBACK_TO_LEGACY_PROTO 1
 
 // Arno, 2011-12-22: Enable Riccardo's VodPiecePicker
 #define ENABLE_VOD_PIECEPICKER        0
