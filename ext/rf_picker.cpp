@@ -12,7 +12,7 @@
 
 using namespace swift;
 
-#define DEBUGPICKER     0
+#define DEBUGPICKER     1
 
 /**
  * Picks pieces in rarest first fashion.

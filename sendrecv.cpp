@@ -21,7 +21,7 @@ using namespace std;
 struct event_base *Channel::evbase;
 struct event Channel::evrecv;
 
-#define DEBUGTRAFFIC     0
+#define DEBUGTRAFFIC     1
 
 /** Arno: Victor's design allows a sender to choose some data to push to
  * a receiver, if that receiver is not HINTing at data. Should be disabled
@@ -727,7 +727,7 @@ void Channel::AddCancel(struct evbuffer *evb)
     }
 }
 
-bin_t        Channel::AddData(struct evbuffer *evb)
+bin_t Channel::AddData(struct evbuffer *evb)
 {
     // RATELIMIT
     if (transfer()->GetCurrentSpeed(DDIR_UPLOAD) > transfer()->GetMaxSpeed(DDIR_UPLOAD)) {
@@ -1187,10 +1187,35 @@ bin_t Channel::DequeueHintOut(uint64_t size)
     if (DEBUGTRAFFIC)
         fprintf(stderr, "%s #%" PRIu32 " Dequeue hint out size (%" PRIu64 ") [%" PRIu64 " are req] ",tintstr(),id_,
                 hint_queue_out_size_, size);
+
+    // check for hints that have already been downloaded
+    // in order to optimise the retrieval, some bins might be outdated
+    while (hint_queue_out_.size() && !transfer()->ack_out()->is_empty(hint_queue_out_.front().bin)) {
+        if (DEBUGTRAFFIC)
+            dprintf("%s #%" PRIu32 " candidate hint :%s not empty!\n",tintstr(),id_, hint_queue_out_.front().bin.str().c_str());
+        tintbin tb = hint_queue_out_.front();
+        bin_t bin = tb.bin;
+        tint time = tb.time;
+        hint_queue_out_.pop_front();
+        hint_queue_out_size_ -= bin.base_length();
+
+        while (!bin.is_base() || !transfer()->ack_out()->is_filled(bin)) {
+            hint_queue_out_.push_front(tintbin(time, bin.right()));
+            hint_queue_out_size_ += hint_queue_out_.front().bin.base_length();
+            bin.to_left();
+        }
+
+        if (transfer()->ack_out()->is_empty(bin)) {
+            hint_queue_out_.push_front(tintbin(time, bin));
+            hint_queue_out_size_ += bin.base_length();
+        }
+    }
+
     // TODO check... the seconds should depend on previous speed of the peer
     while (hint_queue_out_.size() && hint_queue_out_.front().time<NOW-TINT_SEC*HINT_TIME*3/2) { // FIXME sec
         hint_queue_out_size_ -= hint_queue_out_.front().bin.base_length();
-        dprintf("%s #%" PRIu32 " Removing queued hint:%s\n",tintstr(),id_, hint_queue_out_.front().bin.str().c_str());
+        if (DEBUGTRAFFIC)
+            dprintf("%s #%" PRIu32 " Removing queued hint:%s\n",tintstr(),id_, hint_queue_out_.front().bin.str().c_str());
         hint_queue_out_.pop_front();
     }
 
@@ -1595,6 +1620,16 @@ void Channel::OnHint(struct evbuffer *evb)
     binvector::iterator iter;
     for (iter=bv.begin(); iter != bv.end(); iter++) {
         bin_t hint = *iter;
+
+        // Ric: TODO test
+        tbqueue::iterator it = hint_in_.begin();
+        while (it != hint_in_.end()) { // removing likely snubbed hints
+            bin_t b = it->bin;
+            if (hint.contains(b) || b.contains(hint))
+                dprintf("%s #%" PRIu32 " hint already requested   hint:%s - and:%s!!\n", tintstr(), id_, hint.str().c_str(),
+                        b.str().c_str());
+            it++;
+        }
 
         // FIXME: wake up here
         hint_in_.push_back(hint);
