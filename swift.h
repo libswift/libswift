@@ -1018,7 +1018,7 @@ namespace swift
         void        OnPexReq(void);
         void        AddPexReq(struct evbuffer *evb);
         void        BackOffOnLosses(float ratio=0.5);
-        tint        SwitchSendControl(send_control_t control_mode, send_control_reason_t reason = NONE);
+        tint        SwitchSendControl(send_control_t control_mode);
         tint        NextSendTime();
         tint        KeepAliveNextSendTime();
         tint        PingPongNextSendTime();
@@ -1201,6 +1201,7 @@ namespace swift
         /** Arno: Fix for KEEP_ALIVE_CONTROL */
         bool        lastrecvwaskeepalive_;
         bool        lastsendwaskeepalive_;
+        send_control_reason_t keepalivereason_;
         /** Arno: For live, we may receive a HAVE but have no hints
             outstanding. In that case we should not wait till next_send_time_
             but request directly. See send_control.cpp */

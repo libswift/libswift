@@ -303,7 +303,7 @@ bin_t Channel::DequeueHint(bool *retransmitptr)
         }
     }
 
-    //dprintf("%s #%" PRIu32 " dequeue empty %d\n",tintstr(),id_, (int)hint_in_.empty() );
+    dprintf("%s #%" PRIu32 " dequeue size: %d\n",tintstr(),id_, (int)hint_in_size_ );
 
     while (!hint_in_.empty() && send.is_none()) {
         bin_t hint = hint_in_.front().bin;
@@ -313,7 +313,7 @@ bin_t Channel::DequeueHint(bool *retransmitptr)
         hint_in_size_ -= hint_in_.front().bin.base_length();
         hint_in_.pop_front();
 
-        if (time < min(NOW-TINT_SEC*3/2, NOW-rtt_avg_<<2)) {
+        if (time < min(NOW-TINT_SEC*3/2, NOW-(rtt_avg_<<2))) {
             dprintf("%s #%" PRIu32 " Don't serve: hint %s is too old\n",tintstr(),id_, send.str().c_str());
             continue;
         }
@@ -327,7 +327,7 @@ bin_t Channel::DequeueHint(bool *retransmitptr)
         if (!ack_in_.is_filled(hint))
             send = hint;
         else
-            dprintf("%s #%" PRIu32 " hint %s is already been acknowledged\n",tintstr(),id_,hint.str().c_str());
+            dprintf("%s #%" PRIu32 " hint %s has already been acknowledged\n",tintstr(),id_,hint.str().c_str());
     }
 
     dprintf("%s #%" PRIu32 " dequeued %s [%" PRIu64 "]\n",tintstr(),id_,send.str().c_str(),hint_in_size_);
@@ -751,6 +751,7 @@ bin_t        Channel::AddData(struct evbuffer *evb)
             dprintf("%s #%" PRIu32 " sendctrl no idea what data to send\n",tintstr(),id_);
             if (send_control_!=KEEP_ALIVE_CONTROL && send_control_!=CLOSE_CONTROL) {
                 lprintf("\t\t==== Switch to Keep Alive Control (nothing to send) ==== \n");
+                keepalivereason_ = NOTHING_TO_SEND;
                 SwitchSendControl(KEEP_ALIVE_CONTROL);
             }
         }
@@ -2307,9 +2308,10 @@ void Channel::Reschedule()
         return;
     }
     struct timeval currtv;
-    //if (evtimer_pending(evsend_ptr_, &currtv)) {
-    //    evtimer_del(evsend_ptr_);
-    //}
+    // remove pending events if in keep-alive mode
+    if (send_control_ == KEEP_ALIVE_CONTROL && evtimer_pending(evsend_ptr_, &currtv)) {
+        evtimer_del(evsend_ptr_);
+    }
 
     dprintf("%s schedule\n",tintstr());
 

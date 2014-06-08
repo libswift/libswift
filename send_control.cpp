@@ -48,14 +48,14 @@ tint Channel::NextSendTime()
     }
 }
 
-tint Channel::SwitchSendControl(send_control_t control_mode, send_control_reason_t reason)
+tint Channel::SwitchSendControl(send_control_t control_mode)
 {
     dprintf("%s #%" PRIu32 " sendctrl switch %s->%s\n",tintstr(),id(),
             SEND_CONTROL_MODES[send_control_],SEND_CONTROL_MODES[control_mode]);
     switch (control_mode) {
     case KEEP_ALIVE_CONTROL:
         send_interval_ = rtt_avg_; //max(TINT_SEC/10,rtt_avg_);
-        if (reason != NOTHING_TO_SEND && data_out_.size() == 0) {
+        if (keepalivereason_ != NOTHING_TO_SEND) { // && data_out_.size() == 0) {
             cwnd_ = 1;
             dev_avg_ = max(TINT_SEC,rtt_avg_);
             data_out_cap_ = bin_t::ALL;
@@ -90,8 +90,14 @@ tint Channel::KeepAliveNextSendTime()
         return SwitchSendControl(CLOSE_CONTROL);
     }
     if (ack_rcvd_recent_ && hint_in_size_) {
-        lprintf("\t\t==== Switch to Slow Start Control ==== \n");
-        return SwitchSendControl(SLOW_START_CONTROL);
+        if (keepalivereason_==NOTHING_TO_SEND) {
+            lprintf("\t\t==== Switch back to LEDBAT ==== \n");
+            keepalivereason_ = NONE;
+            return SwitchSendControl(LEDBAT_CONTROL);
+        } else {
+            lprintf("\t\t==== Switch to Slow Start Control ==== \n");
+            return SwitchSendControl(SLOW_START_CONTROL);
+        }
     }
     if (data_in_.time!=TINT_NEVER)
         return NOW;
