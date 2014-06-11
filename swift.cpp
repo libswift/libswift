@@ -472,6 +472,7 @@ int utf8main(int argc, char** argv)
             fprintf(stderr,"swift: My listen port is %d\n", BoundAddress(the_sock).port());
     }
     swift::binded_addr = BoundAddress(the_sock);
+    fprintf(stderr, "LISTEN_ADDR %s %d\n", swift::binded_addr.ipstr().c_str(), swift::binded_addr.port());
 
     if (trackerurl != "" && !printurl)
         SetTracker(trackerurl);
