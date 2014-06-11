@@ -49,6 +49,8 @@ if sys.platform == "win32":
     # some library dir settings
     LIBEVENT2_PATH = u"\\build\\libevent-2.0.20-stable-debug"
     if not os.path.exists(LIBEVENT2_PATH):
+        LIBEVENT2_PATH = u"\\build\\libevent-2.0.19-stable"
+    if not os.path.exists(LIBEVENT2_PATH):
         LIBEVENT2_PATH = u"C:\\build\\libevent-2.0.21-stable"
 
     if WITHOPENSSL:
