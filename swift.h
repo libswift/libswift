@@ -239,6 +239,8 @@ namespace swift
         socklen_t get_family_sockaddr_length() const;
     };
 
+    extern struct Address binded_addr;
+
 
 // Arno, 2011-10-03: Use libevent callback functions, no on_error?
 #define sockcb_t        event_callback_fn
