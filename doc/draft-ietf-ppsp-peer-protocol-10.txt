@@ -4,13 +4,13 @@
 PPSP                                                           A. Bakker
 Internet-Draft                              Vrije Universiteit Amsterdam
 Intended status: Standards Track                             R. Petrocco
-Expires: October 6, 2014                                  V. Grishchenko
+Expires: December 19, 2014                                V. Grishchenko
                                            Technische Universiteit Delft
-                                                           April 4, 2014
+                                                           June 17, 2014
 
 
               Peer-to-Peer Streaming Peer Protocol (PPSPP)
-                    draft-ietf-ppsp-peer-protocol-09
+                    draft-ietf-ppsp-peer-protocol-10
 
 Abstract
 
@@ -47,14 +47,14 @@ Status of this Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on October 6, 2014.
+   This Internet-Draft will expire on December 19, 2014.
 
 
 
 
-Bakker, et al.           Expires October 6, 2014                [Page 1]
+Bakker, et al.          Expires December 19, 2014               [Page 1]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 Copyright Notice
@@ -108,9 +108,9 @@ Table of Contents
 
 
 
-Bakker, et al.           Expires October 6, 2014                [Page 2]
+Bakker, et al.          Expires December 19, 2014               [Page 2]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    5.  Content Integrity Protection . . . . . . . . . . . . . . . . . 21
@@ -164,9 +164,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014                [Page 3]
+Bakker, et al.          Expires December 19, 2014               [Page 3]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
      9.1.  Chunk Picking Algorithms . . . . . . . . . . . . . . . . . 57
@@ -220,9 +220,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014                [Page 4]
+Bakker, et al.          Expires December 19, 2014               [Page 4]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
        13.6.8.  CHOKE . . . . . . . . . . . . . . . . . . . . . . . . 71
@@ -276,9 +276,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014                [Page 5]
+Bakker, et al.          Expires December 19, 2014               [Page 5]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 1.  Introduction
@@ -332,9 +332,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014                [Page 6]
+Bakker, et al.          Expires December 19, 2014               [Page 6]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    PPSPP over UDP is available [SWIFTIMPL].
@@ -388,9 +388,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014                [Page 7]
+Bakker, et al.          Expires December 19, 2014               [Page 7]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    content integrity protection scheme
@@ -444,9 +444,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014                [Page 8]
+Bakker, et al.          Expires December 19, 2014               [Page 8]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    leeching
@@ -500,9 +500,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014                [Page 9]
+Bakker, et al.          Expires December 19, 2014               [Page 9]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    This message conveys protocol options, in particular, peer A includes
@@ -556,9 +556,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 10]
+Bakker, et al.          Expires December 19, 2014              [Page 10]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 2.3.  Example: Leaving a Swarm
@@ -612,9 +612,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 11]
+Bakker, et al.          Expires December 19, 2014              [Page 11]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 3.2.  HAVE
@@ -668,9 +668,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 12]
+Bakker, et al.          Expires December 19, 2014              [Page 12]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    chunk specification for C. As LEDBAT is used, an ACK message MUST
@@ -724,9 +724,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 13]
+Bakker, et al.          Expires December 19, 2014              [Page 13]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    MAY send some other chunks in case it runs out of requests or for
@@ -780,9 +780,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 14]
+Bakker, et al.          Expires December 19, 2014              [Page 14]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    hostile environments, as an OPTIONAL feature (not mandatory to
@@ -836,9 +836,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 15]
+Bakker, et al.          Expires December 19, 2014              [Page 15]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    they do not end up interacting only with malicious peers when using
@@ -892,9 +892,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 16]
+Bakker, et al.          Expires December 19, 2014              [Page 16]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
                _________    _________          _________
@@ -948,9 +948,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 17]
+Bakker, et al.          Expires December 19, 2014              [Page 17]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 4.1.  Start-End Ranges
@@ -1004,9 +1004,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 18]
+Bakker, et al.          Expires December 19, 2014              [Page 18]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    trees, thus reducing complexity.  The support for this scheme is
@@ -1060,9 +1060,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 19]
+Bakker, et al.          Expires December 19, 2014              [Page 19]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    and 0x7FFF...FFF stands for "everything".
@@ -1116,9 +1116,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 20]
+Bakker, et al.          Expires December 19, 2014              [Page 20]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 5.  Content Integrity Protection
@@ -1172,9 +1172,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 21]
+Bakker, et al.          Expires December 19, 2014              [Page 21]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    tree may be wider than the number of chunks, any remaining leaves in
@@ -1228,9 +1228,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 22]
+Bakker, et al.          Expires December 19, 2014              [Page 22]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    the requested part of the content.  Otherwise, the sending peer
@@ -1284,9 +1284,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 23]
+Bakker, et al.          Expires December 19, 2014              [Page 23]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    the network so some delivered data cannot be verified and thus has to
@@ -1340,9 +1340,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 24]
+Bakker, et al.          Expires December 19, 2014              [Page 24]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    number of chunks the content is divided (and hence the size of
@@ -1396,9 +1396,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 25]
+Bakker, et al.          Expires December 19, 2014              [Page 25]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 5.6.1.  Peak Hashes
@@ -1452,9 +1452,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 26]
+Bakker, et al.          Expires December 19, 2014              [Page 26]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    Peak hashes can be explained by the binary representation of the
@@ -1508,9 +1508,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 27]
+Bakker, et al.          Expires December 19, 2014              [Page 27]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 5.6.2.  Procedure
@@ -1564,9 +1564,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 28]
+Bakker, et al.          Expires December 19, 2014              [Page 28]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    check the signature using the corresponding public key obtained from
@@ -1620,9 +1620,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 29]
+Bakker, et al.          Expires December 19, 2014              [Page 29]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    The digital signature algorithm which is used, is determined by the
@@ -1676,9 +1676,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 30]
+Bakker, et al.          Expires December 19, 2014              [Page 30]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    Next, the injector announces the existence of the new subtree to its
@@ -1732,9 +1732,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 31]
+Bakker, et al.          Expires December 19, 2014              [Page 31]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    The injector now needs to inform its peers of the updated tree,
@@ -1788,9 +1788,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 32]
+Bakker, et al.          Expires December 19, 2014              [Page 32]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    seed the content.
@@ -1844,9 +1844,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 33]
+Bakker, et al.          Expires December 19, 2014              [Page 33]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    signed munro hash to B in the third datagram, and in any subsequent
@@ -1900,9 +1900,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 34]
+Bakker, et al.          Expires December 19, 2014              [Page 34]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    resources to store chunks and metadata it should chose a small
@@ -1956,9 +1956,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 35]
+Bakker, et al.          Expires December 19, 2014              [Page 35]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
            +---------+----------------------------------------+
@@ -2012,9 +2012,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 36]
+Bakker, et al.          Expires December 19, 2014              [Page 36]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    Each PPSPP peer knows the IDs of the swarms it joins so this
@@ -2068,9 +2068,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 37]
+Bakker, et al.          Expires December 19, 2014              [Page 37]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
                         +----------+-------------+
@@ -2124,9 +2124,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 38]
+Bakker, et al.          Expires December 19, 2014              [Page 38]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
                      +--------+---------------------+
@@ -2180,9 +2180,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 39]
+Bakker, et al.          Expires December 19, 2014              [Page 39]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 7.10.  Supported Messages
@@ -2236,9 +2236,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 40]
+Bakker, et al.          Expires December 19, 2014              [Page 40]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    particular swarm depends primarily on the expected MTU.  The chunk
@@ -2292,9 +2292,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 41]
+Bakker, et al.          Expires December 19, 2014              [Page 41]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
                       +----------+------------------+
@@ -2348,9 +2348,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 42]
+Bakker, et al.          Expires December 19, 2014              [Page 42]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 8.4.  HANDSHAKE
@@ -2404,9 +2404,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 43]
+Bakker, et al.          Expires December 19, 2014              [Page 43]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
          If the message is sent by the initiating peer than it MUST be
@@ -2460,9 +2460,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 44]
+Bakker, et al.          Expires December 19, 2014              [Page 44]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 8.6.  DATA
@@ -2516,9 +2516,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 45]
+Bakker, et al.          Expires December 19, 2014              [Page 45]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    An ACK message using 32-bit chunk ranges as Chunk Addressing method:
@@ -2572,9 +2572,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 46]
+Bakker, et al.          Expires December 19, 2014              [Page 46]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    where the first octet is the ACK message (0x02), followed by the
@@ -2628,9 +2628,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 47]
+Bakker, et al.          Expires December 19, 2014              [Page 47]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    ECDSAP256SHA256 and ECDSAP384SHA384 [RFC6605].  For these algorithms
@@ -2684,9 +2684,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 48]
+Bakker, et al.          Expires December 19, 2014              [Page 48]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 8.12.  CHOKE and UNCHOKE
@@ -2740,9 +2740,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 49]
+Bakker, et al.          Expires December 19, 2014              [Page 49]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
     0                   1                   2                   3
@@ -2796,9 +2796,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 50]
+Bakker, et al.          Expires December 19, 2014              [Page 50]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
     0                   1                   2                   3
@@ -2852,9 +2852,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 51]
+Bakker, et al.          Expires December 19, 2014              [Page 51]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 8.16.  Flow and Congestion Control
@@ -2908,9 +2908,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 52]
+Bakker, et al.          Expires December 19, 2014              [Page 52]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
     0                   1                   2                   3
@@ -2964,9 +2964,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 53]
+Bakker, et al.          Expires December 19, 2014              [Page 53]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
     0                   1                   2                   3
@@ -3020,9 +3020,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 54]
+Bakker, et al.          Expires December 19, 2014              [Page 54]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
     0                   1                   2                   3
@@ -3076,9 +3076,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 55]
+Bakker, et al.          Expires December 19, 2014              [Page 55]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    initiating peer is able to verify it against the root hash.  Also, in
@@ -3132,9 +3132,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 56]
+Bakker, et al.          Expires December 19, 2014              [Page 56]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 9.  Extensibility
@@ -3188,9 +3188,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 57]
+Bakker, et al.          Expires December 19, 2014              [Page 57]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 11.  IANA Considerations
@@ -3244,9 +3244,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 58]
+Bakker, et al.          Expires December 19, 2014              [Page 58]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    following the checklist in [RFC5706], Appendix A.
@@ -3300,9 +3300,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 59]
+Bakker, et al.          Expires December 19, 2014              [Page 59]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    protocol port number.
@@ -3356,9 +3356,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 60]
+Bakker, et al.          Expires December 19, 2014              [Page 60]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 12.1.6.  Configuration
@@ -3412,9 +3412,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 61]
+Bakker, et al.          Expires December 19, 2014              [Page 61]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 12.2.1.  Management Interoperability and Information
@@ -3468,9 +3468,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 62]
+Bakker, et al.          Expires December 19, 2014              [Page 62]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 12.2.4.  Accounting Management
@@ -3524,9 +3524,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 63]
+Bakker, et al.          Expires December 19, 2014              [Page 63]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    3.  Disrupt service to an individual peer: attackers send bogus e.g.
@@ -3580,9 +3580,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 64]
+Bakker, et al.          Expires December 19, 2014              [Page 64]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    attack.
@@ -3636,9 +3636,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 65]
+Bakker, et al.          Expires December 19, 2014              [Page 65]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 13.2.  Secure Peer Address Exchange
@@ -3692,9 +3692,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 66]
+Bakker, et al.          Expires December 19, 2014              [Page 66]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    PPSP tracker acts as certification authority.
@@ -3748,9 +3748,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 67]
+Bakker, et al.          Expires December 19, 2014              [Page 67]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 13.2.3.  Protection Against Eclipse Attacks
@@ -3804,9 +3804,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 68]
+Bakker, et al.          Expires December 19, 2014              [Page 68]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 13.5.  Strength of the Hash Function for Merkle Hash Trees
@@ -3860,9 +3860,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 69]
+Bakker, et al.          Expires December 19, 2014              [Page 69]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 13.6.3.  DATA
@@ -3916,9 +3916,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 70]
+Bakker, et al.          Expires December 19, 2014              [Page 70]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 13.6.6.  REQUEST
@@ -3972,9 +3972,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 71]
+Bakker, et al.          Expires December 19, 2014              [Page 71]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
 13.6.10.  PEX_RES
@@ -4028,9 +4028,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 72]
+Bakker, et al.          Expires December 19, 2014              [Page 72]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
               E. Lear, "Address Allocation for Private Internets",
@@ -4066,6 +4066,10 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
               Signature Algorithm (DSA) for DNSSEC", RFC 6605,
               April 2012.
 
+   [RFC6817]  Shalunov, S., Hazel, G., Iyengar, J., and M. Kuehlewind,
+              "Low Extra Delay Background Transport (LEDBAT)", RFC 6817,
+              December 2012.
+
 14.2.  Informative References
 
    [ABMRKL]   Bakker, A., "Merkle hash torrent extension", BitTorrent
@@ -4077,18 +4081,18 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
               Parallel and  Distributed Systems Group, Fac. of
               Electrical Engineering,  Mathematics, and Computer
               Science, Delft University of Technology,  The Netherlands,
+
+
+
+Bakker, et al.          Expires December 19, 2014              [Page 73]
+
+Internet-Draft             PPSP Peer Protocol                  June 2014
+
+
               Apr 2009.
 
    [BITOS]    Vlavianos, A., Iliofotou, M., Mathieu, F., and M.
               Faloutsos, "BiToS: Enhancing BitTorrent for Supporting
-
-
-
-Bakker, et al.           Expires October 6, 2014               [Page 73]
-
-Internet-Draft             PPSP Peer Protocol                 April 2014
-
-
               Streaming Applications", IEEE INFOCOM Global Internet
               Symposium Barcelona, Spain, Apr 2006.
 
@@ -4133,18 +4137,18 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
               Sips, "Give-to-Get: Free-riding Resilient Video-on-demand
               in P2P Systems", Proceedings Multimedia Computing and
               Networking conference (Proceedings of SPIE Vol. 6818) San
+
+
+
+Bakker, et al.          Expires December 19, 2014              [Page 74]
+
+Internet-Draft             PPSP Peer Protocol                  June 2014
+
+
               Jose, California, USA, Jan 2008.
 
    [HAC01]    Menezes, A., van Oorschot, P., and S. Vanstone, "Handbook
               of Applied Cryptography", CRC Press, (Fifth Printing,
-
-
-
-Bakker, et al.           Expires October 6, 2014               [Page 74]
-
-Internet-Draft             PPSP Peer Protocol                 April 2014
-
-
               August 2001), Oct 1996.
 
    [I-D.gabrijelcic-ppsp-ecs]
@@ -4189,17 +4193,17 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
    [PPSPPERF]
               Petrocco, R., Pouwelse, J., and D. Epema, "Performance
+
+
+
+Bakker, et al.          Expires December 19, 2014              [Page 75]
+
+Internet-Draft             PPSP Peer Protocol                  June 2014
+
+
               analysis of the Libswift P2P streaming protocol", IEEE
               International Conference on Peer-to-Peer
               Computing (P2P'12), Tarragona, Spain, Sept 2012.
-
-
-
-
-Bakker, et al.           Expires October 6, 2014               [Page 75]
-
-Internet-Draft             PPSP Peer Protocol                 April 2014
-
 
    [RFC2564]  Kalbfleisch, C., Krupczak, C., Presuhn, R., and J.
               Saperia, "Application Management MIB", RFC 2564, May 1999.
@@ -4246,16 +4250,15 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
               Management of New Protocols and Protocol Extensions",
               RFC 5706, November 2009.
 
+
+
+Bakker, et al.          Expires December 19, 2014              [Page 76]
+
+Internet-Draft             PPSP Peer Protocol                  June 2014
+
+
    [RFC5971]  Schulzrinne, H. and R. Hancock, "GIST: General Internet
               Signalling Transport", RFC 5971, October 2010.
-
-
-
-
-Bakker, et al.           Expires October 6, 2014               [Page 76]
-
-Internet-Draft             PPSP Peer Protocol                 April 2014
-
 
    [RFC6241]  Enns, R., Bjorklund, M., Schoenwaelder, J., and A.
               Bierman, "Network Configuration Protocol (NETCONF)",
@@ -4267,10 +4270,6 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
    [RFC6709]  Carpenter, B., Aboba, B., and S. Cheshire, "Design
               Considerations for Protocol Extensions", RFC 6709,
               September 2012.
-
-   [RFC6817]  Shalunov, S., Hazel, G., Iyengar, J., and M. Kuehlewind,
-              "Low Extra Delay Background Transport (LEDBAT)", RFC 6817,
-              December 2012.
 
    [RFC6972]  Zhang, Y. and N. Zong, "Problem Statement and Requirements
               of the Peer-to-Peer Streaming Protocol (PPSP)", RFC 6972,
@@ -4301,19 +4300,18 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 Appendix A.  Revision History
 
-
-
-
-
-
-
-
-Bakker, et al.           Expires October 6, 2014               [Page 77]
-
-Internet-Draft             PPSP Peer Protocol                 April 2014
-
-
    -00        2011-12-19 Initial version.
+
+
+
+
+
+
+
+Bakker, et al.          Expires December 19, 2014              [Page 77]
+
+Internet-Draft             PPSP Peer Protocol                  June 2014
+
 
    -01        2012-01-30 Minor text revision:
 
@@ -4360,17 +4358,16 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
        *   Allow different chunk addressing and content integrity
            protection schemes (ticket #13):
 
-
-
-
-
-Bakker, et al.           Expires October 6, 2014               [Page 78]
-
-Internet-Draft             PPSP Peer Protocol                 April 2014
-
-
        *   Added chunk ID, chunk specification, chunk addressing scheme,
            etc. to terminology.
+
+
+
+
+Bakker, et al.          Expires December 19, 2014              [Page 78]
+
+Internet-Draft             PPSP Peer Protocol                  June 2014
+
 
        *   Created new Sections 4 and 5 discussing chunk addressing and
            content integrity protection schemes, respectively and moved
@@ -4417,15 +4414,16 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
        *   Resolved Ticket #43: Updated Live Streaming section to
            include "Sign All" content authentication, and reference to
-
-
-
-Bakker, et al.           Expires October 6, 2014               [Page 79]
-
-Internet-Draft             PPSP Peer Protocol                 April 2014
-
-
            [SIGMCAST] following discussion with Fabio Picconi.
+
+
+
+
+
+Bakker, et al.          Expires December 19, 2014              [Page 79]
+
+Internet-Draft             PPSP Peer Protocol                  June 2014
+
 
        *   Resolved Ticket #12: Added a CANCEL message to cancel
            REQUESTs for the same data that were sent to multiple peers
@@ -4472,18 +4470,17 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
        *   Removed appendix with Rationale.
 
-
-
-
-
-Bakker, et al.           Expires October 6, 2014               [Page 80]
-
-Internet-Draft             PPSP Peer Protocol                 April 2014
-
-
        *   Resolved Ticket #21+25: PPSPP currently uses LEDBAT and the
            DATA and ACK messages now contain the time fields it
            requires.  Should other congestion control algorithms be
+
+
+
+Bakker, et al.          Expires December 19, 2014              [Page 80]
+
+Internet-Draft             PPSP Peer Protocol                  June 2014
+
+
            supported in the future, a protocol option will be added.
 
    -04        2012-11-07 Minor revision
@@ -4529,15 +4526,16 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
        *   Extended versioning scheme to Min/max versioning scheme
            defined in [RFC6709], Section 4.1, following Riccardo
-
-
-
-Bakker, et al.           Expires October 6, 2014               [Page 81]
-
-Internet-Draft             PPSP Peer Protocol                 April 2014
-
-
            Bernardini's suggestion.
+
+
+
+
+
+Bakker, et al.          Expires December 19, 2014              [Page 81]
+
+Internet-Draft             PPSP Peer Protocol                  June 2014
+
 
        *   Processed comments on unclear phrasing from Riccardo
            Bernardini.
@@ -4588,9 +4586,11 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 82]
+
+
+Bakker, et al.          Expires December 19, 2014              [Page 82]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
        *   Updated reference to PPSP problem statement and requirements
@@ -4644,9 +4644,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 83]
+Bakker, et al.          Expires December 19, 2014              [Page 83]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
            individual in the IETF.
@@ -4700,9 +4700,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 84]
+Bakker, et al.          Expires December 19, 2014              [Page 84]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
            5) Concept of channels The concept of channels is good but it
@@ -4756,9 +4756,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 85]
+Bakker, et al.          Expires December 19, 2014              [Page 85]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
            +   Phrase removed.
@@ -4812,9 +4812,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 86]
+Bakker, et al.          Expires December 19, 2014              [Page 86]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
            +   Rephrased MAYs.  "Sequentially" replaced with "received
@@ -4868,9 +4868,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 87]
+Bakker, et al.          Expires December 19, 2014              [Page 87]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
            keep-alive' and it 'MUST use the simple datagram...' as
@@ -4924,9 +4924,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 88]
+Bakker, et al.          Expires December 19, 2014              [Page 88]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
            - Section 5.6.2.  An illustrative example explaining how the
@@ -4980,9 +4980,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 89]
+Bakker, et al.          Expires December 19, 2014              [Page 89]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
            - Section 7.10 I have not understood how the 'Lenght' field
@@ -5036,9 +5036,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 90]
+Bakker, et al.          Expires December 19, 2014              [Page 90]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
            +   Concept now introduced in Section 3.11.
@@ -5092,9 +5092,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 91]
+Bakker, et al.          Expires December 19, 2014              [Page 91]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
            - Section 11 The RFC required for protocol extensions of a
@@ -5148,9 +5148,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 92]
+Bakker, et al.          Expires December 19, 2014              [Page 92]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
            - Section 3.2, last paragraph: What is the latter
@@ -5204,9 +5204,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 93]
+Bakker, et al.          Expires December 19, 2014              [Page 93]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
            +   Mentioned base 1024 in Terminology.  Changed to 1024
@@ -5260,9 +5260,9 @@ Internet-Draft             PPSP Peer Protocol                 April 2014
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 94]
+Bakker, et al.          Expires December 19, 2014              [Page 94]
 
-Internet-Draft             PPSP Peer Protocol                 April 2014
+Internet-Draft             PPSP Peer Protocol                  June 2014
 
 
    -08        2013-08-8 Continued Revision following AD Review
@@ -5316,5 +5316,5 @@ Authors' Addresses
 
 
 
-Bakker, et al.           Expires October 6, 2014               [Page 95]
+Bakker, et al.          Expires December 19, 2014              [Page 95]
 
