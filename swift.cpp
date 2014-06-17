@@ -22,6 +22,7 @@
 
 using namespace swift;
 
+bool swift::quiet = false;
 
 // Local constants
 #define RESCAN_DIR_INTERVAL 30 // seconds
@@ -63,6 +64,7 @@ void usage(void)
     fprintf(stderr,"  -H, --checkpoint\tcreate checkpoint of file when complete for fast restart\n");
     fprintf(stderr,"  -z, --chunksize\tchunk size in bytes (default: %d)\n", SWIFT_DEFAULT_CHUNK_SIZE);
     fprintf(stderr,"  -m, --printurl\tcompose URL from tracker, file and chunksize\n");
+    fprintf(stderr,"  -q, --quiet\tmake some prints quiet\n");
     fprintf(stderr,"  -r, --urlfile\tfile to write URL to for --printurl\n");
     fprintf(stderr,"  -M, --multifile\tcreate multi-file spec with given files\n");
     fprintf(stderr,"  -e, --zerosdir\tdirectory with checkpointed content to serve from with zero state\n");
@@ -123,7 +125,6 @@ int single_td = -1;
 bool file_enable_checkpoint = false;
 bool file_checkpointed = false;
 bool report_progress = false;
-bool quiet=false;
 bool exitoncomplete=false;
 bool httpgw_enabled=false,cmdgw_enabled=false;
 // Gertjan fix
@@ -174,6 +175,7 @@ int utf8main(int argc, char** argv)
         {"checkpoint",no_argument, 0, 'H'},
         {"chunksize",required_argument, 0, 'z'}, // CHUNKSIZE
         {"printurl", no_argument, 0, 'm'},
+        {"quiet", no_argument, 0, 'q'},
         {"urlfile",  required_argument, 0, 'r'},  // should be optional arg to printurl, but win32 getopt don't grok
         {"multifile",required_argument, 0, 'M'}, // MULTIFILE
         {"zerosdir",required_argument, 0, 'e'},  // ZEROSTATE
@@ -212,7 +214,7 @@ int utf8main(int argc, char** argv)
 
     std::string optargstr;
     int c,n;
-    while (-1 != (c = getopt_long(argc, argv, ":h:f:d:l:t:D:L:pg:s:c:o:u:y:z:w:BNHmM:e:r:ji:kC:1:2:3:4:T:GW:P:K:S:a:I:n:",
+    while (-1 != (c = getopt_long(argc, argv, ":h:f:d:l:t:D:L:pg:s:c:o:u:y:z:w:BNHmqM:e:r:ji:kC:1:2:3:4:T:GW:P:K:S:a:I:n:",
                                   long_options, 0))) {
         switch (c) {
         case 'h':
@@ -330,8 +332,11 @@ int utf8main(int argc, char** argv)
             break;
         case 'm': // printurl
             printurl = true;
-            quiet = true;
+            swift::quiet = true;
             wait_time = 0;
+            break;
+        case 'q': // quiet
+            swift::quiet = true;
             break;
         case 'r':
             urlfilename = strdup(optarg);
@@ -461,7 +466,7 @@ int utf8main(int argc, char** argv)
             if (i==10)
                 quit("cant listen on %s\n",bindaddr.str().c_str());
         }
-        if (!quiet)
+        if (!swift::quiet)
             fprintf(stderr,"swift: My listen port is %d\n", BoundAddress(sock).port());
     }
 
@@ -654,7 +659,7 @@ int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string tracker
 int OpenSwiftSwarm(std::string filename, SwarmID &swarmid, std::string trackerurl, Address srcaddr,
                    bool force_check_diskvshash, uint32_t chunk_size, bool livestream, bool activate, std::string metadir)
 {
-    if (!quiet)
+    if (!swift::quiet)
         fprintf(stderr,"swift: parsedir: Opening %s\n", filename.c_str());
 
     // When called by OpenSwiftDirectory, the swarm may already be open. In
@@ -1224,7 +1229,8 @@ int wmain(int wargc, wchar_t *wargv[ ], wchar_t *envp[ ])
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
     int wargc=0;
-    fprintf(stderr,"wWinMain: enter\n");
+    if (!swift::quiet)
+        fprintf(stderr,"wWinMain: enter\n");
     // Arno, 2012-05-30: TODO: add dummy first arg, because getopt eats the first
     // the argument when it is a non-console app. Currently done with -j dummy arg.
     LPWSTR* wargv = CommandLineToArgvW(pCmdLine, &wargc);

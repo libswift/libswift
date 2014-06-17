@@ -145,6 +145,7 @@ namespace swift
 #define bytes2layer(bn,cs)  (int)log2(  ((double)bn)/((double)cs) )
 
 
+    extern bool quiet;
 
 
     typedef enum {
