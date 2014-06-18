@@ -1,0 +1,4 @@
+*.o
+swift
+.sconsign.dblite
+.project
