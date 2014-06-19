@@ -1131,26 +1131,26 @@ void swift::CmdGwTunnelUDPDataCameIn(Address srcaddr, uint32_t srcchan, struct e
         fprintf(stderr,"cmdgw: TunnelUDPData:DataCameIn " PRISIZET " bytes from %s/%08x\n", evbuffer_get_length(evb),
                 srcaddr.str().c_str(), srcchan);
 
+    size_t evb_len = evbuffer_get_length(evb);
+    uint8_t *data = evbuffer_pullup(evb, evb_len);
+    std::string data_str((const char *) data, evb_len);
     /*
      *  Format:
      *  TUNNELRECV ip:port/hexchanid nbytes\r\n
      *  <bytes>
      */
-
     std::ostringstream oss;
     oss << "TUNNELRECV " << srcaddr.str();
     oss << "/" << std::hex << srcchan;
-    oss << " " << std::dec << evbuffer_get_length(evb) << "\r\n";
+    oss << " " << std::dec << evb_len << "\r\n";
+    oss << data_str;
 
-    std::stringbuf *pbuf=oss.rdbuf();
-    size_t slen = strlen(pbuf->str().c_str());
-    send(cmd_tunnel_sock,pbuf->str().c_str(),slen,0);
+    std::string msg_str = oss.rdbuf()->str();
+    size_t msg_len = msg_str.size();
 
-    slen = evbuffer_get_length(evb);
-    uint8_t *data = evbuffer_pullup(evb,slen);
-    send(cmd_tunnel_sock,(const char *)data,slen,0);
+    send(cmd_tunnel_sock, msg_str.c_str(), msg_len, 0);
 
-    evbuffer_drain(evb,slen);
+    evbuffer_drain(evb, evb_len);
 }
 
 
