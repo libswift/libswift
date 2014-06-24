@@ -378,7 +378,8 @@ namespace swift
             newSwarm->ft_->SetTD(newSwarm->id_);
 
             // Arno, 2013-09-11: BuildSwarm could not use ExternalTrackerClient while td was -1
-            fprintf(stderr,"swarmmgr: AddSwarm: ConnectToTracker\n");
+            if (!swift::quiet)
+                fprintf(stderr,"swarmmgr: AddSwarm: ConnectToTracker\n");
             newSwarm->ft_->ConnectToTracker();
         }
 
