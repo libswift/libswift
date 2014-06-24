@@ -78,6 +78,12 @@ typedef enum {
     CMDGW_TUNNEL_READTUNNEL
 } cmdgw_tunnel_t;
 
+typedef enum {
+    SWIFT_STATUS_ERROR,
+    SWIFT_STATUS_OK,
+    SWIFT_STATUS_EXITING,
+} swift_status_t;
+
 std::vector< uint32_t > tunnel_channels_;
 
 cmdgw_tunnel_t cmd_tunnel_state=CMDGW_TUNNEL_SCAN4CRLF;
@@ -102,7 +108,7 @@ tint cmd_gw_last_open=0;
 
 // Fwd defs
 void CmdGwDataCameInCallback(struct bufferevent *bev, void *ctx);
-bool CmdGwReadLine(evutil_socket_t cmdsock);
+int CmdGwReadLine(evutil_socket_t cmdsock);
 void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line);
 void CmdGwProcessData(evutil_socket_t cmdsock);
 
@@ -149,8 +155,10 @@ void CmdGwCloseConnection(evutil_socket_t sock)
         }
     }
 
-    if (cmd_evbuffer != NULL)
+    if (cmd_evbuffer != NULL) {
         evbuffer_free(cmd_evbuffer);
+        cmd_evbuffer = NULL;
+    }
 
     // Arno, 2012-07-06: Close
     swift::close_socket(sock);
@@ -614,12 +622,14 @@ void CmdGwProcessData(evutil_socket_t cmdsock)
     // Process CMD data in the cmd_evbuffer
 
     if (cmd_tunnel_state == CMDGW_TUNNEL_SCAN4CRLF) {
-        bool ok=false;
+        int status=SWIFT_STATUS_ERROR;
         do {
-            ok = CmdGwReadLine(cmdsock);
-            if (ok && cmd_tunnel_state == CMDGW_TUNNEL_READTUNNEL)
+            status = CmdGwReadLine(cmdsock);
+            if (status == SWIFT_STATUS_OK && cmd_tunnel_state == CMDGW_TUNNEL_READTUNNEL)
                 break;
-        } while (ok);
+            if (status == SWIFT_STATUS_EXITING)
+                return;
+        } while (status == SWIFT_STATUS_OK);
     }
     // Not else!
     if (cmd_tunnel_state == CMDGW_TUNNEL_READTUNNEL) {
@@ -641,7 +651,7 @@ void CmdGwProcessData(evutil_socket_t cmdsock)
 }
 
 
-bool CmdGwReadLine(evutil_socket_t cmdsock)
+int CmdGwReadLine(evutil_socket_t cmdsock)
 {
     // Parse cmd_evbuffer for lines, and call NewRequest when found
 
@@ -650,9 +660,12 @@ bool CmdGwReadLine(evutil_socket_t cmdsock)
     if (cmd != NULL) {
         CmdGwNewRequestCallback(cmdsock,cmd);
         free(cmd);
-        return true;
+        if (cmd_evbuffer == NULL)
+            // Swift is shutting down
+            return SWIFT_STATUS_EXITING;
+        return SWIFT_STATUS_OK;
     } else
-        return false;
+        return SWIFT_STATUS_ERROR;
 }
 
 int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline);
