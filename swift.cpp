@@ -337,6 +337,9 @@ int utf8main(int argc, char** argv)
         case 'r':
             urlfilename = strdup(optarg);
             break;
+        case 'q':
+            quiet = true;
+            break;
         case 'M': // MULTIFILE
             filename = strdup(optarg);
             generate_multifile = true;
@@ -431,9 +434,6 @@ int utf8main(int argc, char** argv)
             if (n != 1)
                 quit("zerostimeout must be seconds as float\n");
             zerostimeout = t * TINT_SEC;
-            break;
-        case 'q':
-            quiet = true;
             break;
         }
 
@@ -643,7 +643,8 @@ int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string tracker
         // can be copied to scanned dir and quickly loaded
         swift::Checkpoint(single_td);
     } else {
-        printf("Root hash: %s\n", swift::GetSwarmID(single_td).hex().c_str());
+        if (!quiet)
+            printf("Root hash: %s\n", swift::GetSwarmID(single_td).hex().c_str());
         fflush(stdout); // For testing
     }
 
