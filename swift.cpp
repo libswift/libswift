@@ -43,35 +43,36 @@ using namespace swift;
 void usage(void)
 {
     fprintf(stderr,"Usage:\n");
-    fprintf(stderr,"  -h, --hash\tswarm ID of the content (root hash or public key)\n");
-    fprintf(stderr,"  -f, --file\tname of file to use (root hash by default)\n");
-    fprintf(stderr,"  -d, --dir\tname of directory to scan and seed\n");
-    fprintf(stderr,"  -l, --listen\t[ip:|host:]port to listen to (default: random). MUST set for IPv6\n");
-    fprintf(stderr,"  -t, --tracker\t[ip:|host:]port of the tracker or URL (default: none). IPv6 between [] cf. RFC2732\n");
-    fprintf(stderr,"  -D, --debug\tfile name for debugging logs (default: stdout)\n");
-    fprintf(stderr,"  -B\tdebugging logs to stdout (win32 hack)\n");
+    fprintf(stderr,"  -h, --hash\t\tswarm ID of the content (root hash or public key)\n");
+    fprintf(stderr,"  -f, --file\t\tname of file to use (root hash by default)\n");
+    fprintf(stderr,"  -d, --dir\t\tname of directory to scan and seed\n");
+    fprintf(stderr,"  -l, --listen\t\t[ip:|host:]port to listen to (default: random). MUST set for IPv6\n");
+    fprintf(stderr,"  -t, --tracker\t\t[ip:|host:]port of the tracker or URL (default: none). IPv6 between [] cf. RFC2732\n");
+    fprintf(stderr,"  -D, --debug\t\tfile name for debugging logs (default: stdout)\n");
     fprintf(stderr,"  -p, --progress\treport transfer progress\n");
-    fprintf(stderr,"  -g, --httpgw\t[ip:|host:]port to bind HTTP content gateway to (no default)\n");
-    fprintf(stderr,"  -s, --statsgw\t[ip:|host:]port to bind HTTP stats listen socket to (no default)\n");
-    fprintf(stderr,"  -c, --cmdgw\t[ip:|host:]port to bind CMD listen socket to (no default)\n");
+    fprintf(stderr,"  -g, --httpgw\t\t[ip:|host:]port to bind HTTP content gateway to (no default)\n");
+    fprintf(stderr,"  -s, --statsgw\t\t[ip:|host:]port to bind HTTP stats listen socket to (no default)\n");
+    fprintf(stderr,"  -c, --cmdgw\t\t[ip:|host:]port to bind CMD listen socket to (no default)\n");
     fprintf(stderr,"  -C, --cmdgwint\tcmdgw report interval in seconds\n");
     fprintf(stderr,"  -E, --perscmdgw\tmake the cmdgw persistent, the client will close when the cmd socket is closed\n");
-    fprintf(stderr,"  -o, --destdir\tdirectory for saving data (default: none)\n");
-    fprintf(stderr,"  -u, --uprate\tupload rate limit in KiB/s (default: unlimited)\n");
+    fprintf(stderr,"  -o, --destdir\t\tdirectory for saving data (default: none)\n");
+    fprintf(stderr,"  -u, --uprate\t\tupload rate limit in KiB/s (default: unlimited)\n");
     fprintf(stderr,"  -y, --downrate\tdownload rate limit in KiB/s (default: unlimited)\n");
-    fprintf(stderr,"  -w, --wait\tlimit running time, e.g. 1[DHMs] (default: infinite with -l, -g)\n");
+    fprintf(stderr,"  -w, --wait\t\tlimit running time, e.g. 1[DHMs] (default: infinite with -l, -g)\n");
     fprintf(stderr,"  -H, --checkpoint\tcreate checkpoint of file when complete for fast restart\n");
     fprintf(stderr,"  -z, --chunksize\tchunk size in bytes (default: %d)\n", SWIFT_DEFAULT_CHUNK_SIZE);
     fprintf(stderr,"  -m, --printurl\tcompose URL from tracker, file and chunksize\n");
-    fprintf(stderr,"  -r, --urlfile\tfile to write URL to for --printurl\n");
+    fprintf(stderr,"  -q, --quiet\t\tquiet mode: don't print general status information on stderr\n");
+    fprintf(stderr,"  -r, --urlfile\t\tfile to write URL to for --printurl\n");
     fprintf(stderr,"  -M, --multifile\tcreate multi-file spec with given files\n");
     fprintf(stderr,"  -e, --zerosdir\tdirectory with checkpointed content to serve from with zero state\n");
-    fprintf(stderr,"  -i, --source\tlive source input (URL or filename or - for stdin)\n");
-    fprintf(stderr,"  -k, --live\tperform live download, use with -t and -h\n");
-    fprintf(stderr,"  -r filename\t to save URL to\n");
+    fprintf(stderr,"  -i, --source\t\tlive source input (URL or filename or - for stdin)\n");
+    fprintf(stderr,"  -k, --live\t\tperform live download, use with -t and -h\n");
     fprintf(stderr,"  -1 filename-in-hex\ta win32 workaround for non UTF-16 popen\n");
     fprintf(stderr,"  -2 urlfilename-in-hex\ta win32 workaround for non UTF-16 popen\n");
     fprintf(stderr,"  -3 zerosdir-in-hex\ta win32 workaround for non UTF-16 popen\n");
+    fprintf(stderr,"  -B\tdebugging logs to stdout (win32 hack)\n");
+    fprintf(stderr,"  -r filename\tto save URL to\n");
     fprintf(stderr,"  -T time-out\tin seconds for slow zero state connections\n");
     fprintf(stderr,"  -G GTest mode\n");
     fprintf(stderr,"  -K live keypair filename\n");
@@ -190,6 +191,7 @@ int utf8main(int argc, char** argv)
         {"lsa",required_argument, 0, 'a'}, // PPSP
         {"ldw",required_argument, 0, 'W'}, // PPSP
         {"ia",required_argument, 0, 'I'}, // EXTTRACK
+        {"quiet", no_argument, 0, 'q'}, // be quiet!
         {0, 0, 0, 0}
     };
 
@@ -212,7 +214,7 @@ int utf8main(int argc, char** argv)
 
     std::string optargstr;
     int c,n;
-    while (-1 != (c = getopt_long(argc, argv, ":h:f:d:l:t:D:L:pg:s:c:o:u:y:z:w:BNHmM:e:r:ji:kC:1:2:3:4:T:GW:P:K:S:a:I:n:",
+    while (-1 != (c = getopt_long(argc, argv, ":h:f:d:l:t:D:L:pg:s:c:o:u:y:z:w:BNHmqM:e:r:ji:kC:1:2:3:4:T:GW:P:K:S:a:I:n:",
                                   long_options, 0))) {
         switch (c) {
         case 'h':
@@ -336,6 +338,9 @@ int utf8main(int argc, char** argv)
         case 'r':
             urlfilename = strdup(optarg);
             break;
+        case 'q':
+            quiet = true;
+            break;
         case 'M': // MULTIFILE
             filename = strdup(optarg);
             generate_multifile = true;
@@ -445,7 +450,7 @@ int utf8main(int argc, char** argv)
     } else
         chdir_utf8(destdir);
 
-    if (httpgw_enabled)
+    if (httpgw_enabled && !quiet)
         fprintf(stderr,"CWD %s\n",getcwd_utf8().c_str());
 
     if (bindaddr!=Address()) { // seeding
@@ -496,8 +501,8 @@ int utf8main(int argc, char** argv)
                 quit("Error reading URL from file: parse error");
             std::string swarmidhexstr = puri["swarmidhex"];
             swarmid = SwarmID(swarmidhexstr);
-
-            fprintf(stderr,"swift: Read swarmid: %s\n", swarmid.hex().c_str());
+            if (!quiet)
+                fprintf(stderr,"swift: Read swarmid: %s\n", swarmid.hex().c_str());
         }
     }
 
@@ -591,8 +596,8 @@ int utf8main(int argc, char** argv)
             evtimer_assign(&evrescan, Channel::evbase, RescanDirCallback, NULL);
             evtimer_add(&evrescan, tint2tv(RESCAN_DIR_INTERVAL*TINT_SEC));
         }
-
-        fprintf(stderr,"swift: Mainloop\n");
+        if (!quiet)
+            fprintf(stderr,"swift: Mainloop\n");
         // Enter libevent mainloop
         event_base_dispatch(Channel::evbase);
 
@@ -639,7 +644,8 @@ int HandleSwiftSwarm(std::string filename, SwarmID &swarmid, std::string tracker
         // can be copied to scanned dir and quickly loaded
         swift::Checkpoint(single_td);
     } else {
-        printf("Root hash: %s\n", swift::GetSwarmID(single_td).hex().c_str());
+        if (!quiet)
+            printf("Root hash: %s\n", swift::GetSwarmID(single_td).hex().c_str());
         fflush(stdout); // For testing
     }
 
@@ -709,16 +715,19 @@ int CleanSwiftDirectory(std::string dirname)
     for (iter = tds.begin(); iter != tds.end(); iter++) {
         int td = *iter;
         std::string filename = swift::GetOSPathName(td);
-        fprintf(stderr,"swift: clean: Checking %s\n", filename.c_str());
+        if (!quiet)
+            fprintf(stderr,"swift: clean: Checking %s\n", filename.c_str());
         int res = file_exists_utf8(filename);
         if (res == 0) {
-            fprintf(stderr,"swift: clean: Missing %s\n", filename.c_str());
+            if (!quiet)
+                fprintf(stderr,"swift: clean: Missing %s\n", filename.c_str());
             delset.push_back(td);
         }
     }
     for (iter=delset.begin(); iter!=delset.end(); iter++) {
         int td = *iter;
-        fprintf(stderr,"swift: clean: Deleting transfer %d\n", td);
+        if (!quiet)
+            fprintf(stderr,"swift: clean: Deleting transfer %d\n", td);
         swift::Close(td);
     }
 
@@ -768,7 +777,8 @@ int PrintURL(int td,std::string trackerurl,uint32_t chunk_size,std::string urlfi
 
 void OpenSSLGenerateCallback(int p)
 {
-    fprintf(stderr,"GenKey %d ", p);
+    if (!quiet)
+        fprintf(stderr,"GenKey %d ", p);
 }
 
 
@@ -784,12 +794,13 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
     KeyPair *keypairptr=NULL;
     if (keypairfilename != "") {
         keypairptr = KeyPair::ReadPrivateKey(keypairfilename);
-        if (keypairptr == NULL)
+        if (keypairptr == NULL && !quiet)
             fprintf(stderr,"swift: Could not read keypair from filename, creating new one\n");
     }
     if (keypairptr == NULL) {
         keypairptr = KeyPair::Generate(livesource_sigalg, SWIFT_RSA_DEFAULT_KEYSIZE, OpenSSLGenerateCallback);
-        fprintf(stderr,"swift: siglen is %" PRIu16 "\n", keypairptr->GetSigSizeInBytes());
+        if (!quiet)
+            fprintf(stderr,"swift: siglen is %" PRIu16 "\n", keypairptr->GetSigSizeInBytes());
     }
     if (keypairfilename != "") {
         int ret = keypairptr->WritePrivateKey(keypairfilename);
@@ -813,8 +824,8 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
             livesource_filep = _popen(program.c_str(), "rb");
             if (livesource_filep == NULL)
                 quit("live: file: popen failed");
-
-            fprintf(stderr,"live: pipe: Reading from %s\n", program.c_str());
+            if (!quiet)
+                fprintf(stderr,"live: pipe: Reading from %s\n", program.c_str());
 #else
             quit("live: pipe as source not yet implemented on non-win32");
 #endif
@@ -858,7 +869,8 @@ void HandleLiveSource(std::string livesource_input, std::string filename, std::s
         } else
             httpservname = server;
 
-        fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str());
+        if (!quiet)
+            fprintf(stderr,"live: http: Reading from serv %s port %d path %s\n", httpservname.c_str(), httpport, httppath.c_str());
 
         // Create swarm
         livesource_lt = swift::LiveCreate(filename,*keypairptr,livesource_checkpoint_filename,swarm_cipm,livesource_disc_wnd,
@@ -890,7 +902,8 @@ void AttemptCheckpoint()
             && swift::IsComplete(single_td)) {
         std::string binmap_filename = swift::GetOSPathName(single_td);
         binmap_filename.append(".mbinmap");
-        fprintf(stderr,"swift: Complete, checkpointing %s\n", binmap_filename.c_str());
+        if (!quiet)
+            fprintf(stderr,"swift: Complete, checkpointing %s\n", binmap_filename.c_str());
 
         if (swift::Checkpoint(single_td) >= 0)
             file_checkpointed = true;
@@ -1039,7 +1052,8 @@ void RescanDirCallback(int fd, short event, void *arg)
 typedef std::vector<std::pair<std::string,int64_t> >    filelist_t;
 int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int argidx)
 {
-    fprintf(stderr,"CreateMultiFileSpec: %s nfiles %d\n", specfilename.c_str(), argc-argidx);
+    if (!quiet)
+        fprintf(stderr,"CreateMultiFileSpec: %s nfiles %d\n", specfilename.c_str(), argc-argidx);
 
     filelist_t    filelist;
 
@@ -1050,7 +1064,8 @@ int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int ar
         std::string pathname = argv[i];
         int64_t fsize = file_size_by_path_utf8(pathname);
         if (fsize < 0) {
-            fprintf(stderr,"cannot open file in multi-spec list: %s\n", pathname.c_str());
+            if (!quiet)
+                fprintf(stderr,"cannot open file in multi-spec list: %s\n", pathname.c_str());
             print_error("cannot open file in multi-spec list");
             return fsize;
         }
@@ -1095,7 +1110,8 @@ int CreateMultifileSpec(std::string specfilename, int argc, char *argv[], int ar
     spec << "\n";
     spec << specbody.str();
 
-    fprintf(stderr,"spec: <%s>\n", spec.str().c_str());
+    if (!quiet)
+        fprintf(stderr,"spec: <%s>\n", spec.str().c_str());
 
     // 6. Write to specfile
     FILE *fp = fopen_utf8(specfilename.c_str(),"wb");
@@ -1154,16 +1170,19 @@ void LiveSourceHTTPResponseCallback(struct evhttp_request *req, void *arg)
     const char *new_location = NULL;
     switch (req->response_code) {
     case HTTP_OK:
-        fprintf(stderr,"live: http: GET OK\n");
+        if (!quiet)
+            fprintf(stderr,"live: http: GET OK\n");
         break;
 
     case HTTP_MOVEPERM:
     case HTTP_MOVETEMP:
         new_location = evhttp_find_header(req->input_headers, "Location");
-        fprintf(stderr,"live: http: GET REDIRECT %s\n", new_location);
+        if (!quiet)
+            fprintf(stderr,"live: http: GET REDIRECT %s\n", new_location);
         break;
     default:
-        fprintf(stderr,"live: http: GET ERROR %d\n", req->response_code);
+        if (!quiet)
+            fprintf(stderr,"live: http: GET ERROR %d\n", req->response_code);
         event_base_loopexit(Channel::evbase, 0);
         return;
     }
@@ -1176,7 +1195,8 @@ void LiveSourceHTTPResponseCallback(struct evhttp_request *req, void *arg)
 void LiveSourceHTTPDownloadChunkCallback(struct evhttp_request *req, void *arg)
 {
     int length = evbuffer_get_length(req->input_buffer);
-    fprintf(stderr,"live: http: read %d bytes\n", length);
+    if (!quiet)
+        fprintf(stderr,"live: http: read %d bytes\n", length);
 
     // Create chunks of chunk_size()
     int ret = evbuffer_add_buffer(livesource_evb,req->input_buffer);
@@ -1224,7 +1244,8 @@ int wmain(int wargc, wchar_t *wargv[ ], wchar_t *envp[ ])
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
     int wargc=0;
-    fprintf(stderr,"wWinMain: enter\n");
+    if (!quiet)
+        fprintf(stderr,"wWinMain: enter\n");
     // Arno, 2012-05-30: TODO: add dummy first arg, because getopt eats the first
     // the argument when it is a non-console app. Currently done with -j dummy arg.
     LPWSTR* wargv = CommandLineToArgvW(pCmdLine, &wargc);
