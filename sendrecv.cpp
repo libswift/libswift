@@ -611,7 +611,9 @@ void Channel::AddHint(struct evbuffer *evb)
                 rough_global_hint_out_size);
 
     // 3. Take the smallest allowance from rate and queue limit
-    uint64_t plan_pck = (uint64_t)min(rate_allowed_hints,queue_allowed_hints);
+    // Ric: test: TODO remove
+    uint64_t plan_pck = (uint64_t)min(rate_allowed_hints,first_plan_pck);
+    //uint64_t plan_pck = (uint64_t)min(rate_allowed_hints,queue_allowed_hints);
 
     // 4. Ask allowance in blocks of chunks to get pipelining going from serving peer.
     // Arno, 2012-10-30: not HINT_GRANULARITY for LIVE
