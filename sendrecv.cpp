@@ -2362,6 +2362,7 @@ void Channel::Reschedule()
     }
 
     next_send_time_ = NextSendTime();
+    dprintf("%s #%" PRIu32 " next send in :%" PRIi64 "\n",tintstr(),id_,next_send_time_-NOW);
     if (next_send_time_!=TINT_NEVER) {
 
         assert(next_send_time_<NOW+TINT_MIN);
