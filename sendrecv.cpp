@@ -557,7 +557,30 @@ void Channel::AddHint(struct evbuffer *evb)
 
     }
 
-    int first_plan_pck = max((tint)1, plan_for / dip_avg_);
+    // Ric: calculate the dip over the last period
+    //      use same approach as LEDBAT!
+    // We may apply a filter over the elements.. as suggested in the rfc
+    ttqueue::iterator it = dip_list_.begin();
+    int32_t count = 0;
+    int total = 0;
+    tint dip = 0;
+    tint timeout = NOW - plan_for/2;
+    // use the dip received during the last period, or the dip_avg_
+    while (it != dip_list_.end() && (it->second > timeout || count < 4)) {
+        total += it->first;
+        count++;
+        it++;
+    }
+    // clean up
+    while (dip_list_.size() > 4 && dip_list_.back().second < timeout) {
+        dip_list_.pop_back();
+    }
+    if (dip_list_.size() < 4)
+        dip = dip_avg_;
+    else
+        dip = total/count;
+
+    int first_plan_pck = max((tint)1, plan_for / dip);
 
     // Riccardo, 2012-04-04: Actually allowed is max minus what we already asked for
     int queue_allowed_hints = max(0,first_plan_pck-(int)hint_out_size_);
@@ -1370,8 +1393,14 @@ void Channel::UpdateDIP(bin_t pos)
 {
     if (!pos.is_none()) {
         if (last_data_in_time_) {
+            /*
             tint dip = NOW - last_data_in_time_;
             dip_avg_ = (dip_avg_*7 + dip) >> 3;
+            */
+            tint dip = NOW - last_data_in_time_;
+            std::pair <tint,tint> dip_hist(dip, NOW);
+            dip_list_.push_front(dip_hist);
+            dip_avg_ = (dip_avg_*3 + dip) >> 2;
         }
         last_data_in_time_ = NOW;
     }
@@ -1476,7 +1505,8 @@ void Channel::OnAck(struct evbuffer *evb)
             data_out_size_--;
             data_out_[di]=tintbin();
         } else if (ri!=data_out_tmo_.size()) {
-            UpdateRTT(peer_owd);
+            // Ric: TODO test
+            //UpdateRTT(peer_owd);
             data_out_tmo_[ri]=tintbin();
         }
 

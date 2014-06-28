@@ -1219,6 +1219,7 @@ namespace swift
         tint        owd_min_;
         /** LEDBAT current delay list should be > 4 && == RTT */
         ttqueue     owd_current_;
+        ttqueue     dip_list_; // Ric: a list of dip values for smoothed avg
         /** Stats */
         int         dgrams_sent_;
         int         dgrams_rcvd_;
