@@ -1371,7 +1371,7 @@ void Channel::UpdateDIP(bin_t pos)
     if (!pos.is_none()) {
         if (last_data_in_time_) {
             tint dip = NOW - last_data_in_time_;
-            dip_avg_ = (dip_avg_*3 + dip) >> 2;
+            dip_avg_ = (dip_avg_*7 + dip) >> 3;
         }
         last_data_in_time_ = NOW;
     }
