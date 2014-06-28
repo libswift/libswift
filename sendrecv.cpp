@@ -21,7 +21,7 @@ using namespace std;
 struct event_base *Channel::evbase;
 struct event Channel::evrecv;
 
-#define DEBUGTRAFFIC     0
+#define DEBUGTRAFFIC     1
 
 /** Arno: Victor's design allows a sender to choose some data to push to
  * a receiver, if that receiver is not HINTing at data. Should be disabled
