@@ -1228,7 +1228,7 @@ bin_t Channel::DequeueHintOut(uint64_t size)
         hint_queue_out_.pop_front();
         hint_queue_out_size_ -= bin.base_length();
 
-        while (!bin.is_base() || !transfer()->ack_out()->is_filled(bin)) {
+        while (!bin.is_base() && !transfer()->ack_out()->is_filled(bin)) {
             hint_queue_out_.push_front(tintbin(time, bin.right()));
             hint_queue_out_size_ += hint_queue_out_.front().bin.base_length();
             bin.to_left();
