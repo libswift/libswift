@@ -126,8 +126,11 @@ namespace swift
 // Set to 1 for Sign All, set to a power of 2 > 1 for UMT. This MUST be a power of 2.
 #define SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN   32
 
-    // Ric: allowed hints in the future (e.g., 2 x TINT_SEC)
+// Ric: allowed hints in the future (e.g., 2 x TINT_SEC)
 #define HINT_TIME                       1   // seconds
+
+// timeout for the piece picker
+#define PICKER_TIMEOUT                     2  // seconds
 
 // How much time a SIGNED_INTEGRITY timestamp may diverge from current time
 #define SWIFT_LIVE_MAX_SOURCE_DIVERGENCE_TIME   30 // seconds

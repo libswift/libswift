@@ -160,7 +160,7 @@ public:
         char set = 'X'; // TODO remove set var, only used for debug
 
         // TODO check... the seconds should depend on previous speed of the peer
-        while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*3/2) { // FIXME sec
+        while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*PICKER_TIMEOUT) { // FIXME sec
             binmap_t::copy(ack_hint_out_, *(hashtree()->ack_out()), hint_out_.front().bin);
             hint_out_.pop_front();
         }

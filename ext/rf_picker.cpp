@@ -57,7 +57,7 @@ public:
         int ret_size = 0;
 
         // delete outdated hints
-        while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*2) { // FIXME sec
+        while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*PICKER_TIMEOUT) { // FIXME sec
             binmap_t::copy(ack_hint_out_, *(hashtree()->ack_out()), hint_out_.front().bin);
             hint_out_.pop_front();
         }
