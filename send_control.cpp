@@ -67,7 +67,8 @@ tint Channel::SwitchSendControl(send_control_t control_mode)
         cwnd_ = 1;
         break;
     case SLOW_START_CONTROL:
-        cwnd_ = 1;
+// Ric: TODO test
+        cwnd_ = 4;
         break;
     case AIMD_CONTROL:
         break;
@@ -219,7 +220,9 @@ tint Channel::SlowStartNextSendTime()
         lprintf("\t\t==== Switch to LEDBAT Control (1) ==== \n");
         return SwitchSendControl(LEDBAT_CONTROL);//AIMD_CONTROL);
     }
-    if (rtt_avg_/cwnd_<TINT_SEC/10) {
+    // Ric: TODO test
+    // if (rtt_avg_/cwnd_<TINT_SEC/10) {
+    if (rtt_avg_/cwnd_<TINT_SEC/20) {
         lprintf("\t\t==== Switch to LEDBAT Control (2) ==== \n");
         return SwitchSendControl(LEDBAT_CONTROL);//AIMD_CONTROL);
     }
@@ -284,7 +287,8 @@ tint Channel::LedbatNextSendTime()
         if (cwnd_<1)
             cwnd_ = 1;
         if (owd_cur_==TINT_NEVER || owd_min_==TINT_NEVER)
-            cwnd_ = 1;
+// Ric: TODO test
+            cwnd_ = 40;
     }
 
     return CwndRateNextSendTime();
