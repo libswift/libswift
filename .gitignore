@@ -2,3 +2,5 @@
 swift
 .sconsign.dblite
 .project
+doc/latex
+doc/html
