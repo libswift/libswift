@@ -1,7 +1,7 @@
 #!/bin/sh -x
 
-export XULRUNNER_IDL=$HOME/xulrunner-sdk-1.9.1.7/idl
-export XULRUNNER_XPIDL=$HOME/xulrunner-sdk-1.9.1.7/bin/xpidl
+export XULRUNNER_IDL=$HOME/xulrunner-sdk/idl
+export XULRUNNER_XPIDL=$HOME/xulrunner-sdk/bin/xpidl
 
 # ----- Clean up
 
