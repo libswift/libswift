@@ -592,6 +592,9 @@ void CmdGwUpdateDLStatesCallback()
 
 void CmdGwDataCameInCallback(struct bufferevent *bev, void *ctx)
 {
+    // do not process anything if the system has already shutdown
+    if (cmd_evbuffer == NULL) return;
+
     // Turn TCP stream into lines deliniated by \r\n
 
     evutil_socket_t cmdsock = bufferevent_getfd(bev);
