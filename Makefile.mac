@@ -1,8 +1,9 @@
 LIBEVENT_HOME=/Users/tribler/Workspace/install/libevent-2.0.21-stable
+OPENSSL_HOME=/Users/tribler/Workspace/install/openssl-1.0.1h
 
 # Remove NDEBUG define to trigger asserts
-CPPFLAGS+=-O2 -I. -DNDEBUG -Wall -Wno-sign-compare -Wno-unused -g -I${LIBEVENT_HOME}/include -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -arch i386 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.8.sdk -mmacosx-version-min=10.5 -DMAC_OS_X_VERSION_MIN_REQUIRED=1050
-LDFLAGS+=${LIBEVENT_HOME}/lib/libevent.a -lstdc++ -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.8.sdk -mmacosx-version-min=10.5 -DMAC_OS_X_VERSION_MIN_REQUIRED=1050
+CPPFLAGS+=-O2 -I. -DNDEBUG -DOPENSSL -Wall -Wno-sign-compare -Wno-unused -g -I${LIBEVENT_HOME}/include -I${OPENSSL_HOME}/include -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -arch i386 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.8.sdk -mmacosx-version-min=10.5 -DMAC_OS_X_VERSION_MIN_REQUIRED=1050
+LDFLAGS+=-L${LIBEVENT_HOME}/lib -L${OPENSSL_HOME}/lib -levent -lssl -lcrypto -lstdc++ -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.8.sdk -mmacosx-version-min=10.5 -DMAC_OS_X_VERSION_MIN_REQUIRED=1050
 
 all: swift
 
