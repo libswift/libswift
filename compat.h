@@ -189,6 +189,8 @@ namespace swift
      * which are converted when used to UTF-16 (Windows) or the locale (UNIX).
      */
 
+    void print_backtrace(void);
+
 // Return UTF-16 representation of utf8str. Caller must free returned value.
     wchar_t* utf8to16(std::string utf8str);
     std::string utf16to8(wchar_t* utf16str);
