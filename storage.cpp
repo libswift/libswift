@@ -83,6 +83,11 @@ Storage::Storage(std::string ospathname, std::string destdir, int td, uint64_t l
         dprintf("%s %s storage: Found multifile-spec, will seed it.\n", tintstr(), roothashhex().c_str());
 
         StorageFile *sf = new StorageFile(MULTIFILE_PATHNAME,0,fsize,filename);
+        if (!sf->IsOperational()) {
+            print_error("storage: multi-file spec file is not operational");
+            SetBroken();
+            return;
+        }
         sfs_.push_back(sf);
         if (ParseSpec(sf) < 0) {
             print_error("storage: error parsing multi-file spec");
