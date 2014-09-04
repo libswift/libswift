@@ -377,6 +377,10 @@ int Storage::ParseSpec(StorageFile *sf)
             ospath += Storage::spec2ospn(specpath);
 
             StorageFile *sf = new StorageFile(specpath,offset,fsize,ospath);
+            if (!sf->IsOperational()) {
+                SetBroken();
+                return -1;
+            }
             sfs_.push_back(sf);
             offset += fsize;
         }
