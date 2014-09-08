@@ -87,6 +87,8 @@ if sys.platform == "win32":
     libs = ['ws2_32', 'libevent', 'Advapi32'] 
     if WITHOPENSSL:
         libs.append('libeay32')
+    if DEBUG:
+        libs.append('Dbghelp')
 
     # Somehow linker can't find uuid.lib
     WINSDK_70 = u"C:\\Program Files\\Microsoft SDKs\\Windows\\v7.0"

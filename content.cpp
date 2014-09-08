@@ -32,7 +32,7 @@ uint64_t ContentTransfer::cleancounter = 0;
 #define TRACKER_RETRY_INTERVAL_MAX  (1800*TINT_SEC) // 30 minutes
 
 ContentTransfer::ContentTransfer(transfer_t ttype) :  ttype_(ttype),
-    swarm_id_(), mychannels_(), callbacks_(), picker_(NULL),
+    swarm_id_(), mychannels_(), callbacks_(), picker_(NULL), hashtree_(NULL),
     speedupcount_(0), speeddwcount_(0), trackerurl_(),
     tracker_retry_interval_(TRACKER_RETRY_INTERVAL_START),
     tracker_retry_time_(NOW),
@@ -50,8 +50,10 @@ ContentTransfer::~ContentTransfer()
 {
     dprintf("%s F%d content deconstructor\n",tintstr(),td_);
     CloseChannels(mychannels_,true);
-    if (storage_ != NULL)
+    if (storage_ != NULL) {
         delete storage_;
+        storage_ = NULL;
+    }
 
     if (ext_tracker_client_ != NULL) {
         delete ext_tracker_client_;

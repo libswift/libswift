@@ -75,6 +75,14 @@ FileTransfer::FileTransfer(int td, std::string filename, const Sha1Hash& root_ha
 
     // MULTIFILE
     storage_ = new Storage(filename,destdir,td_,0,meta_mfspec_filename);
+    if (!storage_->IsOperational()) {
+        fprintf(stderr, "[WARN] [1]\n");
+        delete storage_;
+        fprintf(stderr, "[WARN] [2]\n");
+        storage_ = NULL;
+        SetBroken();
+        return;
+    }
 
     // Arno, 2013-02-25: Create HashTree even when PROT_NONE to enable
     // automatic size determination via peak hashes.
@@ -110,15 +118,22 @@ void FileTransfer::UpdateOperational()
 
 FileTransfer::~FileTransfer()
 {
-    delete hashtree_;
-    hashtree_ = NULL;
+    if (hashtree_ != NULL) {
+        delete hashtree_;
+        hashtree_ = NULL;
+    }
+
     if (!IsZeroState()) {
-        delete picker_;
-        picker_ = NULL;
-        delete availability_;
-        // ~ContentTransfer calls CloseChannels which calls Channel::Close which tries to unregister
-        // the availability of that peer from availability_, which has been deallocated here already :-(
-        availability_ = NULL;
+        if (picker_ != NULL) {
+            delete picker_;
+            picker_ = NULL;
+        }
+        if (availability_ != NULL) {
+            delete availability_;
+            // ~ContentTransfer calls CloseChannels which calls Channel::Close which tries to unregister
+            // the availability of that peer from availability_, which has been deallocated here already :-(
+            availability_ = NULL;
+        }
     }
 }
 
