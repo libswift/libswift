@@ -126,8 +126,11 @@ namespace swift
 // Set to 1 for Sign All, set to a power of 2 > 1 for UMT. This MUST be a power of 2.
 #define SWIFT_DEFAULT_LIVE_NCHUNKS_PER_SIGN   32
 
-    // Ric: allowed hints in the future (e.g., 2 x TINT_SEC)
+// Ric: allowed hints in the future (e.g., 2 x TINT_SEC)
 #define HINT_TIME                       1   // seconds
+
+// timeout for the piece picker
+#define PICKER_TIMEOUT                     2  // seconds
 
 // How much time a SIGNED_INTEGRITY timestamp may diverge from current time
 #define SWIFT_LIVE_MAX_SOURCE_DIVERGENCE_TIME   30 // seconds
@@ -447,29 +450,29 @@ namespace swift
         }
         void ResetToLegacy() {
             // Do not reset peer_channel_id
-            version_ = VER_SWIFT_LEGACY;
-            min_version_ = VER_SWIFT_LEGACY;
+            version_ =       VER_SWIFT_LEGACY;
+            min_version_ =   VER_SWIFT_LEGACY;
             cont_int_prot_ = POPT_CONT_INT_PROT_MERKLE;
-            merkle_func_ = POPT_MERKLE_HASH_FUNC_SHA1;
-            live_sig_alg_ = POPT_LIVE_SIG_ALG_PRIVATEDNS;
-            chunk_addr_ = POPT_CHUNK_ADDR_BIN32;
+            merkle_func_ =   POPT_MERKLE_HASH_FUNC_SHA1;
+            live_sig_alg_ =  POPT_LIVE_SIG_ALG_PRIVATEDNS;
+            chunk_addr_ =    POPT_CHUNK_ADDR_BIN32;
             live_disc_wnd_ = (uint32_t)POPT_LIVE_DISC_WND_ALL;
-            live_sig_alg_ = DEFAULT_LIVE_SIG_ALG;
+            live_sig_alg_ =  DEFAULT_LIVE_SIG_ALG;
         }
 
         /**    Peer channel id; zero if we are trying to open a channel. */
-        uint32_t            peer_channel_id_;
-        popt_version_t      version_;
-        popt_version_t      min_version_;
-        popt_cont_int_prot_t    cont_int_prot_;
-        popt_merkle_func_t  merkle_func_;
-        popt_live_sig_alg_t live_sig_alg_;
-        popt_chunk_addr_t   chunk_addr_;
-        uint64_t        live_disc_wnd_;
+        uint32_t             peer_channel_id_;
+        popt_version_t       version_;
+        popt_version_t       min_version_;
+        popt_cont_int_prot_t cont_int_prot_;
+        popt_merkle_func_t   merkle_func_;
+        popt_live_sig_alg_t  live_sig_alg_;
+        popt_chunk_addr_t    chunk_addr_;
+        uint64_t             live_disc_wnd_;
     protected:
         /** Dynamically allocated such that we can deallocate it and
          * save some bytes per channel */
-        SwarmID         *swarm_id_ptr_;
+        SwarmID              *swarm_id_ptr_;
     };
 
     /** Arno, 2013-09-25: Currently just used for URI processing.
@@ -924,6 +927,15 @@ namespace swift
             CLOSE_CONTROL
         } send_control_t;
 
+
+        typedef enum {
+            NONE,
+            NOTHING_TO_SEND,
+            NOTHIG_RECEIVED,
+            PING_PONG_NO_RESPONSE,
+            LONG_SEND_INTERVAL
+        } send_control_reason_t;
+
 #define DGRAM_MAX_SOCK_OPEN 128
         static int sock_count;
         static sckrwecb_t sock_open[DGRAM_MAX_SOCK_OPEN];
@@ -1145,7 +1157,7 @@ namespace swift
         tbqueue     data_out_;
         uint32_t    data_out_size_; // pkts not acknowledged
         /** Timeouted data (potentially to be retransmitted). */
-        tbqueue     data_out_tmo_;
+        tbqueue     data_out_tmo_; // it contains only leaf bins
         bin_t       data_out_cap_; // Ric: maybe we should remove it.. creates problems if lost
         /** Index in the history array. */
         binmap_t    have_out_;
@@ -1192,6 +1204,7 @@ namespace swift
         /** Arno: Fix for KEEP_ALIVE_CONTROL */
         bool        lastrecvwaskeepalive_;
         bool        lastsendwaskeepalive_;
+        send_control_reason_t keepalivereason_;
         /** Arno: For live, we may receive a HAVE but have no hints
             outstanding. In that case we should not wait till next_send_time_
             but request directly. See send_control.cpp */
@@ -1209,6 +1222,7 @@ namespace swift
         tint        owd_min_;
         /** LEDBAT current delay list should be > 4 && == RTT */
         ttqueue     owd_current_;
+        ttqueue     dip_list_; // Ric: a list of dip values for smoothed avg
         /** Stats */
         int         dgrams_sent_;
         int         dgrams_rcvd_;
@@ -1250,7 +1264,7 @@ namespace swift
         void        CleanHintOut(bin_t pos);
         void        Reschedule();
         void        UpdateDIP(bin_t pos); // RETRANSMIT
-        void        UpdateRTT(int32_t pos, tbqueue data_out, tint owd);
+        void        UpdateRTT(tint owd);
 
         bin_t       DequeueHintOut(uint64_t size);
 

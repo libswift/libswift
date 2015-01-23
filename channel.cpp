@@ -62,7 +62,7 @@ Channel::Channel(ContentTransfer* transfer, int socket, Address peer_addr) :
     last_loss_time_(0), next_send_time_(0), open_time_(NOW), cwnd_(1),
     cwnd_count1_(0), send_interval_(TINT_SEC),
     send_control_(PING_PONG_CONTROL), sent_since_recv_(0),
-    lastrecvwaskeepalive_(false), lastsendwaskeepalive_(false), // Arno: nap bug fix
+    lastrecvwaskeepalive_(false), lastsendwaskeepalive_(false), keepalivereason_(NONE),
     live_have_no_hint_(false), // Arno: live speed opt
     ack_rcvd_recent_(0), ack_not_rcvd_recent_(0), owd_min_bin_(0), owd_min_bin_start_(NOW-LEDBAT_ROLLOVER),
     owd_cur_(TINT_NEVER), owd_min_(TINT_NEVER),

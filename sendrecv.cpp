@@ -21,7 +21,7 @@ using namespace std;
 struct event_base *Channel::evbase;
 struct event Channel::evrecv;
 
-#define DEBUGTRAFFIC     0
+#define DEBUGTRAFFIC     1
 
 /** Arno: Victor's design allows a sender to choose some data to push to
  * a receiver, if that receiver is not HINTing at data. Should be disabled
@@ -288,6 +288,8 @@ bin_t Channel::DequeueHint(bool *retransmitptr)
             send = tb.bin;
             dprintf("%s #%" PRIu32 " dequeuing timed-out %s\n",tintstr(),id_, send.str().c_str());
             *retransmitptr = true;
+            if (!send.is_base())
+                dprintf("%s #%" PRIu32 " Error: retransmit, %s, if not a base bin!\n",tintstr(),id_, send.str().c_str());
             break;
         }
     }
@@ -301,7 +303,7 @@ bin_t Channel::DequeueHint(bool *retransmitptr)
         }
     }
 
-    //dprintf("%s #%" PRIu32 " dequeue empty %d\n",tintstr(),id_, (int)hint_in_.empty() );
+    dprintf("%s #%" PRIu32 " dequeue size: %d\n",tintstr(),id_, (int)hint_in_size_ );
 
     while (!hint_in_.empty() && send.is_none()) {
         bin_t hint = hint_in_.front().bin;
@@ -310,15 +312,22 @@ bin_t Channel::DequeueHint(bool *retransmitptr)
         tint time = hint_in_.front().time;
         hint_in_size_ -= hint_in_.front().bin.base_length();
         hint_in_.pop_front();
+
+        if (time < min(NOW-TINT_SEC*3/2, NOW-(rtt_avg_<<2))) {
+            dprintf("%s #%" PRIu32 " Don't serve: hint %s is too old\n",tintstr(),id_, send.str().c_str());
+            continue;
+        }
+
         while (!hint.is_base()) { // FIXME optimize; possible attack
             hint_in_.push_front(tintbin(time,hint.right()));
             hint_in_size_ += hint_in_.front().bin.base_length();
             hint = hint.left();
         }
-        //if (time < NOW-TINT_SEC*3/2 )
-        //    continue;  bad idea
+
         if (!ack_in_.is_filled(hint))
             send = hint;
+        else
+            dprintf("%s #%" PRIu32 " hint %s has already been acknowledged\n",tintstr(),id_,hint.str().c_str());
     }
 
     dprintf("%s #%" PRIu32 " dequeued %s [%" PRIu64 "]\n",tintstr(),id_,send.str().c_str(),hint_in_size_);
@@ -548,7 +557,30 @@ void Channel::AddHint(struct evbuffer *evb)
 
     }
 
-    int first_plan_pck = max((tint)1, plan_for / dip_avg_);
+    // Ric: calculate the dip over the last period
+    //      use same approach as LEDBAT!
+    // We may apply a filter over the elements.. as suggested in the rfc
+    ttqueue::iterator it = dip_list_.begin();
+    int32_t count = 0;
+    int total = 0;
+    tint dip = 0;
+    tint timeout = NOW - plan_for/2;
+    // use the dip received during the last period, or the dip_avg_
+    while (it != dip_list_.end() && (it->second > timeout || count < 4)) {
+        total += it->first;
+        count++;
+        it++;
+    }
+    // clean up
+    while (dip_list_.size() > 4 && dip_list_.back().second < timeout) {
+        dip_list_.pop_back();
+    }
+    if (dip_list_.size() < 4)
+        dip = dip_avg_;
+    else
+        dip = total/count;
+
+    int first_plan_pck = max((tint)1, plan_for / dip);
 
     // Riccardo, 2012-04-04: Actually allowed is max minus what we already asked for
     int queue_allowed_hints = max(0,first_plan_pck-(int)hint_out_size_);
@@ -596,13 +628,19 @@ void Channel::AddHint(struct evbuffer *evb)
                     rate_allowed_hints, rough_global_hint_out_size);
 
     }
-    if (DEBUGTRAFFIC)
-        fprintf(stderr,"hint c%" PRIu32 ": %lf want %d qallow %d rallow %d chanout %" PRIu64 " globout %" PRIu64 "\n", id(),
-                transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, queue_allowed_hints, rate_allowed_hints, hint_out_size_,
-                rough_global_hint_out_size);
-
+    // Ric: test TODO
+    //if (DEBUGTRAFFIC)
+        //fprintf(stderr,"hint c%" PRIu32 ": %lf want %d qallow %d rallow %d chanout %" PRIu64 " globout %" PRIu64 "\n", id(),
+        //        transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, queue_allowed_hints, rate_allowed_hints, hint_out_size_,
+        //        rough_global_hint_out_size);
+    dprintf("%s #%" PRIu32 "hint c%" PRIu32 ": %lf want %d qallow %d rallow %d chanout %" PRIu64 " globout %" PRIu64 "\n",tintstr(),id_, id(),
+                    transfer()->GetCurrentSpeed(DDIR_DOWNLOAD), first_plan_pck, queue_allowed_hints, rate_allowed_hints, hint_out_size_,
+                    rough_global_hint_out_size);
     // 3. Take the smallest allowance from rate and queue limit
+    // Ric: test: TODO remove
+    //uint64_t plan_pck = (uint64_t)min(rate_allowed_hints,first_plan_pck);
     uint64_t plan_pck = (uint64_t)min(rate_allowed_hints,queue_allowed_hints);
+
 
     // 4. Ask allowance in blocks of chunks to get pipelining going from serving peer.
     // Arno, 2012-10-30: not HINT_GRANULARITY for LIVE
@@ -718,7 +756,7 @@ void Channel::AddCancel(struct evbuffer *evb)
     }
 }
 
-bin_t        Channel::AddData(struct evbuffer *evb)
+bin_t Channel::AddData(struct evbuffer *evb)
 {
     // RATELIMIT
     if (transfer()->GetCurrentSpeed(DDIR_UPLOAD) > transfer()->GetMaxSpeed(DDIR_UPLOAD)) {
@@ -742,6 +780,7 @@ bin_t        Channel::AddData(struct evbuffer *evb)
             dprintf("%s #%" PRIu32 " sendctrl no idea what data to send\n",tintstr(),id_);
             if (send_control_!=KEEP_ALIVE_CONTROL && send_control_!=CLOSE_CONTROL) {
                 lprintf("\t\t==== Switch to Keep Alive Control (nothing to send) ==== \n");
+                keepalivereason_ = NOTHING_TO_SEND;
                 SwitchSendControl(KEEP_ALIVE_CONTROL);
             }
         }
@@ -1177,10 +1216,35 @@ bin_t Channel::DequeueHintOut(uint64_t size)
     if (DEBUGTRAFFIC)
         fprintf(stderr, "%s #%" PRIu32 " Dequeue hint out size (%" PRIu64 ") [%" PRIu64 " are req] ",tintstr(),id_,
                 hint_queue_out_size_, size);
+
+    // check for hints that have already been downloaded
+    // in order to optimise the retrieval, some bins might be outdated
+    while (hint_queue_out_.size() && !transfer()->ack_out()->is_empty(hint_queue_out_.front().bin)) {
+        if (DEBUGTRAFFIC)
+            dprintf("%s #%" PRIu32 " candidate hint :%s not empty!\n",tintstr(),id_, hint_queue_out_.front().bin.str().c_str());
+        tintbin tb = hint_queue_out_.front();
+        bin_t bin = tb.bin;
+        tint time = tb.time;
+        hint_queue_out_.pop_front();
+        hint_queue_out_size_ -= bin.base_length();
+
+        while (!bin.is_base() && !transfer()->ack_out()->is_filled(bin)) {
+            hint_queue_out_.push_front(tintbin(time, bin.right()));
+            hint_queue_out_size_ += hint_queue_out_.front().bin.base_length();
+            bin.to_left();
+        }
+
+        if (transfer()->ack_out()->is_empty(bin)) {
+            hint_queue_out_.push_front(tintbin(time, bin));
+            hint_queue_out_size_ += bin.base_length();
+        }
+    }
+
     // TODO check... the seconds should depend on previous speed of the peer
     while (hint_queue_out_.size() && hint_queue_out_.front().time<NOW-TINT_SEC*HINT_TIME*3/2) { // FIXME sec
         hint_queue_out_size_ -= hint_queue_out_.front().bin.base_length();
-        dprintf("%s #%" PRIu32 " Removing queued hint:%s\n",tintstr(),id_, hint_queue_out_.front().bin.str().c_str());
+        if (DEBUGTRAFFIC)
+            dprintf("%s #%" PRIu32 " Removing queued hint:%s\n",tintstr(),id_, hint_queue_out_.front().bin.str().c_str());
         hint_queue_out_.pop_front();
     }
 
@@ -1307,7 +1371,7 @@ bin_t Channel::OnData(struct evbuffer *evb)     // TODO: HAVE NONE for corrupted
 }
 
 
-void Channel::UpdateRTT(int32_t pos, tbqueue data_out, tint owd)
+void Channel::UpdateRTT(tint owd)
 {
 
     // one-way delay calculations
@@ -1329,7 +1393,13 @@ void Channel::UpdateDIP(bin_t pos)
 {
     if (!pos.is_none()) {
         if (last_data_in_time_) {
+            /*
             tint dip = NOW - last_data_in_time_;
+            dip_avg_ = (dip_avg_*7 + dip) >> 3;
+            */
+            tint dip = NOW - last_data_in_time_;
+            std::pair <tint,tint> dip_hist(dip, NOW);
+            dip_list_.push_front(dip_hist);
             dip_avg_ = (dip_avg_*3 + dip) >> 2;
         }
         last_data_in_time_ = NOW;
@@ -1400,6 +1470,7 @@ void Channel::OnAck(struct evbuffer *evb)
         // Ric: by ruling out retransmits we screw up ledbat calculations
         while (ri<data_out_tmo_.size() && !ackd_pos.contains(data_out_tmo_[ri].bin))
             ri++;
+
         dprintf("%s #%" PRIu32 " %cack %s owd:%" PRIi64 "\n",tintstr(),id_,
                 di==data_out_.size() ? (ri==data_out_tmo_.size() ? '?':'R') : '-',ackd_pos.str().c_str(),peer_owd);
 
@@ -1417,7 +1488,7 @@ void Channel::OnAck(struct evbuffer *evb)
             dprintf("%s #%" PRIu32 " rtt:%" PRIu64 ", rtt_avg:%" PRIu64 " dev:%" PRIu64 "\n", tintstr(), id_,rtt, rtt_avg_,
                     dev_avg_);
 
-            UpdateRTT(di, data_out_, peer_owd);
+            UpdateRTT(peer_owd);
             dprintf("%s #%" PRIu32 " setting null %s\n",tintstr(),id_, data_out_[di].bin.str().c_str());
             // early loss detection by packet reordering
             /* TODO do we really need it?
@@ -1434,7 +1505,8 @@ void Channel::OnAck(struct evbuffer *evb)
             data_out_size_--;
             data_out_[di]=tintbin();
         } else if (ri!=data_out_tmo_.size()) {
-            UpdateRTT(ri, data_out_tmo_, peer_owd);
+            // Ric: TODO test
+            //UpdateRTT(peer_owd);
             data_out_tmo_[ri]=tintbin();
         }
 
@@ -1584,6 +1656,16 @@ void Channel::OnHint(struct evbuffer *evb)
     binvector::iterator iter;
     for (iter=bv.begin(); iter != bv.end(); iter++) {
         bin_t hint = *iter;
+
+        // Ric: TODO test
+        tbqueue::iterator it = hint_in_.begin();
+        while (it != hint_in_.end()) { // removing likely snubbed hints
+            bin_t b = it->bin;
+            if (hint.contains(b) || b.contains(hint))
+                dprintf("%s #%" PRIu32 " hint already requested   hint:%s - and:%s!!\n", tintstr(), id_, hint.str().c_str(),
+                        b.str().c_str());
+            it++;
+        }
 
         // FIXME: wake up here
         hint_in_.push_back(hint);
@@ -2297,9 +2379,10 @@ void Channel::Reschedule()
         return;
     }
     struct timeval currtv;
-    //if (evtimer_pending(evsend_ptr_, &currtv)) {
-    //    evtimer_del(evsend_ptr_);
-    //}
+    // remove pending events if in keep-alive mode
+    if (send_control_ == KEEP_ALIVE_CONTROL && evtimer_pending(evsend_ptr_, &currtv)) {
+        evtimer_del(evsend_ptr_);
+    }
 
     dprintf("%s schedule\n",tintstr());
 
@@ -2313,6 +2396,7 @@ void Channel::Reschedule()
     }
 
     next_send_time_ = NextSendTime();
+    dprintf("%s #%" PRIu32 " next send in :%" PRIi64 "\n",tintstr(),id_,next_send_time_-NOW);
     if (next_send_time_!=TINT_NEVER) {
 
         assert(next_send_time_<NOW+TINT_MIN);

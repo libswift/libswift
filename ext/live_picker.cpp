@@ -69,7 +69,7 @@ public:
         if (search4hookin_)
             return bin_t::NONE;
 
-        while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*3/2) { // FIXME sec
+        while (hint_out_.size() && hint_out_.front().time<NOW-TINT_SEC*PICKER_TIMEOUT) { // FIXME sec
             binmap_t::copy(ack_hint_out_, *(transfer_->ack_out()), hint_out_.front().bin);
             hint_out_.pop_front();
         }
