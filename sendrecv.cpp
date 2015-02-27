@@ -580,7 +580,9 @@ void Channel::AddHint(struct evbuffer *evb)
     else
         dip = total/count;
 
-    int first_plan_pck = max((tint)1, plan_for / dip);
+    int first_plan_pck = (tint)1;
+    if (dip != 0) 
+      first_plan_pck = max((tint)1, plan_for / dip);
 
     // Riccardo, 2012-04-04: Actually allowed is max minus what we already asked for
     int queue_allowed_hints = max(0,first_plan_pck-(int)hint_out_size_);
