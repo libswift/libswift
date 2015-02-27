@@ -1,6 +1,6 @@
 
 # Remove NDEBUG define to trigger asserts
-CPPFLAGS+=-O2 -I. -DNDEBUG -Wall -Wno-sign-compare -Wno-unused -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -DOPENSSL
+CPPFLAGS+=-O2 -std=gnu++11 -I. -DNDEBUG -Wall -Wno-sign-compare -Wno-unused -g -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -DOPENSSL
 LDFLAGS+=-levent -lstdc++ -lssl -lcrypto
 
 uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
