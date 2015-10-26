@@ -10,7 +10,8 @@
 #include "bin_utils.h"
 #include <gtest/gtest.h>
 
-TEST(Bin64Test,InitGet) {
+TEST(Bin64Test,InitGet)
+{
 
     EXPECT_EQ(0x1,bin_t(1,0).toUInt());
     EXPECT_EQ(0xB,bin_t(2,1).toUInt());
@@ -24,7 +25,8 @@ TEST(Bin64Test,InitGet) {
 
 }
 
-TEST(Bin64Test,Navigation) {
+TEST(Bin64Test,Navigation)
+{
 
     bin_t mid(4,18);
     EXPECT_EQ(bin_t(5,9),mid.parent());
@@ -36,7 +38,8 @@ TEST(Bin64Test,Navigation) {
 
 }
 
-TEST(Bin64Test,Overflows) {
+TEST(Bin64Test,Overflows)
+{
 
     EXPECT_FALSE(bin_t::NONE.contains(bin_t(0,1)));
     EXPECT_TRUE(bin_t::ALL.contains(bin_t(0,1)));
@@ -47,10 +50,11 @@ TEST(Bin64Test,Overflows) {
     EXPECT_EQ(bin64_t::NONE.right(),bin64_t::NONE);
     EXPECT_EQ(bin64_t::NONE,bin64_t(0,2345).left());
     EXPECT_EQ(bin64_t::NONE,bin64_t::ALL.parent());
-*/
+    */
 }
 
-TEST(Bin64Test, Advanced) {
+TEST(Bin64Test, Advanced)
+{
 
     EXPECT_EQ(4,bin_t(2,3).base_length());
     EXPECT_FALSE(bin_t(1,1234).is_base());
@@ -65,7 +69,8 @@ TEST(Bin64Test, Advanced) {
 
 }
 
-TEST(Bin64Test, Bits) {
+TEST(Bin64Test, Bits)
+{
     bin_t all = bin_t::ALL, none = bin_t::NONE, big = bin_t(40,18);
     uint32_t a32 = bin_toUInt32(all), n32 = bin_toUInt32(none), b32 = bin_toUInt32(big);
     EXPECT_EQ(0x7fffffff,a32);
@@ -73,9 +78,10 @@ TEST(Bin64Test, Bits) {
     EXPECT_EQ(bin_t::NONE,bin_fromUInt32(b32));
 }
 
-int main (int argc, char** argv) {
+int main(int argc, char** argv)
+{
 
-	testing::InitGoogleTest(&argc, argv);
-	return RUN_ALL_TESTS();
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 
 }

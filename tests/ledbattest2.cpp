@@ -10,12 +10,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef _MSC_VER
-	#include "compat/stdint.h"
-    #include <winsock2.h>
+#include "compat/stdint.h"
+#include <winsock2.h>
 #else
-   #include <sys/socket.h>
-   #include <netinet/in.h>
-   #include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #endif
 #include <vector>
 #include <deque>
@@ -38,7 +38,8 @@ unsigned long dest_addr;
 int send_port = 10001;
 int ack_port = 10002;
 
-TEST(Datagram,LedbatTest) {
+TEST(Datagram,LedbatTest)
+{
 
     int MAX_REORDERING = 3;
     tint TARGET = 25*TINT_MSEC;
@@ -53,9 +54,11 @@ TEST(Datagram,LedbatTest) {
     int delay_bin = 0;
     deque<tint> history, delay_history;
     tint min_delay_bins[4] = {TINT_NEVER,TINT_NEVER,
-        TINT_NEVER,TINT_NEVER};
+                              TINT_NEVER,TINT_NEVER
+                             };
     tint cur_delays[4] = {TINT_NEVER,TINT_NEVER,
-        TINT_NEVER,TINT_NEVER};
+                          TINT_NEVER,TINT_NEVER
+                         };
     tint last_sec = 0;
     int sec_ackd = 0;
 
@@ -112,7 +115,7 @@ TEST(Datagram,LedbatTest) {
                     last_drop_time = now;
                 }
                 fprintf(stderr,"got %i. LOSS, cwnd drop: %f\n",seq,cwnd);
-                for(int i=0; i<MAX_REORDERING*2 && history.size(); i++) {
+                for (int i=0; i<MAX_REORDERING*2 && history.size(); i++) {
                     seq_off++;
                     history.pop_front();
                 }
@@ -128,7 +131,7 @@ TEST(Datagram,LedbatTest) {
                 delay_bin = (delay_bin+1) % 4;
                 min_delay_bins[delay_bin] = TINT_NEVER;
                 min_delay = TINT_NEVER;
-                for(int i=0;i<4;i++)
+                for (int i=0; i<4; i++)
                     if (min_delay_bins[i]<min_delay)
                         min_delay = min_delay_bins[i];
             }
@@ -138,7 +141,7 @@ TEST(Datagram,LedbatTest) {
                 min_delay = delay;
             cur_delays[(seq_off+seq)%4] = delay;
             tint current_delay = TINT_NEVER;
-            for(int i=0; i<4; i++)
+            for (int i=0; i<4; i++)
                 if (current_delay > cur_delays[i])
                     current_delay = cur_delays[i];  // FIXME avg
             tint queueing_delay = current_delay - min_delay;
@@ -190,7 +193,8 @@ TEST(Datagram,LedbatTest) {
     } // while
 }
 
-int main (int argc, char** argv) {
+int main(int argc, char** argv)
+{
 
     int opt;
     swift::LibraryInit();

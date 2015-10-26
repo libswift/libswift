@@ -19,7 +19,8 @@ const char* BTF = "test_file";
 Sha1Hash A,B,C,D,E,AB,CD,ABCD,E0,E000,ABCDE000,ROOT;
 
 
-TEST(TransferTest,TBHeap) {
+TEST(TransferTest,TBHeap)
+{
     tbheap tbh;
     ASSERT_TRUE(tbh.is_empty());
     tbh.push(tintbin(3,bin_t::NONE));
@@ -33,7 +34,8 @@ TEST(TransferTest,TBHeap) {
 }
 
 
-TEST(TransferTest,TransferFile) {
+TEST(TransferTest,TransferFile)
+{
 
     AB = Sha1Hash(A,B);
     CD = Sha1Hash(C,D);
@@ -44,9 +46,9 @@ TEST(TransferTest,TransferFile) {
     ROOT = ABCDE000;
     //for (bin_t pos(3,0); !pos.is_all(); pos=pos.parent()) {
     //    ROOT = Sha1Hash(ROOT,Sha1Hash::ZERO);
-        //printf("m %" PRIi64 " %s\n",(uint64_t)pos.parent(),ROOT.hex().c_str());
+    //printf("m %" PRIi64 " %s\n",(uint64_t)pos.parent(),ROOT.hex().c_str());
     //}
-    
+
     // now, submit a new file
 
     SwarmID noswarmid = SwarmID::NOSWARMID;
@@ -77,7 +79,7 @@ TEST(TransferTest,TransferFile) {
     HashTree* leech = leech_transfer->hashtree();
     leech_transfer->picker()->Randomize(0);
     // transfer peak hashes
-    for(int i=0; i<seed->peak_count(); i++)
+    for (int i=0; i<seed->peak_count(); i++)
         leech->OfferHash(seed->peak(i),seed->peak_hash(i));
     ASSERT_EQ(5<<10,leech->size());
     ASSERT_EQ(5,leech->size_in_chunks());
@@ -130,7 +132,8 @@ TEST(TransferTest,TransferFile) {
  - always rehashes (even fresh files)
  */
 
-int main (int argc, char** argv) {
+int main(int argc, char** argv)
+{
 
     // Arno: required
     LibraryInit();
@@ -143,10 +146,9 @@ int main (int argc, char** argv) {
     unlink("copy.mhash");
 
     int f = open(BTF,O_RDWR|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-    if (f < 0)
-    {
-	eprintf("Error opening %s\n",BTF);
-	return -1;
+    if (f < 0) {
+        eprintf("Error opening %s\n",BTF);
+        return -1;
     }
 
     uint8_t buf[1024];

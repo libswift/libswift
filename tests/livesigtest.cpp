@@ -15,7 +15,8 @@ using namespace swift;
 
 void rsasha1_check_sign_verify(EVP_PKEY *evp, int keysize);
 
-TEST(TLiveSig,RSASHA1Default) {
+TEST(TLiveSig,RSASHA1Default)
+{
 
     KeyPair *kp = KeyPair::Generate(POPT_LIVE_SIG_ALG_RSASHA1);
     ASSERT_FALSE(kp == NULL);
@@ -24,7 +25,8 @@ TEST(TLiveSig,RSASHA1Default) {
 }
 
 
-TEST(TLiveSig,RSASHA1768) {
+TEST(TLiveSig,RSASHA1768)
+{
 
     int keysize = 768;
     KeyPair *kp = KeyPair::Generate(POPT_LIVE_SIG_ALG_RSASHA1,keysize);
@@ -51,29 +53,29 @@ void rsasha1_check_sign_verify(EVP_PKEY *evp, int keysize)
      */
     ctx = EVP_PKEY_CTX_new(signing_key,NULL);
     if (!ctx)
-	   ASSERT_TRUE(false);
+        ASSERT_TRUE(false);
     if (EVP_PKEY_sign_init(ctx) <= 0)
-	ASSERT_TRUE(false);
+        ASSERT_TRUE(false);
     if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_PADDING) <= 0)
-	ASSERT_TRUE(false);
+        ASSERT_TRUE(false);
     if (EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha1()) <= 0)
-	ASSERT_TRUE(false);
+        ASSERT_TRUE(false);
 
     /* Determine buffer length */
     if (EVP_PKEY_sign(ctx, NULL, &siglen, md, mdlen) <= 0)
-	ASSERT_TRUE(false);
+        ASSERT_TRUE(false);
 
-    fprintf(stderr,"siglen " PRISIZET "\n", siglen );
+    fprintf(stderr,"siglen " PRISIZET "\n", siglen);
     ASSERT_EQ(keysize,siglen * 8);
 
     sig = (unsigned char *)OPENSSL_malloc(siglen);
 
     if (!sig)
-	ASSERT_TRUE(false);
+        ASSERT_TRUE(false);
 
     // Arno: get max sig len
     if (EVP_PKEY_sign(ctx, sig, &siglen, md, mdlen) <= 0)
-	ASSERT_TRUE(false);
+        ASSERT_TRUE(false);
 
     /* Signature is siglen bytes written to buffer sig */
 
@@ -82,25 +84,26 @@ void rsasha1_check_sign_verify(EVP_PKEY *evp, int keysize)
 
     EVP_PKEY_CTX *ctx2 = EVP_PKEY_CTX_new(verify_key,NULL);
     if (!ctx2)
-	ASSERT_TRUE(false);
+        ASSERT_TRUE(false);
     if (EVP_PKEY_verify_init(ctx2) <= 0)
-	ASSERT_TRUE(false);
+        ASSERT_TRUE(false);
     if (EVP_PKEY_CTX_set_rsa_padding(ctx2, RSA_PKCS1_PADDING) <= 0)
-	ASSERT_TRUE(false);
+        ASSERT_TRUE(false);
     if (EVP_PKEY_CTX_set_signature_md(ctx2, EVP_sha1()) <= 0)
-	ASSERT_TRUE(false);
+        ASSERT_TRUE(false);
 
-     /* Perform operation */
-     int ret = EVP_PKEY_verify(ctx2, sig, siglen, md, mdlen);
+    /* Perform operation */
+    int ret = EVP_PKEY_verify(ctx2, sig, siglen, md, mdlen);
 
-     /* ret == 1 indicates success, 0 verify failure and < 0 for some
-      * other error.
-      */
-     ASSERT_EQ(1,ret);
+    /* ret == 1 indicates success, 0 verify failure and < 0 for some
+     * other error.
+     */
+    ASSERT_EQ(1,ret);
 }
 
 
-TEST(TLiveSig,RSASHA1_SwarmLiveID) {
+TEST(TLiveSig,RSASHA1_SwarmLiveID)
+{
 
     int keysize = SWIFT_RSA_DEFAULT_KEYSIZE;
 
@@ -119,7 +122,8 @@ TEST(TLiveSig,RSASHA1_SwarmLiveID) {
 }
 
 
-int main (int argc, char** argv) {
+int main(int argc, char** argv)
+{
 
     swift::LibraryInit();
     testing::InitGoogleTest(&argc, argv);

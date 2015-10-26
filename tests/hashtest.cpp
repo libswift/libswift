@@ -22,21 +22,24 @@ char hash456b[] = "a923e4b60d2a2a2a5ede87479e0314b028e3ae60";
 char rooth456[] = "5b53677d3a695f29f1b4e18ab6d705312ef7f8c3";
 
 
-TEST(Sha1HashTest,Trivial) {
-	Sha1Hash hash("123\n");
-	EXPECT_STREQ(hash123,hash.hex().c_str());
+TEST(Sha1HashTest,Trivial)
+{
+    Sha1Hash hash("123\n");
+    EXPECT_STREQ(hash123,hash.hex().c_str());
 }
 
 
-TEST(Sha1HashTest,OfferDataTest) {
+TEST(Sha1HashTest,OfferDataTest)
+{
     Sha1Hash roothash123(true,hash123);
     //for(bin_t pos(0,0); !pos.is_all(); pos=pos.parent())
-    //	roothash123 = Sha1Hash(roothash123,Sha1Hash::ZERO);
+    //  roothash123 = Sha1Hash(roothash123,Sha1Hash::ZERO);
     unlink("123");
     fprintf(stderr,"BEFORE STREQ hash\n");
     EXPECT_STREQ(rooth123,roothash123.hex().c_str());
     fprintf(stderr,"BEFORE swift::Open\n");
-    int td = swift::Open("123", SwarmID(roothash123));
+    SwarmID swarmid(roothash123);
+    int td = swift::Open("123", swarmid);
     fprintf(stderr,"BEFORE Storage\n");
     Storage storage("123", ".", td, 0);
     fprintf(stderr,"BEFORE MmapHashTree\n");
@@ -54,7 +57,8 @@ TEST(Sha1HashTest,OfferDataTest) {
 }
 
 
-TEST(Sha1HashTest,SubmitTest) {
+TEST(Sha1HashTest,SubmitTest)
+{
     FILE* f123 = fopen("123","wb+");
     fprintf(f123, "123\n");
     fclose(f123);
@@ -68,13 +72,14 @@ TEST(Sha1HashTest,SubmitTest) {
 }
 
 
-TEST(Sha1HashTest,OfferDataTest2) {
+TEST(Sha1HashTest,OfferDataTest2)
+{
     char data456a[1024]; // 2 chunks with cs 1024, 3 nodes in tree
     for (int i=0; i<1024; i++)
-      data456a[i] = '$';
+        data456a[i] = '$';
     char data456b[4];
     for (int i=0; i<4; i++)
-      data456b[i] = '$';
+        data456b[i] = '$';
 
     FILE* f456 = fopen("456","wb");
     fwrite(data456a,1,1024,f456);
@@ -84,7 +89,8 @@ TEST(Sha1HashTest,OfferDataTest2) {
     Sha1Hash roothash456(Sha1Hash(true,hash456a),Sha1Hash(true,hash456b));
     unlink("456");
     EXPECT_STREQ(rooth456,roothash456.hex().c_str());
-    int td = swift::Open("456", SwarmID(roothash456));
+    SwarmID swarmid(roothash456);
+    int td = swift::Open("123", swarmid);
     Storage storage("456", ".", td, POPT_LIVE_DISC_WND_ALL);
     MmapHashTree tree(&storage,roothash456,1024,"456.mhash",false,"456.mbinmap");
     tree.OfferHash(bin_t(1,0),roothash456);
@@ -94,15 +100,16 @@ TEST(Sha1HashTest,OfferDataTest2) {
     ASSERT_TRUE(tree.OfferData(bin_t(0,0), data456a, 1024));
     ASSERT_TRUE(tree.OfferData(bin_t(0,1), data456b, 4));
     unlink("456");
-	ASSERT_EQ(1028,tree.size());
+    ASSERT_EQ(1028,tree.size());
 }
 
 
 
-int main (int argc, char** argv) {
-	//bin::init();
+int main(int argc, char** argv)
+{
+    //bin::init();
 
-	testing::InitGoogleTest(&argc, argv);
-	return RUN_ALL_TESTS();
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 
 }

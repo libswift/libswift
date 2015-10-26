@@ -56,7 +56,8 @@
  *
  */
 
-class bin_t {
+class bin_t
+{
 public:
     /**
      * Basic integer type
@@ -749,7 +750,7 @@ inline bin_t bin_t::base_right(void) const
  */
 inline bin_t bin_t::twisted(uint_t mask) const
 {
-    return bin_t( v_ ^ ((mask << 1) & ~layer_bits()) );
+    return bin_t(v_ ^ ((mask << 1) & ~layer_bits()));
 }
 
 
@@ -759,9 +760,9 @@ inline bin_t bin_t::twisted(uint_t mask) const
 inline bin_t bin_t::layer_shifted(int zlayer) const
 {
     if (layer_bits() >> zlayer) {
-        return bin_t( v_  >> zlayer );
+        return bin_t(v_  >> zlayer);
     } else {
-        return bin_t( (v_ >> zlayer) & ~static_cast<uint_t>(1) );
+        return bin_t((v_ >> zlayer) & ~static_cast<uint_t>(1));
     }
 }
 

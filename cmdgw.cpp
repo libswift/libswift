@@ -1,8 +1,8 @@
 /*
  *  cmdgw.cpp
- *  command gateway for controling swift engine via a TCP connection
+ *  command gateway for controlling swift engine via a TCP connection
  *
- *  Created by Arno Bakker
+ *  Created by Arno Bakker, Riccado Petrocco
  *  Copyright 2010-2012 TECHNISCHE UNIVERSITEIT DELFT. All rights reserved.
  *
  */
@@ -18,26 +18,26 @@
 using namespace swift;
 
 // Send PLAY after receiving N bytes
-#define CMDGW_MAX_PREBUF_BYTES		(256*1024)
+#define CMDGW_MAX_PREBUF_BYTES      (256*1024)
 
 // Report swift download progress every 2^layer * chunksize bytes (so 0 = report every chunk)
-#define CMDGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER 	0 	// must be 0
-#define CMDGW_PREBUF_PROGRESS_BYTE_INTERVAL_AS_LAYER 	0
+#define CMDGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER     0   // must be 0
+#define CMDGW_PREBUF_PROGRESS_BYTE_INTERVAL_AS_LAYER    0
 
 // Status of the swarm download
-#define DLSTATUS_ALLOCATING_DISKSPACE 	0
-#define DLSTATUS_HASHCHECKING  		2
-#define DLSTATUS_DOWNLOADING  		3
-#define DLSTATUS_SEEDING 		4
-#define DLSTATUS_STOPPED_ON_ERROR   	6
+#define DLSTATUS_ALLOCATING_DISKSPACE   0
+#define DLSTATUS_HASHCHECKING       2
+#define DLSTATUS_DOWNLOADING        3
+#define DLSTATUS_SEEDING        4
+#define DLSTATUS_STOPPED_ON_ERROR       6
 
 #define MAX_CMD_MESSAGE 1024
 
-#define ERROR_NO_ERROR		0
-#define ERROR_UNKNOWN_CMD	-1
-#define ERROR_MISS_ARG		-2
-#define ERROR_BAD_ARG		-3
-#define ERROR_BAD_SWARM		-4
+#define ERROR_NO_ERROR      0
+#define ERROR_UNKNOWN_CMD   -1
+#define ERROR_MISS_ARG      -2
+#define ERROR_BAD_ARG       -3
+#define ERROR_BAD_SWARM     -4
 
 
 #define CMDGW_MAX_CLIENT 1024   // Arno: == maximum number of swarms per proc
@@ -45,9 +45,9 @@ using namespace swift;
 struct cmd_gw_t {
     int         id;
     evutil_socket_t   cmdsock;
-    int		td; // swift FD
-    bool	moreinfo;   // whether to report detailed stats (see SETMOREINFO cmd)
-    tint 	startt;	    // ARNOSMPTODO: debug speed measurements, remove
+    int     td; // swift FD
+    bool    moreinfo;   // whether to report detailed stats (see SETMOREINFO cmd)
+    tint    startt;     // ARNOSMPTODO: debug speed measurements, remove
     std::string mfspecname; // MULTIFILE
     uint64_t    startoff;   // MULTIFILE: starting offset in content range of desired file
     uint64_t    endoff;     // MULTIFILE: ending offset (careful, for an e.g. 100 byte interval this is 99)
@@ -69,18 +69,26 @@ struct evbuffer *cmd_evbuffer = NULL; // Data received on cmd socket : WARNING: 
 /*
  * SOCKTUNNEL
  * We added the ability for a process to tunnel data over swift's UDP socket.
- * The process should send TUNNELSEND commands over the CMD TCP socket and will
- * receive TUNNELRECV commands from swift, containing data received via UDP
- * on channel 0xffffffff.
+ * The process should send TUNNELSUSCRIBE (with a chosen prefix) and TUNNELSEND
+ * commands over the CMD * TCP socket. It will than receive TUNNELRECV commands
+ * from swift.
  */
 typedef enum {
-	CMDGW_TUNNEL_SCAN4CRLF,
-	CMDGW_TUNNEL_READTUNNEL
+    CMDGW_TUNNEL_SCAN4CRLF,
+    CMDGW_TUNNEL_READTUNNEL
 } cmdgw_tunnel_t;
+
+typedef enum {
+    SWIFT_STATUS_ERROR,
+    SWIFT_STATUS_OK,
+    SWIFT_STATUS_EXITING,
+} swift_status_t;
+
+std::vector< uint32_t > tunnel_channels_;
 
 cmdgw_tunnel_t cmd_tunnel_state=CMDGW_TUNNEL_SCAN4CRLF;
 uint32_t       cmd_tunnel_expect=0;
-Address	       cmd_tunnel_dest_addr;
+Address        cmd_tunnel_dest_addr;
 uint32_t       cmd_tunnel_dest_chanid;
 evutil_socket_t cmd_tunnel_sock=INVALID_SOCKET;
 
@@ -89,15 +97,18 @@ Address cmd_gw_httpaddr;
 uint64_t cmd_gw_livesource_disc_wnd=POPT_LIVE_DISC_WND_ALL;
 popt_cont_int_prot_t cmd_gw_cipm=POPT_CONT_INT_PROT_MERKLE;
 
+// Ric: directory containing the metadata
+std::string cmd_gw_metadir;
 
-#define cmd_gw_debug	true
+
+#define cmd_gw_debug    true
 
 tint cmd_gw_last_open=0;
 
 
 // Fwd defs
 void CmdGwDataCameInCallback(struct bufferevent *bev, void *ctx);
-bool CmdGwReadLine(evutil_socket_t cmdsock);
+int CmdGwReadLine(evutil_socket_t cmdsock);
 void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line);
 void CmdGwProcessData(evutil_socket_t cmdsock);
 
@@ -124,17 +135,14 @@ void CmdGwCloseConnection(evutil_socket_t sock)
     // Doesn't remove .mhash state or content
 
     if (cmd_gw_debug)
-       fprintf(stderr,"CmdGwCloseConnection: ENTER %d\n", sock );
+        fprintf(stderr,"CmdGwCloseConnection: ENTER %d\n", sock);
 
     bool scanning = true;
-    while (scanning)
-    {
+    while (scanning) {
         scanning = false;
-        for(int i=0; i<cmd_gw_reqs_open; i++)
-        {
+        for (int i=0; i<cmd_gw_reqs_open; i++) {
             cmd_gw_t* req = &cmd_requests[i];
-            if (req->cmdsock==sock)
-            {
+            if (req->cmdsock==sock) {
                 dprintf("%s @%i stopping-on-close transfer %i\n",tintstr(),req->id,req->td);
                 swift::Close(req->td);
 
@@ -147,14 +155,16 @@ void CmdGwCloseConnection(evutil_socket_t sock)
         }
     }
 
-    if (cmd_evbuffer != NULL)
+    if (cmd_evbuffer != NULL) {
         evbuffer_free(cmd_evbuffer);
+        cmd_evbuffer = NULL;
+    }
 
     // Arno, 2012-07-06: Close
     swift::close_socket(sock);
 
     cmd_gw_conns_open--;
-  
+
     // Arno, 2012-10-11: New policy Immediate shutdown on connection close,
     // see CmdGwUpdateDLStatesCallback()
     fprintf(stderr,"cmd: Shutting down on CMD connection close\n");
@@ -164,7 +174,7 @@ void CmdGwCloseConnection(evutil_socket_t sock)
 
 cmd_gw_t* CmdGwFindRequestByFD(int td)
 {
-    for(int i=0; i<cmd_gw_reqs_open; i++)
+    for (int i=0; i<cmd_gw_reqs_open; i++)
         if (cmd_requests[i].td==td)
             return cmd_requests+i;
     return NULL;
@@ -174,9 +184,9 @@ cmd_gw_t* CmdGwFindRequestBySwarmID(SwarmID &swarmid)
 {
     int td = swift::Find(swarmid);
     if (td < 0)
-	return NULL;
+        return NULL;
     else
-	return CmdGwFindRequestByFD(td);
+        return CmdGwFindRequestByFD(td);
 }
 
 
@@ -201,11 +211,10 @@ void CmdGwGotREMOVE(SwarmID &swarmid, bool removestate, bool removecontent)
         fprintf(stderr,"cmd: GotREMOVE: %s %d %d\n",swarmid.hex().c_str(),removestate,removecontent);
 
     cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
-    if (req == NULL)
-    {
-	if (cmd_gw_debug)
-	    fprintf(stderr,"cmd: GotREMOVE: %s not found, bad swarm?\n",swarmid.hex().c_str());
-	return;
+    if (req == NULL) {
+        if (cmd_gw_debug)
+            fprintf(stderr,"cmd: GotREMOVE: %s not found, bad swarm?\n",swarmid.hex().c_str());
+        return;
     }
     dprintf("%s @%i remove transfer %i\n",tintstr(),req->id,req->td);
 
@@ -224,7 +233,7 @@ void CmdGwGotMAXSPEED(SwarmID &swarmid, data_direction_t ddir, double speed)
 
     cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
     if (req == NULL)
-    	return;
+        return;
     swift::SetMaxSpeed(req->td, ddir, speed);
 }
 
@@ -241,7 +250,7 @@ void CmdGwGotPEERADDR(SwarmID &swarmid, Address &peer)
 {
     cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
     if (req == NULL)
-    	return;
+        return;
     swift::AddPeer(peer, swarmid);
 }
 
@@ -252,7 +261,8 @@ void CmdGwSendINFOHashChecking(evutil_socket_t cmdsock, SwarmID &swarmid)
     // Send INFO DLSTATUS_HASHCHECKING message.
 
     char cmd[MAX_CMD_MESSAGE];
-    sprintf(cmd,"INFO %s %d %" PRIi64 "/%" PRIi64 " %lf %lf %" PRIu32 " %" PRIu32 "\r\n",swarmid.hex().c_str(),DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,0.0,0,0);
+    sprintf(cmd,"INFO %s %d %" PRIi64 "/%" PRIi64 " %lf %lf %" PRIu32 " %" PRIu32 "\r\n",swarmid.hex().c_str(),
+            DLSTATUS_HASHCHECKING,(uint64_t)0,(uint64_t)0,0.0,0.0,0,0);
 
     //fprintf(stderr,"cmd: SendINFO: %s", cmd);
     send(cmdsock,cmd,strlen(cmd),0);
@@ -267,18 +277,18 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
 
     SwarmID swarmid = swift::GetSwarmID(req->td);
     if (swarmid == SwarmID::NOSWARMID)
-	return; // Arno: swarm deleted, ignore
+        return; // Arno: swarm deleted, ignore
 
     uint64_t size = swift::Size(req->td);
     uint64_t complete = 0;
     if (swift::ttype(req->td) == LIVE_TRANSFER)
-	complete = swift::SeqComplete(req->td,swift::GetHookinOffset(req->td));
+        complete = swift::SeqComplete(req->td,swift::GetHookinOffset(req->td));
     else
-	complete = swift::Complete(req->td);
+        complete = swift::Complete(req->td);
     if (size > 0 && size == complete)
         dlstatus = DLSTATUS_SEEDING;
     if (!swift::IsOperational(req->td))
-	    dlstatus = DLSTATUS_STOPPED_ON_ERROR;
+        dlstatus = DLSTATUS_STOPPED_ON_ERROR;
 
     // schaap FIXME: Are those active leechers and seeders, or potential
     // leechers and seeders? In the latter case, get cached values when cached
@@ -289,7 +299,8 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
     double ulspeed = swift::GetCurrentSpeed(req->td,DDIR_UPLOAD);
 
     char cmd[MAX_CMD_MESSAGE];
-    sprintf(cmd,"INFO %s %d %" PRIu64 "/%" PRIu64 " %lf %lf %" PRIu32 " %" PRIu32 "\r\n",swarmid.hex().c_str(),dlstatus,complete,size,dlspeed,ulspeed,numleech,numseeds);
+    sprintf(cmd,"INFO %s %d %" PRIu64 "/%" PRIu64 " %lf %lf %" PRIu32 " %" PRIu32 "\r\n",swarmid.hex().c_str(),dlstatus,
+            complete,size,dlspeed,ulspeed,numleech,numseeds);
 
     send(req->cmdsock,cmd,strlen(cmd),0);
 
@@ -300,9 +311,9 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
         std::ostringstream oss;
         oss.setf(std::ios::fixed,std::ios::floatfield);
         oss.precision(5);
-    	channels_t::iterator iter;
-    	channels_t *peerchans = NULL;
-    	ContentTransfer *ct = swift::GetActivatedTransfer(req->td);
+        channels_t::iterator iter;
+        channels_t *peerchans = NULL;
+        ContentTransfer *ct = swift::GetActivatedTransfer(req->td);
         if (ct)
             peerchans = ct->GetChannels();
 
@@ -312,24 +323,23 @@ void CmdGwSendINFO(cmd_gw_t* req, int dlstatus)
         oss << "{\"timestamp\":\"" << tss << "\", ";
         oss << "\"channels\":";
         oss << "[";
-        if (peerchans != NULL)
-        {
-	    for (iter=peerchans->begin(); iter!=peerchans->end(); iter++) {
-		Channel *c = *iter;
-		if (c == NULL)
-		    continue;
+        if (peerchans != NULL) {
+            for (iter=peerchans->begin(); iter!=peerchans->end(); iter++) {
+                Channel *c = *iter;
+                if (c == NULL)
+                    continue;
 
-		if (iter!=peerchans->begin())
-		    oss << ", ";
-		oss << "{";
-		oss << "\"ip\": \"" << c->peer().ipstr() << "\", ";
-		oss << "\"port\": " << c->peer().port() << ", ";
-		oss << "\"raw_bytes_up\": " << c->raw_bytes_up() << ", ";
-		oss << "\"raw_bytes_down\": " << c->raw_bytes_down() << ", ";
-		oss << "\"bytes_up\": " << c->bytes_up() << ", ";
-		oss << "\"bytes_down\": " << c->bytes_down() << " ";
-		oss << "}";
-	    }
+                if (iter!=peerchans->begin())
+                    oss << ", ";
+                oss << "{";
+                oss << "\"ip\": \"" << c->peer().ipstr() << "\", ";
+                oss << "\"port\": " << c->peer().port() << ", ";
+                oss << "\"raw_bytes_up\": " << c->raw_bytes_up() << ", ";
+                oss << "\"raw_bytes_down\": " << c->raw_bytes_down() << ", ";
+                oss << "\"bytes_up\": " << c->bytes_up() << ", ";
+                oss << "\"bytes_down\": " << c->bytes_down() << " ";
+                oss << "}";
+            }
         }
         oss << "], ";
         oss << "\"raw_bytes_up\": " << Channel::global_raw_bytes_up << ", ";
@@ -365,31 +375,28 @@ void CmdGwSendPLAY(cmd_gw_t *req)
     // Arno, 2013-09-25: Only append params that need to be echoed back
     // by the HTTPGW, because the Transfer already exists.
     bool added=false;
-    if (req->xcontentdur != "")
-    {
-	if (!added)
-	    oss << "?";
-	oss << "cd=" << req->xcontentdur;
-	added = true;
+    if (req->xcontentdur != "") {
+        if (!added)
+            oss << "?";
+        oss << "cd=" << req->xcontentdur;
+        added = true;
     }
-    if (req->mimetype != "")
-    {
-	if (!added)
-	    oss << "?";
-	else
-	    oss << "&";
-	oss << "mt=" << req->mimetype;
-	added = true;
+    if (req->mimetype != "") {
+        if (!added)
+            oss << "?";
+        else
+            oss << "&";
+        oss << "mt=" << req->mimetype;
+        added = true;
     }
     // Arno FIXME: Should be replaced with swift::SetSize() method that stores value from URL.
-    if (req->contentlenstr != "")
-    {
-	if (!added)
-	    oss << "?";
-	else
-	    oss << "&";
-	oss << "cl=" << req->contentlenstr;
-	added = true;
+    if (req->contentlenstr != "") {
+        if (!added)
+            oss << "?";
+        else
+            oss << "&";
+        oss << "cl=" << req->contentlenstr;
+        added = true;
     }
     oss << "\r\n";
 
@@ -403,25 +410,25 @@ void CmdGwSendPLAY(cmd_gw_t *req)
 
 void CmdGwSendERRORBySocket(evutil_socket_t cmdsock, std::string msg, const SwarmID& swarmid=SwarmID::NOSWARMID)
 {
-     std::string cmd = "ERROR ";
-     cmd += swarmid.hex();
-     cmd += " ";
-     cmd += msg;
-     cmd += "\r\n";
+    std::string cmd = "ERROR ";
+    cmd += swarmid.hex();
+    cmd += " ";
+    cmd += msg;
+    cmd += "\r\n";
 
-     if (cmd_gw_debug)
-         fprintf(stderr,"cmd: SendERROR: %s\n", cmd.c_str() );
+    if (cmd_gw_debug)
+        fprintf(stderr,"cmd: SendERROR: %s\n", cmd.c_str());
 
-     char *wire = strdup(cmd.c_str());
-     send(cmdsock,wire,strlen(wire),0);
-     free(wire);
+    char *wire = strdup(cmd.c_str());
+    send(cmdsock,wire,strlen(wire),0);
+    free(wire);
 }
 
 
 /*
  * For VOD and Live, wait until PREBUF_BYTES are in before sending PLAY.
  */
-void CmdGwSwiftPrebufferProgressCallback (int td, bin_t bin)
+void CmdGwSwiftPrebufferProgressCallback(int td, bin_t bin)
 {
     //
     // Subsequent bytes of content downloaded
@@ -439,8 +446,7 @@ void CmdGwSwiftPrebufferProgressCallback (int td, bin_t bin)
     //   fprintf(stderr,"cmd: SwiftPrebuffProgress: want %" PRIu64 " got %" PRIu64 "\n", swift::SeqComplete(req->td,req->startoff), wantsize );
 
 
-    if (swift::SeqComplete(req->td,req->startoff) >= wantsize)
-    {
+    if (swift::SeqComplete(req->td,req->startoff) >= wantsize) {
         // First CMDGW_MAX_PREBUF_BYTES bytes received via swift,
         // tell user to PLAY
         // ARNOSMPTODO: bitrate-dependent prebuffering?
@@ -463,20 +469,19 @@ void CmdGwSwiftPrebufferProgressCallback (int td, bin_t bin)
  * prebuffered (via CmdGwSwiftPrebufferingProcessCallback).
  */
 
-void CmdGwSwiftVODFirstProgressCallback (int td, bin_t bin)
+void CmdGwSwiftVODFirstProgressCallback(int td, bin_t bin)
 {
     //
     // First bytes of content downloaded (first in absolute sense)
     //
     if (cmd_gw_debug)
-        fprintf(stderr,"cmd: SwiftFirstProgress: %d\n", td );
+        fprintf(stderr,"cmd: SwiftFirstProgress: %d\n", td);
 
     cmd_gw_t* req = CmdGwFindRequestByFD(td);
     if (req == NULL)
         return;
 
-    if (swift::ttype(td) == LIVE_TRANSFER)
-    {
+    if (swift::ttype(td) == LIVE_TRANSFER) {
         // Shouldn't happen for LIVE
         swift::RemoveProgressCallback(td,&CmdGwSwiftVODFirstProgressCallback);
         return;
@@ -485,7 +490,7 @@ void CmdGwSwiftVODFirstProgressCallback (int td, bin_t bin)
     // VOD from here
     Storage *storage = swift::GetStorage(td);
     if (storage == NULL)
-	return;
+        return;
     if (!storage->IsReady()) {
         // Wait until (multi-file) storage is ready
         return;
@@ -493,8 +498,7 @@ void CmdGwSwiftVODFirstProgressCallback (int td, bin_t bin)
 
     swift::RemoveProgressCallback(td,&CmdGwSwiftVODFirstProgressCallback);
 
-    if (req->mfspecname == "")
-    {
+    if (req->mfspecname == "") {
         // Single file
         req->startoff = 0;
         req->endoff = swift::Size(req->td)-1;
@@ -502,26 +506,21 @@ void CmdGwSwiftVODFirstProgressCallback (int td, bin_t bin)
         CmdGwSwiftPrebufferProgressCallback(req->td,bin_t(0,0)); // in case file on disk
         if (!req->playsent)
             swift::AddProgressCallback(td,&CmdGwSwiftPrebufferProgressCallback,CMDGW_PREBUF_PROGRESS_BYTE_INTERVAL_AS_LAYER);
-    }
-    else
-    {
+    } else {
         // MULTIFILE
         // Have spec, seek to wanted file
 
         storage_files_t sfs = storage->GetStorageFiles();
         storage_files_t::iterator iter;
         bool found = false;
-        for (iter = sfs.begin(); iter < sfs.end(); iter++)
-        {
+        for (iter = sfs.begin(); iter < sfs.end(); iter++) {
             StorageFile *sf = *iter;
-            if (sf->GetSpecPathName() == req->mfspecname)
-            {
+            if (sf->GetSpecPathName() == req->mfspecname) {
                 if (cmd_gw_debug)
-                    fprintf(stderr,"cmd: SwiftFirstProgress: Seeking to multifile %s for %d\n", req->mfspecname.c_str(), td );
+                    fprintf(stderr,"cmd: SwiftFirstProgress: Seeking to multifile %s for %d\n", req->mfspecname.c_str(), td);
 
                 int ret = swift::Seek(req->td,sf->GetStart(),SEEK_SET);
-                if (ret < 0)
-                {
+                if (ret < 0) {
                     CmdGwSendERRORBySocket(req->cmdsock,"Error seeking to file in multi-file content.");
                     return;
                 }
@@ -533,20 +532,19 @@ void CmdGwSwiftVODFirstProgressCallback (int td, bin_t bin)
                 break;
             }
         }
-        if (!found) 
-        {
+        if (!found) {
             if (cmd_gw_debug)
-                fprintf(stderr,"cmd: SwiftFirstProgress: Error file not found %d\n", td );
+                fprintf(stderr,"cmd: SwiftFirstProgress: Error file not found %d\n", td);
 
-	        CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.",GetSwarmID(req->td));
-	        return;
-	    }
+            CmdGwSendERRORBySocket(req->cmdsock,"Individual file not found in multi-file content.",GetSwarmID(req->td));
+            return;
+        }
     }
 
 }
 
 
-void CmdGwSwiftErrorCallback (evutil_socket_t cmdsock)
+void CmdGwSwiftErrorCallback(evutil_socket_t cmdsock)
 {
     // Error on swift socket callback
 
@@ -556,7 +554,7 @@ void CmdGwSwiftErrorCallback (evutil_socket_t cmdsock)
     //swift::close_socket(sock);
 }
 
-void CmdGwSwiftAllocatingDiskspaceCallback (int td, bin_t bin)
+void CmdGwSwiftAllocatingDiskspaceCallback(int td, bin_t bin)
 {
     //if (cmd_gw_debug)
     //    fprintf(stderr,"cmd: CmdGwSwiftAllocatingDiskspaceCallback: ENTER %d\n", td );
@@ -584,8 +582,7 @@ void CmdGwUpdateDLStatesCallback()
 {
     // Called by swift main approximately every second
     // Loop over all swarms
-    for(int i=0; i<cmd_gw_reqs_open; i++)
-    {
+    for (int i=0; i<cmd_gw_reqs_open; i++) {
         cmd_gw_t* req = &cmd_requests[i];
         CmdGwUpdateDLStateCallback(req);
     }
@@ -595,6 +592,9 @@ void CmdGwUpdateDLStatesCallback()
 
 void CmdGwDataCameInCallback(struct bufferevent *bev, void *ctx)
 {
+    // do not process anything if the system has already shutdown
+    if (cmd_evbuffer == NULL) return;
+
     // Turn TCP stream into lines deliniated by \r\n
 
     evutil_socket_t cmdsock = bufferevent_getfd(bev);
@@ -624,27 +624,26 @@ void CmdGwProcessData(evutil_socket_t cmdsock)
 {
     // Process CMD data in the cmd_evbuffer
 
-    if (cmd_tunnel_state == CMDGW_TUNNEL_SCAN4CRLF)
-    {
-        bool ok=false;
-        do
-        {
-            ok = CmdGwReadLine(cmdsock);
-            if (ok && cmd_tunnel_state == CMDGW_TUNNEL_READTUNNEL)
+    if (cmd_tunnel_state == CMDGW_TUNNEL_SCAN4CRLF) {
+        int status=SWIFT_STATUS_ERROR;
+        do {
+            status = CmdGwReadLine(cmdsock);
+            if (status == SWIFT_STATUS_OK && cmd_tunnel_state == CMDGW_TUNNEL_READTUNNEL)
                 break;
-        } while (ok);
+            if (status == SWIFT_STATUS_EXITING)
+                return;
+        } while (status == SWIFT_STATUS_OK);
     }
     // Not else!
-    if (cmd_tunnel_state == CMDGW_TUNNEL_READTUNNEL)
-    {
+    if (cmd_tunnel_state == CMDGW_TUNNEL_READTUNNEL) {
         // Got "TUNNELSEND addr size\r\n" command, now read
         // size bytes, i.e., cmd_tunnel_expect bytes.
 
         if (cmd_gw_debug)
-            fprintf(stderr,"cmdgw: procTCPdata: tunnel state, got " PRISIZET ", want %d\n", evbuffer_get_length(cmd_evbuffer), cmd_tunnel_expect );
+            fprintf(stderr,"cmdgw: procTCPdata: tunnel state, got " PRISIZET ", want %d\n", evbuffer_get_length(cmd_evbuffer),
+                    cmd_tunnel_expect);
 
-        if (evbuffer_get_length(cmd_evbuffer) >= cmd_tunnel_expect)
-        {
+        if (evbuffer_get_length(cmd_evbuffer) >= cmd_tunnel_expect) {
             // We have all the tunneled data
             CmdGwTunnelSendUDP(cmd_evbuffer);
 
@@ -655,20 +654,21 @@ void CmdGwProcessData(evutil_socket_t cmdsock)
 }
 
 
-bool CmdGwReadLine(evutil_socket_t cmdsock)
+int CmdGwReadLine(evutil_socket_t cmdsock)
 {
     // Parse cmd_evbuffer for lines, and call NewRequest when found
 
     size_t rd=0;
     char *cmd = evbuffer_readln(cmd_evbuffer,&rd, EVBUFFER_EOL_CRLF_STRICT);
-    if (cmd != NULL)
-    {
+    if (cmd != NULL) {
         CmdGwNewRequestCallback(cmdsock,cmd);
         free(cmd);
-        return true;
-    }
-    else
-        return false;
+        if (cmd_evbuffer == NULL)
+            // Swift is shutting down
+            return SWIFT_STATUS_EXITING;
+        return SWIFT_STATUS_OK;
+    } else
+        return SWIFT_STATUS_ERROR;
 }
 
 int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline);
@@ -684,21 +684,20 @@ void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line)
 
     int ret = CmdGwHandleCommand(cmdsock,copyline);
     if (ret < 0) {
-        dprintf("cmd: Error processing command %s\n", line );
+        dprintf("cmd: Error processing command %s\n", line);
         std::string msg = "";
         if (ret == ERROR_UNKNOWN_CMD)
             msg = "unknown command";
-	else if (ret == ERROR_MISS_ARG)
+        else if (ret == ERROR_MISS_ARG)
             msg = "missing parameter";
-	else if (ret == ERROR_BAD_ARG)
-	    msg = "bad parameter";
-	// BAD_SWARM already sent, and not fatal
+        else if (ret == ERROR_BAD_ARG)
+            msg = "bad parameter";
+        // BAD_SWARM already sent, and not fatal
 
-	if (msg != "")
-	{
-	    CmdGwSendERRORBySocket(cmdsock,msg);
-	    CmdGwCloseConnection(cmdsock);
-	}
+        if (msg != "") {
+            CmdGwSendERRORBySocket(cmdsock,msg);
+            CmdGwCloseConnection(cmdsock);
+        }
     }
 
     delete copyline;
@@ -715,8 +714,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
     if (token != NULL) {
         *token = '\0';
         paramstr = token+1;
-    }
-    else
+    } else
         paramstr = (char*)"";
 
     method = copyline;
@@ -725,32 +723,44 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         fprintf(stderr,"cmd: GOT %s %s\n", method, paramstr);
 
     char *savetok = NULL;
-    if (!strcmp(method,"START"))
-    {
+    if (!strcmp(method,"START")) {
         // New START request
         //fprintf(stderr,"cmd: START: new request %i\n",cmd_gw_reqs_count+1);
 
-        // Format: START url destdir\r\n
-        // Arno, 2012-04-13: See if URL followed by storagepath for seeding
+        // Format: START url destdir [metadir]\r\n
         std::string pstr = paramstr;
-        std::string url="",storagepath="";
+        std::string url="",storagepath="", metadir="";
         int sidx = pstr.find(" ");
-        if (sidx == std::string::npos)
-        {
+        if (sidx == std::string::npos) {
+            // No storage path or metadir
             url = pstr;
             storagepath = "";
-        }
-        else
-        {
+        } else {
             url = pstr.substr(0,sidx);
-            storagepath = pstr.substr(sidx+1);
+            std::string qstr = pstr.substr(sidx+1);
+            sidx = qstr.find(" ");
+            if (sidx == std::string::npos) {
+                // Only storage path
+                storagepath = qstr;
+            } else {
+                // Storage path and metadir
+                storagepath = qstr.substr(0,sidx);
+                metadir = qstr.substr(sidx+1);
+            }
+        }
+
+        // If no metadir in command, but one is set on swift command line use latter.
+        if (cmd_gw_metadir.compare("") && !metadir.compare(""))
+            metadir = cmd_gw_metadir;
+        if (metadir.length() > 0) {
+            if (metadir.substr(metadir.length()-std::string(FILE_SEP).length()).compare(FILE_SEP))
+                metadir += FILE_SEP;
         }
 
         // Parse URL
         parseduri_t puri;
-        if (!swift::ParseURI(url,puri))
-        {
-            dprintf("cmd: START: cannot parse uri %s\n", url.c_str() );
+        if (!swift::ParseURI(url,puri)) {
+            dprintf("cmd: START: cannot parse uri %s\n", url.c_str());
             return ERROR_BAD_ARG;
         }
 
@@ -760,9 +770,8 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         sm.live_disc_wnd_ = cmd_gw_livesource_disc_wnd;
         // Convert parsed URI to config values
         std::string errorstr = URIToSwarmMeta(puri,&sm);
-        if (errorstr != "")
-        {
-            dprintf("cmd: START: Error parsing URI: %s\n", errorstr.c_str() );
+        if (errorstr != "") {
+            dprintf("cmd: START: Error parsing URI: %s\n", errorstr.c_str());
             return ERROR_BAD_ARG;
         }
 
@@ -772,23 +781,21 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         std::string bttrackerurl = puri["et"];
         std::string durstr = puri["cd"];
 
-        dprintf("cmd: START: %s with tracker %s chunksize %i duration %d\n",swarmidhexstr.c_str(),trackerstr.c_str(),sm.chunk_size_,sm.cont_dur_);
+        dprintf("cmd: START: %s with tracker %s chunksize %i duration %d storage %s metadir %s\n",swarmidhexstr.c_str(),
+                trackerstr.c_str(),sm.chunk_size_,sm.cont_dur_,storagepath.c_str(),metadir.c_str());
 
         // Handle tracker
         // External tracker via URL param
         std::string trackerurl = "";
-        if (trackerstr == "" && bttrackerurl == "")
-        {
+        if (trackerstr == "" && bttrackerurl == "") {
             trackerstr = Channel::trackerurl;
-            if (trackerstr == "")
-            {
+            if (trackerstr == "") {
                 dprintf("cmd: START: tracker address must be URL server as hostname:port or ip:port, or set via ?bt=\n");
                 return ERROR_BAD_ARG;
             }
         }
         // not else
-        if (bttrackerurl == "")
-        {
+        if (bttrackerurl == "") {
             trackerurl = SWIFT_URI_SCHEME;
             trackerurl += "://";
             trackerurl += trackerstr;
@@ -800,8 +807,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
         // Arno, 2012-06-12: Check for duplicate requests
         cmd_gw_t* req = CmdGwFindRequestBySwarmID(swarmid);
-        if (req != NULL)
-        {
+        if (req != NULL) {
             dprintf("cmd: START: request for given root hash already exists\n");
             return ERROR_BAD_ARG;
         }
@@ -822,12 +828,12 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
                 filename = swarmidhexstr;
 
             if (durstr != "-1")
-                td = swift::Open(filename,swarmid,trackerurl,false,sm.cont_int_prot_,false,activate,sm.chunk_size_);
+                td = swift::Open(filename,swarmid,trackerurl,false,sm.cont_int_prot_,false,activate,sm.chunk_size_,metadir);
             else
                 td = swift::LiveOpen(filename,swarmid,trackerurl,sm.injector_addr_,sm.cont_int_prot_,sm.live_disc_wnd_,sm.chunk_size_);
             if (td == -1) {
-            	CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarmid);
-            	return ERROR_BAD_SWARM;
+                CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarmid);
+                return ERROR_BAD_SWARM;
             }
         }
 
@@ -850,52 +856,43 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
 
 
         //if (cmd_gw_debug)
-	//    fprintf(stderr,"cmd: Already on disk is %" PRIu64 "/%" PRIu64 "\n", swift::Complete(td), swift::Size(td));
+        //    fprintf(stderr,"cmd: Already on disk is %" PRIu64 "/%" PRIu64 "\n", swift::Complete(td), swift::Size(td));
 
         // Set progress callbacks
-        if (swift::ttype(req->td) == FILE_TRANSFER)
-        {
+        if (swift::ttype(req->td) == FILE_TRANSFER) {
             // MULTIFILE
             uint64_t minsize=CMDGW_MAX_PREBUF_BYTES;
 
             Storage *storage = swift::GetStorage(req->td);
-            if (storage == NULL)
-            {
-                dprintf("cmd: START: cannot get storage td %d\n", req->td );
+            if (storage == NULL) {
+                dprintf("cmd: START: cannot get storage td %d\n", req->td);
                 CmdGwSendERRORBySocket(cmdsock,"bad swarm",swarmid);
-        	return ERROR_BAD_SWARM;
+                return ERROR_BAD_SWARM;
             }
             storage_files_t sfs = storage->GetStorageFiles();
             if (sfs.size() > 0)
                 minsize = sfs[0]->GetSize();
             else if (swift::SeqComplete(td) > 0) // Arno, 2013-01-08: Support small files
-        	minsize = std::min(swift::Size(td),minsize);
+                minsize = std::min(swift::Size(td),minsize);
 
             // Wait for first chunk, so we can handle MULTIFILE, then
             // wait for prebuffering and then send PLAY to user.
             // ARNOSMPTODO: OUTOFORDER: breaks with out-of-order download
 
-            if (swift::SeqComplete(td) >= minsize)
-            {
+            if (swift::SeqComplete(td) >= minsize) {
                 CmdGwSwiftVODFirstProgressCallback(td,bin_t(0,0));
                 CmdGwSendINFO(req, DLSTATUS_DOWNLOADING);
-            }
-            else
-            {
+            } else {
                 swift::AddProgressCallback(td,&CmdGwSwiftVODFirstProgressCallback,CMDGW_FIRST_PROGRESS_BYTE_INTERVAL_AS_LAYER);
             }
 
             storage->AddOneTimeAllocationCallback(CmdGwSwiftAllocatingDiskspaceCallback);
-        }
-        else
-        {
+        } else {
             // LIVE
             // Wait for prebuffering and then send PLAY to user
             swift::AddProgressCallback(td,&CmdGwSwiftPrebufferProgressCallback,CMDGW_PREBUF_PROGRESS_BYTE_INTERVAL_AS_LAYER);
         }
-    }
-    else if (!strcmp(method,"REMOVE"))
-    {
+    } else if (!strcmp(method,"REMOVE")) {
         // REMOVE roothash removestate removecontent\r\n
         bool removestate = false, removecontent = false;
 
@@ -915,9 +912,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         std::string swarmidhexstr(swarmidhexcstr);
         SwarmID swarmid(swarmidhexstr);
         CmdGwGotREMOVE(swarmid,removestate,removecontent);
-    }
-    else if (!strcmp(method,"MAXSPEED"))
-    {
+    } else if (!strcmp(method,"MAXSPEED")) {
         // MAXSPEED roothash direction speed-float-kb/s\r\n
         data_direction_t ddir;
         double speed;
@@ -941,17 +936,13 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         std::string swarmidhexstr(swarmidhexcstr);
         SwarmID swarmid(swarmidhexstr);
         CmdGwGotMAXSPEED(swarmid,ddir,speed*1024.0);
-    }
-    else if (!strcmp(method,"CHECKPOINT"))
-    {
+    } else if (!strcmp(method,"CHECKPOINT")) {
         // CHECKPOINT roothash\r\n
-	char *swarmidhexcstr = paramstr;
+        char *swarmidhexcstr = paramstr;
         std::string swarmidhexstr(swarmidhexcstr);
         SwarmID swarmid(swarmidhexstr);
         CmdGwGotCHECKPOINT(swarmid);
-    }
-    else if (!strcmp(method,"SETMOREINFO"))
-    {
+    } else if (!strcmp(method,"SETMOREINFO")) {
         // GETMOREINFO roothash toggle\r\n
         token = strtok_r(paramstr," ",&savetok); // hash
         if (token == NULL)
@@ -965,15 +956,42 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         std::string swarmidhexstr(swarmidhexcstr);
         SwarmID swarmid(swarmidhexstr);
         CmdGwGotSETMOREINFO(swarmid,enable);
-    }
-    else if (!strcmp(method,"SHUTDOWN"))
-    {
+    } else if (!strcmp(method,"SHUTDOWN")) {
         CmdGwCloseConnection(cmdsock);
         // Tell libevent to stop processing events
         event_base_loopexit(Channel::evbase, NULL);
-    }
-    else if (!strcmp(method,"TUNNELSEND"))
-    {
+    } else if (!strcmp(method,"TUNNELSUBSCRIBE")) {
+        uint32_t channel;
+        int n = sscanf(paramstr,"%08x",&channel);
+        if (n != 1)
+            return ERROR_BAD_ARG;
+        if (!channel)
+            return ERROR_BAD_ARG;
+        // check if the channel is allowed (doesn't interfere with normal swift)
+        if (channel < SWIFT_MAX_INCOMING_CONNECTIONS + SWIFT_MAX_OUTGOING_CONNECTIONS)
+            return ERROR_BAD_ARG;
+        // check if the channel is already reserved
+        if (CmdGwTunnelCheckChannel(channel))
+            return ERROR_BAD_ARG;
+
+        tunnel_channels_.push_back(channel);
+        if (cmd_gw_debug)
+            fprintf(stderr,"cmdgw: Subscribed %" PRIu32 " as a new tunneling channel\n", channel);
+    } else if (!strcmp(method,"TUNNELUNSUBSCRIBE")) {
+        uint32_t channel;
+        int n = sscanf(paramstr,"%08x",&channel);
+        if (n != 1)
+            return ERROR_BAD_ARG;
+        if (!channel)
+            return ERROR_BAD_ARG;
+        // check if the channel actually exists
+        if (CmdGwTunnelCheckChannel(channel)) {
+            tunnel_channels_.erase(std::remove(tunnel_channels_.begin(), tunnel_channels_.end(), channel), tunnel_channels_.end());
+            if (cmd_gw_debug)
+                fprintf(stderr,"cmdgw: Unsubscribed channel %" PRIu32 "\n", channel);
+        } else if (cmd_gw_debug)
+            fprintf(stderr,"cmdgw: Unsubscribing channel %" PRIu32 " failed: No such channel subscribed\n", channel);
+    } else if (!strcmp(method,"TUNNELSEND")) {
         token = strtok_r(paramstr,"/",&savetok); // dest addr
         if (token == NULL)
             return ERROR_MISS_ARG;
@@ -998,10 +1016,8 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         cmd_tunnel_state = CMDGW_TUNNEL_READTUNNEL;
 
         if (cmd_gw_debug)
-            fprintf(stderr,"cmdgw: Want tunnel %d bytes to %s\n", cmd_tunnel_expect, cmd_tunnel_dest_addr.str().c_str() );
-    }
-    else if (!strcmp(method,"PEERADDR"))
-    {
+            fprintf(stderr,"cmdgw: Want tunnel %d bytes to %s\n", cmd_tunnel_expect, cmd_tunnel_dest_addr.str().c_str());
+    } else if (!strcmp(method,"PEERADDR")) {
         // PEERADDR roothash addrstr\r\n
         token = strtok_r(paramstr," ",&savetok); // hash
         if (token == NULL)
@@ -1016,9 +1032,7 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         std::string swarmidhexstr(swarmidhexcstr);
         SwarmID swarmid(swarmidhexstr);
         CmdGwGotPEERADDR(swarmid,peer);
-    }
-    else
-    {
+    } else {
         return ERROR_UNKNOWN_CMD;
     }
 
@@ -1031,8 +1045,7 @@ void CmdGwEventCameInCallback(struct bufferevent *bev, short events, void *ctx)
 {
     if (events & BEV_EVENT_ERROR)
         print_error("cmdgw: Error from bufferevent");
-    if (events & (BEV_EVENT_EOF | BEV_EVENT_ERROR))
-    {
+    if (events & (BEV_EVENT_EOF | BEV_EVENT_ERROR)) {
         // Called when error on cmd connection
         evutil_socket_t cmdsock = bufferevent_getfd(bev);
         CmdGwCloseConnection(cmdsock);
@@ -1042,8 +1055,8 @@ void CmdGwEventCameInCallback(struct bufferevent *bev, short events, void *ctx)
 
 
 void CmdGwNewConnectionCallback(struct evconnlistener *listener,
-    evutil_socket_t fd, struct sockaddr *address, int socklen,
-    void *ctx)
+                                evutil_socket_t fd, struct sockaddr *address, int socklen,
+                                void *ctx)
 {
     // New TCP connection on cmd listen socket
 
@@ -1071,7 +1084,7 @@ void CmdGwListenErrorCallback(struct evconnlistener *listener, void *ctx)
 {
     // libevent got error on cmd listener
 
-    fprintf(stderr,"CmdGwListenErrorCallback: Something wrong with CMDGW\n" );
+    fprintf(stderr,"CmdGwListenErrorCallback: Something wrong with CMDGW\n");
     struct event_base *base = evconnlistener_get_base(listener);
     int err = EVUTIL_SOCKET_ERROR();
     char errmsg[1024];
@@ -1084,18 +1097,19 @@ void CmdGwListenErrorCallback(struct evconnlistener *listener, void *ctx)
 }
 
 
-bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpaddr,popt_cont_int_prot_t cipm, uint64_t disc_wnd)
+bool InstallCmdGateway(struct event_base *evbase,Address cmdaddr,Address httpaddr,popt_cont_int_prot_t cipm,
+                       uint64_t disc_wnd, std::string metadir)
 {
     // Allocate libevent listener for cmd connections
     // From http://www.wangafu.net/~nickm/libevent-book/Ref8_listener.html
 
-    fprintf(stderr,"cmdgw: Creating new TCP listener on addr %s\n", cmdaddr.str().c_str() );
-  
+    fprintf(stderr,"cmdgw: Creating new TCP listener on addr %s\n", cmdaddr.str().c_str());
+
     const struct sockaddr_storage sin = (sockaddr_storage)cmdaddr;
 
     cmd_evlistener = evconnlistener_new_bind(evbase, CmdGwNewConnectionCallback, NULL,
-        LEV_OPT_CLOSE_ON_FREE|LEV_OPT_REUSEABLE, -1,
-        (const struct sockaddr *)&sin, cmdaddr.get_family_sockaddr_length());
+                     LEV_OPT_CLOSE_ON_FREE|LEV_OPT_REUSEABLE, -1,
+                     (const struct sockaddr *)&sin, cmdaddr.get_family_sockaddr_length());
     if (!cmd_evlistener) {
         print_error("Couldn't create listener");
         return false;
@@ -1105,6 +1119,7 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
     cmd_gw_httpaddr = httpaddr;
     cmd_gw_cipm=cipm;
     cmd_gw_livesource_disc_wnd = disc_wnd;
+    cmd_gw_metadir = metadir;
 
     cmd_evbuffer = evbuffer_new();
 
@@ -1114,33 +1129,44 @@ bool InstallCmdGateway (struct event_base *evbase,Address cmdaddr,Address httpad
 
 
 // SOCKTUNNEL
+bool swift::CmdGwTunnelCheckChannel(uint32_t channel)
+{
+    // returns true is the channel/prefix is used for tunneling messages through channels
+    for (std::vector<uint32_t>::iterator it = tunnel_channels_.begin(); it != tunnel_channels_.end(); ++it)
+        if (*it == channel)
+            return true;
+    return false;
+}
+
+
 void swift::CmdGwTunnelUDPDataCameIn(Address srcaddr, uint32_t srcchan, struct evbuffer* evb)
 {
     // Message received on UDP socket, forward over TCP conn.
 
     if (cmd_gw_debug)
-        fprintf(stderr,"cmdgw: TunnelUDPData:DataCameIn " PRISIZET " bytes from %s/%08x\n", evbuffer_get_length(evb), srcaddr.str().c_str(), srcchan );
+        fprintf(stderr,"cmdgw: TunnelUDPData:DataCameIn " PRISIZET " bytes from %s/%08x\n", evbuffer_get_length(evb),
+                srcaddr.str().c_str(), srcchan);
 
+    size_t evb_len = evbuffer_get_length(evb);
+    uint8_t *data = evbuffer_pullup(evb, evb_len);
+    std::string data_str((const char *) data, evb_len);
     /*
      *  Format:
      *  TUNNELRECV ip:port/hexchanid nbytes\r\n
      *  <bytes>
      */
-
     std::ostringstream oss;
     oss << "TUNNELRECV " << srcaddr.str();
     oss << "/" << std::hex << srcchan;
-    oss << " " << std::dec << evbuffer_get_length(evb) << "\r\n";
+    oss << " " << std::dec << evb_len << "\r\n";
+    oss << data_str;
 
-    std::stringbuf *pbuf=oss.rdbuf();
-    size_t slen = strlen(pbuf->str().c_str());
-    send(cmd_tunnel_sock,pbuf->str().c_str(),slen,0);
+    std::string msg_str = oss.rdbuf()->str();
+    size_t msg_len = msg_str.size();
 
-    slen = evbuffer_get_length(evb);
-    uint8_t *data = evbuffer_pullup(evb,slen);
-    send(cmd_tunnel_sock,(const char *)data,slen,0);
+    send(cmd_tunnel_sock, msg_str.c_str(), msg_len, 0);
 
-    evbuffer_drain(evb,slen);
+    evbuffer_drain(evb, evb_len);
 }
 
 
@@ -1154,27 +1180,22 @@ void swift::CmdGwTunnelSendUDP(struct evbuffer *evb)
 
     struct evbuffer *sendevbuf = evbuffer_new();
 
-    // Add channel id. Currently always CMDGW_TUNNEL_DEFAULT_CHANNEL_ID=0xffffffff
-    // but we may add a TUNNELSUBSCRIBE command later to allow the allocation
-    // of different channels for different TCP clients.
+    // Add channel id.
     int ret = evbuffer_add_32be(sendevbuf, cmd_tunnel_dest_chanid);
-    if (ret < 0)
-    {
+    if (ret < 0) {
         evbuffer_drain(evb,cmd_tunnel_expect);
         evbuffer_free(sendevbuf);
         fprintf(stderr,"cmdgw: sendudp :can't copy prefix to sendbuf!");
         return;
     }
     ret = evbuffer_remove_buffer(evb, sendevbuf, cmd_tunnel_expect);
-    if (ret < 0)
-    {
+    if (ret < 0) {
         evbuffer_drain(evb,cmd_tunnel_expect);
         evbuffer_free(sendevbuf);
         fprintf(stderr,"cmdgw: sendudp :can't copy to sendbuf!");
         return;
     }
-    if (Channel::sock_count != 1)
-    {
+    if (Channel::sock_count != 1) {
         fprintf(stderr,"cmdgw: sendudp: no single UDP socket!");
         evbuffer_free(sendevbuf);
         return;

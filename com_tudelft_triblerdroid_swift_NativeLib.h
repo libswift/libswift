@@ -13,7 +13,7 @@ extern "C" {
  * Signature: (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Init
-  (JNIEnv *, jobject, jstring, jstring);
+(JNIEnv *, jobject, jstring, jstring);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
@@ -21,7 +21,7 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Init
  * Signature: ()V
  */
 JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Mainloop
-  (JNIEnv *, jobject);
+(JNIEnv *, jobject);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
@@ -29,7 +29,7 @@ JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Mainloop
  * Signature: ()V
  */
 JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Shutdown
-  (JNIEnv *, jobject);
+(JNIEnv *, jobject);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
@@ -37,7 +37,7 @@ JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_Shutdown
  * Signature: (I)Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetResult
-  (JNIEnv *, jobject, jint);
+(JNIEnv *, jobject, jint);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
@@ -45,7 +45,7 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGet
  * Signature: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I
  */
 JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncOpen
-  (JNIEnv *, jobject, jstring, jstring, jstring);
+(JNIEnv *, jobject, jstring, jstring, jstring);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
@@ -53,7 +53,7 @@ JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncOpen
  * Signature: (Ljava/lang/String;ZZ)I
  */
 JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncClose
-  (JNIEnv *, jobject, jstring, jboolean, jboolean);
+(JNIEnv *, jobject, jstring, jboolean, jboolean);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
@@ -61,7 +61,7 @@ JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncClose
  * Signature: (Ljava/lang/String;)Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_hashCheckOffline
-  (JNIEnv *, jobject, jstring);
+(JNIEnv *, jobject, jstring);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
@@ -69,7 +69,7 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_hashChec
  * Signature: (Ljava/lang/String;)V
  */
 JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_SetTracker
-  (JNIEnv *, jobject, jstring);
+(JNIEnv *, jobject, jstring);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
@@ -77,7 +77,7 @@ JNIEXPORT void JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_SetTracker
  * Signature: (Ljava/lang/String;)I
  */
 JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetHTTPProgress
-  (JNIEnv *, jobject, jstring);
+(JNIEnv *, jobject, jstring);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
@@ -85,7 +85,7 @@ JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetHTT
  * Signature: (Ljava/lang/String;)I
  */
 JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetStats
-  (JNIEnv *, jobject, jstring);
+(JNIEnv *, jobject, jstring);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
@@ -93,7 +93,7 @@ JNIEXPORT jint JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_asyncGetSta
  * Signature: (Ljava/lang/String;)Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_LiveCreate
-  (JNIEnv *, jobject, jstring);
+(JNIEnv *, jobject, jstring);
 
 /*
  * Class:     com_tudelft_triblerdroid_swift_NativeLib
@@ -101,7 +101,7 @@ JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_LiveCrea
  * Signature: (Ljava/lang/String;[BII)Ljava/lang/String;
  */
 JNIEXPORT jstring JNICALL Java_com_tudelft_triblerdroid_swift_NativeLib_LiveAdd
-  (JNIEnv *, jobject, jstring, jbyteArray, jint, jint);
+(JNIEnv *, jobject, jstring, jbyteArray, jint, jint);
 
 #ifdef __cplusplus
 }

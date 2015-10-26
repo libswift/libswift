@@ -1,0 +1,8 @@
+#include "nsISupports.idl"
+
+[scriptable, uuid(d5a05a80-f640-11df-8af8-0002a5d5c51b)]
+interface tswiftISwarmTransport : nsISupports
+{
+  readonly attribute string version;
+};
+

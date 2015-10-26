@@ -30,7 +30,8 @@ static int has_secondary;
     @param fmt The format string for the message. See fprintf(3) for details.
     @param ... The arguments for printing.
 */
-void fatal(const char *fmt, ...) {
+void fatal(const char *fmt, ...)
+{
     va_list args;
 
     va_start(args, fmt);
@@ -39,7 +40,8 @@ void fatal(const char *fmt, ...) {
     exit(EXIT_FAILURE);
 }
 
-const char *getTimestamp(void) {
+const char *getTimestamp(void)
+{
     static char timeBuffer[1024];
     struct timeval now;
     double nowF;
@@ -50,7 +52,8 @@ const char *getTimestamp(void) {
     return timeBuffer;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
     struct sockaddr_in local, remote, secondary;
     uint32_t packet[3];
     int c, sock, sock2, sock3, sock4;
@@ -60,13 +63,13 @@ int main(int argc, char *argv[]) {
 
     while ((c = getopt(argc, argv, "s:")) > 0) {
         switch (c) {
-            case 's':
-                has_secondary = 1;
-                secondary.sin_addr.s_addr = inet_addr(optarg);
-                break;
-            default:
-                fatal("Unknown option %c\n", c);
-                break;
+        case 's':
+            has_secondary = 1;
+            secondary.sin_addr.s_addr = inet_addr(optarg);
+            break;
+        default:
+            fatal("Unknown option %c\n", c);
+            break;
         }
     }
 
@@ -121,13 +124,13 @@ int main(int argc, char *argv[]) {
             packet[0] = htonl(REPLY_MAGIC);
             packet[1] = remote.sin_addr.s_addr;
             *(uint16_t *)(packet + 2) = remote.sin_port;
-    retry:
+retry:
             if (sendto(sock, packet, 10, 0, (const struct sockaddr *) &remote, socklen) < 10) {
                 if (errno == EAGAIN)
                     goto retry;
                 fprintf(stderr, "%s: Error sending packet on primary socket: %m\n", getTimestamp());
             }
-    retry2:
+retry2:
             if (sendto(sock2, packet, 10, 0, (const struct sockaddr *) &remote, socklen) < 10) {
                 if (errno == EAGAIN)
                     goto retry2;
@@ -136,13 +139,13 @@ int main(int argc, char *argv[]) {
 
             if (has_secondary) {
                 packet[0] = htonl(REPLY_SEC_MAGIC);
-        retry3:
+retry3:
                 if (sendto(sock3, packet, 4, 0, (const struct sockaddr *) &remote, socklen) < 4) {
                     if (errno == EAGAIN)
                         goto retry3;
                     fprintf(stderr, "%s: Error sending packet on primary socket on secondary address: %m\n", getTimestamp());
                 }
-        retry4:
+retry4:
                 if (sendto(sock4, packet, 4, 0, (const struct sockaddr *) &remote, socklen) < 4) {
                     if (errno == EAGAIN)
                         goto retry4;

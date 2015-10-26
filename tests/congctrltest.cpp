@@ -28,9 +28,10 @@ struct SimPacket {
 tint now = 0;
 
 /** very simplified; uplink is the bottleneck */
-class SimPeer {
+class SimPeer
+{
 public:
-    SimPeer (tint tt, tint lt, int qlen) : travtime(tt), latency(lt), queue_length(qlen) {}
+    SimPeer(tint tt, tint lt, int qlen) : travtime(tt), latency(lt), queue_length(qlen) {}
     int queue_length;
     int travtime;
     tint freetime;
@@ -40,7 +41,7 @@ public:
     queue<SimPacket> packet_queue;
     queue<SimPacket> dropped_queue;
     CongestionControl congc;
-    
+
     void send(SimPacket pck) {
         if (packet_queue.size()==queue_length) {
             dropped_queue.push(pck);
@@ -52,19 +53,19 @@ public:
         pck.arrivaltime = done + latency;
         packet_queue.push(pck);
     }
-    
-    SimPacket recv () {
+
+    SimPacket recv() {
         assert(!packet_queue.empty());
         SimPacket ret = packet_queue.front();
         packet_queue.pop();
         return ret;
     }
-    
-    tint next_recv_time () const {
+
+    tint next_recv_time() const {
         return packet_queue.empty() ? NEVER : packet_queue.front().arrivaltime;
     }
-    
-    void    turn () {
+
+    void    turn() {
         SimPacket rp = recv();
         SimPacket reply;
         now = rp.arrivaltime;
@@ -89,23 +90,25 @@ public:
     }
 };
 
-TEST(P2TP, TailDropTest) {
+TEST(P2TP, TailDropTest)
+{
     // two peers exchange packets over 100ms link with tail-drop discipline
     // bw 1Mbits => travel time of 1KB is ~10ms
     SimPeer a(10*MSEC,100*MSEC,20), b(10*MSEC,100*MSEC,20);
     a.send(SimPacket(&b,now,0,0));
-    while (now<60*60*SEC) 
+    while (now<60*60*SEC)
         if (a.next_recv_time()<b.next_recv_time())
             a.turn();
         else
             b.turn();
 }
 
-int main (int argc, char** argv) {
-	bin::init();
-	bins::init();
-	google::InitGoogleLogging(argv[0]);
-	testing::InitGoogleTest(&argc, argv);
-	return RUN_ALL_TESTS();
-	
+int main(int argc, char** argv)
+{
+    bin::init();
+    bins::init();
+    google::InitGoogleLogging(argv[0]);
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+
 }

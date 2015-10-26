@@ -38,14 +38,11 @@ void compare_binmaps(binmap_t &chunkmap, binmap_t &binmap, uint32_t s, uint32_t 
     double x = log2((double)(e+1));
     double xint = floor(x);
     x -= xint;
-    if (x == 0.0)
-    {
-	// e is end of balanced tree
-	ASSERT_TRUE(ce == bin_t::NONE || ce == bin_t(0,e+1));
-    }
-    else
-    {
-	ASSERT_EQ(ce,bin_t(0,e+1));
+    if (x == 0.0) {
+        // e is end of balanced tree
+        ASSERT_TRUE(ce == bin_t::NONE || ce == bin_t(0,e+1));
+    } else {
+        ASSERT_EQ(ce,bin_t(0,e+1));
     }
 
     ASSERT_TRUE(chunkmap.is_filled(bin_t(0,e)));
@@ -71,17 +68,15 @@ TEST(ChunkAddrTest,Chunk32ToBin32a)
 
     binvector::iterator iter;
     binmap_t binmap;
-    for (iter=bv.begin(); iter != bv.end(); iter++)
-    {
-	bin_t b = *iter;
-	//fprintf(stderr,"%s\n", b.str().c_str() );
-	binmap.set(b);
+    for (iter=bv.begin(); iter != bv.end(); iter++) {
+        bin_t b = *iter;
+        //fprintf(stderr,"%s\n", b.str().c_str() );
+        binmap.set(b);
     }
 
     binmap_t chunkmap;
-    for (uint32_t i=s; i<=e; i++)
-    {
-	chunkmap.set(bin_t(0,i));
+    for (uint32_t i=s; i<=e; i++) {
+        chunkmap.set(bin_t(0,i));
     }
 
     compare_binmaps(chunkmap, binmap, s, e);
@@ -92,33 +87,29 @@ TEST(ChunkAddrTest,Chunk32ToBin32b)
 {
     uint32_t sm = 269;
     uint32_t em = 312;
-    for (uint32_t s=0; s<sm; s++)
-    {
-	for (uint32_t e=s; e<s+em; e++)
-	{
-	    //fprintf(stderr,"\ns %" PRIu32 " e %" PRIu32 "\n", s, e );
-	    binvector bv;
+    for (uint32_t s=0; s<sm; s++) {
+        for (uint32_t e=s; e<s+em; e++) {
+            //fprintf(stderr,"\ns %" PRIu32 " e %" PRIu32 "\n", s, e );
+            binvector bv;
 
-	    swift::chunk32_to_bin32(s,e,&bv);
+            swift::chunk32_to_bin32(s,e,&bv);
 
-	    binvector::iterator iter;
-	    binmap_t binmap;
-	    for (iter=bv.begin(); iter != bv.end(); iter++)
-	    {
-		bin_t b = *iter;
-		//fprintf(stderr,"%s\n", b.str().c_str() );
-		binmap.set(b);
-	    }
+            binvector::iterator iter;
+            binmap_t binmap;
+            for (iter=bv.begin(); iter != bv.end(); iter++) {
+                bin_t b = *iter;
+                //fprintf(stderr,"%s\n", b.str().c_str() );
+                binmap.set(b);
+            }
 
-	    binmap_t chunkmap;
-	    for (uint32_t i=s; i<=e; i++)
-	    {
-		chunkmap.set(bin_t(0,i));
-	    }
+            binmap_t chunkmap;
+            for (uint32_t i=s; i<=e; i++) {
+                chunkmap.set(bin_t(0,i));
+            }
 
-	    compare_binmaps(chunkmap, binmap, s, e);
-	}
-	fprintf(stderr,"." );
+            compare_binmaps(chunkmap, binmap, s, e);
+        }
+        fprintf(stderr,".");
     }
 }
 
@@ -129,22 +120,22 @@ TEST(ChunkAddrTest,Bin32)
     uint32_t s = want.base_offset();
     uint32_t e = (want.base_offset()+want.base_length()-1);
 
-    fprintf(stderr,"want start %" PRIu32 " end %" PRIu32 "\n", s, e );
-    
+    fprintf(stderr,"want start %" PRIu32 " end %" PRIu32 "\n", s, e);
+
     binvector bv;
     swift::chunk32_to_bin32(s,e,&bv);
 
     binvector::iterator iter;
-    for (iter=bv.begin(); iter != bv.end(); iter++)
-    {
-	bin_t b = *iter;
-        fprintf(stderr,"got %s\n", b.str().c_str() );
+    for (iter=bv.begin(); iter != bv.end(); iter++) {
+        bin_t b = *iter;
+        fprintf(stderr,"got %s\n", b.str().c_str());
     }
 }
 
 
 
-int main (int argc, char** argv) {
+int main(int argc, char** argv)
+{
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
