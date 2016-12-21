@@ -113,6 +113,14 @@ void CmdGwNewRequestCallback(evutil_socket_t cmdsock, char *line);
 void CmdGwProcessData(evutil_socket_t cmdsock);
 
 
+void CmdGwSendListenAddr(evutil_socket_t cmdsock)
+{
+    std::string response = "LISTEN_ADDR ";
+    response += swift::binded_addr.str();
+    send(cmdsock, response.c_str(), response.size(), 0);
+}
+
+
 void CmdGwFreeRequest(cmd_gw_t* req)
 {
     req->id = -1;
@@ -1032,6 +1040,8 @@ int CmdGwHandleCommand(evutil_socket_t cmdsock, char *copyline)
         std::string swarmidhexstr(swarmidhexcstr);
         SwarmID swarmid(swarmidhexstr);
         CmdGwGotPEERADDR(swarmid,peer);
+    } else if (!strcmp(method, "GET_LISTEN_ADDR")) {
+        CmdGwSendListenAddr(cmdsock);
     } else {
         return ERROR_UNKNOWN_CMD;
     }

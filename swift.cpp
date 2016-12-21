@@ -23,6 +23,8 @@
 using namespace swift;
 
 
+struct Address swift::binded_addr;
+
 // Local constants
 #define RESCAN_DIR_INTERVAL 30 // seconds
 #define REPORT_INTERVAL      1 // 1 second. Use cmdgw_report_interval for larger intervals
@@ -453,22 +455,29 @@ int utf8main(int argc, char** argv)
     if (httpgw_enabled && !quiet)
         fprintf(stderr,"CWD %s\n",getcwd_utf8().c_str());
 
+    evutil_socket_t the_sock = INVALID_SOCKET;
     if (bindaddr!=Address()) { // seeding
-        if (Listen(bindaddr)<=0)
-            quit("cant listen to %s\n",bindaddr.str().c_str())
-        } else if (trackerurl != "" || httpgw_enabled || cmdgw_enabled) { // leeching
-        evutil_socket_t sock = INVALID_SOCKET;
+        if ((the_sock = Listen(bindaddr)) <= 0) {
+            // try to bind to a random port
+            bindaddr = Address((uint32_t)INADDR_ANY,0);
+            the_sock = Listen(bindaddr);
+            if (the_sock <= 0)
+                quit("cant bind to random address [%s]\n", bindaddr.str().c_str());
+        }
+    } else if (trackerurl != "" || httpgw_enabled || cmdgw_enabled) { // leeching
         for (int i=0; i<=10; i++) {
             bindaddr = Address((uint32_t)INADDR_ANY,0);
-            sock = Listen(bindaddr);
-            if (sock>0)
+            the_sock = Listen(bindaddr);
+            if (the_sock > 0)
                 break;
             if (i==10)
                 quit("cant listen on %s\n",bindaddr.str().c_str());
         }
         if (!quiet)
-            fprintf(stderr,"swift: My listen port is %d\n", BoundAddress(sock).port());
+            fprintf(stderr,"swift: My listen port is %d\n", BoundAddress(the_sock).port());
     }
+    swift::binded_addr = BoundAddress(the_sock);
+    fprintf(stderr, "LISTEN_ADDR %s %d\n", swift::binded_addr.ipstr().c_str(), swift::binded_addr.port());
 
     if (trackerurl != "" && !printurl)
         SetTracker(trackerurl);
